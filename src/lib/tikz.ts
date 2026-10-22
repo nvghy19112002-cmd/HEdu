@@ -72,7 +72,10 @@ export const defaultPreamble = () => invoke<string>('tikz_default_preamble');
 /** Lỗi từ Rust có thể là chuỗi hoặc object; đưa về một dạng. */
 export function asTikzErr(e: unknown): TikzErr {
   if (typeof e === 'string') return { message: e, log: '', stage: 'latex' };
-  if (e instanceof Error) return { message: e.message, log: '', stage: 'latex' };
+  if (e instanceof Error) {
+    const x = e as Error & { log?: unknown; stage?: unknown };
+    return { message: e.message, log: typeof x.log === 'string' ? x.log : '', stage: (x.stage as TikzErr['stage']) ?? 'latex' };
+  }
   if (e && typeof e === 'object') {
     const o = e as Record<string, unknown>;
     if (typeof o.message === 'string') {

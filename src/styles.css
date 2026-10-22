@@ -432,3 +432,18 @@ a { color: var(--accent); }
 .fig-ph.err .fig-ph-t { color: var(--accent-ink); }
 .fig-log { display: block; width: 100%; margin-top: 6px; font-family: var(--f-code); font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 220px; overflow: auto; }
 .fig-ph .btn { margin-top: 6px; }
+
+/* ---- Gói LaTeX (Issue #1) ---- */
+.pkg-panel { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.pkg-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pkg-head h2 { margin: 0; }
+.chk-pill.warn { background: #FFF6E0; color: #8A5A00; border: 1px solid #F0DDA8; }
+.pkg-card { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); font-size: 13px; line-height: 1.55; }
+.pkg-card.loi { background: var(--accent-soft); border-color: #F0C9BF; }
+.pkg-card.canh { background: #FFF6E0; border-color: #F0DDA8; }
+.pkg-hint { color: var(--ink-2); font-size: 12.5px; }
+.pkg-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.pkg-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--paper); border: 1px dashed var(--line); }
+.pkg-ok summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+.pkg-ok ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.pkg-kind { margin-left: 6px; font-size: 11.5px; color: var(--ink-2); }

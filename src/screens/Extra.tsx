@@ -1,6 +1,7 @@
 // Màn Nhập liệu: dán hoặc mở file LaTeX, xem trước rồi nhập hàng loạt vào ngân hàng.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, grades } from '../lib/curriculum';
 import { shortName } from '../lib/taxonomy';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
@@ -64,7 +65,14 @@ export function ImportScreen() {
   const nFig = issues.filter((x) => x?.some((y) => y.level === 'tin')).length;
   const [onlyBad, setOnlyBad] = useState(false);
   const [openRow, setOpenRow] = useState<number | null>(null);
-  const shownRows = rows.map((r, i) => ({ r, i })).filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh');
+  const [pkgFilter, setPkgFilter] = useState<{ rows: number[]; key: string } | null>(null);
+  const [limit, setLimit] = useState(200);
+  const blocks = useMemo(() => rows.map((r) => r.latex), [rows]);
+  useEffect(() => { setPkgFilter(null); setLimit(200); }, [text250]);
+  const shownRows = rows
+    .map((r, i) => ({ r, i }))
+    .filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh')
+    .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i));
 
   const chs = chapters(loc.grade);
   const chapter = chs.find((c) => c.id === loc.chapterId) ?? chs[0];
@@ -104,7 +112,9 @@ export function ImportScreen() {
               <label className="lbl">Bài<select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>{(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{shortName(l.name)}</option>)}</select></label>
               <label className="lbl">Mức độ<select className="sel" value={level} onChange={(e) => setLevel(e.target.value as Level)}>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select></label>
             </div>
+            <PackagePanel src={text250} blocks={blocks} activeFilter={pkgFilter?.key ?? null} onFilter={(r, key) => setPkgFilter(r ? { rows: r, key } : null)} />
             <h2 style={{ marginTop: 6 }}>Kiểm tra {rows.length} câu trước khi nhập</h2>
+            {pkgFilter && <span className="sys-hint">Đang chỉ hiện {pkgFilter.rows.length} câu liên quan tới một gói. Bấm “Hiện lại mọi câu” ở thẻ gói để bỏ lọc.</span>}
             <div className="chk-sum">
               {checking && <span className="chk-pill">Đang kiểm tra {done}/{rows.length}…</span>}
               {!checking && <span className={`chk-pill${nErr ? ' bad' : ' ok'}`}>{nErr ? `${nErr} câu lỗi xem trước` : 'Không câu nào lỗi xem trước'}</span>}
@@ -120,7 +130,7 @@ export function ImportScreen() {
               <span className="sys-hint">Câu lỗi vẫn nhập được, nhưng phần xem trước sẽ vỡ cho tới khi bạn sửa. Bấm vào câu để xem lỗi ở đâu.</span>
             )}
             <ol className="chk-list">
-              {shownRows.slice(0, 200).map(({ r, i }) => (
+              {shownRows.slice(0, limit).map(({ r, i }) => (
                 <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'}`}>
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
                     <span className="chk-n">{i + 1}</span>
@@ -143,7 +153,13 @@ export function ImportScreen() {
                 </li>
               ))}
             </ol>
-            {shownRows.length > 200 && <span className="sys-hint">Đang hiện 200 câu đầu trong {shownRows.length} câu.</span>}
+            {shownRows.length > limit && (
+              <div className="head-actions">
+                <span className="sys-hint">Đang hiện {limit} trong {shownRows.length} câu.</span>
+                <button type="button" className="btn btn-sm" onClick={() => setLimit(limit + 200)}>Hiện thêm 200 câu</button>
+                <button type="button" className="btn btn-sm" onClick={() => setLimit(shownRows.length)}>Hiện hết</button>
+              </div>
+            )}
             <div><button type="button" className="btn btn-accent" disabled={!importable.length || checking} onClick={run}>{checking ? 'Đang kiểm tra…' : `Nhập ${importable.length} câu vào ngân hàng`}</button></div>
           </div>
         )}

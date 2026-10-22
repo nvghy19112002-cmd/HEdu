@@ -1,6 +1,8 @@
 // Lõi desktop của HEdu: lưu dữ liệu an toàn + cập nhật hai kênh + quay lại bản trước.
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
+mod proc;
 mod storage;
+mod texpkg;
 mod tikz;
 
 use serde::Serialize;
@@ -192,6 +194,9 @@ fn restore_backup(app: AppHandle, gate: State<Gate>) -> Result<String, String> {
     Ok(format!("Đã khôi phục ({} byte).", bytes.len()))
 }
 
+/// Tối đa 3 hình dịch cùng lúc; hình còn lại xếp hàng chờ (không làm đứng giao diện).
+static RENDER_SLOTS: proc::Slots = proc::Slots::new(3);
+
 /// Dịch một hình TikZ thành SVG (chạy ở luồng riêng để giao diện không bị đứng).
 #[tauri::command]
 async fn tikz_render(
@@ -205,7 +210,10 @@ async fn tikz_render(
     let dir = tikz::cache_dir_of(root.root());
     std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
     let o = opts.unwrap_or_default();
-    tauri::async_runtime::spawn_blocking(move || tikz::render(&dir, &code, &defs, &o))
+    tauri::async_runtime::spawn_blocking(move || {
+        let _slot = RENDER_SLOTS.acquire();
+        tikz::render(&dir, &code, &defs, &o)
+    })
         .await
         .map_err(|e| err(e.to_string()))?
 }
@@ -232,6 +240,23 @@ fn tikz_clear_cache(app: AppHandle) -> Result<usize, String> {
 #[tauri::command]
 async fn tikz_find() -> Vec<String> {
     tauri::async_runtime::spawn_blocking(tikz::find_tex_bins).await.unwrap_or_default()
+}
+
+/// Hỏi TeX Live đang chọn xem có từng tệp (.sty, .cls, thư viện tikz…) hay không.
+#[tauri::command]
+async fn tex_check_files(files: Vec<String>, tex_bin: Option<String>) -> Result<Vec<texpkg::FileHit>, tikz::TikzErr> {
+    tauri::async_runtime::spawn_blocking(move || texpkg::check_files(&files, &tex_bin))
+        .await
+        .map_err(|e| tikz::TikzErr { message: e.to_string(), log: String::new(), stage: String::from("latex") })?
+}
+
+/// Tra gói TeX Live chứa một tệp. Chỉ tra cứu; không bao giờ cài.
+/// `global` = tra cả kho trên mạng, giao diện chỉ gửi true sau khi người dùng đồng ý.
+#[tauri::command]
+async fn tex_find_package(file: String, tex_bin: Option<String>, global: bool) -> Result<Vec<texpkg::PkgHit>, tikz::TikzErr> {
+    tauri::async_runtime::spawn_blocking(move || texpkg::find_package(&file, &tex_bin, global))
+        .await
+        .map_err(|e| tikz::TikzErr { message: e.to_string(), log: String::new(), stage: String::from("latex") })?
 }
 
 #[tauri::command]
@@ -261,7 +286,9 @@ pub fn run() {
             tikz_probe,
             tikz_clear_cache,
             tikz_default_preamble,
-            tikz_find
+            tikz_find,
+            tex_check_files,
+            tex_find_package
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
