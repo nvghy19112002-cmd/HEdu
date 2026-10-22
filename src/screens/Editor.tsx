@@ -5,7 +5,8 @@ import { LatexEditor, type LatexEditorHandle } from '../components/LatexEditor';
 import { QuestionView } from '../components/QuestionView';
 import { IcAlert, IcCheckCircle, IcPlus, IcSearch } from '../components/Icons';
 import { buildExTest, parseExTest, TEMPLATES, type ParsedQuestion } from '../lib/extest';
-import { CURRICULUM, firstLocation, getGrade } from '../lib/curriculum';
+import { chapters, firstLocation, grades } from '../lib/curriculum';
+import { shortName } from '../lib/taxonomy';
 import { findDuplicates } from '../lib/dup';
 import { questionCode, seqLabel } from '../lib/id';
 import { saveQuestion, useBank } from '../lib/store';
@@ -119,9 +120,10 @@ export function EditorScreen({ editUid }: { editUid?: string }) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const grade = getGrade(loc.grade);
-  const chapter = grade.chapters.find((c) => c.id === loc.chapterId) ?? grade.chapters[0];
-  const lesson = chapter.lessons.find((l) => l.id === loc.lessonId) ?? chapter.lessons[0];
+  const chs = chapters(loc.grade);
+  const chapter = chs.find((c) => c.id === loc.chapterId) ?? chs[0];
+  const lesson = chapter?.lessons.find((l) => l.id === loc.lessonId) ?? chapter?.lessons[0];
+  const byBranch = chs.reduce<Record<string, typeof chs>>((m, c) => ({ ...m, [c.monName]: [...(m[c.monName] ?? []), c] }), {});
 
   const addTag = () => {
     const t = (tagInput ?? '').trim();
@@ -196,22 +198,26 @@ export function EditorScreen({ editUid }: { editUid?: string }) {
             <h2>Vị trí trong ngân hàng</h2>
             <label className="lbl">Lớp
               <select className="sel" value={loc.grade} onChange={(e) => setLoc(firstLocation(Number(e.target.value)))}>
-                {CURRICULUM.map((g) => <option key={g.grade} value={g.grade}>Lớp {g.grade}</option>)}
+                {grades().map((g) => <option key={g} value={g}>Lớp {g}</option>)}
               </select>
             </label>
             <label className="lbl">Chương
-              <select className="sel" value={chapter.id} onChange={(e) => setLoc(firstLocation(loc.grade, e.target.value))}>
-                {grade.chapters.map((c) => <option key={c.id} value={c.id}>{c.no}. {c.name}</option>)}
+              <select className="sel" value={chapter?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, e.target.value))}>
+                {Object.entries(byBranch).map(([mon, list]) => (
+                  <optgroup key={mon} label={mon}>
+                    {list.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </label>
             <label className="lbl">Bài
-              <select className="sel" value={lesson.id} onChange={(e) => setLoc(firstLocation(loc.grade, chapter.id, e.target.value))}>
-                {chapter.lessons.map((l) => <option key={l.id} value={l.id}>{l.no}. {l.name}</option>)}
+              <select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>
+                {(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </label>
             <label className="lbl">Dạng toán
               <select className="sel" value={loc.formId} onChange={(e) => setLoc({ ...loc, formId: e.target.value })}>
-                {lesson.forms.map((f) => <option key={f.id} value={f.id}>{f.no}. {f.name}</option>)}
+                {(lesson?.forms ?? []).map((f) => <option key={f.id} value={f.id}>{shortName(f.name)}</option>)}
               </select>
             </label>
             <div className="id-card">

@@ -1,7 +1,8 @@
-// Các màn hình phụ: Nhập liệu (từ LaTeX), Khung chương trình.
+// Màn Nhập liệu: dán hoặc mở file LaTeX, xem trước rồi nhập hàng loạt vào ngân hàng.
 import { useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
-import { CURRICULUM, firstLocation, getGrade } from '../lib/curriculum';
+import { chapters, firstLocation, grades } from '../lib/curriculum';
+import { shortName } from '../lib/taxonomy';
 import { findDuplicates } from '../lib/dup';
 import { parseExTest, splitExBlocks } from '../lib/extest';
 import { parseCode, questionCode } from '../lib/id';
@@ -28,9 +29,9 @@ export function ImportScreen() {
   }), [src, questions]);
   const importable = rows.filter((r) => !(r.dup && r.dup.score === 1));
 
-  const grade = getGrade(loc.grade);
-  const chapter = grade.chapters.find((c) => c.id === loc.chapterId) ?? grade.chapters[0];
-  const lesson = chapter.lessons.find((l) => l.id === loc.lessonId) ?? chapter.lessons[0];
+  const chs = chapters(loc.grade);
+  const chapter = chs.find((c) => c.id === loc.chapterId) ?? chs[0];
+  const lesson = chapter?.lessons.find((l) => l.id === loc.lessonId) ?? chapter?.lessons[0];
 
   const run = () => {
     const drafts: Draft[] = importable.map((r) => ({ latex: r.latex.trim(), level: r.fromId?.level ?? level, tags: [], ...(r.fromId?.loc ?? loc) }));
@@ -47,9 +48,9 @@ export function ImportScreen() {
         <div className="panel">
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>
           <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-            Mỗi câu nằm trong <span className="mono">\begin{'{ex}'} … \end{'{ex}'}</span>. Câu có sẵn ID dạng <span className="mono">%[2D1B1-1]</span> sẽ tự vào đúng bài và mức độ; câu không có ID dùng vị trí chọn bên dưới. Câu trùng hẳn với ngân hàng sẽ được bỏ qua.
+            Mỗi câu nằm trong <span className="mono">\begin{'{ex}'} … \end{'{ex}'}</span>. Câu có sẵn ID dạng <span className="mono">%[2D1H1-1]</span> sẽ tự vào đúng bài và mức độ; câu không có ID dùng vị trí chọn bên dưới. Câu trùng hẳn với ngân hàng sẽ được bỏ qua.
           </span>
-          <textarea value={src} onChange={(e) => setSrc(e.target.value)} placeholder={'\\begin{ex}%[2D1Y1-1]\n  Đề bài ...\n  \\choice\n  {\\True A}{B}{C}{D}\n\\end{ex}'} aria-label="Mã LaTeX cần nhập" spellCheck={false} />
+          <textarea value={src} onChange={(e) => setSrc(e.target.value)} placeholder={'\\begin{ex}%[2D1N1-1]\n  Đề bài ...\n  \\choice\n  {\\True A}{B}{C}{D}\n\\end{ex}'} aria-label="Mã LaTeX cần nhập" spellCheck={false} />
           <div className="head-actions">
             <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}>Mở file .tex</button>
             <button type="button" className="btn btn-sm" onClick={() => toast('Nhập từ Word (.docx có Equation) sẽ có ở bản cài trên Windows.')}>Mở file Word</button>
@@ -61,9 +62,9 @@ export function ImportScreen() {
           <div className="panel">
             <h2>Vị trí cho câu không có ID</h2>
             <div className="grid2">
-              <label className="lbl">Lớp<select className="sel" value={loc.grade} onChange={(e) => setLoc(firstLocation(Number(e.target.value)))}>{CURRICULUM.map((g) => <option key={g.grade} value={g.grade}>Lớp {g.grade}</option>)}</select></label>
-              <label className="lbl">Chương<select className="sel" value={chapter.id} onChange={(e) => setLoc(firstLocation(loc.grade, e.target.value))}>{grade.chapters.map((c) => <option key={c.id} value={c.id}>{c.no}. {c.short}</option>)}</select></label>
-              <label className="lbl">Bài<select className="sel" value={lesson.id} onChange={(e) => setLoc(firstLocation(loc.grade, chapter.id, e.target.value))}>{chapter.lessons.map((l) => <option key={l.id} value={l.id}>{l.no}. {l.name}</option>)}</select></label>
+              <label className="lbl">Lớp<select className="sel" value={loc.grade} onChange={(e) => setLoc(firstLocation(Number(e.target.value)))}>{grades().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
+              <label className="lbl">Chương<select className="sel" value={chapter?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, e.target.value))}>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+              <label className="lbl">Bài<select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>{(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{shortName(l.name)}</option>)}</select></label>
               <label className="lbl">Mức độ<select className="sel" value={level} onChange={(e) => setLevel(e.target.value as Level)}>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select></label>
             </div>
             <h2 style={{ marginTop: 6 }}>Tìm thấy {rows.length} câu</h2>
@@ -79,37 +80,6 @@ export function ImportScreen() {
             <div><button type="button" className="btn btn-accent" disabled={!importable.length} onClick={run}>Nhập {importable.length} câu vào ngân hàng</button></div>
           </div>
         )}
-      </div>
-    </>
-  );
-}
-
-export function CurriculumScreen() {
-  const { questions } = useBank();
-  return (
-    <>
-      <header className="page-head">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <h1>Khung chương trình</h1>
-          <span className="crumbs">Mẫu theo bộ Kết nối tri thức · bộ sách mặc định còn chờ bạn chốt · chỉnh sửa khung sẽ có ở lát sau</span>
-        </div>
-      </header>
-      <div className="simple">
-        {CURRICULUM.slice().reverse().map((g) => (
-          <div key={g.grade} className="panel">
-            <h2>Lớp {g.grade}</h2>
-            <div className="ct-list">
-              {g.chapters.map((c) => (
-                <div key={c.id}>
-                  <div className="ct-ch">Chương {c.no}. {c.name} <small>· {questions.filter((q) => q.chapterId === c.id).length} câu · mã phân môn {c.mon}</small></div>
-                  {(c.lessons.length > 1 || c.lessons[0].name !== 'Tổng hợp chương') && (
-                    <ul className="ct-ls">{c.lessons.map((l) => <li key={l.id}>Bài {l.no}. {l.name}{l.forms.length > 1 ? ` — ${l.forms.length} dạng` : ''}</li>)}</ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
       </div>
     </>
   );

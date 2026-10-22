@@ -2,6 +2,7 @@
 // sinh nhiều mã đề và bảng đáp án, xuất mã LaTeX.
 import { buildExTest, parseExTest, type ParsedQuestion } from './extest';
 import { findChapter } from './curriculum';
+import { shortName } from './taxonomy';
 import { questionCode } from './id';
 import type { Question } from './types';
 
@@ -182,5 +183,6 @@ export function examToTex(info: ExamInfo, variants: Variant[], opts: { withSolut
 }
 
 export function chapterName(id: string): string {
-  return findChapter(id)?.short ?? id;
+  const c = findChapter(id);
+  return c ? shortName(c.name) : id;
 }

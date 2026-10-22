@@ -8,12 +8,15 @@ import { parseExTest } from './extest';
 import { CURRENT_SCHEMA, migrate, SchemaNewerError } from './migrate';
 import { invoke, isDesktop } from './platform';
 import { seedQuestions } from './seed';
-import type { Level, Location, Question } from './types';
+import type { Level, Location, Question, Taxonomy } from './types';
+import { resetTaxonomy, setTaxonomy } from './curriculum';
 
 export interface AppState {
   schema: number;
   questions: Question[];
   nextSeq: number;
+  /** Cây mục lục đang dùng; null = dùng cây mặc định đi kèm bản cài. */
+  taxonomy: Taxonomy | null;
 }
 
 export interface Persistence {
@@ -48,7 +51,7 @@ export type BootResult =
   | { ok: false; kind: 'unreadable'; message: string };
 
 let persistence: Persistence = webPersistence;
-let state: AppState = { schema: CURRENT_SCHEMA, questions: [], nextSeq: 1 };
+let state: AppState = { schema: CURRENT_SCHEMA, questions: [], nextSeq: 1, taxonomy: null };
 let writable = true;
 const listeners = new Set<() => void>();
 
@@ -61,13 +64,19 @@ export async function initStore(p?: Persistence): Promise<BootResult> {
       // Lần chạy đầu: bản web nạp câu mẫu để xem thử; bản cài bắt đầu với ngân hàng trống.
       if (!isDesktop()) {
         const qs = seedQuestions();
-        state = { schema: CURRENT_SCHEMA, questions: qs, nextSeq: qs.length + 1 };
+        state = { schema: CURRENT_SCHEMA, questions: qs, nextSeq: qs.length + 1, taxonomy: null };
       }
       return { ok: true, recovered: false, firstRun: true };
     }
     const m = migrate(JSON.parse(json));
     const migrated = m.schema !== (JSON.parse(json).schema ?? 1);
-    state = { schema: m.schema, questions: m.questions, nextSeq: Math.max(Number(m.nextSeq) || 0, ...m.questions.map((q: Question) => q.seq + 1), 1) };
+    state = {
+      schema: m.schema,
+      questions: m.questions,
+      nextSeq: Math.max(Number(m.nextSeq) || 0, ...m.questions.map((q: Question) => q.seq + 1), 1),
+      taxonomy: m.taxonomy ?? null,
+    };
+    if (state.taxonomy) setTaxonomy(state.taxonomy);
     if (migrated) schedule();
     return { ok: true, recovered: !!recovered, firstRun: false };
   } catch (e) {
@@ -169,8 +178,16 @@ export function importBackup(json: string): number {
   const questions = m.questions as Question[];
   const nextSeq = Math.max(Number(m.nextSeq) || 0, ...questions.map((q) => q.seq + 1), 1);
   writable = true;
-  set({ schema: m.schema, questions, nextSeq });
+  const taxonomy = (m.taxonomy ?? null) as Taxonomy | null;
+  if (taxonomy) setTaxonomy(taxonomy); else resetTaxonomy();
+  set({ schema: m.schema, questions, nextSeq, taxonomy });
   return questions.length;
+}
+
+/** Đổi cây mục lục đang dùng và ghi vào dữ liệu (null = quay về cây mặc định). */
+export function applyTaxonomy(tax: Taxonomy | null) {
+  if (tax) setTaxonomy(tax); else resetTaxonomy();
+  set({ ...state, taxonomy: tax });
 }
 
 export function resetToSample() {

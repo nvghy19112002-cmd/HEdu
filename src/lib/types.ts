@@ -42,7 +42,13 @@ export interface Question extends Location {
   updatedAt: number;
 }
 
-export interface Lesson { id: string; no: number; name: string; forms: Form[] }
-export interface Form { id: string; no: number; name: string }
-export interface Chapter { id: string; no: number; name: string; short: string; mon: 'D' | 'H'; lessons: Lesson[] }
-export interface Grade { grade: number; chapters: Chapter[] }
+/** ---- Cây mục lục (khung chương trình): 5 cấp, sửa được trong app ---- */
+export type TaxKind = 'grade' | 'branch' | 'chapter' | 'lesson' | 'form';
+
+export interface Form { id: string; code: string; name: string }
+export interface Lesson { id: string; code: string; name: string; forms: Form[] }
+export interface Chapter { id: string; code: string; name: string; lessons: Lesson[] }
+/** Phân môn: Đại số (D), Hình học (H), Chuyên đề (C)… mã do người dùng đặt */
+export interface Branch { id: string; code: string; name: string; chapters: Chapter[] }
+export interface Grade { id: string; code: string; name: string; grade: number; branches: Branch[] }
+export interface Taxonomy { name: string; grades: Grade[] }

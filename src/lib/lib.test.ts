@@ -7,6 +7,7 @@ import { pickByMatrix, makeVariants, shortages, examToTex } from './exam';
 import { renderLatexText } from './render';
 import { CURRENT_SCHEMA, migrate, SchemaNewerError } from './migrate';
 import { parseCode } from './id';
+import { addChild, buildDefault, countNodes, fromJson, moveNode, removeNode, renameNode, setNodeCode, toJson } from './taxonomy';
 
 let failed = 0;
 function ok(cond: unknown, msg: string) {
@@ -34,8 +35,8 @@ ok(rebuilt.options[3].correct && rebuilt.options[3].text === '$(0;2)$', 'dựng 
 ok(splitExBlocks(bank[0].latex + '\n\n' + bank[1].latex).length === 2, 'tách nhiều câu');
 
 console.log('Gán ID');
-ok(questionCode(bank[0], bank[0].level) === '2D1B1-1', 'ID câu 1: 2D1B1-1');
-ok(questionCode(bank[6], bank[6].level) === '2H2Y3-1', 'ID câu vectơ: 2H2Y3-1');
+ok(questionCode(bank[0], bank[0].level) === '2D1H1-1', 'ID câu 1: 2D1H1-1');
+ok(questionCode(bank[6], bank[6].level) === '2H2N2-1', 'ID câu véc-tơ: 2H2N2-1');
 
 console.log('Kiểm tra trùng');
 const same = bank[0].latex.replace('Cho hàm số', 'Cho  hàm   số');
@@ -47,11 +48,11 @@ ok(findDuplicates(bank[9].latex, bank, bank[9].uid).length === 0, 'câu khác h�
 
 console.log('Tạo đề');
 const rows = [
-  { chapterId: 'g12c1', nb: 1, th: 1, vd: 1, ds: 1, tln: 1 },
-  { chapterId: 'g12c4', nb: 1, th: 1, vd: 0, ds: 1, tln: 1 },
+  { chapterId: 'c2D1', nb: 1, th: 1, vd: 1, ds: 1, tln: 1 },
+  { chapterId: 'c2D4', nb: 1, th: 1, vd: 0, ds: 1, tln: 1 },
 ];
 ok(shortages(bank, rows).length === 0, 'ma trận mẫu đủ câu');
-ok(shortages(bank, [{ chapterId: 'g12c2', nb: 1, th: 0, vd: 1, ds: 0, tln: 1 }]).length === 1, 'phát hiện thiếu câu VD chương vectơ');
+ok(shortages(bank, [{ chapterId: 'c2H2', nb: 1, th: 0, vd: 1, ds: 0, tln: 1 }]).length === 1, 'phát hiện thiếu câu VD chương véc-tơ');
 const picked = pickByMatrix(bank, rows, 42);
 ok(picked.p1.length === 5 && picked.p2.length === 2 && picked.p3.length === 2, 'chọn đúng số câu mỗi phần');
 const vars = makeVariants(picked, { count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, seed: 42 });
@@ -90,10 +91,34 @@ try { migrate({ ...v1, schema: 1 }, {}, 2); } catch { missing = true; }
 ok(missing, 'thiếu bước nâng cấp thì báo lỗi, không đoán');
 
 console.log('Đọc ngược ID6');
-const pc = parseCode('2D1B1-1');
-ok(pc?.loc.chapterId === 'g12c1' && pc.level === 'TH' && pc.loc.lessonId === 'g12c1l1', '2D1B1-1 → Lớp 12, chương 1, bài 1, thông hiểu');
-ok(parseCode('2H2Y3-2')?.loc.formId === 'g12c2l3f2', '2H2Y3-2 → đúng dạng 2');
+const pc = parseCode('2D1H1-1');
+ok(pc?.loc.chapterId === 'c2D1' && pc.level === 'TH' && pc.loc.lessonId === 'l2D11', '2D1H1-1 → Lớp 12, chương 1, bài 1, thông hiểu');
+ok(parseCode('2H2N2-2')?.loc.formId === 'f2H222', '2H2N2-2 → đúng dạng 2');
 ok(parseCode('9X9') === null, 'ID sai định dạng trả về null');
+ok(parseCode('2D1X1-1') === null, 'chữ mức độ lạ bị từ chối');
+
+console.log('Cây mục lục sửa được');
+const tax0 = buildDefault();
+const c0 = countNodes(tax0);
+ok(c0.grades === 3 && c0.chapters === 30 && c0.lessons === 99 && c0.forms === 532, `cây mặc định: ${c0.grades} lớp, ${c0.chapters} chương, ${c0.lessons} bài, ${c0.forms} dạng`);
+const round = fromJson(toJson(tax0));
+ok(JSON.stringify(countNodes(round.tax)) === JSON.stringify(c0) && round.warnings.length === 0, 'xuất ra JSON rồi nạp lại giữ nguyên cây');
+const g0 = tax0.grades[0];
+const renamed = renameNode(tax0, g0.id, 'Lớp mười');
+ok(renamed.grades[0].name === 'Lớp mười' && tax0.grades[0].name === 'Lớp 10', 'đổi tên không đụng cây cũ');
+const recoded = setNodeCode(tax0, g0.branches[0].id, 'X');
+ok(recoded.grades[0].branches[0].code === 'X' && recoded.grades[0].branches[0].chapters.length === g0.branches[0].chapters.length, 'đổi mã phân môn giữ nguyên các chương');
+ok(setNodeCode(tax0, g0.id, 'AB').grades[0].code === '0', 'mã dài hơn một ký tự bị từ chối');
+const added = addChild(tax0, g0.branches[0].chapters[0].id, 'Bài mới');
+ok(added.grades[0].branches[0].chapters[0].lessons.length === g0.branches[0].chapters[0].lessons.length + 1, 'thêm bài vào chương');
+const removed = removeNode(tax0, g0.branches[0].id);
+ok(removed.grades[0].branches.length === g0.branches.length - 1, 'xoá một phân môn');
+const moved = moveNode(tax0, g0.branches[1].id, -1);
+ok(moved.grades[0].branches[0].id === g0.branches[1].id, 'đổi chỗ hai phân môn');
+let badTree = false;
+try { fromJson('{"nodes":[]}'); } catch { badTree = true; }
+ok(badTree, 'file cây rỗng bị từ chối');
+ok(fromJson(JSON.stringify({ nodes: [{ code: '0', name: 'Lớp 10', children: [{ code: 'DD', name: 'Mã sai' }] }] })).warnings.length === 1, 'mã sai trong file nạp vào được báo cảnh báo');
 
 if (failed) { console.log(`\n${failed} kiểm thử lỗi`); process.exit(1); }
 console.log('\nTất cả kiểm thử đều đạt.');

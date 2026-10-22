@@ -7,7 +7,7 @@ import { parseExTest } from '../lib/extest';
 import { TYPE_LABEL } from '../lib/types';
 
 const SCREENS: { s: Screen; name: string }[] = [
-  { s: 'editor', name: 'Soạn câu hỏi mới' },
+  { s: 'editor', name: 'Soạn câu hỏi mới' }, // không ở thanh bên nhưng vẫn gọi được từ đây
   { s: 'bank', name: 'Mở ngân hàng câu hỏi' },
   { s: 'exam', name: 'Tạo đề theo ma trận' },
   { s: 'import', name: 'Nhập câu từ LaTeX' },

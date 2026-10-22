@@ -8,12 +8,13 @@ import type { BootResult } from './lib/store';
 import { BankScreen } from './screens/Bank';
 import { EditorScreen } from './screens/Editor';
 import { ExamScreen } from './screens/Exam';
-import { CurriculumScreen, ImportScreen } from './screens/Extra';
+import { ImportScreen } from './screens/Extra';
+import { CurriculumScreen } from './screens/Curriculum';
 import { SystemScreen } from './screens/System';
 import { UpdateProvider, useUpdates } from './update-context';
 
+// "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
 const NAV: { s: Screen; label: string; Icon: typeof IcEdit }[] = [
-  { s: 'editor', label: 'Soạn thảo', Icon: IcEdit },
   { s: 'bank', label: 'Ngân hàng', Icon: IcBank },
   { s: 'exam', label: 'Tạo đề', Icon: IcExam },
   { s: 'import', label: 'Nhập liệu', Icon: IcImport },
@@ -26,7 +27,7 @@ export function App({ boot }: { boot: BootResult }) {
 }
 
 function Shell({ recovered }: { recovered: boolean }) {
-  const [nav, setNav] = useState<Nav>({ screen: 'editor' });
+  const [nav, setNav] = useState<Nav>({ screen: 'bank' });
   const [msg, setMsg] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
   const [file, setFile] = useState<FileOut | null>(null);

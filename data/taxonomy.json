@@ -1,0 +1,3031 @@
+{
+ "_chuThich": "BẢN CHÉP của cây mục lục nằm trong file ngân hàng (bảng taxonomy_nodes + difficulty_levels + meta). Nguồn chân lý là file ngân hàng, KHÔNG phải file này: app tự ghi lại đây sau mỗi lần sửa cây, sửa tay vào đây không có tác dụng, xoá đi cũng không mất gì. Nó tồn tại để đọc bằng mắt và để mang bộ mục lục sang ngân hàng khác bằng nút \"Nạp cây mục lục…\".",
+ "format": {
+  "separator": "",
+  "open": "[",
+  "close": "]",
+  "levelOpen": "",
+  "levelClose": "",
+  "readSeparators": "-_*.·/|,;:+ ()",
+  "readWrappers": [
+   [
+    "[",
+    "]"
+   ],
+   [
+    "(",
+    ")"
+   ],
+   [
+    "<",
+    ">"
+   ],
+   [
+    "{",
+    "}"
+   ]
+  ],
+  "levelSeparators": [
+   "",
+   "",
+   "",
+   "-"
+  ],
+  "difficultyAfterLevel": 3,
+  "readMode": "strict",
+  "requireLeaf": true,
+  "requireDifficulty": true
+ },
+ "nodes": [
+  {
+   "code": "0",
+   "name": "Lớp 10",
+   "children": [
+    {
+     "code": "D",
+     "name": "Đại số / Xác suất - Thống kê / Tổ hợp",
+     "children": [
+      {
+       "code": "1",
+       "name": "Chương 1. Mệnh đề. Tập hợp",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Mệnh đề",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xác định mệnh đề, mệnh đề chứa biến"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tính đúng-sai của mệnh đề"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Phủ định của một mệnh đề"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Mệnh đề kéo theo, mệnh đề đảo, mệnh đề tương đương"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Mệnh đề với mọi, tồn tại (và phủ định chúng)"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Áp dụng mệnh đề vào suy luận có lí"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Tập hợp",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tập hợp và phần tử của tập hợp"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tập hợp con. Hai tập hợp bằng nhau"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Ký hiệu khoảng, đoạn, nửa khoảng"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Các phép toán tập hợp",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Giao và hợp của hai tập hợp (rời rạc)"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Hiệu và phần bù của hai tập hợp (rời rạc)"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Giao và hợp (dùng đoạn, khoảng)"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Hiệu và phần bù (dùng đoạn, khoảng)"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế ứng dụng của tập hợp"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "2",
+       "name": "Chương 2. BPT và hệ BPT bậc nhất hai ẩn",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Bất phương trình bậc nhất hai ẩn",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Các khái niệm về BPT bậc nhất hai ẩn"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Miền nghiệm của BPT bậc nhất hai ẩn"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Toán thực tế về BPT bậc nhất hai ẩn"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Hệ bất phương trình bậc nhất hai ẩn",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Các khái niệm về Hệ BPT bậc nhất hai ẩn"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Miền nghiệm của Hệ BPT bậc nhất hai ẩn"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Toán thực tế về Hệ BPT bậc nhất hai ẩn"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "3",
+       "name": "Chương 3. Hàm số bậc hai và đồ thị",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Hàm số và đồ thị",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xác định một hàm số"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tập xác định của hàm số"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Giá trị của hàm số"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Đồ thị của hàm số"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Tính đồng biến, nghịch biến"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Tính chẵn, lẻ"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế về hàm số"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Hàm số bậc hai",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xác định hàm số bậc hai"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bảng biến thiên, tính đơn điệu, max, min"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Đồ thị của hàm số bậc hai"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Bài toán về sự tương giao"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Hàm số chứa dấu giá trị tuyệt đối"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế ứng dụng hàm số bậc hai"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "6",
+       "name": "Chương 6. Thống kê",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Số gần đúng. Sai số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tính và ước lượng sai số tuyệt đối, tương đối"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tính và xác định độ chính xác của kết quả"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Quy tròn số gần đúng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Viết số gần đúng cho số đúng biết độ chính xác"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Mô tả và biểu diễn dữ liệu trên các bảng và biểu đồ",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Đọc và phân tích thông tin trên bảng số liệu"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Đọc và phân tích thông tin trên biểu đồ"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Số liệu bất thường trên bảng số liệu"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Số liệu bất thường trên biểu đồ"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Các số đặc trưng đo xu thế trung tâm của mẫu số liệu",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Số trung bình cộng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Số trung vị"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tứ phân vị"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Mốt"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Các số đặc trưng đo mức độ phân tán của mẫu số liệu",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Khoảng biến thiên, khoảng tứ phân vị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Giá trị bất thường của mẫu số liệu"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Phương sai, độ lệch chuẩn của mẫu số liệu"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "7",
+       "name": "Chương 7. Bất phương trình bậc 2 một ẩn",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Dấu của tam thức bậc 2",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xác định tam thức bậc 2"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Dấu của tam thức bậc 2 và ứng dụng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bài toán xét dấu biết BXD, đồ thị"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Xét dấu biểu thức dạng tích, thương"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế ứng dụng dấu tam thức bậc 2"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Giải bất phương trình bậc 2 một ẩn",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Bất phương trình bậc 2 và ứng dụng"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Giải bất phương trình bậc hai biết BXD, đồ thị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bất phương trình dạng tích, thương"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Hệ bất phương trình BPT bậc 2"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Bất phương trình chứa căn, | · |"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Bài toán có tham số m"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế ứng dụng bất phương trình bậc 2 một ẩn"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Phương trình quy về phương trình bậc hai",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Phương trình căn √(f(x)) = √(g(x)) và mở rộng"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương trình căn √(f(x)) = g(x) và mở rộng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Phương trình căn thức có tham số"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Phương trình căn thức (dạng khác)"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phương trình khác quy về phương trình bậc 2"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán hình, toán thực tế ứng dụng phương trình quy về bậc 2"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "8",
+       "name": "Chương 8. Đại số tổ hợp",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Quy tắc cộng-quy tắc nhân",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Bài toán chỉ sử dụng quy tắc cộng"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bài toán chỉ sử dụng quy tắc nhân"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bài toán kết hợp quy tắc cộng và quy tắc nhân"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Bài toán dùng quy tắc bù trừ"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Bài toán đếm số tự nhiên"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Sơ đồ hình cây"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Hoán vị. Chỉnh hợp. Tổ hợp",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Lý thuyết tổng hợp về P, C, A"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bài toán có biểu thức P, C, A"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bài toán đếm số tự nhiên"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Bài toán chọn người"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Bài toán chọn đối tượng khác"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Bài toán có yếu tố hình học"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Bài toán xếp chỗ (không tròn, không lặp)"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Hoán vị bàn tròn"
+          },
+          {
+           "code": "9",
+           "name": "Dạng 9. Hoán vị lặp"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Nhị thức Newton",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Các câu hỏi lý thuyết tổng hợp"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Khai triển một nhị thức Newton"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm hệ số, số hạng trong khai triển bằng tam giác Pascal"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tìm hệ số, số hạng trong khai triển"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Tính tổng nhờ khai triển nhị thức Newton"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán tổ hợp có dùng nhị thức Newton"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "0",
+       "name": "Chương 10. Xác suất",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Không gian mẫu và biến cố",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Các câu hỏi lý thuyết tổng hợp"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Mô tả không gian mẫu, biến cố"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Đếm phần tử không gian mẫu, biến cố"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Xác suất của biến cố",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Các câu hỏi lý thuyết tổng hợp"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Liên quan xúc xắc, đồng tiền (PP liệt kê)"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Liên quan việc sắp xếp chỗ"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Liên quan việc chọn người"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Liên quan việc chọn đối tượng khác"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Liên quan hình học"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Liên quan việc đếm số"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Liên quan bàn tròn hoặc hoán vị lặp"
+          },
+          {
+           "code": "9",
+           "name": "Dạng 9. Liên quan vấn đề khác"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "code": "H",
+     "name": "Hình học & đo lường",
+     "children": [
+      {
+       "code": "4",
+       "name": "Chương 4. Hệ thức lượng trong tam giác",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Giá trị lượng giác của góc (0 − 180∘)",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xét dấu của biểu thức lượng giác"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tính các giá trị lượng giác"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Biến đổi, rút gọn biểu thức lượng giác"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Định lý sin và định lý côsin",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Bài toán chỉ dùng định lý Sin, Côsin"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bài toán có dùng công thức diện tích"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Biến đổi, rút gọn biểu thức"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Nhận dạng tam giác"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Giải tam giác và ứng dụng thực tế",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Giải tam giác"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Các ứng dụng thực tế"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "5",
+       "name": "Chương 5. Véctơ (chưa xét tọa độ)",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Khái niệm véctơ",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xác định một véctơ"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xét phương và hướng của các véctơ"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Hai véctơ bằng nhau"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Hai véctơ đối nhau"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Độ dài của một véctơ"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng véctơ"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Tổng và hiệu của hai véctơ",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tính toán, thu gọn hiệu các véctơ"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tính đúng-sai của 1 đẳng thức véctơ"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm điểm nhờ đẳng thức véctơ"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tính độ dài của véctơ tổng, hiệu"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Cực trị hình học"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng tổng hiệu véctơ"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Tích của một số với véctơ",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xác định k.v⃗ và độ dài của nó"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Biến đổi, thu gọn 1 đẳng thức véctơ"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm điểm nhờ đẳng thức véctơ"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Sự cùng phương của 2 véctơ và ứng dụng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phân tích 1 véctơ theo 2 véctơ không cùng phương"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Tính độ dài của véctơ tổng, hiệu"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Tập hợp điểm"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Cực trị hình học"
+          },
+          {
+           "code": "9",
+           "name": "Dạng 9. Toán thực tế áp dụng tích 1 số với véctơ"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Tích vô hướng (chưa xét tọa độ)",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tích vô hướng, góc giữa 2 véctơ"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm góc nhờ tích vô hướng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Đẳng thức về tích vô hướng hoặc độ dài"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Điều kiện vuông góc"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Các bài toán tìm điểm và tập hợp điểm"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Cực trị và chứng minh bất đẳng thức"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế áp dụng tích vô hướng"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "9",
+       "name": "Chương 9. Phương pháp toạ độ trong mặt phẳng (Oxy)",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Toạ độ của véctơ",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tọa độ điểm, độ dài đại số của véctơ trên 1 trục"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phép toán véctơ (tổng, hiệu, tích với số) trong Oxy"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tọa độ điểm và véctơ trên hệ trục Oxy"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Sự cùng phương của 2 véctơ và ứng dụng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phân tích một véctơ theo 2 véctơ không cùng phương"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế dùng hệ toạ độ"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Tích vô hướng (theo tọa độ)",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tích vô hướng, góc giữa 2 véctơ"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm góc nhờ tích vô hướng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Đẳng thức về tích vô hướng hoặc độ dài"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Điều kiện vuông góc"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Các bài toán tìm điểm và tập hợp điểm"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Cực trị và chứng minh bất đẳng thức"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế, liên môn"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Đường thẳng trong mặt phẳng toạ độ",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Điểm, véctơ, hệ số góc của đường thẳng"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương trình đường thẳng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Vị trí tương đối giữa hai đường thẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Bài toán về góc giữa hai đường thẳng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Bài toán về khoảng cách"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Bài toán tìm điểm"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Bài toán dùng cho tam giác, tứ giác"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Bài toán thực tế, PP tọa độ hóa"
+          },
+          {
+           "code": "9",
+           "name": "Dạng 9. Bài toán có dùng PT chính tắc"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Đường tròn trong mặt phẳng toạ độ",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tìm tâm, bán kính và điều kiện là đường tròn"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương trình đường tròn"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Phương trình tiếp tuyến của đường tròn"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Vị trí tương đối liên quan đường tròn"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán tổng hợp đường thẳng và đường tròn"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Bài toán dùng cho tam giác, tứ giác"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Bài toán thực tế, PP tọa độ hóa"
+          }
+         ]
+        },
+        {
+         "code": "5",
+         "name": "Bài 5. Ba đường conic trong mặt phẳng toạ độ",
+         "children": [
+          {
+           "code": "0",
+           "name": "Dạng 0. Bài toán tổng hợp/thực tế, PP tọa độ hóa 3 đường conic"
+          },
+          {
+           "code": "1",
+           "name": "Dạng 1. Xác định các yếu tố của elip"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương trình chính tắc của elip"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bài toán điểm trên elip"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Xác định các yếu tố của hypebol"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phương trình chính tắc của hypebol"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Bài toán điểm trên hypebol"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Xác định các yếu tố của parabol"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Phương trình chính tắc của parabol"
+          },
+          {
+           "code": "9",
+           "name": "Dạng 9. Bài toán điểm trên parabol"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "code": "C",
+     "name": "Chuyên đề",
+     "children": [
+      {
+       "code": "1",
+       "name": "Chuyên đề 1. Hệ phương trình bậc nhất 3 ẩn và ứng dụng",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Hệ phương trình bậc nhất 3 ẩn và ứng dụng",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Các khái niệm về Hệ PT bậc nhất 3 ẩn"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Giải Hệ PT bậc nhất 3 ẩn"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Toán thực tế ứng dụng Hệ PT bậc nhất 3 ẩn"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "2",
+       "name": "Chuyên đề 2. Phương pháp quy nạp toán học",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Phương pháp quy nạp toán học",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Quy nạp chứng minh các đẳng thức/công thức/chia hết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Quy nạp chứng minh các bất đẳng thức"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "1",
+   "name": "Lớp 11",
+   "children": [
+    {
+     "code": "D",
+     "name": "Đại số / Xác suất - Thống kê / Tổ hợp",
+     "children": [
+      {
+       "code": "1",
+       "name": "Chương 1. Hàm số lượng giác và phương trình lượng giác",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Góc lượng giác",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Chuyển đổi đơn vị độ và radian"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Số đo của một góc lượng giác"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Độ dài của một cung tròn"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Đường tròn lượng giác và ứng dụng"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng góc lượng giác"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Giá trị lượng giác của một góc lượng giác",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xét dấu giá trị lượng giác. Tính giá trị lượng giác của một góc"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Biến đổi, rút gọn biểu thức lượng giác; chứng minh đẳng thức lượng giác"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Các góc lượng giác có liên quan đặc biệt: bù nhau, phụ nhau, đối nhau, hơn kém nhau π"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế áp dụng giá trị của một góc lượng giác"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Các công thức lượng giác",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Áp dụng công thức cộng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Áp dụng công thức nhân đôi - hạ bậc"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Áp dụng công thức biến đổi tích <-> tổng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Kết hợp nhiều công thức lượng giác"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Nhận dạng tam giác"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế áp dụng công thức lượng giác"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Hàm số lượng giác và đồ thị",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm tập xác định"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Xét tính đơn điệu"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Xét tính chẵn, lẻ"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Xét tính tuần hoàn, tìm chu kỳ"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Tìm tập giá trị và min, max"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Bảng biến thiên và đồ thị"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng hàm số lượng giác"
+          }
+         ]
+        },
+        {
+         "code": "5",
+         "name": "Bài 5. Phương trình lượng giác cơ bản",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết. Khái niệm phương trình tương đương"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Điều kiện có nghiệm"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Phương trình cơ bản dùng Radian"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Phương trình cơ bản dùng Độ"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phương trình đưa về dạng cơ bản"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng phương trình lượng giác"
+          }
+         ]
+        },
+        {
+         "code": "6",
+         "name": "Bài 6. [Giảm] Phương trình lượng giác thường gặp",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Phương trình bậc n theo một hàm số lượng giác"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương trình đẳng cấp bậc n đối với sinx và cosx"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Phương trình bậc nhất đối với sinx và cosx"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Phương trình đối xứng, phản đối xứng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phương trình lượng giác không mẫu mực"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Phương trình lượng giác có chứa ẩn ở mẫu số"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Phương trình lượng giác có chứa tham số"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng phương trình lượng giác thường gặp"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "2",
+       "name": "Chương 2. Dãy số. Cấp số cộng. Cấp số nhân",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Dãy số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Số hạng tổng quát, biểu diễn dãy số"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm số hạng cụ thể của dãy số"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Dãy số tăng, dãy số giảm"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Dãy số bị chặn"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng dãy số"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Cấp số cộng",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Nhận diện cấp số cộng, công sai d"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Số hạng tổng quát của cấp số cộng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tìm số hạng cụ thể trong cấp số cộng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Điều kiện để dãy số là cấp số cộng"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Tính tổng của cấp số cộng"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế áp dụng cấp số cộng"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Cấp số nhân",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Nhận diện cấp số nhân, công bội q"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Số hạng tổng quát của cấp số nhân"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tìm số hạng cụ thể trong cấp số nhân"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Điều kiện để dãy số là cấp số nhân"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Tính tổng của cấp số nhân"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Kết hợp cấp số nhân và cấp số cộng"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng cấp số nhân"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "3",
+       "name": "Chương 3. Giới hạn. Hàm số liên tục",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Giới hạn của dãy số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương pháp đặt thừa số chung (lim hữu hạn)"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Phương pháp lượng liên hợp (lim hữu hạn)"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Giới hạn vô cực"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Cấp số nhân lùi vô hạn"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng giới hạn của dãy số"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Giới hạn của hàm số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Thay số trực tiếp"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. PP đặt thừa số chung, kết quả hữu hạn"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. PP đặt thừa số chung, kết quả vô cực"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. PP lượng liên hợp, kết quả hữu hạn"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. PP lượng liên hợp, kết quả vô cực"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Giới hạn một bên"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng giới hạn của hàm số"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Hàm số liên tục",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tính liên tục thể hiện qua đồ thị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Hàm số liên tục tại một điểm"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Hàm số liên tục trên khoảng, đoạn"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Bài toán phương trình có nghiệm"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng hàm số liên tục"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "5",
+       "name": "Chương 5. Các số đặc trưng đo xu thế trung tâm cho mẫu số liệu ghép nhóm",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Số trung bình và mốt của mẫu số liệu ghép nhóm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Mẫu số liệu ghép nhóm"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Số trung bình"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Mốt"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Trung vị và tứ phân vị của mẫu số liệu ghép nhóm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Trung vị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tứ phân vị"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "6",
+       "name": "Chương 6. Hàm số mũ và hàm số lôgarít",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Phép tính luỹ thừa",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tính giá trị của biểu thức chứa lũy thừa"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Biến đổi, rút gọn biểu thức chứa lũy thừa"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Điều kiện cho luỹ thừa, căn thức"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. So sánh các lũy thừa"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Phép tính lôgarít",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tính giá trị biểu thức chứa lôgarít"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Biến đổi, biểu diễn biểu thức chứa lôgarít"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Rút gọn, chứng minh biểu thức lôgarít"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Số e và bài toán lãi kép"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế áp dụng phép tính lôgarít"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Hàm số mũ. Hàm số lôgarít",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết hàm số lũy thừa, mũ, lôgarít"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tập xác định của hàm số"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Sự biến thiên và đồ thị của hàm số mũ, lôgarít"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. So sánh các luỹ thừa và lôgarít"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế áp dụng hàm số mũ, lôgarít"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Phương trình, bất phương trình mũ và lôgarít",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Điều kiện có nghiệm"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương trình mũ, lôgarít cơ bản"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bất phương trình mũ, lôgarít cơ bản"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Phương trình mũ, lôgarít đưa về cùng cơ số"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Bất phương trình mũ, lôgarít đưa về cùng cơ số"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng phương trình mũ, lôgarít"
+          }
+         ]
+        },
+        {
+         "code": "5",
+         "name": "Bài 5. [Giảm] Các phương pháp giải được giảm tải",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Phương pháp đặt ẩn phụ cho PT mũ, lôgarít"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương pháp lôgarít hóa, mũ cho PT mũ, lôgarít"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Phương pháp hàm số, đánh giá cho PT mũ, lôgarít"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Hệ PT mũ, lôgarít"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế áp dụng phương trình mũ, lôgarít"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "7",
+       "name": "Chương 7. Đạo hàm",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Đạo hàm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tính đạo hàm bằng định nghĩa"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Số gia hàm số, số gia biến số"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Ý nghĩa Hình học của đạo hàm"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Ý nghĩa Vật lý của đạo hàm"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế khác áp dụng định nghĩa đạo hàm"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Các quy tắc đạo hàm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tính đạo hàm"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Đẳng thức có y và y′"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tiếp tuyến tại một điểm"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tiếp tuyến biết trước hệ số góc"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Tiếp tuyến chưa biết tiếp điểm và hệ số góc"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Giới hạn hàm số lượng giác, hàm số mũ, lôgarít"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Dùng đạo hàm cho nhị thức Newton"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng quy tắc đạo hàm"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Đạo hàm cấp hai",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tính đạo hàm cấp hai"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Đẳng thức có y và (y′, y′′)"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Toán thực tế và Ý nghĩa Vật lý của đạo hàm cấp hai"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "9",
+       "name": "Chương 9. Xác suất",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Biến cố giao và quy tắc nhân xác suất",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lí thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định và đếm số phần tử biến cố giao"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Công thức nhân xác suất cho 2 biến cố độc lập"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tính xác suất biến cố giao bằng sơ đồ hình cây"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Biến cố hợp và quy tắc cộng xác suất",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lí thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định và đếm số phần tử biến cố hợp"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Quy tắc cộng cho hai biến cố xung khắc"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Quy tắc cộng cho hai biến cố bất kì"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Tính xác suất biến cố hợp bằng sơ đồ hình cây"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "code": "H",
+     "name": "Hình học & đo lường",
+     "children": [
+      {
+       "code": "4",
+       "name": "Chương 4. Đường thẳng, mặt phẳng. Quan hệ song song trong không gian",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Điểm, đường thẳng và mặt phẳng",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Hình biểu diễn của một hình không gian"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm giao tuyến của hai mặt phẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tìm giao điểm của đường thẳng và mặt phẳng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Xác định thiết diện"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Ba điểm thẳng hàng, ba đường thẳng đồng quy"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế áp dụng điểm, đường thẳng và mặt phẳng"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Hai đường thẳng song song",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Hai đường thẳng song song"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm giao tuyến bằng cách kẻ song song"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tìm giao điểm của đường thẳng và mặt phẳng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Xác định thiết diện bằng cách kẻ song song"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Ba điểm thẳng hàng"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Bài toán quỹ tích và điểm cố định"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng hai đường thẳng song song"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Đường thẳng và mặt phẳng song song",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Đường thẳng song song với mặt phẳng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm giao tuyến bằng cách kẻ song song"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tìm giao điểm của đường thẳng và mặt phẳng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Xác định thiết diện bằng cách kẻ song song"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Ba điểm thẳng hàng"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Bài toán quỹ tích và điểm cố định"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng đường thẳng song song mặt phẳng"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Hai mặt phẳng song song",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Hai mặt phẳng song song"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Chứng minh đường thẳng song song mặt phẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Xác định mặt phẳng đi qua một điểm và song song với một mặt phẳng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Xác định mặt phẳng chứa đường thẳng (hoặc đi qua hai điểm) và song song với một mặt phẳng"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Bài toán tổng hợp"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế áp dụng hai mặt phẳng song song"
+          }
+         ]
+        },
+        {
+         "code": "5",
+         "name": "Bài 5. Hình lăng trụ và hình hộp (xiên)",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bài toán về hình lăng trụ (xiên)"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bài toán về hình hộp (xiên)"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Toán thực tế áp dụng hình lăng trụ và hình hộp"
+          }
+         ]
+        },
+        {
+         "code": "6",
+         "name": "Bài 6. Phép chiếu song song",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Hình biểu diễn của một hình không gian"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Xác định yếu tố song song"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Xác định phương chiếu"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Tính tỉ số đoạn thẳng, diện tích qua phép chiếu"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "8",
+       "name": "Chương 8. Quan hệ vuông góc trong không gian",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Hai đường thẳng vuông góc",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lí thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định hai đường thẳng vuông góc"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm góc giữa hai đường thẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Toán thực tế áp dụng hai đường thẳng vuông góc"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Đường thẳng vuông góc với mặt phẳng",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lí thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định hoặc chứng minh đường thẳng và mặt phẳng vuông góc"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Xác định hoặc chứng minh hai đường thẳng vuông góc"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Dựng mặt phẳng, tìm thiết diện"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Hình chiếu vuông góc của một hình trên mặt phẳng (tìm điểm, tìm đoạn thẳng, tính diện tích)"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng đường thẳng vuông góc mặt phẳng"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Phép chiếu vuông góc",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Lý thuyết về phép chiếu vuông góc"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Hình chiếu vuông góc của đa giác trên mặt phẳng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Các bài toán thực tế áp dụng phép chiếu vuông góc"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Hai mặt phẳng vuông góc",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lí thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định/chứng minh đường thẳng vuông góc mặt phẳng, mặt phẳng vuông góc"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Xác định góc giữa hai mặt phẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Dựng mặt phẳng, thiết diện"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Nhận dạng và tính toán liên quan các hình thông dụng"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Bài toán cho trước góc giữa d và (P)"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế áp dụng hai mặt phẳng vuông góc"
+          }
+         ]
+        },
+        {
+         "code": "5",
+         "name": "Bài 5. Khoảng cách",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lí thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Khoảng cách giữa 2 điểm, từ 1 điểm đến 1 đường thẳng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Khoảng cách từ một điểm đến một mặt phẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Khoảng cách giữa hai đường thẳng chéo nhau"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Đường vuông góc chung của hai đường thẳng chéo nhau"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng khoảng cách"
+          }
+         ]
+        },
+        {
+         "code": "6",
+         "name": "Bài 6. Góc giữa đường thẳng và mặt phẳng. Góc nhị diện",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Góc giữa đường thẳng và mặt phẳng"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Góc nhị diện, góc phẳng nhị diện"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Góc giữa 2 mặt phẳng, biết trước góc (d,(P))"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Khoảng cách giữa điểm, đường, biết trước góc (d,(P))"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Khoảng cách giữa điểm - mặt phẳng, biết trước góc (d,(P))"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Khoảng cách giữa 2 đường chéo nhau, biết trước góc (d,(P))"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế về góc đường thẳng, mặt phẳng, góc nhị diện"
+          }
+         ]
+        },
+        {
+         "code": "7",
+         "name": "Bài 7. Hình lăng trụ đứng. Hình chóp đều. Thể tích",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lí thuyết, công thức"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Thể tích khối chóp tam giác"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Thể tích khối chóp tứ giác"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Thể tích khối lăng trụ tam giác"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Thể tích khối lăng trụ tứ giác"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Thể tích khối chóp cụt và các khối khác"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Tỉ số thể tích"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Ứng dụng thể tích tính góc, khoảng cách,. . ."
+          },
+          {
+           "code": "9",
+           "name": "Dạng 9. Toán thực tế hình lăng trụ đứng, chóp đều, thể tích"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "code": "C",
+     "name": "Chuyên đề",
+     "children": [
+      {
+       "code": "1",
+       "name": "Chuyên đề 1. Phép biến hình phẳng",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Phép biến hình, phép dời hình và hai hình bằng nhau",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bài toán xác định một phép đặt tương ứng có là phép dời hình hay không?"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Xác định ảnh khi thực hiện phép dời hình"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Phép tịnh tiến",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm ảnh hoặc tạo ảnh khi thực hiện phép tịnh tiến"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Ứng dụng phép tịnh tiến"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Phép đối xứng trục",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm ảnh hoặc tạo ảnh khi thực hiện phép đối xứng trục"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Xác định trục đối xứng và số trục đối xứng của một hình"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Ứng dụng phép đối xứng trục"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Phép đối xứng tâm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm ảnh, tạo ảnh khi thực hiện phép đối xứng tâm"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Xác định hình có tâm đối xứng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Ứng dụng phép đối xứng tâm"
+          }
+         ]
+        },
+        {
+         "code": "5",
+         "name": "Bài 5. Phép quay",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định vị trí ảnh của điểm, hình khi thực hiện phép quay cho trước"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm tọa độ ảnh của điểm, phương trình của một đường thẳng khi thực hiện phép quay"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Ứng dụng phép quay"
+          }
+         ]
+        },
+        {
+         "code": "6",
+         "name": "Bài 6. Phép vị tự",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định ảnh, tạo ảnh khi thực hiện phép vị tự"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm tâm vị tự của hai đường tròn"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Ứng dụng phép vị tự"
+          }
+         ]
+        },
+        {
+         "code": "7",
+         "name": "Bài 7. Phép đồng dạng",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định ảnh, tạo ảnh khi thực hiện phép đồng dạng"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "2",
+       "name": "Chuyên đề 2. Lý thuyết đồ thị",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Đồ thị",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi về đỉnh, cạnh của đồ thị"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Câu hỏi về bậc của đồ thị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Câu hỏi tổng hợp"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Đường đi Euler và Harmilton",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Đường đi Euler"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Đường đi Harmilton"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Câu hỏi tổng hợp"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Bài toán tìm đường đi ngắn nhất",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Bài toán tìm đường đi ngắn nhất"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tổng hợp"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "3",
+       "name": "Chuyên đề 3. Một số yếu tố vẽ kỹ thuật",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Hình biểu diễn của một hình, khối",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Lý thuyết về phép chiếu và hình biểu diễn song song"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Lý thuyết về phép chiếu vuông góc"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Lý thuyết về phép chiếu trục đo"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tổng hợp"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Bản vẽ kỹ thuật",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Lý thuyết cơ bản về bản vẽ kỹ thuật"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Phương pháp biểu diễn bản vẽ kỹ thuật"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tổng hợp"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "2",
+   "name": "Lớp 12",
+   "children": [
+    {
+     "code": "D",
+     "name": "Đại số / Xác suất - Thống kê / Tổ hợp",
+     "children": [
+      {
+       "code": "1",
+       "name": "Chương 1. Ứng dụng đạo hàm để khảo sát hàm số",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Sự đồng biến và nghịch biến của hàm số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Xét tính đơn điệu của hàm số cho bởi công thức"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xét tính đơn điệu dựa vào bảng biến thiên, đồ thị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm tham số m để hàm số đơn điệu"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Ứng dụng tính đơn điệu để chứng minh bất đẳng thức, giải phương trình, bất phương trình, hệ phương trình"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Toán thực tế ứng dụng sự đồng biến nghịch biến"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Cực trị của hàm số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Tìm cực trị của hàm số cho bởi công thức"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm cực trị dựa vào BBT, đồ thị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm m để hàm số đạt cực trị tại 1 điểm x0 cho trước"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tìm m để hàm số, đồ thị hàm số bậc ba có cực trị thỏa mãn điều kiện"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Tìm m để hàm số, đồ thị hàm số trùng phương có cực trị thỏa mãn điều kiện"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Tìm m để hàm số, đồ thị hàm số các hàm số khác có cực trị thỏa mãn điều kiện"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế ứng dụng cực trị của hàm số"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Giá trị lớn nhất và giá trị nhỏ nhất của hàm số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. GTLN, GTNN trên đoạn [a; b]"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. GTLN, GTNN trên khoảng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Sử dụng các đánh giá, bất đẳng thức cổ điển"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Ứng dụng GTNN, GTLN trong bài toán phương trình, bất phương trình, hệ phương trình"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. GTLN, GTNN hàm nhiều biến"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế ứng dụng GTLN, GTNN của hàm số"
+          }
+         ]
+        },
+        {
+         "code": "4",
+         "name": "Bài 4. Đường tiệm cận",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Bài toán xác định các đường tiệm cận của hàm số (không chứa tham số) hoặc biết BBT, đồ thị"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bài toán xác định các đường tiệm cận của hàm số có chứa tham số"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Bài toán liên quan đến đồ thị hàm số và các đường tiệm cận"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Toán thực tế ứng dụng tiệm cận"
+          }
+         ]
+        },
+        {
+         "code": "5",
+         "name": "Bài 5. Khảo sát sự biến thiên và vẽ đồ thị hàm số",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Nhận dạng đồ thị"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Các phép biến đổi đồ thị"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Biện luận số giao điểm dựa vào đồ thị, bảng biến thiên"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Sự tương giao của hai đồ thị (liên quan đến tọa độ giao điểm)"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Đồ thị của hàm đạo hàm"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Phương trình tiếp tuyến của đồ thị hàm số"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Điểm đặc biệt của đồ thị hàm số"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế ứng dụng khảo sát hàm số"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "3",
+       "name": "Chương 3. Các số đặc trưng đo mức độ phân tán cho mẫu số liệu ghép nhóm",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Khoảng biến thiên, khoảng tứ phân vị của mẫu số liệu ghép nhóm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm khoảng biến thiên"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm khoảng tứ phân vị"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Câu hỏi tổng hợp"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Phương sai, độ lệch chuẩn của mẫu số liệu ghép nhóm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm phương sai, độ lệch chuẩn"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Câu hỏi tổng hợp"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "4",
+       "name": "Chương 4. Nguyên hàm, tích phân và ứng dụng",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Nguyên hàm",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Nguyên hàm cơ bản đa thức, phân thức"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Nguyên hàm cơ bản hàm lượng giác"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Nguyên hàm cơ bản hàm mũ, luỹ thừa"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phương pháp đổi biến số cơ bản"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng nguyên hàm"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Tích phân",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tích phân cơ bản đa thức, phân thức"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tích phân cơ bản hàm lượng giác"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Tích phân cơ bản hàm mũ, luỹ thừa"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Phương pháp đổi biến số cơ bản"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng nguyên hàm"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Ứng dụng thực tế và hình học của tích phân",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Diện tích hình phẳng được giới hạn bởi các đồ thị"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Bài toán thực tế sử dụng diện tích hình phẳng"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Thể tích giới hạn bởi các đồ thị (tròn xoay)"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Thể tích tính theo mặt cắt S(x)"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Bài toán thực tế và ứng dụng thể tích tròn xoay, S(x)"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "6",
+       "name": "Chương 6. Một số yếu tố xác suất",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Xác suất có điều kiện",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tính xác suất có điều kiện bằng công thức"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tính xác suất có điều kiện bằng sơ đồ cây"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Bài toán tổng hợp"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Công thức xác suất toàn phần. Công thức Bayes",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tính xác suất bằng công thức xác suất toàn phần"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tính xác suất bằng công thức xác suất Bayes"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Bài toán tổng hợp"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "code": "H",
+     "name": "Hình học & đo lường",
+     "children": [
+      {
+       "code": "2",
+       "name": "Chương 2. Tọa độ của véc-tơ trong không gian",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Véc-tơ và các phép toán véc-tơ trong không gian (chưa toạ độ hoá)",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tổng, hiệu, tích một số với véc-tơ"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tích vô hướng và ứng dụng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Toán thực tế áp dụng các phép toán véc-tơ"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Toạ độ của véc-tơ và các công thức",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Công thức lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Tìm tọa độ điểm"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Tìm tọa độ véc-tơ"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Công thức toạ độ của tích vô hướng và ứng dụng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Công thức toạ độ của tích có hướng và ứng dụng"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Toán thực tế áp dụng các phép toán toạ độ hoá véc-tơ"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "code": "5",
+       "name": "Chương 5. Phương trình mặt phẳng, đường thẳng, mặt cầu trong không gian Oxyz",
+       "children": [
+        {
+         "code": "1",
+         "name": "Bài 1. Phương trình mặt phẳng",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định véc-tơ pháp tuyến, cặp véc-tơ chỉ phương"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Viết phương trình tổng quát mặt phẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Vị trí tương đối giữa hai mặt phẳng (song song, vuông góc)"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Khoảng cách điểm tới mặt phẳng"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Góc giữa hai mặt phẳng"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Toán thực tế áp dụng phương trình mặt phẳng"
+          }
+         ]
+        },
+        {
+         "code": "2",
+         "name": "Bài 2. Phương trình đường thẳng trong không gian",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định véc-tơ chỉ phương, cặp véc-tơ pháp tuyến"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Viết phương trình tổng quát, chính tắc, tham số đường thẳng"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Vị trí tương đối giữa hai đường thẳng"
+          },
+          {
+           "code": "5",
+           "name": "Dạng 5. Vị trí tương đối giữa đường thẳng và mặt phẳng"
+          },
+          {
+           "code": "6",
+           "name": "Dạng 6. Khoảng cách điểm tới đường thẳng"
+          },
+          {
+           "code": "7",
+           "name": "Dạng 7. Góc giữa hai đường thẳng, đường thẳng và mặt phẳng"
+          },
+          {
+           "code": "8",
+           "name": "Dạng 8. Toán thực tế áp dụng phương trình đường thẳng"
+          }
+         ]
+        },
+        {
+         "code": "3",
+         "name": "Bài 3. Phương trình mặt cầu trong không gian",
+         "children": [
+          {
+           "code": "1",
+           "name": "Dạng 1. Câu hỏi lý thuyết"
+          },
+          {
+           "code": "2",
+           "name": "Dạng 2. Xác định tâm, bán kính, đường kính mặt cầu"
+          },
+          {
+           "code": "3",
+           "name": "Dạng 3. Viết phương trình tổng quát mặt cầu"
+          },
+          {
+           "code": "4",
+           "name": "Dạng 4. Toán thực tế áp dụng phương trình mặt cầu"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "levels": [
+  {
+   "code": "N",
+   "name": "Nhận biết",
+   "ord": 0
+  },
+  {
+   "code": "H",
+   "name": "Thông hiểu",
+   "ord": 1
+  },
+  {
+   "code": "V",
+   "name": "Vận dụng",
+   "ord": 2
+  },
+  {
+   "code": "C",
+   "name": "Vận dụng cao",
+   "ord": 3
+  }
+ ]
+}

@@ -3,15 +3,15 @@ import { useMemo, useState } from 'react';
 import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
 import { IcCheck, IcX } from '../components/Icons';
-import { getGrade, CURRICULUM } from '../lib/curriculum';
+import { chapters as chaptersOf, grades } from '../lib/curriculum';
+import { shortName } from '../lib/taxonomy';
 import { available, CELLS, examToTex, makeVariants, partTitle, pickByMatrix, pickManual, POINTS, shortages, type Cell, type MatrixRow, type Picked, type Variant } from '../lib/exam';
 import { useBank } from '../lib/store';
 
-const DEFAULT_ROWS: MatrixRow[] = [
-  { chapterId: 'g12c1', nb: 1, th: 1, vd: 1, ds: 1, tln: 1 },
-  { chapterId: 'g12c2', nb: 1, th: 0, vd: 1, ds: 0, tln: 1 },
-  { chapterId: 'g12c4', nb: 1, th: 1, vd: 0, ds: 1, tln: 1 },
-];
+/** Ma trận mở sẵn: ba chương đầu của lớp cao nhất, mỗi ô một câu để thấy cách dùng. */
+function defaultRows(list: { id: string }[]): MatrixRow[] {
+  return list.slice(0, 3).map((c) => ({ chapterId: c.id, nb: 1, th: 1, vd: 0, ds: 1, tln: 1 }));
+}
 
 const CELL_ARIA: Record<Cell, string> = { nb: 'Phần I, Nhận biết', th: 'Phần I, Thông hiểu', vd: 'Phần I, Vận dụng', ds: 'Phần II', tln: 'Phần III' };
 const LEVEL_SHORT: Record<Cell, string> = { nb: 'NB', th: 'TH', vd: 'VD', ds: 'Đ/S', tln: 'TLN' };
@@ -28,7 +28,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const { questions } = useBank();
   const [mode, setMode] = useState<'matrix' | 'manual'>(pick?.length ? 'manual' : 'matrix');
   const [grade, setGrade] = useState(12);
-  const [rows, setRows] = useState<MatrixRow[]>(DEFAULT_ROWS);
+  const [rows, setRows] = useState<MatrixRow[]>(() => defaultRows(chaptersOf(grades()[grades().length - 1] ?? 12)));
   const [school, setSchool] = useState('');
   const [title, setTitle] = useState('Kiểm tra cuối học kì I');
   const [minutes, setMinutes] = useState(90);
@@ -42,7 +42,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
 
   const manualQs = useMemo(() => questions.filter((q) => pick?.includes(q.uid)), [questions, pick]);
   const miss = useMemo(() => shortages(questions, rows), [questions, rows]);
-  const chapters = getGrade(grade).chapters;
+  const chapters = chaptersOf(grade);
 
   const tot = { nb: 0, th: 0, vd: 0, ds: 0, tln: 0 } as Record<Cell, number>;
   rows.forEach((r) => CELLS.forEach((c) => (tot[c] += r[c])));
@@ -117,12 +117,12 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                       const rowMiss = miss.filter((m) => m.chapterId === r.chapterId);
                       return (
                         <tr key={r.chapterId} className={rowMiss.length ? 'short-row' : undefined}>
-                          <td style={{ fontWeight: 500 }}>{ch?.short ?? r.chapterId}</td>
+                          <td style={{ fontWeight: 500 }}>{ch ? shortName(ch.name) : r.chapterId}</td>
                           {CELLS.map((c) => {
                             const have = available(questions, r.chapterId, c);
                             return (
                               <td key={c}>
-                                <input className={`num${r[c] > have ? ' over' : ''}`} type="number" min={0} max={40} value={r[c]} aria-label={`${ch?.short}, ${CELL_ARIA[c]}`} onChange={(e) => setCell(i, c, Number(e.target.value))} />
+                                <input className={`num${r[c] > have ? ' over' : ''}`} type="number" min={0} max={40} value={r[c]} aria-label={`${ch ? shortName(ch.name) : ''}, ${CELL_ARIA[c]}`} onChange={(e) => setCell(i, c, Number(e.target.value))} />
                                 <span className="avail">có {have}</span>
                               </td>
                             );
@@ -136,7 +136,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                               <span className="okmark"><IcCheck />Đủ câu</span>
                             )}
                           </td>
-                          <td><button type="button" className="ico" style={{ width: 32, height: 32 }} aria-label={`Bỏ chương ${ch?.short}`} onClick={() => setRows(rows.filter((_, k) => k !== i))}><IcX /></button></td>
+                          <td><button type="button" className="ico" style={{ width: 32, height: 32 }} aria-label={`Bỏ chương ${ch ? shortName(ch.name) : ''}`} onClick={() => setRows(rows.filter((_, k) => k !== i))}><IcX /></button></td>
                         </tr>
                       );
                     })}
@@ -161,7 +161,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                     <span>Thêm chương</span>
                     <select className="sel" style={{ width: 'auto', maxWidth: 360 }} value="" onChange={(e) => e.target.value && setRows([...rows, { chapterId: e.target.value, nb: 0, th: 0, vd: 0, ds: 0, tln: 0 }])}>
                       <option value="">Chọn chương…</option>
-                      {unused.map((c) => <option key={c.id} value={c.id}>{c.no}. {c.name}</option>)}
+                      {unused.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </label>
                 )}
@@ -248,9 +248,9 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                 <select className="sel" value={grade} onChange={(e) => {
                   const g = Number(e.target.value);
                   setGrade(g);
-                  setRows(g === 12 ? DEFAULT_ROWS : getGrade(g).chapters.filter((c) => questions.some((q) => q.chapterId === c.id)).map((c) => ({ chapterId: c.id, nb: 0, th: 0, vd: 0, ds: 0, tln: 0 })));
+                  setRows(defaultRows(chaptersOf(g)));
                 }}>
-                  {[...CURRICULUM].reverse().map((g) => <option key={g.grade} value={g.grade}>Lớp {g.grade}</option>)}
+                  {[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}
                 </select>
               </label>
             </div>

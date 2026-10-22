@@ -6,12 +6,25 @@
 // Dữ liệu có schema MỚI hơn app đang chạy sẽ bị từ chối mở (không ghi đè), để bản cũ
 // không làm hỏng dữ liệu của bản mới.
 
-export const CURRENT_SCHEMA = 1;
+export const CURRENT_SCHEMA = 2;
 
 // MIGRATIONS[n] nâng dữ liệu từ schema n lên n + 1.
 // Ví dụ khi có schema 2:  MIGRATIONS[1] = (s) => ({ ...s, questions: s.questions.map(addNewField) })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const MIGRATIONS: Record<number, (state: any) => any> = {};
+export const MIGRATIONS: Record<number, (state: any) => any> = {
+  // 1 → 2: thêm cây mục lục vào dữ liệu (trước đây khung chương trình viết cứng trong code).
+  // Để trống taxonomy = dùng cây mặc định. Vị trí cũ (g12c1…) không còn trong cây mới nên
+  // câu hỏi cũ được đánh dấu "chưa gán vị trí" thay vì gán bừa.
+  1: (s) => ({
+    ...s,
+    taxonomy: null,
+    questions: (s.questions ?? []).map((q: Record<string, unknown>) =>
+      typeof q.chapterId === 'string' && q.chapterId.startsWith('g')
+        ? { ...q, chapterId: '', lessonId: '', formId: '' }
+        : q,
+    ),
+  }),
+};
 
 export class SchemaNewerError extends Error {
   constructor(public found: number) {
