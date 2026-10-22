@@ -17,6 +17,7 @@ import { branchShort, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { deleteQuestion, duplicateQuestion, setReview, useBank } from '../lib/store';
 import { FilterMenu } from '../components/FilterMenu';
+import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
 import { LEVEL_LABEL, LEVELS, REVIEW_LABEL, reviewOf, TYPE_LABEL, TYPES, type Level, type QType, type Question, type ReviewFilter, type ReviewStatus } from '../lib/types';
 
@@ -59,6 +60,7 @@ export function BankScreen() {
   const [detailOpen, setDetailOpen] = useState(false);            // cửa sổ hẹp: Chi tiết phủ lên danh sách
   const [treeOpen, setTreeOpenState] = useState(() => loadTreeOpen() ?? (loadBankView() === 'list' ? typeof window === 'undefined' || window.innerWidth >= 1500 : true));
   const setTreeOpen = (o: boolean) => { setTreeOpenState(o); saveTreeOpen(o); };
+  const [dupOpen, setDupOpen] = useState(false); // màn Kiểm tra trùng
   const [menuUid, setMenuUid] = useState<string | null>(null); // menu ba chấm của thẻ
 
   const index = useMemo(() => new Map(questions.map((q) => [q.uid, searchable(q)])), [questions]);
@@ -296,6 +298,7 @@ export function BankScreen() {
               <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Thẻ</button>
               <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             </div>
+            <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
             <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>{treeOpen ? 'Ẩn mục lục' : 'Hiện mục lục'}</button>
           </div>
 
@@ -390,6 +393,7 @@ export function BankScreen() {
           )}
         </section>
       </div>
+      {dupOpen && <DupCheck questions={questions} onClose={() => setDupOpen(false)} onOpen={setOpenUid} />}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
   );
