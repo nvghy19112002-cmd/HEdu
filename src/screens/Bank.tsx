@@ -6,6 +6,7 @@ import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
 import { CompiledView } from '../components/CompiledView';
+import { QuestionDrawer } from '../components/QuestionDrawer';
 import { isTikzReady } from '../lib/tikz';
 import { IcCopy, IcEdit, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
@@ -27,7 +28,7 @@ function searchable(q: Question): string {
 const nf = new Intl.NumberFormat('vi-VN');
 
 export function BankScreen() {
-  const { go, toast, openPalette, showFile } = useApp();
+  const { go, toast, openPalette, showFile, nav } = useApp();
   const { questions } = useBank();
   const { tax } = useTaxonomy();
 
@@ -43,6 +44,8 @@ export function BankScreen() {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [exact, setExact] = useState<Set<string>>(new Set()); // các câu đang ở chế độ “Xem chuẩn”
+  const [openUid, setOpenUid] = useState<string | null>(nav.openUid ?? null); // câu đang sửa ở ngăn bên phải
+  const opened = openUid ? questions.find((q) => q.uid === openUid) : undefined;
   const [page, setPage] = useState(0);
   const PER_PAGE = 20;
 
@@ -256,7 +259,7 @@ export function BankScreen() {
                   {isTikzReady() && (
                     <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
                   )}
-                  <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => go({ screen: 'editor', editUid: q.uid })}><IcEdit size={18} /></button>
+                  <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => setOpenUid(q.uid)}><IcEdit size={18} /></button>
                   <button type="button" className="ico" aria-label="Nhân bản câu" title="Nhân bản" onClick={() => { const c = duplicateQuestion(q.uid); if (c) toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); }}><IcCopy /></button>
                   {confirmDel === q.uid ? (
                     <button type="button" className="ico danger" style={{ width: 'auto', padding: '0 8px', fontSize: 12, color: 'var(--accent)' }} onClick={() => { deleteQuestion(q.uid); setConfirmDel(null); sel.delete(q.uid); toast(`Đã xoá ${seqLabel(q.seq)}`); }} onBlur={() => setConfirmDel(null)} autoFocus>Xoá?</button>
@@ -284,6 +287,7 @@ export function BankScreen() {
           )}
         </section>
       </div>
+      {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
   );
 }
