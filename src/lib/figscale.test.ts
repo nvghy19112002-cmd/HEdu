@@ -1,0 +1,25 @@
+import { applyFigScale, fitSize, naturalSize } from './figscale';
+import { nextSvgPrefix, scopeSvgIds } from './svgids';
+let fail = 0;
+const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
+console.log('figscale + svgids');
+const A = { mode: 'auto' as const, scale: 1 };
+const sizes = [[40, 30], [90, 70], [150, 120], [260, 200], [420, 380], [700, 120], [120, 700]].map(([w, h]) => fitSize({ w, h }, A)!);
+sizes.forEach((s, i) => ok(s.w <= 380 && s.h <= 300 && (s.w >= 70 || i === 6), `hình ${i} → ${s.w}×${s.h} trong khoảng cho phép`));
+const small = fitSize({ w: 60, h: 45 }, A)!, big = fitSize({ w: 400, h: 350 }, A)!;
+ok(big.w / small.w < 400 / 60, `chênh lệch to/nhỏ giảm: ${(400 / 60).toFixed(1)}× → ${(big.w / small.w).toFixed(1)}×`);
+ok(Math.abs(small.w / small.h - 60 / 45) < 0.03 && Math.abs(big.w / big.h - 400 / 350) < 0.03, 'giữ tỉ lệ khung hình');
+ok(fitSize({ w: 100, h: 100 }, { mode: 'raw', scale: 1 }) === null, 'chế độ giữ nguyên không can thiệp');
+const r = fitSize({ w: 100, h: 100 }, { mode: 'raw', scale: 1.2 })!;
+ok(r.w === 120, 'thanh trượt 120% ở chế độ giữ nguyên');
+const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='90pt' height='60pt' viewBox='0 0 90 60'><g/></svg>";
+ok(naturalSize(svg)!.w === 120, 'đọc cỡ pt → px');
+const out = applyFigScale(svg, A);
+ok(/viewBox='0 0 90 60'/.test(out) && /width="\d+" height="\d+"/.test(out), 'đổi width/height, giữ viewBox');
+const s1 = "<svg><defs><clipPath id='clip1'><rect/></clipPath><marker id='m'/></defs><g clip-path='url(#clip1)'><use xlink:href='#m'/></g></svg>";
+const o1 = scopeSvgIds(s1, 'f1-'), o2 = scopeSvgIds(s1, 'f2-');
+ok(o1.includes("id='f1-clip1'") && o1.includes('url(#f1-clip1)') && o1.includes("href='#f1-m'"), 'id, url(#), href được gắn tiền tố');
+ok(!o1.includes("id='clip1'") && o1 !== o2, 'hai hình cùng id không còn trùng nhau');
+ok(scopeSvgIds('<svg><g/></svg>', 'x-') === '<svg><g/></svg>', 'SVG không có id giữ nguyên');
+ok(nextSvgPrefix() !== nextSvgPrefix(), 'tiền tố mỗi lần một khác');
+if (fail) { console.log(`${fail} lỗi`); process.exit(1); }

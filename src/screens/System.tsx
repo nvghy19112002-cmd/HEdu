@@ -11,7 +11,7 @@ import {
   backupInfo, checkUpdate, CHANNEL_LABEL, formatBytes, friendlyError, installUpdate, restoreBackup,
   type BackupMeta, type Channel, type Progress, type UpdateInfo,
 } from '../lib/updates';
-import { ZoomPanel } from '../components/ZoomControl';
+import { FigScalePanel, ZoomPanel } from '../components/ZoomControl';
 import { useUpdates } from '../update-context';
 
 function readFile(file: File): Promise<string> {
@@ -299,6 +299,7 @@ export function SystemScreen() {
         </section>
 
         <ZoomPanel />
+        <FigScalePanel />
 
         <section className="panel" aria-label="Dữ liệu">
           <h2>Dữ liệu</h2>

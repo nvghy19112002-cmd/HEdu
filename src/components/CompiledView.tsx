@@ -1,5 +1,6 @@
 // Hiện câu hỏi do TeX Live biên dịch (“Xem chuẩn”): ảnh SVG hoặc báo lỗi rõ nguyên nhân kèm log.
 import { useEffect, useRef, useState } from 'react';
+import { nextSvgPrefix, scopeSvgIds } from '../lib/svgids';
 import { compileQuestion, type Failure } from '../lib/xemchuan';
 
 type State = { s: 'dang' } | { s: 'xong'; svg: string; cached: boolean; ms: number } | { s: 'loi'; fail: Failure };
@@ -25,6 +26,7 @@ export function FailureBox({ fail, onRetry }: { fail: Failure; onRetry?: () => v
 export function CompiledView({ latex, solution, onBack, onState }: { latex: string; solution: boolean; onBack?: () => void; onState?: (s: 'dang' | 'xong' | 'loi') => void }) {
   const [st, setSt] = useState<State>({ s: 'dang' });
   const alive = useRef(true);
+  const prefix = useRef(nextSvgPrefix());
   const [again, setAgain] = useState(0);
 
   useEffect(() => { onState?.(st.s === 'dang' ? 'dang' : st.s === 'xong' ? 'xong' : 'loi'); }, [st.s]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -47,7 +49,7 @@ export function CompiledView({ latex, solution, onBack, onState }: { latex: stri
         {onBack && <button type="button" className="linkbtn" onClick={onBack}>Về xem nhanh</button>}
       </div>
       {st.s === 'dang' && <div className="cv-wait" aria-busy="true">Đang dịch…</div>}
-      {st.s === 'xong' && <div className="cv-page" dangerouslySetInnerHTML={{ __html: st.svg }} />}
+      {st.s === 'xong' && <div className="cv-page" dangerouslySetInnerHTML={{ __html: scopeSvgIds(st.svg, prefix.current) }} />}
       {st.s === 'loi' && <FailureBox fail={st.fail} onRetry={() => { setAgain(again + 1); }} />}
     </div>
   );
