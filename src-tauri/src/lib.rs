@@ -212,12 +212,12 @@ async fn tikz_render(
 
 /// Kiểm tra máy đã có TeX Live chưa; trả về dòng phiên bản của pdflatex.
 #[tauri::command]
-async fn tikz_probe(app: AppHandle) -> Result<String, tikz::TikzErr> {
+async fn tikz_probe(app: AppHandle, tex_bin: Option<String>) -> Result<String, tikz::TikzErr> {
     let err = |m: String| tikz::TikzErr { message: m, log: String::new(), stage: String::from("latex") };
     let root = paths(&app).map_err(err)?;
     let dir = tikz::cache_dir_of(root.root());
     std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
-    tauri::async_runtime::spawn_blocking(move || tikz::probe(&dir))
+    tauri::async_runtime::spawn_blocking(move || tikz::probe(&dir, tex_bin))
         .await
         .map_err(|e| err(e.to_string()))?
 }
@@ -226,6 +226,12 @@ async fn tikz_probe(app: AppHandle) -> Result<String, tikz::TikzErr> {
 fn tikz_clear_cache(app: AppHandle) -> Result<usize, String> {
     let dir = tikz::cache_dir_of(paths(&app)?.root());
     tikz::clear_cache(&dir).map_err(io_err)
+}
+
+/// Dò các thư mục hay cài TeX Live để người dùng bấm một nút là xong.
+#[tauri::command]
+async fn tikz_find() -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(tikz::find_tex_bins).await.unwrap_or_default()
 }
 
 #[tauri::command]
@@ -254,7 +260,8 @@ pub fn run() {
             tikz_render,
             tikz_probe,
             tikz_clear_cache,
-            tikz_default_preamble
+            tikz_default_preamble,
+            tikz_find
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");

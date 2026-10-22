@@ -54,6 +54,80 @@ pub struct TikzOpts {
     pub engine: Option<String>,
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    /// Thư mục bin của TeX Live, dùng khi PATH không có (vd. D:\\texlive\\2025\\bin\\windows)
+    #[serde(default)]
+    pub tex_bin: Option<String>,
+}
+
+/// Đường dẫn tới một chương trình: ưu tiên thư mục người dùng chỉ, không có thì tìm trong PATH.
+fn prog(tex_bin: &Option<String>, name: &str) -> std::ffi::OsString {
+    if let Some(dir) = tex_bin.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+        let p = Path::new(dir).join(name);
+        let exe = if cfg!(windows) { p.with_extension("exe") } else { p.clone() };
+        if exe.exists() {
+            return exe.into_os_string();
+        }
+        if p.exists() {
+            return p.into_os_string();
+        }
+    }
+    std::ffi::OsString::from(name)
+}
+
+/// Dò các chỗ hay cài TeX Live / MiKTeX để người dùng khỏi phải tự tìm.
+pub fn find_tex_bins() -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let exe = if cfg!(windows) { "pdflatex.exe" } else { "pdflatex" };
+    let mut push_if_ok = |p: PathBuf| {
+        if p.join(exe).exists() {
+            let s = p.display().to_string();
+            if !out.contains(&s) {
+                out.push(s);
+            }
+        }
+    };
+    // TeX Live: <ổ>:\\texlive\\...\\bin\\<nền tảng> — có máy lồng thêm một cấp (texlive\\texlive\\2026).
+    fn walk(dir: &Path, depth: u32, found: &mut Vec<PathBuf>) {
+        if depth == 0 {
+            return;
+        }
+        let Ok(rd) = fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let name = e.file_name();
+            if name.eq_ignore_ascii_case("bin") {
+                if let Ok(bd) = fs::read_dir(&p) {
+                    for plat in bd.flatten() {
+                        found.push(plat.path());
+                    }
+                }
+            }
+            walk(&p, depth - 1, found);
+        }
+    }
+    for drive in ["C:", "D:", "E:", "F:"] {
+        for root in [format!("{drive}\\texlive"), format!("{drive}\\texmf"), format!("{drive}\\Program Files\\texlive")] {
+            let mut found = Vec::new();
+            walk(Path::new(&root), 4, &mut found);
+            for f in found {
+                push_if_ok(f);
+            }
+        }
+    }
+    // MiKTeX
+    for cand in [
+        "C:\\Program Files\\MiKTeX\\miktex\\bin\\x64",
+        "C:\\Program Files (x86)\\MiKTeX\\miktex\\bin",
+        "/usr/bin",
+        "/usr/local/bin",
+        "/Library/TeX/texbin",
+    ] {
+        push_if_ok(PathBuf::from(cand));
+    }
+    out
 }
 
 fn hash64(parts: &[&str]) -> String {
@@ -127,7 +201,7 @@ fn first_error_line(log: &str) -> String {
 fn missing_tool(name: &str) -> TikzErr {
     TikzErr {
         message: format!(
-            "Không tìm thấy {name}. Hãy cài TeX Live (hoặc MiKTeX) và mở lại HEdu; nếu đã cài thì kiểm tra xem thư mục bin của nó có trong PATH chưa."
+            "Không chạy được {name}. Nếu TeX Live đã cài nhưng không nằm trong PATH, hãy điền thư mục bin của nó ở mục Hệ thống (ví dụ D:\\texlive\\2025\\bin\\windows), hoặc bấm nút Tìm tự động."
         ),
         log: String::new(),
         stage: String::from("thieu-texlive"),
@@ -166,7 +240,7 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
 
     let limit = Duration::from_secs(opts.timeout_secs.unwrap_or(40).clamp(5, 180));
 
-    let mut c = Command::new(engine);
+    let mut c = Command::new(prog(&opts.tex_bin, engine));
     c.current_dir(&work)
         .arg("-interaction=nonstopmode")
         .arg("-halt-on-error")
@@ -199,7 +273,7 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         return Err(e);
     }
 
-    let mut d = Command::new("dvisvgm");
+    let mut d = Command::new(prog(&opts.tex_bin, "dvisvgm"));
     d.current_dir(&work)
         .arg("--pdf")
         .arg("--no-fonts")
@@ -240,10 +314,10 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
 }
 
 /// Thử dịch một hình bé xíu để biết máy đã có TeX Live chưa.
-pub fn probe(cache_dir: &Path) -> Result<String, TikzErr> {
-    let opts = TikzOpts { preamble: None, engine: None, timeout_secs: Some(60) };
+pub fn probe(cache_dir: &Path, tex_bin: Option<String>) -> Result<String, TikzErr> {
+    let opts = TikzOpts { preamble: None, engine: None, timeout_secs: Some(90), tex_bin: tex_bin.clone() };
     render(cache_dir, r"\begin{tikzpicture}\draw(0,0)--(1,1);\end{tikzpicture}", "", &opts)?;
-    let mut c = Command::new("pdflatex");
+    let mut c = Command::new(prog(&tex_bin, "pdflatex"));
     c.arg("--version").stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
     hide_console(&mut c);
     let v = c.output().ok().map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").to_string());
@@ -291,6 +365,14 @@ mod tests {
         assert_ne!(hash64(&["a", "b"]), hash64(&["ab", ""]));
         assert_ne!(hash64(&["x"]), hash64(&["y"]));
         assert_eq!(hash64(&["a"]).len(), 16);
+    }
+
+    #[test]
+    fn duong_dan_bo_dich() {
+        assert_eq!(prog(&None, "pdflatex"), std::ffi::OsString::from("pdflatex"));
+        assert_eq!(prog(&Some("   ".into()), "dvisvgm"), std::ffi::OsString::from("dvisvgm"));
+        // thư mục không tồn tại thì quay về tên trần, để PATH lo
+        assert_eq!(prog(&Some("/khong/co/dau".into()), "pdflatex"), std::ffi::OsString::from("pdflatex"));
     }
 
     #[test]

@@ -12,10 +12,12 @@ export interface TikzSettings {
   /** để trống = dùng đầu file mặc định của app */
   preamble: string;
   timeoutSecs: number;
+  /** thư mục bin của TeX Live khi PATH không có, vd D:\\texlive\\texlive\\2026\\bin\\windows */
+  texBin: string;
 }
 
 const KEY = 'hedu.tikz';
-export const DEFAULT_SETTINGS: TikzSettings = { auto: true, engine: 'pdflatex', preamble: '', timeoutSecs: 40 };
+export const DEFAULT_SETTINGS: TikzSettings = { auto: true, engine: 'pdflatex', preamble: '', timeoutSecs: 40, texBin: '' };
 
 export function getSettings(): TikzSettings {
   try {
@@ -56,18 +58,28 @@ export function renderTikz(code: string, defs = ''): Promise<TikzOut> {
   const p = invoke<TikzOut>('tikz_render', {
     code,
     defs,
-    opts: { preamble: s.preamble.trim() || null, engine: s.engine, timeoutSecs: s.timeoutSecs },
+    opts: { preamble: s.preamble.trim() || null, engine: s.engine, timeoutSecs: s.timeoutSecs, texBin: s.texBin.trim() || null },
   }).catch((e) => { cache.delete(k); throw e; });
   cache.set(k, p);
   return p;
 }
 
-export const probeTeX = () => invoke<string>('tikz_probe');
+export const probeTeX = () => invoke<string>('tikz_probe', { texBin: getSettings().texBin.trim() || null });
+export const findTeX = () => invoke<string[]>('tikz_find');
 export const clearTikzCache = async () => { const n = await invoke<number>('tikz_clear_cache'); cache.clear(); return n; };
 export const defaultPreamble = () => invoke<string>('tikz_default_preamble');
 
 /** Lỗi từ Rust có thể là chuỗi hoặc object; đưa về một dạng. */
 export function asTikzErr(e: unknown): TikzErr {
-  if (e && typeof e === 'object' && 'message' in e) return e as TikzErr;
-  return { message: e instanceof Error ? e.message : String(e), log: '', stage: 'latex' };
+  if (typeof e === 'string') return { message: e, log: '', stage: 'latex' };
+  if (e instanceof Error) return { message: e.message, log: '', stage: 'latex' };
+  if (e && typeof e === 'object') {
+    const o = e as Record<string, unknown>;
+    if (typeof o.message === 'string') {
+      return { message: o.message, log: typeof o.log === 'string' ? o.log : '', stage: (o.stage as TikzErr['stage']) ?? 'latex' };
+    }
+    // không đúng dạng mình chờ: hiện nguyên văn còn hơn hiện [object Object]
+    try { return { message: JSON.stringify(e), log: '', stage: 'latex' }; } catch { /* rơi xuống dưới */ }
+  }
+  return { message: String(e), log: '', stage: 'latex' };
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { IcAlert, IcCheckCircle } from '../components/Icons';
 import { isDesktop } from '../lib/platform';
-import { clearTikzCache, defaultPreamble, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
+import { clearTikzCache, defaultPreamble, findTeX, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
 import { asTikzErr } from '../lib/tikz';
 import { addSamples, exportBackup, importBackup, resetToSample, useBank } from '../lib/store';
 import {
@@ -48,6 +48,17 @@ export function SystemScreen() {
   const [texOk, setTexOk] = useState(false);
 
   const saveTikz = (s: TikzSettings) => { setTikzState(s); setTikz(s); };
+  const autoFind = async () => {
+    setTexMsg(null);
+    try {
+      const list = await findTeX();
+      if (!list.length) { setTexOk(false); setTexMsg('Không tìm thấy TeX Live ở các chỗ cài quen thuộc. Bạn mở thư mục chứa pdflatex.exe rồi chép đường dẫn vào ô bên dưới.'); return; }
+      saveTikz({ ...tikz, texBin: list[0] });
+      setTexOk(true);
+      setTexMsg(`Tìm thấy: ${list.join(' · ')}. Đã chọn chỗ đầu tiên, bấm Kiểm tra TeX Live để thử.`);
+    } catch (e) { setTexOk(false); setTexMsg(asTikzErr(e).message); }
+  };
+
   const checkTeX = async () => {
     setProbing(true); setTexMsg(null); setTexLog('');
     try {
@@ -239,9 +250,13 @@ export function SystemScreen() {
             <button type="button" className="btn btn-dark btn-sm" disabled={!desktop || probing} onClick={() => void checkTeX()}>
               {probing ? 'Đang thử dịch một hình…' : 'Kiểm tra TeX Live'}
             </button>
+            <button type="button" className="btn btn-outline btn-sm" disabled={!desktop} onClick={() => void autoFind()}>Tìm TeX Live tự động</button>
             <button type="button" className="btn btn-outline btn-sm" disabled={!desktop} onClick={() => void clearTikzCache().then((n) => toast(`Đã xoá ${n} hình đã dịch. Hình sẽ được dịch lại khi cần.`))}>Xoá hình đã dịch</button>
           </div>
           {texMsg && <div className={`note ${texOk ? 'ok' : 'bad'}`}>{texOk ? <IcCheckCircle /> : <IcAlert />}<div className="note-body"><b>{texOk ? 'TeX Live chạy được' : 'Chưa dịch được hình'}</b><span>{texMsg}</span>{texLog && <code className="fig-log">{texLog}</code>}</div></div>}
+          <label className="lbl">Thư mục bin của TeX Live <small style={{ fontWeight: 400, color: 'var(--ink-3)' }}>(để trống nếu đã có trong PATH)</small>
+            <input className="inp" type="text" spellCheck={false} placeholder="D:\\texlive\\texlive\\2026\\bin\\windows" value={tikz.texBin} onChange={(e) => saveTikz({ ...tikz, texBin: e.target.value })} />
+          </label>
           <div className="sys-row">
             <label className="sw"><input type="checkbox" checked={tikz.auto} onChange={(e) => saveTikz({ ...tikz, auto: e.target.checked })} />Tự vẽ hình khi mở câu hỏi</label>
             <label className="lbl" style={{ maxWidth: 220 }}>Bộ dịch
