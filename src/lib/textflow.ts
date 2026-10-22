@@ -502,6 +502,13 @@ function renderEnv(name: string, body: string, ctx: Ctx): string {
   return `<span class="tx-unk">\\begin{${name}}</span>` + wrapBlock('tx-wrap', walk(body, ctx)) + `<span class="tx-unk">\\end{${name}}</span>`;
 }
 
+/** Dòng kẻ ngang cuối bảng (\hline sau hàng cuối): một hàng cao 0 phủ ĐỦ mọi cột để đường kẻ chạy suốt chiều ngang. */
+function ruleRow(n: number): string {
+  let s = OPEN('tx-tr rule');
+  for (let i = 0; i < Math.max(1, n); i++) s += OPEN('tx-td') + CLOSE;
+  return s + CLOSE;
+}
+
 function renderTable(name: string, body: string, ctx: Ctx): string {
   let p = 0;
   const o = readOptional(body, p);
@@ -560,7 +567,7 @@ function renderTable(name: string, body: string, ctx: Ctx): string {
     });
     out += CLOSE;
   });
-  if (rule) out += OPEN('tx-tr rule') + OPEN('tx-td') + CLOSE + CLOSE;
+  if (rule) out += ruleRow(cols.length);
   return out + CLOSE;
 }
 

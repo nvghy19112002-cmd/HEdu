@@ -533,7 +533,7 @@ a { color: var(--accent); }
 .tx-td.bl { border-left: 1px solid currentColor; }
 .tx-td.br { border-right: 1px solid currentColor; }
 .tx-tr.top > .tx-td { border-top: 1px solid currentColor; }
-.tx-tr.rule > .tx-td { border-top: 1px solid currentColor; padding: 0; }
+.tx-tr.rule > .tx-td { border-top: 1px solid currentColor; padding: 0; height: 0; line-height: 0; font-size: 0; }
 .tx-box { border: 1px solid currentColor; padding: 1px 5px; }
 .tx-tt { font-family: var(--f-code); font-size: .92em; }
 .tx-pre { font-family: var(--f-code); font-size: .85em; white-space: pre-wrap; }

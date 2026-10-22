@@ -1,3 +1,8 @@
+## Có gì mới trong beta.13
+
+- **Sửa bảng bị mất đường kẻ dưới cùng:** `\hline` ở cuối bảng nay kẻ suốt chiều ngang (trước đây chỉ hiện ở cột đầu).
+- Dữ liệu, ID và sao lưu không đổi.
+
 ## Có gì mới trong beta.12
 
 - **Đáp án dài không còn bị bẻ xấu:** đáp án trắc nghiệm tự xếp 4, 2 hoặc 1 cột tuỳ độ dài thật (như ex_test), nên phân số/biểu thức dài không bị xuống dòng lung tung.
