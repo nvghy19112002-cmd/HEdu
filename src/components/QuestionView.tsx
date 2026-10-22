@@ -55,7 +55,7 @@ function Choices({ items, defs, rightIdx, ring }: { items: { text: string; lette
     if (hasFig) { setCols(1); return; }
     const el = box.current, m = meas.current;
     if (!el || !m) return;
-    const GAP = 16, PAD = 6;
+    const GAP = 16, PAD = 30; // PAD = đệm + viền của ô đáp án
     const calc = () => {
       const avail = el.clientWidth;
       if (!avail) return;

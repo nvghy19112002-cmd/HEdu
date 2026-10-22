@@ -1,6 +1,6 @@
 // Vẽ một hình TikZ. Bản cài Windows gọi TeX Live để dịch ra SVG; nếu chưa có TeX Live
 // hoặc hình lỗi thì hiện khung báo rõ lý do kèm đoạn log.
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { applyFigScale, getFigPrefs, subscribeFig } from '../lib/figscale';
 import { nextSvgPrefix, scopeSvgIds } from '../lib/svgids';
 import { classifyTexLog } from '../lib/texcheck';
@@ -17,6 +17,8 @@ export function TikzFigure({ code, defs = '', label, size }: { code: string; def
   const [showLog, setShowLog] = useState(false);
   const alive = useRef(true);
   const prefix = useRef(nextSvgPrefix());
+  const host = useRef<HTMLSpanElement>(null);
+  const [colW, setColW] = useState(0);
   useSyncExternalStore(subscribeFig, getFigPrefs, getFigPrefs);
 
   const run = () => {
@@ -35,12 +37,24 @@ export function TikzFigure({ code, defs = '', label, size }: { code: string; def
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, defs]);
 
+  // Bề rộng khung câu chứa hình, để hình ngang được phóng đủ lớn
+  useLayoutEffect(() => {
+    const read = () => {
+      const box = host.current?.closest('.q-col, .q, .tx-blk, .sol') as HTMLElement | null;
+      const w = box?.clientWidth ?? 0;
+      setColW((c) => (Math.abs(c - w) > 24 ? w : c));
+    };
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, [st.s]);
+
   useEffect(() => onSettingsChange(() => setSt({ s: 'cho' })), []);
 
   if (st.s === 'xong') {
     return (
-      <span className="fig" role="img" aria-label={label}>
-        <span className="fig-svg" style={size ? ({ '--fig-w': size.w ?? 'auto', '--fig-h': size.h ?? 'auto' } as CSSProperties) : undefined} dangerouslySetInnerHTML={{ __html: scopeSvgIds(size ? st.svg : applyFigScale(st.svg, getFigPrefs()), prefix.current) }} />
+      <span className="fig" role="img" aria-label={label} ref={host}>
+        <span className="fig-svg" style={size ? ({ '--fig-w': size.w ?? 'auto', '--fig-h': size.h ?? 'auto' } as CSSProperties) : undefined} dangerouslySetInnerHTML={{ __html: scopeSvgIds(size ? st.svg : applyFigScale(st.svg, getFigPrefs(), colW), prefix.current) }} />
       </span>
     );
   }

@@ -12,6 +12,13 @@ ok(Math.abs(small.w / small.h - 60 / 45) < 0.03 && Math.abs(big.w / big.h - 400 
 ok(fitSize({ w: 100, h: 100 }, { mode: 'raw', scale: 1 }) === null, 'chế độ giữ nguyên không can thiệp');
 const r = fitSize({ w: 100, h: 100 }, { mode: 'raw', scale: 1.2 })!;
 ok(r.w === 120, 'thanh trượt 120% ở chế độ giữ nguyên');
+const wideNarrow = fitSize({ w: 850, h: 190 }, A, 0)!;
+const wideBig = fitSize({ w: 850, h: 190 }, A, 1600)!, wideMid = fitSize({ w: 850, h: 190 }, A, 700)!;
+ok(wideBig.w >= 700 && wideBig.w <= 760 && wideBig.h <= 300, `hình 4 hình con xếp ngang: khung rộng → ${wideBig.w}×${wideBig.h} (không còn nhỏ xíu)`);
+ok(wideMid.w >= 360 && wideMid.w <= wideBig.w && wideBig.w > wideNarrow.w, `khung vừa → ${wideMid.w}px; không biết khung → ${wideNarrow.w}px`);
+ok(Math.abs(wideBig.w / wideBig.h - 850 / 190) < 0.05, 'hình ngang giữ tỉ lệ');
+const tall = fitSize({ w: 120, h: 700 }, A, 1600)!;
+ok(tall.h <= 300, 'hình cao không bị phóng vượt trần chiều cao');
 const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='90pt' height='60pt' viewBox='0 0 90 60'><g/></svg>";
 ok(naturalSize(svg)!.w === 120, 'đọc cỡ pt → px');
 const out = applyFigScale(svg, A);
