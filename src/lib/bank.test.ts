@@ -52,7 +52,7 @@ if (!existsSync(DIR) || !readdirSync(DIR).some((f) => f.endsWith('.tex'))) {
     ok(badId === 0, `mọi ID đọc ngược được (${badId} sai)`);
     ok(leak === 0, `đề bài không dính \\def, \\newcommand, \\immini (${leak} câu dính)`);
     ok(emptyStem === 0, `không câu nào mất đề bài (${emptyStem} câu trống)`);
-    if (srcErr.length) console.log(`  ℹ ${srcErr.length} câu có lỗi ngoặc/môi trường trong mã nguồn (đã báo kèm dòng): ${srcErr[0]}`);
+    if (srcErr.length) console.log(`  ℹ ${srcErr.length} câu có lỗi hoặc lưu ý trong mã nguồn (ngoặc, môi trường, thiếu \\draw; đã báo kèm dòng): ${srcErr[0]}`);
     ok(hardError === 0, `không câu nào lỗi xem trước (${hardError} câu lỗi${errs.length ? ': ' + errs[0] : ''})`);
   }
   if (failed) { console.log(`\n${failed} kiểm thử dữ liệu thật lỗi`); process.exit(1); }

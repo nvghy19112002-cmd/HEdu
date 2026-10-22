@@ -7,7 +7,7 @@
 import katex from 'katex';
 import type { ParsedQuestion } from './extest';
 import { cleanForDisplay, MACROS, previewProblems, quietly, segments } from './render';
-import { sourceProblems } from './srcdiag';
+import { barePathProblems, sourceProblems } from './srcdiag';
 
 export type IssueLevel = 'loi' | 'canh' | 'tin';
 
@@ -102,6 +102,9 @@ export function checkQuestion(p: ParsedQuestion, raw?: string, lineOffset = 0): 
   if (whole) {
     for (const sp of sourceProblems(whole, lineOffset)) {
       out.push({ level: 'loi', source: true, message: `${sp.message} (dòng ${sp.line}, cột ${sp.col})`, detail: cut(sp.snippet) });
+    }
+    for (const sp of barePathProblems(whole, lineOffset)) {
+      out.push({ level: 'canh', source: true, message: `${sp.message} (dòng ${sp.line}, cột ${sp.col})`, detail: cut(sp.snippet) });
     }
   } else {
     for (const [name, text] of parts) {
