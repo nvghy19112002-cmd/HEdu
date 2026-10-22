@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::UpdaterExt;
 
 /// Cấu trúc dữ liệu mà bản app này hiểu. Phải bằng CURRENT_SCHEMA trong src/lib/migrate.ts.
-const SUPPORTED_SCHEMA: u32 = 2;
+const SUPPORTED_SCHEMA: u32 = 3;
 
 /// "chủ/kho" GitHub, gắn vào lúc build bởi workflow (biến môi trường HEDU_REPO).
 const REPO: Option<&str> = option_env!("HEDU_REPO");

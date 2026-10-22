@@ -8,7 +8,7 @@ import { parseExTest } from './extest';
 import { CURRENT_SCHEMA, migrate, SchemaNewerError } from './migrate';
 import { invoke, isDesktop } from './platform';
 import { seedQuestions } from './seed';
-import type { Level, Location, Question, Taxonomy } from './types';
+import type { Level, ReviewStatus, Location, Question, Taxonomy } from './types';
 import { resetTaxonomy, setTaxonomy } from './curriculum';
 
 export interface AppState {
@@ -100,12 +100,14 @@ export function flushSave(): Promise<void> {
   clearTimeout(timer);
   if (!writable) return pending;
   const json = JSON.stringify(state);
-  pending = pending.then(() => persistence.save(json)).catch((e) => {
+  pending = pending.then(() => persistence.save(json).then(() => { lastSaveOk = true; })).catch((e) => {
+    lastSaveOk = false;
     console.error('Không ghi được dữ liệu', e);
-    window.dispatchEvent(new CustomEvent('hedu-save-error', { detail: String(e) }));
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('hedu-save-error', { detail: String(e) }));
   });
   return pending;
 }
+let lastSaveOk = true;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => { void flushSave(); });
@@ -141,6 +143,8 @@ export function saveQuestion(draft: Draft, existingUid?: string): Question {
     const old = state.questions.find((q) => q.uid === existingUid);
     if (old) {
       const q: Question = { ...old, ...draft, type, updatedAt: now };
+      // Nội dung đã được duyệt/đánh dấu nhưng LaTeX hoặc loại câu đổi → phải kiểm tra lại.
+      if (old.review && (draft.latex !== old.latex || type !== old.type)) delete q.review;
       set({ ...state, questions: state.questions.map((x) => (x.uid === q.uid ? q : x)) });
       return q;
     }
@@ -148,6 +152,25 @@ export function saveQuestion(draft: Draft, existingUid?: string): Question {
   const q: Question = { ...draft, type, uid: uid(), seq: state.nextSeq, createdAt: now, updatedAt: now };
   set({ ...state, questions: [...state.questions, q], nextSeq: state.nextSeq + 1 });
   return q;
+}
+
+/**
+ * Đổi trạng thái kiểm duyệt của một câu và ĐỢI ghi xuống đĩa xong mới báo kết quả.
+ * Trả về true nếu đã lưu bền vững; false nếu không lưu được (trạng thái cũ được khôi phục).
+ */
+export async function setReview(id: string, status: ReviewStatus | undefined): Promise<boolean> {
+  if (!writable) return false;
+  const before = state;
+  const old = state.questions.find((q) => q.uid === id);
+  if (!old) return false;
+  if (old.review === status) return true;
+  const q: Question = { ...old };
+  if (status) q.review = status; else delete q.review; // giữ updatedAt: kiểm duyệt không phải sửa nội dung
+  set({ ...state, questions: state.questions.map((x) => (x.uid === id ? q : x)) });
+  await flushSave();
+  if (lastSaveOk) return true;
+  set(before);
+  return false;
 }
 
 export function addMany(drafts: Draft[]): Question[] {

@@ -6,7 +6,7 @@
 // Dữ liệu có schema MỚI hơn app đang chạy sẽ bị từ chối mở (không ghi đè), để bản cũ
 // không làm hỏng dữ liệu của bản mới.
 
-export const CURRENT_SCHEMA = 2;
+export const CURRENT_SCHEMA = 3;
 
 // MIGRATIONS[n] nâng dữ liệu từ schema n lên n + 1.
 // Ví dụ khi có schema 2:  MIGRATIONS[1] = (s) => ({ ...s, questions: s.questions.map(addNewField) })
@@ -24,6 +24,9 @@ export const MIGRATIONS: Record<number, (state: any) => any> = {
         : q,
     ),
   }),
+  // 2 → 3: thêm trạng thái kiểm duyệt `review` (tuỳ chọn; vắng = Chưa kiểm tra). Chỉ nâng số
+  // phiên bản, KHÔNG sửa bất kỳ câu nào (uid, seq, latex, ngày giờ giữ nguyên).
+  2: (s) => ({ ...s }),
 };
 
 export class SchemaNewerError extends Error {

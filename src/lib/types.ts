@@ -40,7 +40,15 @@ export interface Question extends Location {
   tags: string[];
   createdAt: number;
   updatedAt: number;
+  /** Kiểm duyệt do giáo viên xác nhận; VẮNG = Chưa kiểm tra (schema 3). Khoá theo uid, không theo seq/ID6. */
+  review?: ReviewStatus;
 }
+
+/** Kiểm duyệt là hành động của người, KHÔNG phải kết quả máy (biên dịch được ≠ đã duyệt). */
+export type ReviewStatus = 'needs_fix' | 'approved';
+export type ReviewFilter = 'all' | 'unreviewed' | ReviewStatus;
+export const REVIEW_LABEL: Record<'unreviewed' | ReviewStatus, string> = { unreviewed: 'Chưa kiểm tra', needs_fix: 'Cần sửa', approved: 'Đã duyệt' };
+export const reviewOf = (q: { review?: ReviewStatus }): 'unreviewed' | ReviewStatus => q.review ?? 'unreviewed';
 
 /** ---- Cây mục lục (khung chương trình): 5 cấp, sửa được trong app ---- */
 export type TaxKind = 'grade' | 'branch' | 'chapter' | 'lesson' | 'form';
