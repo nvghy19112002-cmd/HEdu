@@ -1,6 +1,7 @@
 // Vẽ một hình TikZ. Bản cài Windows gọi TeX Live để dịch ra SVG; nếu chưa có TeX Live
 // hoặc hình lỗi thì hiện khung báo rõ lý do kèm đoạn log.
 import { useEffect, useRef, useState } from 'react';
+import { classifyTexLog } from '../lib/texcheck';
 import { asTikzErr, getSettings, isTikzReady, onSettingsChange, renderTikz, type TikzErr } from '../lib/tikz';
 
 type State =
@@ -42,10 +43,12 @@ export function TikzFigure({ code, defs = '', label }: { code: string; defs?: st
 
   if (st.s === 'loi') {
     const e = st.err;
+    const info = e.stage === 'latex' ? classifyTexLog(e.message, e.log) : null;
     return (
       <span className="fig-ph err">
-        <span className="fig-ph-t">{e.stage === 'thieu-texlive' ? 'Chưa dịch được hình' : 'Hình lỗi khi dịch'}</span>
+        <span className="fig-ph-t">{e.stage === 'thieu-texlive' ? 'Chưa dịch được hình' : info && info.kind !== 'khac' ? info.label : 'Hình lỗi khi dịch'}</span>
         <span className="fig-ph-s">{e.message}</span>
+        {info && info.kind !== 'khac' && <span className="fig-ph-s">{info.detail}</span>}
         {e.log && (
           <>
             <button type="button" className="linkbtn" onClick={() => setShowLog(!showLog)}>{showLog ? 'Ẩn log' : 'Xem log TeX'}</button>

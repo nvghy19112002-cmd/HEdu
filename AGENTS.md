@@ -48,6 +48,10 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 ## 7. Trạng thái (Claude cập nhật sau mỗi đợt)
 Mới nhất: `v0.1.0-beta.6` trên kênh beta.
 - Xong: khung cập nhật hai kênh + quay lại + sao lưu; cây khung CT sửa được (nhập/xuất JSON); màn Ngân hàng mới; nhập liệu có cảnh báo lỗi từng câu; TikZ qua TeX Live (có chọn thư mục `bin`, tự dò).
+- Issue #1 (TeX Live/TikZ, đã duyệt) — đang làm trên nhánh `claude/issue-1-texlive-packages`:
+  - Xong P1/P2: đọc khai báo gói (`src/lib/packages.ts`), tra `kpsewhich`, tra tên gói bằng `tlmgr search` (có hỏi trước khi dùng mạng, KHÔNG tự cài), bảng cảnh báo gói trong màn Nhập liệu, phân loại lỗi log TeX.
+  - Xong một phần P3/P4: chạy tiến trình có giờ chót cho cả `dvisvgm`, đọc ống song song (không treo), thư mục tạm riêng mỗi lần dịch, ghi SVG nguyên tử, tối đa 3 hình dịch cùng lúc.
+  - Chưa làm: “Xem chuẩn” biên dịch nguyên câu với đầu file/ex_test; lưu đầu file (preamble) cùng câu hỏi (cần đổi schema → chờ duyệt riêng); hủy tiến trình con của TeX trên Windows.
 - Chưa xác nhận trên máy thật: cài cập nhật tới beta.6, TikZ chạy được với `D:\texlive\texlive\2026\bin\windows`.
 - Chưa làm: lưu câu hỏi bằng SQLite (cần chủ dự án duyệt thiết kế, thuộc loại L); bảng danh sách + khung xem trước; luồng tạo đề 3 bước; xuất Word/PDF; nhập từ Word; MathHub ~60.000 câu chưa được nhập.
 - Các mục "Word Equation/MathType", mở rộng ngoài lớp 10–12 là hướng nghiên cứu, chưa thuộc phạm vi phát hành.

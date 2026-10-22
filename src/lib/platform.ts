@@ -21,8 +21,13 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   try {
     return await t.core.invoke<T>(cmd, args);
   } catch (e) {
-    // Tauri ném về chuỗi lỗi do Rust trả; chuẩn hoá thành Error.
-    throw e instanceof Error ? e : new Error(String(e));
+    // Rust trả lỗi là chuỗi hoặc object {message, log, stage}. Giữ nguyên các trường thay vì
+    // String(e), vì String(object) cho ra "[object Object]" và mất log.
+    if (e instanceof Error) throw e;
+    if (e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string') {
+      throw Object.assign(new Error((e as { message: string }).message), e);
+    }
+    throw new Error(typeof e === 'string' ? e : JSON.stringify(e));
   }
 }
 

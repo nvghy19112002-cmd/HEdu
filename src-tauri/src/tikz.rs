@@ -10,7 +10,13 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+use crate::proc::run_capture;
+
+/// Số thứ tự để mỗi lần dịch có thư mục tạm riêng (hai hình giống nhau dịch cùng lúc không giẫm chân nhau).
+static JOB: AtomicU64 = AtomicU64::new(0);
 
 /// Đầu file mặc định. Người dùng đổi được trong mục Hệ thống nếu TeX Live của họ
 /// thiếu gói nào đó, hoặc cần thêm gói riêng.
@@ -60,12 +66,21 @@ pub struct TikzOpts {
 }
 
 /// Đường dẫn tới một chương trình: ưu tiên thư mục người dùng chỉ, không có thì tìm trong PATH.
-fn prog(tex_bin: &Option<String>, name: &str) -> std::ffi::OsString {
+pub(crate) fn prog(tex_bin: &Option<String>, name: &str) -> std::ffi::OsString {
     if let Some(dir) = tex_bin.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
         let p = Path::new(dir).join(name);
         let exe = if cfg!(windows) { p.with_extension("exe") } else { p.clone() };
         if exe.exists() {
             return exe.into_os_string();
+        }
+        if cfg!(windows) {
+            // tlmgr trên Windows là tlmgr.bat
+            for ext in ["bat", "cmd"] {
+                let b = p.with_extension(ext);
+                if b.exists() {
+                    return b.into_os_string();
+                }
+            }
         }
         if p.exists() {
             return p.into_os_string();
@@ -153,32 +168,6 @@ fn engine_name(engine: &Option<String>) -> &'static str {
     }
 }
 
-fn run(cmd: &mut Command, limit: Duration) -> io::Result<(bool, String)> {
-    // Chạy và chờ; nếu quá giờ thì kết thúc tiến trình.
-    let mut child = cmd.spawn()?;
-    let start = Instant::now();
-    loop {
-        match child.try_wait()? {
-            Some(status) => {
-                let mut out = String::new();
-                if let Some(mut o) = child.stdout.take() {
-                    use std::io::Read;
-                    let _ = o.read_to_string(&mut out);
-                }
-                return Ok((status.success(), out));
-            }
-            None => {
-                if start.elapsed() > limit {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Ok((false, String::from("__QUA_LAU__")));
-                }
-                std::thread::sleep(Duration::from_millis(60));
-            }
-        }
-    }
-}
-
 /// Lấy đoạn log quanh dòng lỗi đầu tiên (dòng bắt đầu bằng '!').
 fn useful_log(log: &str) -> String {
     let lines: Vec<&str> = log.lines().collect();
@@ -222,7 +211,8 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         }
     }
 
-    let work = cache_dir.join(format!("tmp-{key}"));
+    let job = JOB.fetch_add(1, Ordering::Relaxed);
+    let work = cache_dir.join(format!("tmp-{key}-{}-{job}", std::process::id()));
     let _ = fs::remove_dir_all(&work);
     fs::create_dir_all(&work).map_err(|e| TikzErr {
         message: format!("Không tạo được thư mục tạm: {e}"),
@@ -245,20 +235,22 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         .arg("-interaction=nonstopmode")
         .arg("-halt-on-error")
         .arg("-no-shell-escape")
-        .arg("hinh.tex")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
+        .arg("hinh.tex");
     hide_console(&mut c);
 
-    let (ok, out) = match run(&mut c, limit) {
+    let res = match run_capture(&mut c, limit) {
         Ok(v) => v,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(missing_tool(engine)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            let _ = fs::remove_dir_all(&work);
+            return Err(missing_tool(engine));
+        }
         Err(e) => {
-            return Err(TikzErr { message: format!("Không chạy được {engine}: {e}"), log: String::new(), stage: String::from("latex") })
+            let _ = fs::remove_dir_all(&work);
+            return Err(TikzErr { message: format!("Không chạy được {engine}: {e}"), log: String::new(), stage: String::from("latex") });
         }
     };
-    let log = fs::read_to_string(work.join("hinh.log")).unwrap_or(out.clone());
-    if out == "__QUA_LAU__" {
+    let log = fs::read_to_string(work.join("hinh.log")).unwrap_or_else(|_| res.stdout.clone());
+    if res.timed_out {
         let _ = fs::remove_dir_all(&work);
         return Err(TikzErr {
             message: format!("Dịch hình quá {} giây nên đã dừng. Hình có thể quá nặng, hoặc đang chờ nhập gì đó.", limit.as_secs()),
@@ -266,6 +258,7 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
             stage: String::from("qua-lau"),
         });
     }
+    let ok = res.success;
     let pdf = work.join("hinh.pdf");
     if !ok || !pdf.exists() {
         let e = TikzErr { message: first_error_line(&log), log: useful_log(&log), stage: String::from("latex") };
@@ -279,12 +272,9 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         .arg("--no-fonts")
         .arg("--exact-bbox")
         .arg("--output=hinh.svg")
-        .arg("hinh.pdf")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .arg("hinh.pdf");
     hide_console(&mut d);
-    let dres = d.output();
-    let svg = match dres {
+    let svg = match run_capture(&mut d, limit) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             let _ = fs::remove_dir_all(&work);
             return Err(missing_tool("dvisvgm"));
@@ -293,14 +283,21 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
             let _ = fs::remove_dir_all(&work);
             return Err(TikzErr { message: format!("Không chạy được dvisvgm: {e}"), log: String::new(), stage: String::from("svg") });
         }
+        Ok(o) if o.timed_out => {
+            let _ = fs::remove_dir_all(&work);
+            return Err(TikzErr {
+                message: format!("Chuyển sang SVG quá {} giây nên đã dừng.", limit.as_secs()),
+                log: String::new(),
+                stage: String::from("qua-lau"),
+            });
+        }
         Ok(o) => {
             let made = work.join("hinh.svg");
-            if !o.status.success() || !made.exists() {
-                let err = String::from_utf8_lossy(&o.stderr).to_string();
+            if !o.success || !made.exists() {
                 let _ = fs::remove_dir_all(&work);
                 return Err(TikzErr {
                     message: String::from("Dịch ra PDF được nhưng chuyển sang SVG thì lỗi."),
-                    log: err.chars().take(1200).collect(),
+                    log: o.stderr.chars().take(1200).collect(),
                     stage: String::from("svg"),
                 });
             }
@@ -308,7 +305,11 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         }
     };
 
-    let _ = fs::write(&svg_path, &svg);
+    // ghi ra file tạm rồi đổi tên: người đọc cùng lúc không bao giờ thấy file dở dang
+    let part = cache_dir.join(format!("{key}.{}-{job}.part", std::process::id()));
+    if fs::write(&part, &svg).is_ok() && fs::rename(&part, &svg_path).is_err() {
+        let _ = fs::remove_file(&part);
+    }
     let _ = fs::remove_dir_all(&work);
     Ok(TikzOut { svg, cached: false, ms: started.elapsed().as_millis() as u64 })
 }
@@ -318,9 +319,9 @@ pub fn probe(cache_dir: &Path, tex_bin: Option<String>) -> Result<String, TikzEr
     let opts = TikzOpts { preamble: None, engine: None, timeout_secs: Some(90), tex_bin: tex_bin.clone() };
     render(cache_dir, r"\begin{tikzpicture}\draw(0,0)--(1,1);\end{tikzpicture}", "", &opts)?;
     let mut c = Command::new(prog(&tex_bin, "pdflatex"));
-    c.arg("--version").stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
+    c.arg("--version");
     hide_console(&mut c);
-    let v = c.output().ok().map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").to_string());
+    let v = run_capture(&mut c, Duration::from_secs(10)).ok().map(|o| o.stdout.lines().next().unwrap_or("").to_string());
     Ok(v.unwrap_or_default())
 }
 
@@ -346,14 +347,14 @@ pub fn cache_dir_of(root: &Path) -> PathBuf {
 }
 
 #[cfg(windows)]
-fn hide_console(c: &mut Command) {
+pub(crate) fn hide_console(c: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     c.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(windows))]
-fn hide_console(_c: &mut Command) {}
+pub(crate) fn hide_console(_c: &mut Command) {}
 
 #[cfg(test)]
 mod tests {
