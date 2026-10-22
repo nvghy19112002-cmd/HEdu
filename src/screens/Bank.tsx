@@ -214,6 +214,7 @@ export function BankScreen() {
           {sel.size > 0 ? (
             <div className="selbar">
               <span style={{ fontSize: 14 }}><b>Đã chọn {sel.size} câu</b></span>
+              <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
               <div className="head-actions" style={{ gap: 8 }}>
                 <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn</button>
                 <button type="button" className="btn btn-sm" onClick={exportSelected}>Xuất .tex</button>
