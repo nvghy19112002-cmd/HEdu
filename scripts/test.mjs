@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const dir = mkdtempSync(join(tmpdir(), 'hedu-test-'));
-for (const name of ['lib.test', 'bank.test', 'packages.test', 'preview.test', 'xemchuan.test', 'zoom.test', 'figscale.test', 'snippet.test', 'review.test']) {
+for (const name of ['lib.test', 'bank.test', 'packages.test', 'preview.test', 'xemchuan.test', 'zoom.test', 'figscale.test', 'snippet.test', 'review.test', 'crisp.test']) {
   const out = join(dir, `${name}.mjs`);
   await build({ entryPoints: [`src/lib/${name}.ts`], bundle: true, platform: 'node', format: 'esm', outfile: out, logLevel: 'error' });
   execFileSync(process.execPath, [out], { stdio: 'inherit' });

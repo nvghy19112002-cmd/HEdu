@@ -1,6 +1,8 @@
 // Vẽ một hình TikZ. Bản cài Windows gọi TeX Live để dịch ra SVG; nếu chưa có TeX Live
 // hoặc hình lỗi thì hiện khung báo rõ lý do kèm đoạn log.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { crispStrokes } from '../lib/crisp';
+import { subscribeZoom } from '../lib/zoom';
 import { applyFigScale, getFigPrefs, subscribeFig } from '../lib/figscale';
 import { nextSvgPrefix, scopeSvgIds } from '../lib/svgids';
 import { classifyTexLog } from '../lib/texcheck';
@@ -48,6 +50,19 @@ export function TikzFigure({ code, defs = '', label, size }: { code: string; def
     window.addEventListener('resize', read);
     return () => window.removeEventListener('resize', read);
   }, [st.s]);
+
+  // Nét ngang/dọc đủ 1 điểm ảnh, theo cỡ hiển thị + zoom hiện tại (xem src/lib/crisp.ts)
+  useLayoutEffect(() => {
+    const el = host.current;
+    if (!el || st.s !== 'xong') return;
+    const go = () => crispStrokes(el);
+    go();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(go) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', go);
+    const un = subscribeZoom(() => setTimeout(go, 60));
+    return () => { ro?.disconnect(); window.removeEventListener('resize', go); un(); };
+  }, [st, colW]);
 
   useEffect(() => onSettingsChange(() => setSt({ s: 'cho' })), []);
 
