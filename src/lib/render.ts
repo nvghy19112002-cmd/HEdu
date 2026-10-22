@@ -128,6 +128,35 @@ export function maskFigures(src: string): { text: string; figures: string[] } {
 
 export { figureLabel };
 
+/** Một mảnh để vẽ: đoạn HTML đã dựng, hoặc một hình TikZ cần biên dịch riêng. */
+export type Part = { kind: 'html'; html: string } | { kind: 'figure'; code: string; label: string };
+
+function renderSegs(t: string): string {
+  let out = '';
+  for (const seg of segments(t)) out += seg.kind === 'math' ? renderMath(seg.value, seg.display) : renderTextPart(seg.value);
+  return out;
+}
+
+/** Tách đoạn LaTeX thành các mảnh chữ và các hình, để React vẽ hình bằng component riêng. */
+export function renderParts(src: string): Part[] {
+  if (!src) return [];
+  const { text, figures } = maskFigures(src);
+  const out: Part[] = [];
+  const re = /\u0000FIG(\d+)\u0000/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const before = text.slice(last, m.index);
+    if (before.trim()) out.push({ kind: 'html', html: renderSegs(before) });
+    const code = figures[Number(m[1])] ?? '';
+    out.push({ kind: 'figure', code, label: figureLabel(code) });
+    last = re.lastIndex;
+  }
+  const tail = text.slice(last);
+  if (tail.trim() || !out.length) out.push({ kind: 'html', html: renderSegs(tail) });
+  return out;
+}
+
 export function renderLatexText(src: string): string {
   if (!src) return '';
   const { text, figures } = maskFigures(src);

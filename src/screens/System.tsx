@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { IcAlert, IcCheckCircle } from '../components/Icons';
 import { isDesktop } from '../lib/platform';
+import { clearTikzCache, defaultPreamble, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
+import { asTikzErr } from '../lib/tikz';
 import { addSamples, exportBackup, importBackup, resetToSample, useBank } from '../lib/store';
 import {
   backupInfo, checkUpdate, CHANNEL_LABEL, formatBytes, friendlyError, installUpdate, restoreBackup,
@@ -38,8 +40,31 @@ export function SystemScreen() {
   const [backup, setBackup] = useState<BackupMeta | null>(null);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [restoreErr, setRestoreErr] = useState<string | null>(null);
+  const [tikz, setTikzState] = useState<TikzSettings>(() => getTikz());
+  const [defPre, setDefPre] = useState('');
+  const [probing, setProbing] = useState(false);
+  const [texMsg, setTexMsg] = useState<string | null>(null);
+  const [texLog, setTexLog] = useState('');
+  const [texOk, setTexOk] = useState(false);
+
+  const saveTikz = (s: TikzSettings) => { setTikzState(s); setTikz(s); };
+  const checkTeX = async () => {
+    setProbing(true); setTexMsg(null); setTexLog('');
+    try {
+      const v = await probeTeX();
+      setTexOk(true);
+      setTexMsg(`Dịch thử một hình thành công. ${v || ''}`.trim());
+    } catch (e) {
+      const err = asTikzErr(e);
+      setTexOk(false);
+      setTexMsg(err.message);
+      setTexLog(err.log);
+    } finally { setProbing(false); }
+  };
   const [fileErr, setFileErr] = useState<string | null>(null);
   const [armedReset, setArmedReset] = useState(false);
+
+  useEffect(() => { if (desktop) void defaultPreamble().then(setDefPre).catch(() => {}); }, [desktop]);
 
   useEffect(() => { if (desktop) backupInfo().then(setBackup).catch(() => setBackup(null)); }, [desktop]);
 
@@ -202,6 +227,42 @@ export function SystemScreen() {
           )}
           {confirmRestore && <span className="sys-hint">Dữ liệu hiện tại sẽ trở thành bản sao lưu, nên nếu bấm nhầm bạn vẫn khôi phục lại được.</span>}
           {restoreErr && <div className="note bad"><IcAlert /><div className="note-body"><b>Không khôi phục được</b><span>{restoreErr}</span></div></div>}
+        </section>
+
+        <section className="panel" aria-label="Vẽ hình TikZ">
+          <h2>Vẽ hình TikZ bằng TeX Live</h2>
+          <span className="sys-hint">
+            App gọi <span className="mono">{tikz.engine}</span> rồi <span className="mono">dvisvgm</span> trên máy bạn để dịch mỗi hình thành ảnh SVG.
+            Hình đã dịch được nhớ lại nên lần sau hiện ngay. Cần TeX Live (hoặc MiKTeX) đã cài và nằm trong PATH.
+          </span>
+          <div className="head-actions">
+            <button type="button" className="btn btn-dark btn-sm" disabled={!desktop || probing} onClick={() => void checkTeX()}>
+              {probing ? 'Đang thử dịch một hình…' : 'Kiểm tra TeX Live'}
+            </button>
+            <button type="button" className="btn btn-outline btn-sm" disabled={!desktop} onClick={() => void clearTikzCache().then((n) => toast(`Đã xoá ${n} hình đã dịch. Hình sẽ được dịch lại khi cần.`))}>Xoá hình đã dịch</button>
+          </div>
+          {texMsg && <div className={`note ${texOk ? 'ok' : 'bad'}`}>{texOk ? <IcCheckCircle /> : <IcAlert />}<div className="note-body"><b>{texOk ? 'TeX Live chạy được' : 'Chưa dịch được hình'}</b><span>{texMsg}</span>{texLog && <code className="fig-log">{texLog}</code>}</div></div>}
+          <div className="sys-row">
+            <label className="sw"><input type="checkbox" checked={tikz.auto} onChange={(e) => saveTikz({ ...tikz, auto: e.target.checked })} />Tự vẽ hình khi mở câu hỏi</label>
+            <label className="lbl" style={{ maxWidth: 220 }}>Bộ dịch
+              <select className="sel" value={tikz.engine} onChange={(e) => saveTikz({ ...tikz, engine: e.target.value as TikzSettings['engine'] })}>
+                <option value="pdflatex">pdflatex (nhanh nhất)</option>
+                <option value="lualatex">lualatex</option>
+                <option value="xelatex">xelatex</option>
+              </select>
+            </label>
+            <label className="lbl" style={{ maxWidth: 160 }}>Giới hạn (giây)
+              <input className="num" type="number" min={5} max={180} value={tikz.timeoutSecs} onChange={(e) => saveTikz({ ...tikz, timeoutSecs: Number(e.target.value) || 40 })} />
+            </label>
+          </div>
+          <details>
+            <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--ink-2)' }}>Đầu file khi dịch hình (chỉ sửa khi thiếu gói)</summary>
+            <textarea style={{ marginTop: 8, minHeight: 150 }} spellCheck={false} value={tikz.preamble} placeholder={defPre} onChange={(e) => saveTikz({ ...tikz, preamble: e.target.value })} aria-label="Đầu file LaTeX" />
+            <div className="head-actions">
+              <button type="button" className="btn btn-sm" onClick={() => saveTikz({ ...tikz, preamble: '' })}>Dùng lại mặc định</button>
+              <button type="button" className="btn btn-sm" onClick={() => saveTikz({ ...tikz, preamble: defPre })}>Chép mặc định ra để sửa</button>
+            </div>
+          </details>
         </section>
 
         <section className="panel" aria-label="Sao lưu thủ công">

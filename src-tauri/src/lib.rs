@@ -1,6 +1,7 @@
 // Lõi desktop của HEdu: lưu dữ liệu an toàn + cập nhật hai kênh + quay lại bản trước.
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod storage;
+mod tikz;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -191,6 +192,47 @@ fn restore_backup(app: AppHandle, gate: State<Gate>) -> Result<String, String> {
     Ok(format!("Đã khôi phục ({} byte).", bytes.len()))
 }
 
+/// Dịch một hình TikZ thành SVG (chạy ở luồng riêng để giao diện không bị đứng).
+#[tauri::command]
+async fn tikz_render(
+    app: AppHandle,
+    code: String,
+    defs: String,
+    opts: Option<tikz::TikzOpts>,
+) -> Result<tikz::TikzOut, tikz::TikzErr> {
+    let err = |m: String| tikz::TikzErr { message: m, log: String::new(), stage: String::from("latex") };
+    let root = paths(&app).map_err(err)?;
+    let dir = tikz::cache_dir_of(root.root());
+    std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
+    let o = opts.unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || tikz::render(&dir, &code, &defs, &o))
+        .await
+        .map_err(|e| err(e.to_string()))?
+}
+
+/// Kiểm tra máy đã có TeX Live chưa; trả về dòng phiên bản của pdflatex.
+#[tauri::command]
+async fn tikz_probe(app: AppHandle) -> Result<String, tikz::TikzErr> {
+    let err = |m: String| tikz::TikzErr { message: m, log: String::new(), stage: String::from("latex") };
+    let root = paths(&app).map_err(err)?;
+    let dir = tikz::cache_dir_of(root.root());
+    std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
+    tauri::async_runtime::spawn_blocking(move || tikz::probe(&dir))
+        .await
+        .map_err(|e| err(e.to_string()))?
+}
+
+#[tauri::command]
+fn tikz_clear_cache(app: AppHandle) -> Result<usize, String> {
+    let dir = tikz::cache_dir_of(paths(&app)?.root());
+    tikz::clear_cache(&dir).map_err(io_err)
+}
+
+#[tauri::command]
+fn tikz_default_preamble() -> &'static str {
+    tikz::DEFAULT_PREAMBLE
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -208,7 +250,11 @@ pub fn run() {
             check_update,
             install_update,
             backup_info,
-            restore_backup
+            restore_backup,
+            tikz_render,
+            tikz_probe,
+            tikz_clear_cache,
+            tikz_default_preamble
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
