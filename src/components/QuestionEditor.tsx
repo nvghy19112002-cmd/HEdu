@@ -112,9 +112,10 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
     if (!parsed.stem) { toast('Đề bài đang trống — chưa lưu.'); return false; }
     const exact = dups.find((d) => d.score === 1);
     if (exact) { toast(`Câu này trùng hẳn với ${seqLabel(exact.question.seq)} — chưa lưu.`); return false; }
+    const hadReview = editing?.review;
     const q = saveQuestion({ latex, level, tags, ...loc }, editing?.uid);
     if (!editing) saveDraft(null);
-    toast(editing ? `Đã cập nhật ${questionCode(q, q.level)} · ${seqLabel(q.seq)}` : `Đã lưu vào ngân hàng: ${questionCode(q, q.level)} · ${seqLabel(q.seq)}`);
+    toast(editing ? `Đã cập nhật ${questionCode(q, q.level)} · ${seqLabel(q.seq)}${hadReview && !q.review ? ' — nội dung đổi nên trạng thái về “Chưa kiểm tra”' : ''}` : `Đã lưu vào ngân hàng: ${questionCode(q, q.level)} · ${seqLabel(q.seq)}`);
     onSaved?.(q);
     return true;
   };

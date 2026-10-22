@@ -594,3 +594,22 @@ a { color: var(--accent); }
   .detail-back { display: inline-block; }
 }
 .scope-head .btn { width: auto; flex: none; align-self: center; }
+
+/* ---------- Kiểm duyệt câu hỏi (F2) ---------- */
+.rv-chip { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
+.rv-chip.rv-unreviewed { background: #F0EEE7; color: var(--ink-3); border-color: var(--line); }
+.rv-chip.rv-needs_fix { background: #FCEBDD; color: #8A3B10; border-color: #F1C9A6; }
+.rv-chip.rv-approved { background: var(--ok-bg); color: var(--ok); border-color: #B5D8C5; }
+.rv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding-top: 10px; margin-top: 4px; border-top: 1px dashed var(--line); font-size: 13px; }
+.rv-l { font-weight: 700; color: var(--ink-2); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.rv-seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; background: #fff; }
+.rv-seg button { border: 0; background: transparent; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; border-right: 1px solid var(--line); }
+.rv-seg button:last-child { border-right: 0; }
+.rv-seg button[aria-pressed="true"].rv-unreviewed { background: #E9E6DC; color: var(--ink); }
+.rv-seg button[aria-pressed="true"].rv-needs_fix { background: #F6D5B8; color: #6E2D08; }
+.rv-seg button[aria-pressed="true"].rv-approved { background: var(--ok); color: #fff; }
+.rv-seg button:disabled { opacity: .6; cursor: progress; }
+.rv-msg { color: var(--ok); font-weight: 600; }
+.rv-msg.bad { color: var(--accent); }
+.rv-note { flex-basis: 100%; color: var(--ink-3); font-size: 12px; }
+.rv-ask { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--ok); border-radius: 12px; background: var(--ok-bg); }

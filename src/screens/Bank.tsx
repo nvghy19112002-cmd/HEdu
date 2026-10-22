@@ -15,8 +15,9 @@ import { buildExTest, parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
 import { branchShort, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
-import { deleteQuestion, duplicateQuestion, useBank } from '../lib/store';
-import { LEVEL_LABEL, LEVELS, TYPE_LABEL, TYPES, type Level, type QType, type Question } from '../lib/types';
+import { deleteQuestion, duplicateQuestion, setReview, useBank } from '../lib/store';
+import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
+import { LEVEL_LABEL, LEVELS, REVIEW_LABEL, reviewOf, TYPE_LABEL, TYPES, type Level, type QType, type Question, type ReviewFilter, type ReviewStatus } from '../lib/types';
 
 function fold(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
@@ -40,6 +41,7 @@ export function BankScreen() {
   const [formId, setFormId] = useState<string | null>(null);
   const [types, setTypes] = useState<Set<QType>>(new Set());
   const [levels, setLevels] = useState<Set<Level>>(new Set());
+  const [reviewF, setReviewF] = useState<ReviewFilter>('all');
   const [text, setText] = useState('');
   const [wide, setWide] = useState(false); // tìm trong toàn bộ ngân hàng thay vì mục đang chọn
   const [showSol, setShowSol] = useState(false);
@@ -79,7 +81,13 @@ export function BankScreen() {
     extra(q) &&
     (!formId || q.formId === formId) &&
     (!types.size || types.has(q.type)) &&
-    (!levels.size || levels.has(q.level))).length;
+    (!levels.size || levels.has(q.level)) &&
+    (reviewF === 'all' || reviewOf(q) === reviewF)).length;
+
+  /** Đếm theo trạng thái kiểm duyệt (bỏ qua chính bộ lọc kiểm duyệt). */
+  const reviewTally = (r: ReviewFilter) => base.filter((q) =>
+    (!formId || q.formId === formId) && (!types.size || types.has(q.type)) && (!levels.size || levels.has(q.level)) &&
+    (r === 'all' || reviewOf(q) === r)).length;
 
   const list = useMemo(() => {
     const f = fold(text.trim());
@@ -87,9 +95,10 @@ export function BankScreen() {
       .filter((q) => !formId || q.formId === formId)
       .filter((q) => !types.size || types.has(q.type))
       .filter((q) => !levels.size || levels.has(q.level))
+      .filter((q) => reviewF === 'all' || reviewOf(q) === reviewF)
       .filter((q) => !f || f.split(/\s+/).every((w) => index.get(q.uid)!.includes(w)))
       .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [base, formId, types, levels, text, index]);
+  }, [base, formId, types, levels, reviewF, text, index]);
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
@@ -121,6 +130,7 @@ export function BankScreen() {
           <div className="card-meta">
             <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
             <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
+            <ReviewBadge q={q} />
             <span className="code-tag">{questionCode(q, q.level)}</span>
             <span>{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span>
             {q.tags.map((t) => <span key={t} className="tag" style={{ height: 24, paddingRight: 10, fontSize: 12 }}>{t}</span>)}
@@ -129,6 +139,7 @@ export function BankScreen() {
           {exact.has(q.uid)
             ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
             : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
+          <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
         </div>
         <div className="card-acts">
           {isTikzReady() && (
@@ -144,6 +155,13 @@ export function BankScreen() {
         </div>
       </article>
     );
+  };
+
+  /** Đổi kiểm duyệt; nếu câu rời khỏi bộ lọc đang bật thì báo nhẹ (câu đang xem tự chuyển sang câu hợp lệ kế tiếp). */
+  const changeReview = async (q: Question, s: ReviewStatus | undefined): Promise<boolean> => {
+    const ok = await setReview(q.uid, s);
+    if (ok && reviewF !== 'all' && (s ?? 'unreviewed') !== reviewF) toast(`${seqLabel(q.seq)} chuyển sang “${REVIEW_LABEL[s ?? 'unreviewed']}” nên không còn trong bộ lọc này.`);
+    return ok;
   };
 
   /** Xoá một câu: bỏ khỏi ô chọn, và nếu đang xem câu đó thì chuyển sang câu liền kề còn lại. */
@@ -172,6 +190,7 @@ export function BankScreen() {
                 <span className="code-tag">{questionCode(q, q.level)}</span>
                 <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
                 <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
+                <ReviewBadge q={q} />
               </span>
               <span className="row-text">{plainSnippet(p.stem) || '(câu chưa có đề bài)'}</span>
             </button>
@@ -302,6 +321,16 @@ export function BankScreen() {
                 ))}
               </div>
             </div>
+            <div className="fgroup">
+              <h3>Kiểm duyệt</h3>
+              <div className="chips">
+                {(['all', 'unreviewed', 'needs_fix', 'approved'] as const).map((r) => (
+                  <button key={r} type="button" className="chip" aria-pressed={reviewF === r} onClick={() => { setReviewF(r); setPage(0); }}>
+                    {r === 'all' ? 'Tất cả' : REVIEW_LABEL[r]}<span className="chip-n">{reviewTally(r)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {sel.size > 0 ? (
@@ -345,7 +374,7 @@ export function BankScreen() {
           {!list.length && (
             <div className="empty">
               <span>{questions.length ? 'Không có câu nào khớp bộ lọc.' : 'Ngân hàng đang trống. Bấm “+ Câu hỏi mới”, hoặc nhập cả file .tex ở mục Nhập liệu.'}</span>
-              {questions.length > 0 && <button type="button" className="btn btn-sm" onClick={() => { setTypes(new Set()); setLevels(new Set()); setText(''); setFormId(null); }}>Xoá bộ lọc</button>}
+              {questions.length > 0 && <button type="button" className="btn btn-sm" onClick={() => { setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setText(''); setFormId(null); }}>Xoá bộ lọc</button>}
             </div>
           )}
         </section>
