@@ -1,8 +1,9 @@
 // Màn Nhập liệu: dán hoặc mở file LaTeX, xem trước rồi nhập hàng loạt vào ngân hàng.
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { chapters, firstLocation, grades } from '../lib/curriculum';
 import { shortName } from '../lib/taxonomy';
+import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { findDuplicates } from '../lib/dup';
 import { parseExTest, splitExBlocks } from '../lib/extest';
 import { parseCode, questionCode } from '../lib/id';
@@ -21,13 +22,49 @@ export function ImportScreen() {
   const [level, setLevel] = useState<Level>('TH');
   const file = useRef<HTMLInputElement>(null);
 
-  const rows = useMemo(() => splitExBlocks(src).map((latex) => {
+  // Đọc lại sau khi ngừng gõ 250ms: dán một file vài trăm câu mà đọc ngay từng phím thì treo.
+  const [text250, setText250] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setText250(src), 250);
+    return () => clearTimeout(t);
+  }, [src]);
+
+  const rows = useMemo(() => splitExBlocks(text250).map((latex) => {
     const p = parseExTest(latex);
     const fromId = p.idComment ? parseCode(p.idComment) : null;
     const dup = findDuplicates(latex, questions)[0];
     return { latex, p, fromId, dup };
-  }), [src, questions]);
+  }), [text250, questions]);
+
+  // Kiểm tra lỗi xem trước theo từng đợt 15 câu, nhường chỗ cho giao diện giữa các đợt.
+  const [issues, setIssues] = useState<(Issue[] | undefined)[]>([]);
+  useEffect(() => {
+    setIssues(new Array(rows.length));
+    if (!rows.length) return;
+    let stop = false;
+    const acc: (Issue[] | undefined)[] = new Array(rows.length);
+    let i = 0;
+    const step = () => {
+      if (stop) return;
+      const until = Math.min(i + 15, rows.length);
+      for (; i < until; i++) acc[i] = checkQuestion(rows[i].p, rows[i].latex);
+      setIssues(acc.slice());
+      if (i < rows.length) setTimeout(step, 0);
+    };
+    const t = setTimeout(step, 0);
+    return () => { stop = true; clearTimeout(t); };
+  }, [rows]);
+
+  const done = issues.filter(Boolean).length;
+  const checking = rows.length > 0 && done < rows.length;
+  const worstOf = (i: number) => (issues[i] ? worstLevel(issues[i]!) : null);
   const importable = rows.filter((r) => !(r.dup && r.dup.score === 1));
+  const nErr = issues.filter((x) => x && worstLevel(x) === 'loi').length;
+  const nWarn = issues.filter((x) => x && worstLevel(x) === 'canh').length;
+  const nFig = issues.filter((x) => x?.some((y) => y.level === 'tin')).length;
+  const [onlyBad, setOnlyBad] = useState(false);
+  const [openRow, setOpenRow] = useState<number | null>(null);
+  const shownRows = rows.map((r, i) => ({ r, i })).filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh');
 
   const chs = chapters(loc.grade);
   const chapter = chs.find((c) => c.id === loc.chapterId) ?? chs[0];
@@ -67,17 +104,47 @@ export function ImportScreen() {
               <label className="lbl">Bài<select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>{(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{shortName(l.name)}</option>)}</select></label>
               <label className="lbl">Mức độ<select className="sel" value={level} onChange={(e) => setLevel(e.target.value as Level)}>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select></label>
             </div>
-            <h2 style={{ marginTop: 6 }}>Tìm thấy {rows.length} câu</h2>
-            <ol style={{ margin: 0, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13.5 }}>
-              {rows.map((r, i) => (
-                <li key={i}>
-                  <b>{TYPE_LABEL[r.p.type]}</b> · {r.fromId ? <span className="mono">{questionCode(r.fromId.loc, r.fromId.level)}</span> : 'không có ID'}
-                  {r.p.issues.length > 0 && <span style={{ color: 'var(--warn)' }}> · {r.p.issues[0]}</span>}
-                  {r.dup && <span style={{ color: 'var(--accent)' }}> · {r.dup.score === 1 ? 'trùng hẳn, bỏ qua' : `giống ${Math.round(r.dup.score * 100)}% một câu đã có`}</span>}
+            <h2 style={{ marginTop: 6 }}>Kiểm tra {rows.length} câu trước khi nhập</h2>
+            <div className="chk-sum">
+              {checking && <span className="chk-pill">Đang kiểm tra {done}/{rows.length}…</span>}
+              {!checking && <span className={`chk-pill${nErr ? ' bad' : ' ok'}`}>{nErr ? `${nErr} câu lỗi xem trước` : 'Không câu nào lỗi xem trước'}</span>}
+              {nWarn > 0 && <span className="chk-pill warn">{nWarn} câu cần xem lại</span>}
+              {nFig > 0 && <span className="chk-pill">{nFig} câu có hình TikZ</span>}
+              {(nErr > 0 || nWarn > 0) && (
+                <label className="sw" style={{ marginLeft: 'auto' }}>
+                  <input type="checkbox" checked={onlyBad} onChange={(e) => setOnlyBad(e.target.checked)} />Chỉ xem câu có vấn đề
+                </label>
+              )}
+            </div>
+            {!checking && nErr > 0 && (
+              <span className="sys-hint">Câu lỗi vẫn nhập được, nhưng phần xem trước sẽ vỡ cho tới khi bạn sửa. Bấm vào câu để xem lỗi ở đâu.</span>
+            )}
+            <ol className="chk-list">
+              {shownRows.slice(0, 200).map(({ r, i }) => (
+                <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'}`}>
+                  <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
+                    <span className="chk-n">{i + 1}</span>
+                    <b>{TYPE_LABEL[r.p.type]}</b>
+                    <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : 'không ID'}</span>
+                    <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
+                    {r.dup && <span className="chk-tag dup">{r.dup.score === 1 ? 'trùng hẳn, bỏ qua' : `giống ${Math.round(r.dup.score * 100)}%`}</span>}
+                    {worstOf(i) && <span className={`chk-tag ${worstOf(i)}`}>{worstOf(i) === 'tin' ? 'có hình' : LEVEL_TEXT[worstOf(i)!]}</span>}
+                  </button>
+                  {openRow === i && (issues[i]?.length ?? 0) > 0 && (
+                    <ul className="chk-why">
+                      {issues[i]!.map((it: Issue, k: number) => (
+                        <li key={k} className={it.level}>
+                          <span>{it.message}</span>
+                          {it.detail && <code>{it.detail}</code>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ol>
-            <div><button type="button" className="btn btn-accent" disabled={!importable.length} onClick={run}>Nhập {importable.length} câu vào ngân hàng</button></div>
+            {shownRows.length > 200 && <span className="sys-hint">Đang hiện 200 câu đầu trong {shownRows.length} câu.</span>}
+            <div><button type="button" className="btn btn-accent" disabled={!importable.length || checking} onClick={run}>{checking ? 'Đang kiểm tra…' : `Nhập ${importable.length} câu vào ngân hàng`}</button></div>
           </div>
         )}
       </div>

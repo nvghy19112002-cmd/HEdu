@@ -1,17 +1,14 @@
-## Có gì mới trong beta.3
+## Có gì mới trong beta.4
 
-**Khung chương trình thật, và sửa được**
-- Thay cây mẫu bằng cây đầy đủ: 3 lớp, 30 chương, 99 bài, **532 dạng toán**.
-- Mục **Khung CT** giờ sửa được: đổi tên, đổi mã, thêm, xoá, sắp xếp lại; **nạp cây từ file JSON** và **xuất cây ra JSON**; có nút đưa về cây mặc định. Đổi sách giáo khoa chỉ cần nạp cây mới, không phải cài lại app.
-- Mã ID theo đúng chuẩn đang dùng: `[Lớp][Phân môn][Chương][Mức độ][Bài]-[Dạng]`, mức độ là **N / H / V / C**, ví dụ `2D1H1-1`.
+Bản này tập trung vào việc đọc kho câu hỏi LaTeX thật (đã thử trên 300 câu có 363 hình TikZ).
 
-**Ngân hàng câu hỏi dễ nhìn hơn**
-- Chọn lớp bằng nút có sẵn số câu, rồi chọn chương, rồi chọn bài.
-- Lọc theo **Dạng toán · Mức độ · Loại câu**, mỗi nút hiện sẵn số câu.
-- Ô tìm kiếm gọn lại, thêm lựa chọn tìm trong mục đang chọn hay toàn bộ ngân hàng.
-- Có phân trang (20 câu mỗi trang) để ngân hàng vài chục nghìn câu vẫn mượt, và nút hiện/ẩn lời giải.
+**Đọc đúng câu có hình**
+- Hỗ trợ `\immini{đề}{hình}`: trước đây mã hình lọt vào đề bài và phần hình bị mất khi xuất lại. Nay đề và hình tách riêng, xuất ra vẫn đúng dạng hai cột như cũ.
+- Hỗ trợ `\def\ten#1#2{…}` và `\newcommand{\ten}[2][…]{…}`: các khai báo vẽ hình được giữ riêng, không hiện lẫn vào đề. Khai báo nằm *bên trong* `tikzpicture` được giữ nguyên vì nó là một phần của hình.
+- Nhận `\lq\lq … \rq\rq` thành dấu ngoặc kép, `\colon` thành dấu hai chấm.
 
-**Gọn thanh bên**
-- Bỏ mục "Soạn thảo" khỏi thanh bên vì trùng với "Nhập liệu". Màn soạn một câu vẫn mở khi bấm "+ Câu hỏi mới" hoặc khi sửa một câu.
-
-**Dữ liệu**: cấu trúc dữ liệu lên phiên bản 2 (thêm cây mục lục). Dữ liệu cũ tự nâng cấp; câu hỏi gắn với khung cũ sẽ hiện "Chưa gán vị trí" để bạn gán lại.
+**Báo lỗi xem trước khi nhập**
+- Màn Nhập liệu kiểm tra từng câu trước khi nhập và báo rõ: công thức nào KaTeX không dịch được, ngoặc nhọn lệch ở phần nào, `\begin{…}` nào chưa đóng, câu nào thiếu lời giải, câu nào có hình.
+- Bấm vào một câu để xem chính xác lỗi nằm ở đâu, kèm đoạn mã gây lỗi. Có nút lọc "chỉ xem câu có vấn đề".
+- Kiểm tra chạy theo từng đợt nên dán vài trăm câu không làm treo giao diện (300 câu kiểm tra xong trong khoảng 2 giây).
+- Các lệnh chỉ dùng khi in (`\hfill`, `\vspace`, …) không còn làm hỏng cả công thức.

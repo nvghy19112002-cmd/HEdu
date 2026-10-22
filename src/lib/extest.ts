@@ -12,6 +12,12 @@ export interface Option { text: string; correct: boolean }
 
 export interface ParsedQuestion {
   stem: string;
+  /** Hình đi kèm (nhóm thứ hai của \immini) — tách ra để đề bài không dính mã hình */
+  figure: string | null;
+  /** 'immini' = đề và hình bày hai cột; giữ lại để xuất ra đúng như cũ */
+  layout: 'plain' | 'immini';
+  /** Các khai báo \def, \newcommand phục vụ hình vẽ */
+  defs: string;
   type: QType;
   options: Option[]; // 4 phương án (tn) hoặc 4 ý (ds)
   shortAnswer: string | null;
@@ -34,6 +40,60 @@ export function stripComments(src: string): { text: string; id: string | null } 
     return line;
   });
   return { text: lines.join('\n'), id };
+}
+
+const TIKZ_BLOCK = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
+const MASK = '\u0001T';
+
+/** Che các khối tikzpicture để quét lệnh ở ngoài mà không đụng vào mã hình. */
+function maskTikz(src: string): { text: string; parts: string[] } {
+  const parts: string[] = [];
+  const text = src.replace(TIKZ_BLOCK, (m) => { parts.push(m); return `${MASK}${parts.length - 1}${MASK}`; });
+  return { text, parts };
+}
+
+function unmaskTikz(src: string, parts: string[]): string {
+  return src.replace(/\u0001T(\d+)\u0001T/g, (_, k) => parts[Number(k)] ?? '');
+}
+
+/** Tách các khai báo \def\ten{…}, \newcommand{…}{…} nằm NGOÀI hình, ra khỏi phần nội dung.
+ *  \def bên trong \begin{tikzpicture} là một phần của hình nên được giữ nguyên. */
+export function extractDefs(src: string): { text: string; defs: string } {
+  const defs: string[] = [];
+  const masked = maskTikz(src);
+  let s = masked.text;
+  // \def\ten#1#2{…} (có thể có tham số) và \newcommand{\ten}[2][mặc định]{…}
+  const heads = [
+    /\\def\s*\\[A-Za-z@]+\s*(#\d|[^{}\\\s])*\s*(?=\{)/,
+    /\\(re)?newcommand\s*\*?\s*\{?\s*\\[A-Za-z@]+\s*\}?\s*(\[[^\]]*\])*\s*(?=\{)/,
+  ];
+  for (const re of heads) {
+    for (let guard = 0; guard < 200; guard++) {
+      const m = re.exec(s);
+      if (!m) break;
+      const g = readGroup(s, m.index + m[0].length);
+      if (!g) { s = s.slice(0, m.index) + s.slice(m.index + m[0].length); continue; }
+      defs.push(s.slice(m.index, g[1]));
+      s = s.slice(0, m.index) + s.slice(g[1]);
+    }
+  }
+  return { text: unmaskTikz(s, masked.parts), defs: unmaskTikz(defs.join('\n'), masked.parts) };
+}
+
+/** \immini[tỉ lệ]{nội dung}{hình}: trả về nội dung đã mở ra và phần hình. */
+export function unwrapImmini(src: string): { text: string; figure: string | null } {
+  let s = src;
+  let figure: string | null = null;
+  for (let guard = 0; guard < 20; guard++) {
+    const m = /\\immini\s*\*?\s*(\[[^\]]*\])?\s*(?=\{)/.exec(s);
+    if (!m) break;
+    const a = readGroup(s, m.index + m[0].length);
+    if (!a) { s = s.slice(0, m.index) + s.slice(m.index + m[0].length); continue; }
+    const b = readGroup(s, a[1]);
+    if (b && b[0].trim()) figure = figure ? figure + '\n' + b[0].trim() : b[0].trim();
+    s = s.slice(0, m.index) + a[0] + s.slice(b ? b[1] : a[1]);
+  }
+  return { text: s, figure };
 }
 
 function skipSpace(s: string, i: number): number {
@@ -106,6 +166,15 @@ export function parseExTest(src: string): ParsedQuestion {
   const issues: string[] = [];
   if (b < 0 && src.trim()) issues.push('Thiếu \\begin{ex} … \\end{ex}.');
 
+  // Tách khai báo hình và mở \immini TRƯỚC khi cắt đề/phương án, vì \choice thường
+  // nằm bên trong \immini{…}; không mở ra thì đề dính mã và hình bị mất.
+  const d = extractDefs(body);
+  const defs = d.defs;
+  const im = unwrapImmini(d.text);
+  body = im.text;
+  const figure = im.figure;
+  const layout: 'plain' | 'immini' = figure ? 'immini' : 'plain';
+
   const iTF = findCommand(body, 'choiceTF');
   const iCh = findCommand(body, 'choice');
   const iSh = findCommand(body, 'shortans');
@@ -157,7 +226,7 @@ export function parseExTest(src: string): ParsedQuestion {
   if (!stem) issues.push('Đề bài đang trống.');
   if (unbalancedDollar(stem + (solution ?? '') + options.map((o) => o.text).join(''))) issues.push('Số dấu $ bị lẻ — có công thức chưa đóng.');
 
-  return { stem, type, options, shortAnswer, solution, idComment: id, issues };
+  return { stem, figure, layout, defs, type, options, shortAnswer, solution, idComment: id, issues };
 }
 
 function unbalancedDollar(s: string): boolean {
@@ -221,13 +290,26 @@ export function buildExTest(p: ParsedQuestion, opts: { id?: string; order?: numb
   const order = opts.order ?? p.options.map((_, i) => i);
   const lines: string[] = [];
   lines.push(`\\begin{ex}${opts.id ? `%[${opts.id}]` : ''}`);
-  lines.push('  ' + p.stem.replace(/\n/g, '\n  '));
+  if (p.defs) lines.push('  ' + p.defs.replace(/\n/g, '\n  '));
+  // Phần đề + phương án; nếu câu vốn bày hai cột thì gói lại trong \immini như cũ.
+  const inner: string[] = [];
+  inner.push(p.stem.replace(/\n/g, '\n  '));
   if (p.type === 'tn' || p.type === 'ds') {
-    lines.push(p.type === 'tn' ? '  \\choice' : '  \\choiceTF');
+    inner.push(p.type === 'tn' ? '\\choice' : '\\choiceTF');
     for (const k of order) {
       const o = p.options[k];
-      if (o) lines.push(`  {${o.correct ? '\\True ' : ''}${o.text}}`);
+      if (o) inner.push(`{${o.correct ? '\\True ' : ''}${o.text}}`);
     }
+  }
+  if (p.layout === 'immini' && p.figure) {
+    lines.push('  \\immini{');
+    inner.forEach((x) => lines.push('    ' + x));
+    lines.push('  }{');
+    lines.push('    ' + p.figure.replace(/\n/g, '\n    '));
+    lines.push('  }');
+  } else {
+    inner.forEach((x) => lines.push('  ' + x));
+    if (p.figure) lines.push('  ' + p.figure.replace(/\n/g, '\n  '));
   }
   if (p.type === 'tln' && p.shortAnswer != null) lines.push(`  \\shortans{${p.shortAnswer}}`);
   if (opts.withSolution !== false && p.solution) lines.push(`  \\loigiai{\n    ${p.solution.replace(/\n/g, '\n    ')}\n  }`);

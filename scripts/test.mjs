@@ -5,7 +5,10 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const out = join(mkdtempSync(join(tmpdir(), 'hedu-test-')), 'test.mjs');
-await build({ entryPoints: ['src/lib/lib.test.ts'], bundle: true, platform: 'node', format: 'esm', outfile: out, logLevel: 'error' });
-execFileSync(process.execPath, [out], { stdio: 'inherit' });
+const dir = mkdtempSync(join(tmpdir(), 'hedu-test-'));
+for (const name of ['lib.test', 'bank.test']) {
+  const out = join(dir, `${name}.mjs`);
+  await build({ entryPoints: [`src/lib/${name}.ts`], bundle: true, platform: 'node', format: 'esm', outfile: out, logLevel: 'error' });
+  execFileSync(process.execPath, [out], { stdio: 'inherit' });
+}
 execFileSync(process.execPath, ['scripts/release-scripts.test.mjs'], { stdio: 'inherit' });
