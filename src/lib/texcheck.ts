@@ -122,7 +122,7 @@ export function installCommand(pkgs: PkgHit[], file: string): string {
 
 export type TexErrKind = 'thieu-goi' | 'thieu-tep' | 'xung-dot' | 'engine' | 'cu-phap' | 'khac';
 
-export interface TexErrInfo { kind: TexErrKind; label: string; file?: string; detail: string }
+export interface TexErrInfo { kind: TexErrKind; label: string; file?: string; /** lệnh bị thiếu, khi là Undefined control sequence */ command?: string; detail: string }
 
 /** Đọc log TeX và nói lỗi thuộc loại nào, để không đề nghị cài gói khi lỗi là do mã sai. */
 export function classifyTexLog(message: string, log: string): TexErrInfo {
@@ -137,7 +137,18 @@ export function classifyTexLog(message: string, log: string): TexErrInfo {
   if (/requires? (?:Lua|Xe)\s?TeX|only (?:works|runs) with (?:Lua|Xe)|Unicode engine|fontspec Error|luaotfload|Lua(?:La)?TeX/i.test(text) && /error|!/.test(text)) {
     return { kind: 'engine', label: 'Cần bộ dịch khác', detail: 'Mã này cần LuaLaTeX hoặc XeLaTeX; đổi “Bộ dịch” ở mục Hệ thống.' };
   }
-  if (/Undefined control sequence|Missing \$ inserted|Missing \{ inserted|Runaway argument|Extra \}|Misplaced|Illegal parameter|Paragraph ended before|Too many \}|Package pgf Error|Package tikz Error|Package tkz/i.test(text)) {
+  if (/Undefined control sequence/.test(text)) {
+    // dòng "l.16 …\\TenLenh" ngay sau dòng lỗi: lệnh cuối cùng trước chỗ TeX dừng là lệnh chưa định nghĩa
+    const ctx = /Undefined control sequence\.?\s*\n\s*l\.\d+\s?(.*)/.exec(text);
+    const cmd = ctx ? [...ctx[1].matchAll(/\\[A-Za-z@]+/g)].pop()?.[0] : undefined;
+    return {
+      kind: 'cu-phap', label: 'Lỗi mã LaTeX', command: cmd,
+      detail: cmd
+        ? `Lệnh ${cmd} chưa được định nghĩa. Có thể là macro riêng của bạn (hãy thêm định nghĩa vào đầu file ở mục Hệ thống) hoặc thiếu gói chứa nó.`
+        : 'Có lệnh chưa được định nghĩa. Xem log để biết lệnh nào.',
+    };
+  }
+  if (/Missing \$ inserted|Missing \{ inserted|Runaway argument|Extra \}|Misplaced|Illegal parameter|Paragraph ended before|Too many \}|Package pgf Error|Package tikz Error|Package tkz/i.test(text)) {
     return { kind: 'cu-phap', label: 'Lỗi mã LaTeX', detail: 'Mã có lỗi hoặc dùng lệnh chưa được khai báo gói. Xem log để biết dòng nào.' };
   }
   return { kind: 'khac', label: 'Lỗi khi dịch', detail: message };

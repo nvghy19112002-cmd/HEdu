@@ -1,9 +1,11 @@
 // Hỏi TeX Live của máy: "tệp .sty/.cls/… này có không?" và "gói nào chứa tệp này?".
 // Chỉ ĐỌC và TRA CỨU. Tuyệt đối không chạy `tlmgr install` hay sửa gì trong TeX Live (Issue #1).
+use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
 use crate::proc::{run_capture, Slots};
+use crate::support;
 use crate::tikz::{hide_console, prog, TikzErr};
 
 /// Số lần gọi kpsewhich chạy song song.
@@ -49,9 +51,10 @@ fn missing_kpse() -> TikzErr {
 }
 
 /// Tra một tệp. Ok(None) = không có; Err = không chạy được kpsewhich.
-fn kpse_one(file: &str, tex_bin: &Option<String>) -> Result<Option<String>, TikzErr> {
+fn kpse_one(file: &str, tex_bin: &Option<String>, support_dir: &Option<PathBuf>) -> Result<Option<String>, TikzErr> {
     let mut c = Command::new(prog(tex_bin, "kpsewhich"));
     c.arg(file.trim());
+    support::apply(&mut c, support_dir);
     hide_console(&mut c);
     match run_capture(&mut c, Duration::from_secs(15)) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(missing_kpse()),
@@ -65,7 +68,7 @@ fn kpse_one(file: &str, tex_bin: &Option<String>) -> Result<Option<String>, Tikz
 }
 
 /// Tra nhiều tệp (bỏ trùng, giữ thứ tự). Một tệp có tên không hợp lệ bị coi là không tìm thấy.
-pub fn check_files(files: &[String], tex_bin: &Option<String>) -> Result<Vec<FileHit>, TikzErr> {
+pub fn check_files(files: &[String], tex_bin: &Option<String>, support_dir: &Option<PathBuf>) -> Result<Vec<FileHit>, TikzErr> {
     let mut uniq: Vec<&String> = Vec::new();
     for f in files.iter().take(400) {
         if !uniq.contains(&f) {
@@ -75,7 +78,7 @@ pub fn check_files(files: &[String], tex_bin: &Option<String>) -> Result<Vec<Fil
     // thử một tệp đầu để biết có kpsewhich không, khỏi báo lỗi lặp cho từng tệp
     let mut out: Vec<Option<Result<Option<String>, TikzErr>>> = (0..uniq.len()).map(|_| None).collect();
     if let Some(first) = uniq.iter().position(|f| valid_file(f)) {
-        let r = kpse_one(uniq[first], tex_bin)?;
+        let r = kpse_one(uniq[first], tex_bin, support_dir)?;
         out[first] = Some(Ok(r));
     }
     std::thread::scope(|sc| {
@@ -86,9 +89,10 @@ pub fn check_files(files: &[String], tex_bin: &Option<String>) -> Result<Vec<Fil
             .map(|(i, _)| {
                 let f = uniq[i].clone();
                 let bin = tex_bin.clone();
+                let sup = support_dir.clone();
                 (i, sc.spawn(move || {
                     let _p = KPSE_SLOTS.acquire();
-                    kpse_one(&f, &bin)
+                    kpse_one(&f, &bin, &sup)
                 }))
             })
             .collect();
@@ -220,7 +224,7 @@ mod tests {
 
     #[test]
     fn khong_co_kpsewhich_thi_bao_thieu_texlive() {
-        let r = check_files(&["a.sty".to_string()], &Some("/khong/co/dau".into()));
+        let r = check_files(&["a.sty".to_string()], &Some("/khong/co/dau".into()), &None);
         // trên máy dev có thể có sẵn kpsewhich; chỉ kiểm tra khi thiếu
         if let Err(e) = r {
             assert_eq!(e.stage, "thieu-texlive");

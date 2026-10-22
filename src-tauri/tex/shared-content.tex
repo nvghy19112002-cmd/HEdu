@@ -1,0 +1,139 @@
+% ============================================================================
+% NGUỒN DUY NHẤT các gói & thư viện cần để DỰNG NỘI DUNG CÂU HỎI.
+%
+% Mọi đường biên dịch của app đều `\input` file này:
+%   - xem trước câu hỏi / hình TikZ rời / Thư viện TikZ  → qua preamble.tex
+%   - xuất đề PDF + phiếu trả lời                        → qua khaibaochung.tex
+%
+% VÌ SAO CÓ FILE NÀY: trước đây mỗi đường tự khai một danh sách gói riêng (preamble.tex,
+% hằng TIKZ_LIBRARY_PACKAGES trong TypeScript, khaibaochung.tex). Ba danh sách lệch nhau
+% sinh ra triệu chứng rất khó lần: CÙNG một câu render được ở trang này mà hỏng ở trang kia.
+% Đo trên bank ngày 21/07/2026: 445 câu (~1%) dính đúng lỗi đó.
+%
+% QUY TẮC: thêm gói/thư viện phục vụ NỘI DUNG câu hỏi thì thêm VÀO ĐÂY, đừng thêm vào
+% preamble.tex hay khaibaochung.tex. Script `npm run check:preamble` sẽ báo đỏ nếu hai file
+% kia tự khai `\usetikzlibrary`/`\usepgfplotslibrary` ngoài file này.
+% Sửa file này PHẢI tăng PREAMBLE_VERSION trong src/main/latex/preamble.ts (nếu không,
+% câu đã cache vẫn trả về bản render cũ và bản vá trông như vô tác dụng).
+%
+% KHÔNG thuộc phạm vi file này (cố ý để riêng mỗi đường): documentclass, engine biên dịch,
+% font, hyperref, bố cục đề (titlesec/fancyhdr/counters). Xem docs/latex-format.md mục 4.
+% ============================================================================
+
+% --- Bộ vẽ hình ---
+\usepackage{tikz-3dplot}          % hình không gian 3D (\tdplotsetmaincoords, hình chóp/lăng trụ)
+\usepackage{tikz}
+\usepackage{tkz-euclide}
+\usepackage{tkz-tab}              % bảng biến thiên / xét dấu (các câu image_type=center)
+\usepackage{tabvar}               % biến thể khác của bảng biến thiên (một số câu cũ)
+\usepackage{pgf,pgfplots}
+
+% Hợp của cả ba danh sách cũ. Số câu trong bank cần từng thư viện (đo 21/07/2026) ghi kèm
+% những thư viện TỪNG THIẾU ở preamble.tex — đó chính là các câu hỏng khi xem trước:
+%   intersections           190 câu (`name path=`)
+%   decorations.markings     87 câu (`decoration={markings,…}`)
+%   arrows                   60 câu (mũi tên cũ `->|`, `stealth'` — arrows.meta KHÔNG có)
+%   positioning               3 câu (`right=of …`)
+%   through                   2 câu
+% `hobby`, `decorations.pathreplacing`: 0 câu trong bank nhưng người dùng có thể gõ tay ở
+% Thư viện TikZ / Trợ lí TeX nên vẫn giữ.
+% CỐ Ý KHÔNG có `snakes`: thư viện đã khai tử và xung khắc với `decorations.*`. 13 câu dùng
+% `decoration={snake,…}` là cú pháp MỚI do `decorations.pathmorphing` cung cấp; câu duy nhất
+% còn cú pháp cũ `snake=coil` (2D4H2-6) đã xóa mềm ngày 21/07/2026.
+\usetikzlibrary{%
+  angles,arrows,arrows.meta,backgrounds,calc,%
+  decorations.markings,decorations.pathmorphing,decorations.pathreplacing,%
+  hobby,intersections,patterns,patterns.meta,positioning,quotes,shadows,%
+  shapes.geometric,shapes.symbols,through%
+}
+% compat: để 1.17 thay vì 1.18 để tương thích với máy người dùng có PGFPlots cũ (TeX Live
+% 2020/2021, MiKTeX chưa cập nhật). PGFPlots 1.18+ vẫn chạy tốt với compat=1.17.
+% Đã đối chiếu 23 câu dùng pgfplots — không đổi kết quả đáng kể.
+\pgfplotsset{compat=1.17}
+\usepgfplotslibrary{fillbetween,polar}
+
+% --- Gói nội dung khác mà câu hỏi trong bank có dùng ---
+% Trước đây chỉ khaibaochung.tex có ⇒ các câu này hỏng khi xem trước.
+\usepackage{multirow,makecell,diagbox}  % bảng ghép ô (7+3+3 câu)
+\usepackage{fontawesome,pifont}         % \faXXX (56 câu), \ding (2 câu)
+\usepackage{yhmath}                     % \wideparen — cung tròn (8 câu)
+\usepackage{esvect}                     % \vv (128 câu gõ tay)
+\usepackage{twemojis}                   % \twemoji (5 câu); .sty nằm cùng thư mục này
+
+% CỐ Ý KHÔNG chép `\def\vec{\vv}` / `\def\overrightarrow{\vv}` của khaibaochung.tex sang đây:
+% đã thử và gây "Undefined control sequence" hàng loạt trên 5.721 câu dùng \overrightarrow
+% chuẩn (xem ghi chú trong preamble.tex). Nạp gói esvect là đủ cho các câu gõ thẳng \vv.
+
+% --- Hộp ghi chú (tcolorbox) ---
+% Đo được +4 ms mỗi lượt biên dịch nên nạp cho mọi đường, đổi lại `\begin{dl}`, `\begin{luuy}`…
+% hiện GIỐNG NHAU ở xem trước và ở đề in ra.
+\usepackage{tcolorbox}
+\tcbuselibrary{theorems,breakable,skins}
+
+\newtcolorbox{khung}{
+  before upper=\raggedright,
+  colback=white,
+  boxrule=0.5pt,
+  colframe=gray!50!black,
+  fonttitle=\bfseries,
+  breakable,
+  arc=1mm,
+  left=2pt, right=2pt, top=2pt, bottom=2pt
+}
+
+% Hộp nền màu, viền trái — mỗi loại ghi chú một màu.
+\newenvironment{boxdn}
+{\begin{tcolorbox}[enhanced jigsaw,breakable,pad at break*=1mm,colback=red!10,boxrule=0pt,
+    frame hidden,opacityback=0.5,left=3mm,right=0pt,bottom=2pt,top=2pt,before skip=2mm,
+    after skip=2mm,arc=0pt,borderline west={1mm}{0cm}{red!30}]}
+{\end{tcolorbox}}
+\newenvironment{boxdl}
+{\begin{tcolorbox}[enhanced jigsaw,breakable,pad at break*=1mm,colback=cyan!10,boxrule=0pt,
+    frame hidden,opacityback=0.5,left=3mm,right=0pt,bottom=2pt,top=2pt,before skip=2mm,
+    after skip=2mm,arc=0pt,borderline west={1mm}{0cm}{cyan!30}]}
+{\end{tcolorbox}}
+\newenvironment{boxchuy}
+{\begin{tcolorbox}[enhanced jigsaw,breakable,pad at break*=1mm,colback=green!10,boxrule=0pt,
+    frame hidden,opacityback=0.5,left=3mm,right=0pt,bottom=2pt,top=2pt,before skip=2mm,
+    after skip=2mm,arc=0pt,borderline west={1mm}{0cm}{green!30}]}
+{\end{tcolorbox}}
+\newenvironment{boxluuy}
+{\begin{tcolorbox}[enhanced jigsaw,breakable,pad at break*=1mm,colback=purple!10,boxrule=0pt,
+    frame hidden,opacityback=0.5,left=3mm,right=0pt,bottom=2pt,top=2pt,before skip=2mm,
+    after skip=2mm,arc=0pt,borderline west={1mm}{0cm}{purple!30}]}
+{\end{tcolorbox}}
+\newenvironment{boxpp}
+{\begin{tcolorbox}[enhanced jigsaw,breakable,pad at break*=1mm,colback=orange!10,boxrule=0pt,
+    frame hidden,opacityback=0.5,left=3mm,right=0pt,bottom=2pt,top=2pt,before skip=2mm,
+    after skip=2mm,arc=0pt,borderline west={1mm}{0cm}{orange!30}]}
+{\end{tcolorbox}}
+\newenvironment{boxtc}
+{\begin{tcolorbox}[enhanced jigsaw,breakable,pad at break*=1mm,colback=pink!10,boxrule=0pt,
+    frame hidden,opacityback=0.5,left=3mm,right=0pt,bottom=2pt,top=2pt,before skip=2mm,
+    after skip=2mm,arc=0pt,borderline west={1mm}{0cm}{pink!30}]}
+{\end{tcolorbox}}
+% Hộp LÝ THUYẾT — dùng cho tính năng "OCR tài liệu" (gõ lại nguyên khối lý thuyết của sách/tài
+% liệu). Cùng khuôn với các hộp trên; `breakable` là bắt buộc vì một khối lý thuyết thường dài hơn
+% một trang. Nhãn nhận THAM SỐ TÙY CHỌN để giữ đúng tên mục của tài liệu gốc:
+%   \begin{lt} …            → nhãn "Lý thuyết."
+%   \begin{lt}[Hàm số bậc hai] … → nhãn "Hàm số bậc hai."
+\newenvironment{boxlt}
+{\begin{tcolorbox}[enhanced jigsaw,breakable,pad at break*=1mm,colback=teal!10,boxrule=0pt,
+    frame hidden,opacityback=0.5,left=3mm,right=0pt,bottom=2pt,top=2pt,before skip=2mm,
+    after skip=2mm,arc=0pt,borderline west={1mm}{0cm}{teal!30}]}
+{\end{tcolorbox}}
+
+\newenvironment{dn}{\begin{boxdn}\textcolor{red}{\textbf{Định nghĩa. }}}{\end{boxdn}}
+\newenvironment{dl}{\begin{boxdl}\textcolor{blue}{\textbf{Định lý. }}}{\end{boxdl}}
+\newenvironment{luuy}{\begin{boxluuy}\textcolor{purple}{\textbf{Lưu ý. }}}{\end{boxluuy}}
+\newenvironment{nx}{\begin{khung}\textcolor{purple}{\textbf{Nhận xét. }}}{\end{khung}}
+\newenvironment{pp}{\begin{boxpp}\textcolor{orange!70!black}{\textbf{Phương pháp. }}}{\end{boxpp}}
+\newenvironment{chuy}{\begin{boxchuy}\textcolor{green!50!black}{\textbf{Chú ý. }}}{\end{boxchuy}}
+\newenvironment{note}{\begin{khung}\textcolor{cyan}{\textbf{Ghi chú. }}}{\end{khung}}
+\newenvironment{tc}{\begin{boxtc}\textcolor{pink!50!black}{\textbf{Tính chất. }}}{\end{boxtc}}
+\newenvironment{lt}[1][Lý thuyết]{\begin{boxlt}\textcolor{teal!60!black}{\textbf{#1. }}}{\end{boxlt}}
+
+% --- Macro tự chế của tác giả gốc (không thuộc ex_test.sty) ---
+% Hệ/tuyển phương trình — không phải lệnh LaTeX chuẩn, nhiều câu trong bank dùng.
+\newcommand{\hoac}[1]{\left[\begin{aligned}#1\end{aligned}\right.}
+\newcommand{\heva}[1]{\left\{\begin{aligned}#1\end{aligned}\right.}

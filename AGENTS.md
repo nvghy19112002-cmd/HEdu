@@ -46,7 +46,8 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 - Trao đổi giữa hai AI qua Issue/PR hoặc file Markdown ngắn, không dán cả hội thoại.
 
 ## 7. Trạng thái (Claude cập nhật sau mỗi đợt)
-Mới nhất: `v0.1.0-beta.6` trên kênh beta.
+Mới nhất đã phát hành: `v0.1.0-beta.8` trên kênh beta (hình dịch qua DVI, không cần Ghostscript).
+Chờ phát hành (đã gộp vào `main`, CHƯA phát hành theo ý chủ dự án — gộp với đợt chỉnh sửa sau): nhúng gói LaTeX riêng của chủ dự án (`src-tauri/tex/`: ex_test, tkz-tab-vn, tkz-linknodes, ex_tkz-euclide, twemojis, shared-content), đầu file vẽ hình mặc định mới, báo tên lệnh chưa định nghĩa. Ghi chú sẵn trong `GHI-CHU-PHAT-HANH.md`.
 - Xong: khung cập nhật hai kênh + quay lại + sao lưu; cây khung CT sửa được (nhập/xuất JSON); màn Ngân hàng mới; nhập liệu có cảnh báo lỗi từng câu; TikZ qua TeX Live (có chọn thư mục `bin`, tự dò).
 - Issue #1 (TeX Live/TikZ, đã duyệt) — đang làm trên nhánh `claude/issue-1-texlive-packages`:
   - Xong P1/P2: đọc khai báo gói (`src/lib/packages.ts`), tra `kpsewhich`, tra tên gói bằng `tlmgr search` (có hỏi trước khi dùng mạng, KHÔNG tự cài), bảng cảnh báo gói trong màn Nhập liệu, phân loại lỗi log TeX.
