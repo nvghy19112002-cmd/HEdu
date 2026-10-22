@@ -1,6 +1,8 @@
 // Vẽ một hình TikZ. Bản cài Windows gọi TeX Live để dịch ra SVG; nếu chưa có TeX Live
 // hoặc hình lỗi thì hiện khung báo rõ lý do kèm đoạn log.
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { applyFigScale, getFigPrefs, subscribeFig } from '../lib/figscale';
+import { nextSvgPrefix, scopeSvgIds } from '../lib/svgids';
 import { classifyTexLog } from '../lib/texcheck';
 import { asTikzErr, getSettings, isTikzReady, onSettingsChange, renderTikz, type TikzErr } from '../lib/tikz';
 
@@ -14,6 +16,8 @@ export function TikzFigure({ code, defs = '', label, size }: { code: string; def
   const [st, setSt] = useState<State>({ s: 'cho' });
   const [showLog, setShowLog] = useState(false);
   const alive = useRef(true);
+  const prefix = useRef(nextSvgPrefix());
+  useSyncExternalStore(subscribeFig, getFigPrefs, getFigPrefs);
 
   const run = () => {
     if (!isTikzReady()) return;
@@ -36,7 +40,7 @@ export function TikzFigure({ code, defs = '', label, size }: { code: string; def
   if (st.s === 'xong') {
     return (
       <span className="fig" role="img" aria-label={label}>
-        <span className="fig-svg" style={size ? ({ '--fig-w': size.w ?? 'auto', '--fig-h': size.h ?? 'auto' } as CSSProperties) : undefined} dangerouslySetInnerHTML={{ __html: st.svg }} />
+        <span className="fig-svg" style={size ? ({ '--fig-w': size.w ?? 'auto', '--fig-h': size.h ?? 'auto' } as CSSProperties) : undefined} dangerouslySetInnerHTML={{ __html: scopeSvgIds(size ? st.svg : applyFigScale(st.svg, getFigPrefs()), prefix.current) }} />
       </span>
     );
   }

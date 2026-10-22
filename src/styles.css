@@ -463,7 +463,8 @@ a { color: var(--accent); }
 /* ---- Hình TikZ đã dịch ---- */
 .fig { display: block; margin: 10px auto; text-align: center; }
 .fig-svg { display: inline-block; max-width: 100%; }
-.fig-svg svg { max-width: 100%; height: var(--fig-h, auto); width: var(--fig-w, auto); }
+.fig-svg svg { max-width: 100%; height: auto; }
+.fig-svg[style] svg { height: var(--fig-h, auto); width: var(--fig-w, auto); } /* cỡ do \resizebox đặt */
 .fig-ph.err { border-color: #E0B3A8; background: var(--accent-soft); max-width: 520px; align-items: flex-start; text-align: left; }
 .fig-ph.err .fig-ph-t { color: var(--accent-ink); }
 .fig-log { display: block; width: 100%; margin-top: 6px; font-family: var(--f-code); font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 220px; overflow: auto; }
