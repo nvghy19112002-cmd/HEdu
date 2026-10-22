@@ -137,6 +137,14 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
     return () => { setGuard(null); if (leaveRef) leaveRef.current = null; };
   }, [setGuard, leaveRef]);
 
+  // Esc khi đang hỏi “thay đổi chưa lưu” = Tiếp tục sửa (không đóng ngăn sửa)
+  useEffect(() => {
+    if (!leaving) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); setLeaving(null); } };
+    window.addEventListener('keydown', h, true);
+    return () => window.removeEventListener('keydown', h, true);
+  }, [leaving]);
+
   // Ctrl+S chỉ lưu câu đang sửa
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -189,8 +197,8 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
       </header>
 
       {leaving && (
-        <div className="qe-confirm" role="alertdialog" aria-label="Thay đổi chưa lưu">
-          <span><b>Câu này có thay đổi chưa lưu.</b> Bạn muốn làm gì?</span>
+        <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Thay đổi chưa lưu">
+          <span><b>Câu này có thay đổi chưa lưu.</b> Muốn đóng thì chọn một trong ba:</span>
           <div className="head-actions">
             <button type="button" className="btn btn-sm btn-accent" onClick={() => { const go2 = leaving; if (save()) { setLeaving(null); go2(); } }}>Lưu rồi tiếp tục</button>
             <button type="button" className="btn btn-sm" onClick={() => { const go2 = leaving; setLeaving(null); go2(); }}>Bỏ thay đổi</button>

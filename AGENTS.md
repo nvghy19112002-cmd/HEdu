@@ -60,3 +60,5 @@ Chờ chủ dự án nghiệm thu trên máy Windows thật (chưa ai xác nhậ
 Issue: #3, #7, #9 đã đóng (“ĐÃ XỬ LÝ beta.10 — chờ nghiệm thu”, mở lại nếu nghiệm thu thấy lỗi). #1 còn mở với 3 mục: lưu đầu file theo từng câu (đổi schema, cần duyệt riêng), hủy hẳn tiến trình con TeX trên Windows, nghiệm thu máy thật.
 Chưa làm: lưu bằng SQLite (loại L, cần duyệt thiết kế); bảng danh sách + khung xem trước; luồng tạo đề 3 bước (Tạo đề đang ẩn); xuất Word/PDF; nhập từ Word; nhập MathHub ~60.000 câu. “Word Equation/MathType” và mở rộng ngoài lớp 10–12 chỉ là hướng nghiên cứu.
 Ghi nhớ kỹ thuật: `node_modules` đang bị git theo dõi như một liên kết (symlink) — chưa xử lý, đừng chạy `npm i` làm mất nó (nếu mất: `git checkout node_modules`).
+
+Đợt sau beta.15 (PR #23 nhãn enumerate + sửa tách `\item` sau danh sách lồng, PR #24 `src/lib/crisp.ts` nét ngang/dọc SVG sắc nét, PR-C bố cục Ngân hàng gọn: `.qbar`, Bộ lọc thu gọn `hedu.bankfilters`, mục lục ẩn được `hedu.banktree`, menu ba chấm `.more-menu`, hộp “thay đổi chưa lưu” dạng modal). Không đổi schema/ID/dữ liệu/updater. Chưa phát hành (đợi chủ dự án nghiệm thu).

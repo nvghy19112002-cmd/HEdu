@@ -8,9 +8,9 @@ import { QuestionView } from '../components/QuestionView';
 import { CompiledView } from '../components/CompiledView';
 import { QuestionDrawer } from '../components/QuestionDrawer';
 import { isTikzReady } from '../lib/tikz';
-import { loadBankView, saveBankView, type BankView } from '../lib/bankview';
+import { loadBankView, loadFiltersOpen, loadTreeOpen, saveBankView, saveFiltersOpen, saveTreeOpen, type BankView } from '../lib/bankview';
 import { plainSnippet } from '../lib/snippet';
-import { IcCopy, IcEdit, IcSearch, IcTrash } from '../components/Icons';
+import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
 import { branchShort, shortName } from '../lib/taxonomy';
@@ -56,7 +56,11 @@ export function BankScreen() {
   const setView = (v: BankView) => { setViewState(v); saveBankView(v); };
   const [activeUid, setActiveUid] = useState<string | null>(null); // câu đang xem ở chế độ Danh sách (khác với ô chọn nhiều)
   const [detailOpen, setDetailOpen] = useState(false);            // cửa sổ hẹp: Chi tiết phủ lên danh sách
-  const [treeOpen, setTreeOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1500);
+  const [treeOpen, setTreeOpenState] = useState(() => loadTreeOpen() ?? (loadBankView() === 'list' ? typeof window === 'undefined' || window.innerWidth >= 1500 : true));
+  const setTreeOpen = (o: boolean) => { setTreeOpenState(o); saveTreeOpen(o); };
+  const [filtersOpen, setFiltersOpenState] = useState(loadFiltersOpen);
+  const setFiltersOpen = (o: boolean) => { setFiltersOpenState(o); saveFiltersOpen(o); };
+  const [menuUid, setMenuUid] = useState<string | null>(null); // menu ba chấm của thẻ
 
   const index = useMemo(() => new Map(questions.map((q) => [q.uid, searchable(q)])), [questions]);
 
@@ -106,6 +110,15 @@ export function BankScreen() {
   // Câu đang xem: nếu không còn nằm trong trang hiện tại (đổi lọc/trang/xoá) thì lấy câu đầu tiên hợp lệ.
   const active = shown.find((q) => q.uid === activeUid) ?? shown[0] ?? null;
   useEffect(() => { if (!active) setDetailOpen(false); }, [active]);
+  // Menu ba chấm: bấm ra ngoài thì đóng
+  useEffect(() => {
+    if (!menuUid) return;
+    const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.('.more')) { setMenuUid(null); setConfirmDel(null); } };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); setMenuUid(null); setConfirmDel(null); } };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
+  }, [menuUid]);
 
   const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); apply(n); };
   const pickGrade = (g: number | null) => { setPage(0); setGradeNum(g); setChapterId(null); setLessonId(null); setFormId(null); };
@@ -132,26 +145,30 @@ export function BankScreen() {
             <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
             <ReviewBadge q={q} />
             <span className="code-tag">{questionCode(q, q.level)}</span>
-            <span>{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span>
-            {q.tags.map((t) => <span key={t} className="tag" style={{ height: 24, paddingRight: 10, fontSize: 12 }}>{t}</span>)}
-            <span style={{ marginLeft: 'auto' }} className="mono">{seqLabel(q.seq)}</span>
+            <span className="mono card-no">{seqLabel(q.seq)}</span>
+            <div className="card-acts">
+              {isTikzReady() && (
+                <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
+              )}
+              <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => setOpenUid(q.uid)}><IcEdit size={17} /></button>
+              <div className="more">
+                <button type="button" className="ico" aria-label="Thêm thao tác" aria-haspopup="menu" aria-expanded={menuUid === q.uid} title="Nhân bản, xoá…" onClick={() => { setConfirmDel(null); setMenuUid(menuUid === q.uid ? null : q.uid); }}><IcMore size={17} /></button>
+                {menuUid === q.uid && (
+                  <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenuUid(null); } }}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuUid(null); const c = duplicateQuestion(q.uid); if (c) { if (mode === 'detail') setActiveUid(c.uid); toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); } }}><IcCopy size={16} />Nhân bản</button>
+                    {confirmDel === q.uid
+                      ? <button type="button" role="menuitem" className="danger" onClick={() => { setMenuUid(null); removeQuestion(q); }} autoFocus><IcTrash size={16} />Bấm lần nữa để xoá</button>
+                      : <button type="button" role="menuitem" className="danger" onClick={() => setConfirmDel(q.uid)}><IcTrash size={16} />Xoá câu</button>}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
           {exact.has(q.uid)
             ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
             : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
           <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
-        </div>
-        <div className="card-acts">
-          {isTikzReady() && (
-            <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
-          )}
-          <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => setOpenUid(q.uid)}><IcEdit size={18} /></button>
-          <button type="button" className="ico" aria-label="Nhân bản câu" title="Nhân bản" onClick={() => { const c = duplicateQuestion(q.uid); if (c) { if (mode === 'detail') setActiveUid(c.uid); toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); } }}><IcCopy /></button>
-          {confirmDel === q.uid ? (
-            <button type="button" className="ico danger" style={{ width: 'auto', padding: '0 8px', fontSize: 12, color: 'var(--accent)' }} onClick={() => removeQuestion(q)} onBlur={() => setConfirmDel(null)} autoFocus>Xoá?</button>
-          ) : (
-            <button type="button" className="ico danger" aria-label="Xoá câu" title="Xoá" onClick={() => setConfirmDel(q.uid)}><IcTrash /></button>
-          )}
         </div>
       </article>
     );
@@ -190,7 +207,7 @@ export function BankScreen() {
                 <span className="code-tag">{questionCode(q, q.level)}</span>
                 <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
                 <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-                <ReviewBadge q={q} />
+                <ReviewBadge q={q} compact />
               </span>
               <span className="row-text">{plainSnippet(p.stem) || '(câu chưa có đề bài)'}</span>
             </button>
@@ -200,6 +217,7 @@ export function BankScreen() {
     </ul>
   );
 
+  const activeFilters = (formId ? 1 : 0) + levels.size + types.size + (reviewF !== 'all' ? 1 : 0);
   const heading = chapter ? `Lớp ${gradeNum} · ${chapter.name}` : gradeNum ? `Lớp ${gradeNum}` : 'Toàn bộ ngân hàng';
 
   return (
@@ -212,7 +230,7 @@ export function BankScreen() {
         </div>
       </header>
 
-      <div className={`body-row${view === 'list' ? ' is-list' : ''}${view === 'list' && !treeOpen ? ' tree-hidden' : ''}`}>
+      <div className={`body-row${view === 'list' ? ' is-list' : ''}${!treeOpen ? ' tree-hidden' : ''}`}>
         <aside className="tree" aria-label="Mục lục">
           <h2>Chọn lớp</h2>
           <div className="gseg">
@@ -264,28 +282,28 @@ export function BankScreen() {
         </aside>
 
         <section className="qlist" aria-label="Danh sách câu hỏi">
-          <label className="search sm">
-            <IcSearch size={16} />
-            <span className="sr-only">Tìm câu hỏi</span>
-            <input type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Gõ từ khoá để tìm câu, ví dụ: tiệm cận, xác suất, hoặc mã 2D1H1" />
-            <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
-              <option value="here">trong mục đang chọn</option>
-              <option value="all">toàn bộ ngân hàng</option>
-            </select>
-            <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
-          </label>
-
-          <div className="scope-head">
-            <h2>{heading}</h2>
-            {lesson && <span>Bài: {lesson.name}</span>}
+          <div className="qbar">
+            <label className="search sm">
+              <IcSearch size={16} />
+              <span className="sr-only">Tìm câu hỏi</span>
+              <input type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Gõ từ khoá để tìm câu, ví dụ: tiệm cận, xác suất, hoặc mã 2D1H1" />
+              <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
+                <option value="here">trong mục đang chọn</option>
+                <option value="all">toàn bộ ngân hàng</option>
+              </select>
+              <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
+            </label>
             <div className="vseg" role="group" aria-label="Kiểu hiển thị">
               <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Thẻ</button>
               <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             </div>
-            {view === 'list' && <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>{treeOpen ? 'Ẩn mục lục' : 'Hiện mục lục'}</button>}
+            <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>{treeOpen ? 'Ẩn mục lục' : 'Hiện mục lục'}</button>
+            <button type="button" className="btn btn-sm" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
+              Bộ lọc{activeFilters > 0 && <span className="chip-n on">{activeFilters}</span>} {filtersOpen ? '▴' : '▾'}
+            </button>
           </div>
 
-          <div className="fgroups">
+          {filtersOpen && <div className="fgroups">
             {lesson && lesson.forms.length > 0 && (
               <div className="fgroup">
                 <h3>Dạng toán</h3>
@@ -331,11 +349,11 @@ export function BankScreen() {
                 ))}
               </div>
             </div>
-          </div>
+          </div>}
 
           {sel.size > 0 ? (
             <div className="selbar">
-              <span style={{ fontSize: 14 }}><b>Đã chọn {sel.size} câu</b></span>
+              <span className="selbar-n"><b>Đã chọn {sel.size} câu</b></span>
               <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
               <div className="head-actions" style={{ gap: 8 }}>
                 <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn</button>
@@ -345,7 +363,7 @@ export function BankScreen() {
             </div>
           ) : (
             <div className="list-head">
-              <span>Tìm thấy <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
+              <span><b className="lh-title">{heading}</b>{lesson ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
               <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
               {shown.length > 0 && <button type="button" className="linkbtn" onClick={() => setSel(new Set([...sel, ...shown.map((q) => q.uid)]))}>Chọn cả trang</button>}
             </div>

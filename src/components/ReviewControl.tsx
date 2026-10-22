@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { REVIEW_LABEL, reviewOf, type Question, type ReviewStatus } from '../lib/types';
 
-export const ReviewBadge = ({ q }: { q: Question }) => {
+export const ReviewBadge = ({ q, compact = false }: { q: Question; compact?: boolean }) => {
   const r = reviewOf(q);
+  // Hàng danh sách: “Chưa kiểm tra” là mặc định nên chỉ hiện chấm xám nhỏ; Cần sửa / Đã duyệt hiện nhãn đủ chữ.
+  if (compact && r === 'unreviewed') return <span className="rv-dot" role="img" aria-label="Kiểm duyệt: Chưa kiểm tra" title="Chưa kiểm tra" />;
   return <span className={`rv-chip rv-${r}`} title={`Kiểm duyệt: ${REVIEW_LABEL[r]}`}>{REVIEW_LABEL[r]}</span>;
 };
 
@@ -52,7 +54,7 @@ export function ReviewControl({ q, onChange }: { q: Question; onChange: (s: Revi
           </div>
         </div>
       )}
-      <small className="rv-note">Sửa LaTeX hoặc đổi loại câu sẽ đưa câu về “Chưa kiểm tra”.</small>
+      <small className="rv-note">Sửa LaTeX / đổi loại câu → về “Chưa kiểm tra”</small>
     </div>
   );
 }

@@ -4,6 +4,10 @@
 - **Bộ lọc “Kiểm duyệt”** (Tất cả / Chưa kiểm tra / Cần sửa / Đã duyệt) kèm số đếm, dùng chung với các bộ lọc khác ở cả hai kiểu xem. Câu đổi trạng thái và rời bộ lọc thì có thông báo nhẹ.
 - **Sửa LaTeX hoặc đổi loại câu** sẽ đưa câu về “Chưa kiểm tra” (có báo); đổi nhãn, mức độ, vị trí thì giữ nguyên. Câu nhân bản hoặc nhập mới luôn là “Chưa kiểm tra”.
 - Chỉ báo “Đã lưu” khi đã ghi xuống đĩa; nếu lỗi sẽ báo rõ và có nút Thử lại.
+- **Nhãn danh sách đúng:** `\begin{enumerate}[\it TH1:]` nay hiện `TH1:`, `TH2:` (nghiêng) thay vì lộ chữ `it`; hiểu `\alph*`, `\Alph*`, `\roman*`, `\Roman*`, `\arabic*` và danh sách lồng nhau (1. → (a) → i.). Sửa luôn lỗi nuốt mất mục `\item` đứng sau một danh sách lồng.
+- **Lưới và trục không còn nét đậm nét nhạt:** nét thẳng ngang/dọc trong hình TikZ được vẽ tối thiểu 1 điểm ảnh, sắc nét đều ở zoom 80–150%. Nét chéo/cong, hình tô và “Xem chuẩn” giữ nguyên.
+- **Ngân hàng gọn hơn:** tìm kiếm, kiểu xem, Ẩn/Hiện mục lục và nút **Bộ lọc** (có số bộ lọc đang bật) nằm trên một hàng; các bộ lọc xếp ngang; thanh “Đã chọn N câu” thấp hơn; nút Thao tác của thẻ nằm cùng hàng nhãn, **Nhân bản/Xoá** gom vào menu ba chấm (xoá cần bấm hai lần). Mục lục ẩn được ở cả Thẻ lẫn Danh sách; lựa chọn ẩn/hiện được nhớ theo máy.
+- **Nút Đóng của ngăn sửa:** khi còn thay đổi chưa lưu, hộp hỏi nay nổi giữa màn hình, nền tối (trước đây chỉ là một thanh vàng nhỏ dưới nút nên dễ tưởng nút không bấm được). Esc trong hộp = Tiếp tục sửa.
 - ⚠️ **Đổi cấu trúc dữ liệu (2→3):** sau khi cập nhật, bản app cũ **không mở được** dữ liệu mới. Bản sao lưu tự tạo trước khi cập nhật vẫn giữ dữ liệu cũ. Nội dung câu hỏi không đổi.
 
 ## Có gì mới trong beta.14
