@@ -232,7 +232,7 @@ export function BankScreen() {
             const on = sel.has(q.uid);
             const at = place(q.lessonId) ?? place(q.chapterId);
             return (
-              <article key={q.uid} className={`card${on ? ' sel' : ''}`}>
+              <article key={q.uid} className={`card${on ? ' is-selected' : ''}`}>
                 <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => toggle(sel, q.uid, setSel)} />
                 <div className="card-body">
                   <div className="card-meta">

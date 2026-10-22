@@ -227,7 +227,12 @@ a { color: var(--accent); }
 .selbar .btn:hover { background: #263043; }
 .selbar .btn-accent { background: var(--accent); border: none; font-weight: 600; }
 .card { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; display: flex; gap: 16px; }
-.card.sel { border: 1.5px solid var(--accent); background: #FFFDF9; }
+.card { flex: none; }
+/* Không dùng tên lớp `sel`: nó trùng với kiểu ô chọn (.sel: cao 42px, rộng 100%) nên thẻ được chọn bị ép thấp và nội dung tràn đè thẻ sau. */
+.card.is-selected { border-color: var(--accent); background: #FFFDF9; box-shadow: 0 0 0 .5px var(--accent); }
+.card-body { overflow-wrap: anywhere; }
+.card-body svg, .card-body img { max-width: 100%; height: auto; }
+.selbar, .list-head { min-height: 46px; }
 .card input[type="checkbox"] { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--ink); flex: none; }
 .card-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .card-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; color: var(--ink-3); }
