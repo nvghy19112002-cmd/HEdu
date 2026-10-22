@@ -83,6 +83,14 @@ console.log('Chữ, danh sách, bảng');
   ok(r.unsupported.length === 0 && /a\)/.test(h) && /b\)/.test(h) && /1\)/.test(h) && /2\)/.test(h), 'itemchoice → a) b); enumerate[1)] → 1) 2); itemize');
   const t = renderPartsEx(`\\begin{tabular}{|c|c|}\\hline x & y \\\\ \\hline ${FIG(1)} & ${FIG(2)} \\\\ \\hline \\end{tabular}`);
   ok(t.figures === 2 && t.unsupported.length === 0, 'hình nằm trong ô của bảng vẫn hiện (2/2)');
+  const tb = renderPartsEx('\\begin{tabular}{|c|c|c|}\\hline a & b & c \\\\ \\hline & & d \\\\ \\hline \\end{tabular}');
+  const tbHtml = tb.parts.map((x) => (x as { html?: string; cls?: string }).html ?? (x as { cls?: string }).cls ?? '').join('|');
+  const ruleCells = (tbHtml.match(/tx-tr rule/g) ?? []).length;
+  ok(ruleCells === 1, '\\hline cuối bảng tạo đúng 1 dòng kẻ cuối');
+  const idx = tb.parts.findIndex((x) => /tx-tr rule/.test(JSON.stringify(x)));
+  let cells = 0;
+  for (let i = idx + 1; i < tb.parts.length; i++) { const s = JSON.stringify(tb.parts[i]); if (/tx-td/.test(s)) cells++; else if (/close/.test(s) && cells >= 3) break; }
+  ok(cells >= 3, `dòng kẻ cuối phủ đủ ${cells}/3 cột (không chỉ cột đầu)`);
   const m = renderPartsEx('\\begin{align*} a &= b \\\\ c &= d \\end{align*} và \\begin{eqnarray*} x &=& 1 \\end{eqnarray*}');
   ok(m.unsupported.length === 0 && (m.parts.map((x) => (x as { html?: string }).html ?? '').join('').match(/katex/g) ?? []).length > 0, 'align*, eqnarray* ngoài $…$ dựng bằng công thức');
 }
