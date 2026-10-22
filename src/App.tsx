@@ -4,6 +4,7 @@ import { BootGate } from './components/BootGate';
 import { CommandPalette } from './components/CommandPalette';
 import { FileDialog } from './components/FileDialog';
 import { IcBackup, IcBank, IcEdit, IcExam, IcImport, IcTree } from './components/Icons';
+import { featureOn, type FeatureKey } from './lib/features';
 import type { BootResult } from './lib/store';
 import { BankScreen } from './screens/Bank';
 import { EditorScreen } from './screens/Editor';
@@ -14,9 +15,9 @@ import { SystemScreen } from './screens/System';
 import { UpdateProvider, useUpdates } from './update-context';
 
 // "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
-const NAV: { s: Screen; label: string; Icon: typeof IcEdit }[] = [
+const NAV: { s: Screen; label: string; Icon: typeof IcEdit; feature?: FeatureKey }[] = [
   { s: 'bank', label: 'Ngân hàng', Icon: IcBank },
-  { s: 'exam', label: 'Tạo đề', Icon: IcExam },
+  { s: 'exam', label: 'Tạo đề', Icon: IcExam, feature: 'exam' },
   { s: 'import', label: 'Nhập liệu', Icon: IcImport },
   { s: 'curriculum', label: 'Khung CT', Icon: IcTree },
 ];
@@ -38,7 +39,17 @@ function Shell({ recovered }: { recovered: boolean }) {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setMsg(null), 4200);
   }, []);
-  const go = useCallback((n: Nav) => { setNav(n); window.scrollTo(0, 0); }, []);
+  const go = useCallback((n: Nav) => {
+    // Lối vào sót lại tới một màn đang tắt thì về Ngân hàng, không mở tính năng đã tắt.
+    if (n.screen === 'exam' && !featureOn('exam')) {
+      setNav({ screen: 'bank' });
+      toast('Tạo đề đang tạm ngưng trong bản này.');
+      window.scrollTo(0, 0);
+      return;
+    }
+    setNav(n);
+    window.scrollTo(0, 0);
+  }, [toast]);
   const api = useMemo(() => ({ nav, go, toast, openPalette: () => setPalette(true), showFile: setFile }), [nav, go, toast]);
 
   useEffect(() => {
@@ -76,7 +87,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
     <div className="app">
       <nav className="rail" aria-label="Điều hướng chính">
         <div className="logo" aria-label="HEdu">√</div>
-        {NAV.map(({ s, label, Icon }) => (
+        {NAV.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, Icon }) => (
           <button key={s} type="button" className="rb" aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
             <Icon />
             <span>{label}</span>
@@ -91,7 +102,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
       <main className="main">
         {screen === 'editor' && <EditorScreen key={nav.editUid ?? 'new'} editUid={nav.editUid} />}
         {screen === 'bank' && <BankScreen />}
-        {screen === 'exam' && <ExamScreen pick={nav.examPick} />}
+        {screen === 'exam' && featureOn('exam') && <ExamScreen pick={nav.examPick} />}
         {screen === 'import' && <ImportScreen />}
         {screen === 'curriculum' && <CurriculumScreen />}
         {screen === 'system' && <SystemScreen />}

@@ -3,6 +3,7 @@
 // Mọi nút lọc đều hiện sẵn số câu để biết chỗ nào đang thiếu.
 import { useMemo, useState } from 'react';
 import { useApp } from '../app-context';
+import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
 import { IcCopy, IcEdit, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
@@ -216,7 +217,7 @@ export function BankScreen() {
               <div className="head-actions" style={{ gap: 8 }}>
                 <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn</button>
                 <button type="button" className="btn btn-sm" onClick={exportSelected}>Xuất .tex</button>
-                <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: [...sel] })}>Thêm vào đề</button>
+                {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: [...sel] })}>Thêm vào đề</button>}
               </div>
             </div>
           ) : (

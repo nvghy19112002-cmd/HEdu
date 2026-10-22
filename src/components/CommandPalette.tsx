@@ -1,6 +1,7 @@
 // Ô lệnh Ctrl+K: tìm câu hỏi theo nội dung/ID, chuyển màn hình nhanh.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, type Screen } from '../app-context';
+import { featureOn } from '../lib/features';
 import { useBank } from '../lib/store';
 import { questionCode, seqLabel } from '../lib/id';
 import { parseExTest } from '../lib/extest';
@@ -33,7 +34,7 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
 
   const items = useMemo(() => {
     const f = fold(q.trim());
-    const scr = SCREENS.filter((x) => !f || fold(x.name).includes(f)).map((x) => ({ key: 's' + x.s, label: x.name, sub: 'Màn hình', run: () => go({ screen: x.s }) }));
+    const scr = SCREENS.filter((x) => (x.s !== 'exam' || featureOn('exam')) && (!f || fold(x.name).includes(f))).map((x) => ({ key: 's' + x.s, label: x.name, sub: 'Màn hình', run: () => go({ screen: x.s }) }));
     const qs = f
       ? questions
           .map((x) => ({ x, text: plain(x.latex), code: questionCode(x, x.level) }))
