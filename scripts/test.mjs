@@ -1,0 +1,11 @@
+// Đóng gói file kiểm thử rồi chạy bằng Node.
+import { build } from 'esbuild';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const out = join(mkdtempSync(join(tmpdir(), 'hedu-test-')), 'test.mjs');
+await build({ entryPoints: ['src/lib/lib.test.ts'], bundle: true, platform: 'node', format: 'esm', outfile: out, logLevel: 'error' });
+execFileSync(process.execPath, [out], { stdio: 'inherit' });
+execFileSync(process.execPath, ['scripts/release-scripts.test.mjs'], { stdio: 'inherit' });

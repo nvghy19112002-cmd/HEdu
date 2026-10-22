@@ -1,0 +1,18 @@
+# Bấm chạy tay một lần sau khi cài khóa ký, để biết đã cấu hình đúng chưa.
+name: Kiểm tra khóa ký
+
+on: workflow_dispatch
+
+jobs:
+  kiem-tra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kiểm tra
+        env:
+          PRIV: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          fail=0
+          if [ -z "$PRIV" ]; then echo "::error::Thiếu secret TAURI_SIGNING_PRIVATE_KEY (khóa riêng)."; fail=1; else echo "✓ Có khóa riêng"; fi
+          if [ ! -s src-tauri/updater.pub ]; then echo "::error::Thiếu file src-tauri/updater.pub (khóa công khai)."; fail=1; else echo "✓ Có khóa công khai"; fi
+          exit $fail

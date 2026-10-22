@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Quyền của cửa sổ chính: gọi các lệnh của app và nhận sự kiện tiến trình cập nhật.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

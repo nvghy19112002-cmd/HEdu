@@ -1,0 +1,30 @@
+{
+  "name": "hedu",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "HEdu — soạn thảo Toán, ngân hàng câu hỏi LaTeX, tạo đề",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "build:single": "node scripts/build.mjs --single",
+    "test": "node scripts/test.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "katex": "^0.16.47",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@fontsource/be-vietnam-pro": "^5.2.0",
+    "@fontsource/lora": "^5.2.0",
+    "@fontsource/jetbrains-mono": "^5.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

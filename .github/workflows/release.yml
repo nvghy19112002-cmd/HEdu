@@ -1,0 +1,133 @@
+# Phát hành: đẩy tag lên GitHub là ra bản cài.
+#   v1.2.3        → kênh Chính thức   (người dùng bấm "Cập nhật" sẽ nhận)
+#   v1.2.3-beta.1 → kênh Thử nghiệm   (chỉ người chọn kênh beta nhận)
+name: Phát hành
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag đã có để phát hành lại (ví dụ v0.2.0-beta.1)'
+        required: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.info.outputs.version }}
+      channel: ${{ steps.info.outputs.channel }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Đọc tên phiên bản
+        id: info
+        run: |
+          node -e "import('./scripts/ci-config.mjs').then(m=>{const r=m.parseTag(process.env.TAG);console.log('version='+r.version+'\nchannel='+r.channel)})" >> "$GITHUB_OUTPUT"
+
+      - run: npm install
+      - name: Chạy kiểm thử (lỗi thì dừng, không phát hành)
+        run: npm test
+
+      - name: Gắn phiên bản và khóa công khai
+        run: node scripts/ci-config.mjs "$TAG" "${{ github.repository }}"
+
+      - name: Đọc ghi chú phát hành
+        id: notes
+        run: |
+          {
+            echo 'body<<HEDU_EOF'
+            cat GHI-CHU-PHAT-HANH.md
+            echo
+            echo 'HEDU_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          HEDU_REPO: ${{ github.repository }}
+        with:
+          tagName: ${{ env.TAG }}
+          releaseName: 'HEdu ${{ steps.info.outputs.version }}'
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: ${{ steps.info.outputs.channel == 'beta' }}
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+  kenh:
+    # Chuyển bản vừa build vào đúng kênh, giữ bản trước, rồi dọn bản cũ.
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CHANNEL: ${{ needs.build.outputs.channel }}
+      VERSION: ${{ needs.build.outputs.version }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Lấy latest.json của bản vừa build
+        run: |
+          mkdir -p work
+          gh release download "$TAG" --repo "$REPO" --pattern latest.json --dir work --clobber
+          jq -e --arg v "$VERSION" '.version == $v' work/latest.json > /dev/null
+
+      - name: Đảm bảo các kênh tồn tại
+        run: |
+          for c in channel-stable channel-beta channel-previous; do
+            gh release view "$c" --repo "$REPO" > /dev/null 2>&1 || \
+              gh release create "$c" --repo "$REPO" --target "${{ github.sha }}" \
+                --title "$c (tự động, đừng xóa)" --notes "Chỉ chứa latest.json để app biết bản mới. Không tải ở đây." --prerelease
+          done
+
+      - name: Chuyển vào kênh
+        run: |
+          put() { gh release upload "$1" work/latest.json --repo "$REPO" --clobber; }
+          if [ "$CHANNEL" = "stable" ]; then
+            # Bản chính thức cũ → thành "bản trước" (chỉ khi khác bản mới, để chạy lại không đè mất).
+            if gh release download channel-stable --repo "$REPO" --pattern latest.json --dir work/old --clobber 2>/dev/null; then
+              OLD=$(jq -r .version work/old/latest.json)
+              if [ "$OLD" != "$VERSION" ]; then
+                gh release upload channel-previous work/old/latest.json --repo "$REPO" --clobber
+              fi
+            fi
+            put channel-stable
+            put channel-beta   # người dùng beta cũng nhận bản chính thức mới hơn
+          else
+            put channel-beta
+          fi
+
+      - name: Dọn bản cũ (chỉ giữ chính thức, bản trước, beta)
+        run: node scripts/prune-releases.mjs "$REPO"

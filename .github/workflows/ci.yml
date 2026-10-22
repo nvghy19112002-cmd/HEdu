@@ -1,0 +1,51 @@
+# Kiểm tra mỗi lần đẩy mã lên: chạy thử logic, đóng gói giao diện, biên dịch phần Rust trên Windows.
+name: Kiểm tra
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  giao-dien:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm test
+      - run: npm run build
+      - name: Kiểm tra kiểu dữ liệu (chỉ cảnh báo)
+        run: npm run typecheck
+        continue-on-error: true
+
+  windows:
+    runs-on: windows-latest
+    needs: giao-dien
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm install
+      - run: npm run build
+      - name: Biên dịch và chạy kiểm thử Rust
+        working-directory: src-tauri
+        env:
+          HEDU_REPO: ${{ github.repository }}
+        run: cargo test --lib
