@@ -500,3 +500,19 @@ a { color: var(--accent); }
 .q-tail { margin-top: 2px; }
 .q-warn { font-family: var(--f-ui); font-size: 12.5px; line-height: 1.5; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid #E0B3A8; border-radius: 8px; padding: 6px 10px; }
 .tx-blk .fig-ph { display: inline-flex; vertical-align: middle; margin: 6px 4px; max-width: 46%; }
+/* ----- Xem chuẩn (biên dịch nguyên câu bằng TeX Live) ----- */
+.cv { display: flex; flex-direction: column; gap: 8px; }
+.cv-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-family: var(--f-ui); font-size: 12.5px; color: var(--ink-3); }
+.cv-bar b { color: var(--ink); font-size: 13px; }
+.cv-bar .linkbtn { margin-left: auto; }
+.cv-page { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px; overflow: auto; text-align: center; }
+.cv-page svg { max-width: 100%; height: auto; }
+.cv-wait { font-family: var(--f-ui); font-size: 13px; color: var(--ink-3); padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+.cv-err { max-width: none; margin: 0; }
+.ico.txt { width: auto; padding: 0 9px; font-family: var(--f-ui); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.ico.txt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: #E0B3A8; }
+.tex-batch { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.tex-batch-h { display: flex; flex-direction: column; gap: 2px; font-family: var(--f-ui); font-size: 13px; }
+.tex-batch-h span { font-size: 12.5px; color: var(--ink-3); }
+.chk-tex { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 6px 12px 10px; }
+.chk-tex .cv { align-self: stretch; }
