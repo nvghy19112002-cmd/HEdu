@@ -5,6 +5,8 @@ import { useMemo, useState } from 'react';
 import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
+import { CompiledView } from '../components/CompiledView';
+import { isTikzReady } from '../lib/tikz';
 import { IcCopy, IcEdit, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
@@ -40,6 +42,7 @@ export function BankScreen() {
   const [showSol, setShowSol] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [exact, setExact] = useState<Set<string>>(new Set()); // các câu đang ở chế độ “Xem chuẩn”
   const [page, setPage] = useState(0);
   const PER_PAGE = 20;
 
@@ -245,9 +248,14 @@ export function BankScreen() {
                     {q.tags.map((t) => <span key={t} className="tag" style={{ height: 24, paddingRight: 10, fontSize: 12 }}>{t}</span>)}
                     <span style={{ marginLeft: 'auto' }} className="mono">{seqLabel(q.seq)}</span>
                   </div>
-                  <QuestionView p={p} variant="compact" showSolution={showSol} />
+                  {exact.has(q.uid)
+                    ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
+                    : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
                 </div>
                 <div className="card-acts">
+                  {isTikzReady() && (
+                    <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
+                  )}
                   <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => go({ screen: 'editor', editUid: q.uid })}><IcEdit size={18} /></button>
                   <button type="button" className="ico" aria-label="Nhân bản câu" title="Nhân bản" onClick={() => { const c = duplicateQuestion(q.uid); if (c) toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); }}><IcCopy /></button>
                   {confirmDel === q.uid ? (

@@ -1,5 +1,8 @@
 // Màn Nhập liệu: dán hoặc mở file LaTeX, xem trước rồi nhập hàng loạt vào ngân hàng.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { CompiledView, FailureBox } from '../components/CompiledView';
+import { compileBatch, CATEGORY_ORDER, type Category, type Failure } from '../lib/xemchuan';
+import { isTikzReady } from '../lib/tikz';
 import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, grades } from '../lib/curriculum';
@@ -67,12 +70,37 @@ export function ImportScreen() {
   const [openRow, setOpenRow] = useState<number | null>(null);
   const [pkgFilter, setPkgFilter] = useState<{ rows: number[]; key: string } | null>(null);
   const [limit, setLimit] = useState(200);
+  // Biên dịch thử bằng TeX Live (Xem chuẩn hàng loạt)
+  type Tex = { ok: true; ms: number; cached: boolean } | { ok: false; fail: Failure };
+  const [tex, setTex] = useState<Record<number, Tex>>({});
+  const [texRun, setTexRun] = useState(false);
+  const [texSol, setTexSol] = useState(true);
+  const [texOnlyBad, setTexOnlyBad] = useState(false);
+  const [exactRow, setExactRow] = useState<number | null>(null);
+  const stopRef = useRef({ stop: false });
+  useEffect(() => { stopRef.current.stop = true; setTex({}); setTexRun(false); setExactRow(null); }, [text250]);
+  const startTex = async () => {
+    const sig = { stop: false };
+    stopRef.current = sig;
+    setTex({});
+    setTexRun(true);
+    await compileBatch(rows.map((r) => r.latex), texSol, {
+      signal: sig,
+      onEach: (i, r) => { if (!sig.stop) setTex((cur) => ({ ...cur, [i]: r.ok ? { ok: true, ms: r.ms, cached: r.cached } : { ok: false, fail: r.fail } })); },
+    });
+    if (stopRef.current === sig) setTexRun(false);
+  };
+  const stopTex = () => { stopRef.current.stop = true; setTexRun(false); };
+  const texDone = Object.keys(tex).length;
+  const texFail = Object.values(tex).filter((x) => !x.ok) as { ok: false; fail: Failure }[];
+  const texByCat = texFail.reduce<Partial<Record<Category, number>>>((a, x) => ({ ...a, [x.fail.category]: (a[x.fail.category] ?? 0) + 1 }), {});
   const blocks = useMemo(() => rows.map((r) => r.latex), [rows]);
   useEffect(() => { setPkgFilter(null); setLimit(200); }, [text250]);
   const shownRows = rows
     .map((r, i) => ({ r, i }))
     .filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh')
-    .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i));
+    .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i))
+    .filter(({ i }) => !texOnlyBad || tex[i]?.ok === false);
 
   const chs = chapters(loc.grade);
   const chapter = chs.find((c) => c.id === loc.chapterId) ?? chs[0];
@@ -129,6 +157,30 @@ export function ImportScreen() {
             {!checking && nErr > 0 && (
               <span className="sys-hint">Câu lỗi vẫn nhập được, nhưng phần xem trước sẽ vỡ cho tới khi bạn sửa. Bấm vào câu để xem lỗi ở đâu.</span>
             )}
+            {isTikzReady() && (
+              <div className="tex-batch">
+                <div className="tex-batch-h">
+                  <b>Biên dịch thử bằng TeX Live</b>
+                  <span>Xem trước ở trên là HEdu tự dựng. Chỉ khi TeX Live biên dịch được thì câu mới chắc chắn in ra đúng.</span>
+                </div>
+                <div className="head-actions">
+                  {!texRun
+                    ? <button type="button" className="btn btn-sm" disabled={!rows.length || checking} onClick={startTex}>{texDone ? 'Biên dịch lại' : `Biên dịch thử ${rows.length} câu`}</button>
+                    : <button type="button" className="btn btn-sm" onClick={stopTex}>Dừng</button>}
+                  <label className="sw"><input type="checkbox" checked={texSol} disabled={texRun} onChange={(e) => setTexSol(e.target.checked)} />Gồm đáp án và lời giải</label>
+                  {texFail.length > 0 && <label className="sw"><input type="checkbox" checked={texOnlyBad} onChange={(e) => setTexOnlyBad(e.target.checked)} />Chỉ câu biên dịch lỗi</label>}
+                </div>
+                {texDone > 0 && (
+                  <div className="chk-sum">
+                    <span className="chk-pill">{texRun ? 'Đang biên dịch' : 'Đã biên dịch'} {texDone}/{rows.length}</span>
+                    <span className="chk-pill ok">{texDone - texFail.length} câu đạt</span>
+                    {CATEGORY_ORDER.filter((c) => texByCat[c]).map((c) => (
+                      <span key={c} className="chk-pill bad">{texByCat[c]} câu: {texFail.find((x) => x.fail.category === c)!.fail.label}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <ol className="chk-list">
               {shownRows.slice(0, limit).map(({ r, i }) => (
                 <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'}`}>
@@ -138,8 +190,19 @@ export function ImportScreen() {
                     <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : 'không ID'}</span>
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
                     {r.dup && <span className="chk-tag dup">{r.dup.score === 1 ? 'trùng hẳn, bỏ qua' : `giống ${Math.round(r.dup.score * 100)}%`}</span>}
+                    {tex[i] && <span className={`chk-tag ${tex[i].ok ? 'tin' : 'loi'}`}>{tex[i].ok ? 'TeX đạt' : `TeX: ${(tex[i] as { fail: Failure }).fail.label}`}</span>}
                     {worstOf(i) && <span className={`chk-tag ${worstOf(i)}`}>{worstOf(i) === 'tin' ? 'có hình' : LEVEL_TEXT[worstOf(i)!]}</span>}
                   </button>
+                  {openRow === i && isTikzReady() && (
+                    <div className="chk-tex">
+                      {exactRow === i
+                        ? <CompiledView latex={r.latex} solution={texSol} onBack={() => setExactRow(null)} />
+                        : <>
+                            {tex[i] && !tex[i].ok && <FailureBox fail={(tex[i] as { fail: Failure }).fail} />}
+                            <button type="button" className="btn btn-sm" onClick={() => setExactRow(i)}>Xem chuẩn câu này</button>
+                          </>}
+                    </div>
+                  )}
                   {openRow === i && (issues[i]?.length ?? 0) > 0 && (
                     <ul className="chk-why">
                       {issues[i]!.map((it: Issue, k: number) => (
