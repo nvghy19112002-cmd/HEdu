@@ -1,0 +1,20 @@
+import { clampZoom, createWheelStepper, stepZoom, zoomKey } from './zoom';
+let fail = 0;
+const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
+console.log('zoom');
+ok(clampZoom(0.5) === 0.8 && clampZoom(3) === 1.5 && clampZoom(NaN) === 1, 'giới hạn 80–150%, giá trị lạ về 100%');
+ok(stepZoom(1, 1) === 1.1 && stepZoom(1.1, 1) === 1.2 && stepZoom(1, -1) === 0.9, 'mỗi bước 10%, không lệch số thực');
+let z = 1; for (let i = 0; i < 10; i++) z = stepZoom(z, 1);
+ok(z === 1.5, 'không vượt 150%');
+z = 1; for (let i = 0; i < 10; i++) z = stepZoom(z, -1);
+ok(z === 0.8, 'không dưới 80%');
+const s = createWheelStepper();
+ok(s(-100, 0) === 1 && s(100, 0) === -1, 'một nấc chuột = một bước');
+let total = 0; for (let i = 0; i < 25; i++) total += s(-8, 0);
+ok(total === 2, 'chụm ngón: nhiều sự kiện nhỏ cộng dồn thành từng bước (200/100=2)');
+ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '=' }) === 1, 'Ctrl + (phím =) phóng to');
+ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '+' }) === 1, 'Ctrl + phóng to');
+ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '-' }) === -1, 'Ctrl − thu nhỏ');
+ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '0' }) === 'reset', 'Ctrl 0 đặt lại');
+ok(zoomKey({ ctrlKey: false, metaKey: false, altKey: false, key: '=' }) === null, 'không Ctrl thì bỏ qua');
+if (fail) { console.log(`${fail} lỗi`); process.exit(1); }

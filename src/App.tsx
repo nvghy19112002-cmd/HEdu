@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppCtx, type FileOut, type Nav, type NavGuard, type Screen, useApp } from './app-context';
 import { BootGate } from './components/BootGate';
 import { CommandPalette } from './components/CommandPalette';
+import { ZoomIndicator } from './components/ZoomControl';
+import { startZoom } from './lib/zoom';
 import { FileDialog } from './components/FileDialog';
 import { IcBackup, IcBank, IcEdit, IcExam, IcImport, IcTree } from './components/Icons';
 import { featureOn, type FeatureKey } from './lib/features';
@@ -66,6 +68,8 @@ function Shell({ recovered }: { recovered: boolean }) {
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('hedu-save-error', onSaveErr); };
   }, [toast]);
 
+  useEffect(() => startZoom(), []);
+
   useEffect(() => {
     if (recovered) toast('File dữ liệu bị lỗi nên HEdu đã lấy lại từ bản dự phòng. Nên kiểm tra các câu vừa soạn gần đây.');
   }, [recovered, toast]);
@@ -79,6 +83,7 @@ function Shell({ recovered }: { recovered: boolean }) {
         {palette && <CommandPalette onClose={() => setPalette(false)} />}
         {file && <FileDialog file={file} onClose={() => setFile(null)} onToast={toast} />}
         {msg && <div className="toast" role="status">{msg}</div>}
+        <ZoomIndicator />
       </UpdateProvider>
     </AppCtx.Provider>
   );

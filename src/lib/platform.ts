@@ -4,6 +4,7 @@
 
 interface TauriGlobal {
   core: { invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> };
+  webview?: { getCurrentWebview(): { setZoom(f: number): Promise<void> } };
   event: { listen<T>(name: string, cb: (e: { payload: T }) => void): Promise<() => void> };
 }
 
