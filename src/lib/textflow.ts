@@ -35,6 +35,8 @@ interface Ctx extends FlowHooks {
   meta: Record<number, FigMeta>;
   size: FigMeta | null;
   depth: number;
+  /** độ sâu danh sách hiện tại (0 = ngoài cùng) để chọn nhãn mặc định */
+  listDepth: number;
 }
 
 // ---------- lệnh có đối số, bảng tra ----------
@@ -134,7 +136,7 @@ function splitTop(body: string, re: RegExp): { cmd: string; at: number; after: n
     const c = body[i];
     if (c === '\\') {
       const mb = /^\\(begin|end)\s*\{/.exec(body.slice(i, i + 12));
-      if (mb) { env += mb[1] === 'begin' ? 1 : -1; i += mb[0].length - 1; continue; }
+      if (mb) { env += mb[1] === 'begin' ? 1 : -1; const close = body.indexOf('}', i + mb[0].length); i = close < 0 ? i + mb[0].length - 1 : close; continue; }
       if (brace === 0 && env === 0) {
         re.lastIndex = 0;
         const m = re.exec(body.slice(i));
@@ -159,7 +161,7 @@ function splitCells(body: string, sep: '&' | '\\\\'): string[] {
     const c = body[i];
     if (c === '\\') {
       const mb = /^\\(begin|end)\s*\{/.exec(body.slice(i, i + 12));
-      if (mb) { env += mb[1] === 'begin' ? 1 : -1; i += mb[0].length - 1; continue; }
+      if (mb) { env += mb[1] === 'begin' ? 1 : -1; const close = body.indexOf('}', i + mb[0].length); i = close < 0 ? i + mb[0].length - 1 : close; continue; }
       if (sep === '\\\\' && body[i + 1] === '\\' && brace === 0 && env === 0) {
         out.push(body.slice(last, i));
         i += 1;
@@ -182,22 +184,57 @@ function splitCells(body: string, sep: '&' | '\\\\'): string[] {
 }
 
 // ---------- dựng ----------
-function listLabel(env: string, opt: string | null, n: number): string {
+const ROMAN: [number, string][] = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+const romanOf = (n: number) => { let s = ''; for (const [v, r] of ROMAN) while (n >= v) { s += r; n -= v; } return s; };
+const alphOf = (n: number) => String.fromCharCode(96 + (((n - 1) % 26) + 26) % 26 + 1);
+
+/** Giá trị của một bộ đếm theo kiểu: arabic | alph | Alph | roman | Roman. */
+function counterText(kind: string, n: number): string {
+  switch (kind) {
+    case 'alph': return alphOf(n);
+    case 'Alph': return alphOf(n).toUpperCase();
+    case 'roman': return romanOf(n);
+    case 'Roman': return romanOf(n).toUpperCase();
+    default: return String(n);
+  }
+}
+
+/**
+ * Nhãn mục theo enumitem, trả về MÃ LaTeX (để walk dựng tiếp: \it, \textbf, $..$ đều xử lý như văn bản thường).
+ *  - `\alph*`, `\Alph*`, `\roman*`, `\Roman*`, `\arabic*` → giá trị bộ đếm.
+ *  - nhãn ngắn: ký tự `1 a A i I` ĐẦU TIÊN nằm ngoài {} và ngoài tên lệnh (như enumitem; `\it TH1:` → `\it TH2:`).
+ * Không tự sửa mã của giáo viên: chỉ đọc nhãn để dựng xem trước.
+ */
+function labelTex(opt: string, n: number): string {
   const num = n + 1;
-  const letters = 'abcdefghijklmnopqrstuvwxyz';
-  const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
-  const style = (o: string) => {
-    const m = /(\\?[aAiI1])([^\w]*)$/.exec(o.replace(/\\[a-z]+\{?|\}/gi, '').trim()) ?? /([aAiI1])(.*)$/.exec(o);
-    if (!m) return null;
-    const k = m[1].replace('\\', '');
-    const tail = o.slice(o.lastIndexOf(k) + 1).replace(/[{}\\]/g, '');
-    const pre = o.slice(0, o.lastIndexOf(k)).replace(/[{}\\]|\w+\{/g, '');
-    const v = k === 'a' ? letters[(num - 1) % 26] : k === 'A' ? letters[(num - 1) % 26].toUpperCase() : k === 'i' ? (roman[num - 1] ?? String(num)) : k === 'I' ? (roman[num - 1] ?? String(num)).toUpperCase() : String(num);
-    return `${pre}${v}${tail}`;
-  };
-  if (env === 'itemchoice') return opt ? (style(opt) ?? `${letters[n % 26]})`) : `${letters[n % 26]})`;
-  if (env === 'enumerate' || env === 'enumEX') return opt ? (style(opt) ?? `${num}.`) : `${num}.`;
-  return '•';
+  const star = /\\(arabic|alph|Alph|roman|Roman)\s*\*/g;
+  if (star.test(opt)) return opt.replace(star, (_, k: string) => counterText(k, num));
+  let out = '';
+  let done = false;
+  let brace = 0;
+  for (let i = 0; i < opt.length; i++) {
+    const c = opt[i];
+    if (c === '\\') { const m = /^\\([A-Za-z]+|.)/.exec(opt.slice(i)); const len = m ? m[0].length : 1; out += opt.slice(i, i + len); i += len - 1; continue; }
+    if (c === '{') brace++;
+    else if (c === '}') brace = Math.max(0, brace - 1);
+    else if (!done && brace === 0 && '1aAiI'.includes(c)) {
+      done = true;
+      out += c === '1' ? String(num) : c === 'a' ? alphOf(num) : c === 'A' ? alphOf(num).toUpperCase() : c === 'i' ? romanOf(num) : romanOf(num).toUpperCase();
+      continue;
+    }
+    out += c;
+  }
+  return done ? out : opt;
+}
+
+/** Nhãn mặc định của LaTeX theo độ sâu: 1. → (a) → i. → A. */
+function defaultLabel(env: string, n: number, depth: number): string {
+  const num = n + 1;
+  if (env === 'itemchoice') return `${alphOf(num)})`;
+  if (env === 'enumerate' || env === 'enumEX') {
+    return [`${num}.`, `(${alphOf(num)})`, `${romanOf(num)}.`, `${alphOf(num).toUpperCase()}.`][Math.min(depth, 3)];
+  }
+  return depth === 0 ? '•' : depth === 1 ? '–' : '∗';
 }
 
 function walk(s: string, ctx: Ctx): string {
@@ -478,8 +515,12 @@ function renderEnv(name: string, body: string, ctx: Ctx): string {
       let lab: string | null = null;
       const o = readOptional(text, 0);
       if (o && !text.slice(0, skipWs(text, 0)).trim()) { lab = o[0]; text = text.slice(o[1]); }
-      const label = lab != null ? walk(lab, ctx) : listLabel(name, opt, n);
-      items += OPEN('tx-item') + `<span class="tx-lab">${label}</span>` + OPEN('tx-itemtxt') + walk(text, ctx) + CLOSE + CLOSE;
+      const labTex = lab ?? (opt != null && (name === 'enumerate' || name === 'enumEX' || name === 'itemchoice') ? labelTex(opt, n) : null);
+      const label = labTex != null ? walk(labTex, ctx) : esc(defaultLabel(name, n, ctx.listDepth));
+      ctx.listDepth++;
+      const inner = walk(text, ctx);
+      ctx.listDepth--;
+      items += OPEN('tx-item') + `<span class="tx-lab">${label}</span>` + OPEN('tx-itemtxt') + inner + CLOSE + CLOSE;
     });
     return out + OPEN('tx-list') + items + CLOSE;
   }
@@ -573,7 +614,7 @@ function renderTable(name: string, body: string, ctx: Ctx): string {
 
 /** Dựng một đoạn chữ LaTeX (đã thay hình bằng dấu) thành HTML. */
 export function renderFlow(src: string, hooks: FlowHooks): FlowResult {
-  const ctx: Ctx = { ...hooks, unsup: new Set(), meta: {}, size: null, depth: 0 };
+  const ctx: Ctx = { ...hooks, unsup: new Set(), meta: {}, size: null, depth: 0, listDepth: 0 };
   const html = walk(src, ctx);
   return { html, unsupported: [...ctx.unsup], meta: ctx.meta };
 }
