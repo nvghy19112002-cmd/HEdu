@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppCtx, type FileOut, type Nav, type Screen, useApp } from './app-context';
+import { AppCtx, type FileOut, type Nav, type NavGuard, type Screen, useApp } from './app-context';
 import { BootGate } from './components/BootGate';
 import { CommandPalette } from './components/CommandPalette';
 import { FileDialog } from './components/FileDialog';
@@ -39,7 +39,11 @@ function Shell({ recovered }: { recovered: boolean }) {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setMsg(null), 4200);
   }, []);
+  const guard = useRef<NavGuard | null>(null);
+  const setGuard = useCallback((g: NavGuard | null) => { guard.current = g; }, []);
   const go = useCallback((n: Nav) => {
+    // còn thay đổi chưa lưu thì hỏi trước; đồng ý mới đi tiếp
+    if (guard.current && !guard.current(() => { guard.current = null; go(n); })) return;
     // Lối vào sót lại tới một màn đang tắt thì về Ngân hàng, không mở tính năng đã tắt.
     if (n.screen === 'exam' && !featureOn('exam')) {
       setNav({ screen: 'bank' });
@@ -50,7 +54,7 @@ function Shell({ recovered }: { recovered: boolean }) {
     setNav(n);
     window.scrollTo(0, 0);
   }, [toast]);
-  const api = useMemo(() => ({ nav, go, toast, openPalette: () => setPalette(true), showFile: setFile }), [nav, go, toast]);
+  const api = useMemo(() => ({ nav, go, toast, openPalette: () => setPalette(true), setGuard, showFile: setFile }), [nav, go, toast, setGuard]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

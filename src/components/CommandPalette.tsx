@@ -40,7 +40,7 @@ export function CommandPalette({ onClose }: { onClose(): void }) {
           .map((x) => ({ x, text: plain(x.latex), code: questionCode(x, x.level) }))
           .filter(({ x, text, code }) => fold(text).includes(f) || fold(code).includes(f) || seqLabel(x.seq).includes(f))
           .slice(0, 8)
-          .map(({ x, text, code }) => ({ key: x.uid, label: text || '(đề trống)', sub: `${code} · ${TYPE_LABEL[x.type]}`, run: () => go({ screen: 'editor', editUid: x.uid }) }))
+          .map(({ x, text, code }) => ({ key: x.uid, label: text || '(đề trống)', sub: `${code} · ${TYPE_LABEL[x.type]}`, run: () => go({ screen: 'bank', openUid: x.uid }) }))
       : [];
     return [...qs, ...scr];
   }, [q, questions, go]);

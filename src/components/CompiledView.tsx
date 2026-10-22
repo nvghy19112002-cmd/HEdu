@@ -22,10 +22,12 @@ export function FailureBox({ fail, onRetry }: { fail: Failure; onRetry?: () => v
   );
 }
 
-export function CompiledView({ latex, solution, onBack }: { latex: string; solution: boolean; onBack?: () => void }) {
+export function CompiledView({ latex, solution, onBack, onState }: { latex: string; solution: boolean; onBack?: () => void; onState?: (s: 'dang' | 'xong' | 'loi') => void }) {
   const [st, setSt] = useState<State>({ s: 'dang' });
   const alive = useRef(true);
   const [again, setAgain] = useState(0);
+
+  useEffect(() => { onState?.(st.s === 'dang' ? 'dang' : st.s === 'xong' ? 'xong' : 'loi'); }, [st.s]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     alive.current = true;

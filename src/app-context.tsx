@@ -9,13 +9,23 @@ export interface Nav {
   editUid?: string;
   /** các câu chọn tay từ ngân hàng để đưa sang Tạo đề */
   examPick?: string[];
+  /** mở sẵn ngăn sửa bên phải của câu này khi vào Ngân hàng */
+  openUid?: string;
 }
+
+/**
+ * Chặn rời đi khi còn thay đổi chưa lưu. Trả true nếu đi được ngay; trả false nghĩa là đã hiện hộp hỏi
+ * và `proceed` sẽ được gọi sau nếu người dùng đồng ý.
+ */
+export type NavGuard = (proceed: () => void) => boolean;
 
 export interface AppApi {
   nav: Nav;
   go(next: Nav): void;
   toast(msg: string): void;
   openPalette(): void;
+  /** đăng ký (hoặc gỡ bằng null) bộ chặn rời đi; mọi go() đều đi qua đó */
+  setGuard(g: NavGuard | null): void;
   /** Mở hộp xem/sao chép/tải một file văn bản (.tex, sao lưu) */
   showFile(f: FileOut): void;
 }
