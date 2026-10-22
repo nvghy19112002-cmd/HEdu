@@ -14,4 +14,4 @@ Nhờ vậy `\IntervalLR`, `\usepackage{ex_test}`, `tkz-tab-vn`… dùng đượ
 | `shared-content.tex` | Danh sách gói dùng chung của bộ đề, do chủ dự án cung cấp |
 
 Khi cập nhật một tệp ở đây, `SUPPORT_REV` trong `src-tauri/src/support.rs` tự đổi (theo nội dung) nên hình đã dịch được dịch lại.
-Trước khi phát hành rộng rãi nên rà lại giấy phép của `ex_test.sty` và `tkz-tab-vn.sty` với tác giả.
+Chủ dự án xác nhận (22/10/2026) đã được tác giả đồng ý cho dùng `ex_test.sty` và `tkz-tab-vn.sty` trong HEdu.
