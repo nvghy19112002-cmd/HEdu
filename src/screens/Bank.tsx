@@ -1,13 +1,15 @@
 // Màn hình Ngân hàng câu hỏi.
 // Bố cục: cột trái chọn Lớp → Chương → Bài; cột phải tìm kiếm, lọc theo Dạng/Mức độ/Loại và xem câu.
 // Mọi nút lọc đều hiện sẵn số câu để biết chỗ nào đang thiếu.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
 import { CompiledView } from '../components/CompiledView';
 import { QuestionDrawer } from '../components/QuestionDrawer';
 import { isTikzReady } from '../lib/tikz';
+import { loadBankView, saveBankView, type BankView } from '../lib/bankview';
+import { plainSnippet } from '../lib/snippet';
 import { IcCopy, IcEdit, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
@@ -48,6 +50,11 @@ export function BankScreen() {
   const opened = openUid ? questions.find((q) => q.uid === openUid) : undefined;
   const [page, setPage] = useState(0);
   const PER_PAGE = 20;
+  const [view, setViewState] = useState<BankView>(loadBankView);
+  const setView = (v: BankView) => { setViewState(v); saveBankView(v); };
+  const [activeUid, setActiveUid] = useState<string | null>(null); // câu đang xem ở chế độ Danh sách (khác với ô chọn nhiều)
+  const [detailOpen, setDetailOpen] = useState(false);            // cửa sổ hẹp: Chi tiết phủ lên danh sách
+  const [treeOpen, setTreeOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1500);
 
   const index = useMemo(() => new Map(questions.map((q) => [q.uid, searchable(q)])), [questions]);
 
@@ -87,6 +94,9 @@ export function BankScreen() {
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
   const shown = list.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
+  // Câu đang xem: nếu không còn nằm trong trang hiện tại (đổi lọc/trang/xoá) thì lấy câu đầu tiên hợp lệ.
+  const active = shown.find((q) => q.uid === activeUid) ?? shown[0] ?? null;
+  useEffect(() => { if (!active) setDetailOpen(false); }, [active]);
 
   const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); apply(n); };
   const pickGrade = (g: number | null) => { setPage(0); setGradeNum(g); setChapterId(null); setLessonId(null); setFormId(null); };
@@ -98,6 +108,78 @@ export function BankScreen() {
     const body = selected.map((q) => buildExTest(parseExTest(q.latex), { id: questionCode(q, q.level) })).join('\n\n');
     showFile({ title: `${selected.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: `% ${selected.length} câu xuất từ HEdu\n\n${body}\n`, mime: 'application/x-tex' });
   };
+
+
+  const renderCard = (q: Question, mode: 'card' | 'detail') => {
+    const p = parseExTest(q.latex);
+    const on = sel.has(q.uid);
+    const at = place(q.lessonId) ?? place(q.chapterId);
+    return (
+      <article key={q.uid} className={`card${on ? ' is-selected' : ''}${mode === 'detail' ? ' card-detail' : ''}`}>
+        <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => toggle(sel, q.uid, setSel)} />
+        <div className="card-body">
+          <div className="card-meta">
+            <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
+            <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
+            <span className="code-tag">{questionCode(q, q.level)}</span>
+            <span>{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span>
+            {q.tags.map((t) => <span key={t} className="tag" style={{ height: 24, paddingRight: 10, fontSize: 12 }}>{t}</span>)}
+            <span style={{ marginLeft: 'auto' }} className="mono">{seqLabel(q.seq)}</span>
+          </div>
+          {exact.has(q.uid)
+            ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
+            : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
+        </div>
+        <div className="card-acts">
+          {isTikzReady() && (
+            <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
+          )}
+          <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => setOpenUid(q.uid)}><IcEdit size={18} /></button>
+          <button type="button" className="ico" aria-label="Nhân bản câu" title="Nhân bản" onClick={() => { const c = duplicateQuestion(q.uid); if (c) { if (mode === 'detail') setActiveUid(c.uid); toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); } }}><IcCopy /></button>
+          {confirmDel === q.uid ? (
+            <button type="button" className="ico danger" style={{ width: 'auto', padding: '0 8px', fontSize: 12, color: 'var(--accent)' }} onClick={() => removeQuestion(q)} onBlur={() => setConfirmDel(null)} autoFocus>Xoá?</button>
+          ) : (
+            <button type="button" className="ico danger" aria-label="Xoá câu" title="Xoá" onClick={() => setConfirmDel(q.uid)}><IcTrash /></button>
+          )}
+        </div>
+      </article>
+    );
+  };
+
+  /** Xoá một câu: bỏ khỏi ô chọn, và nếu đang xem câu đó thì chuyển sang câu liền kề còn lại. */
+  const removeQuestion = (q: Question) => {
+    const i = shown.findIndex((x) => x.uid === q.uid);
+    const next = shown[i + 1] ?? shown[i - 1] ?? null;
+    deleteQuestion(q.uid);
+    setConfirmDel(null);
+    setSel((s) => { const n = new Set(s); n.delete(q.uid); return n; });
+    if (active?.uid === q.uid) setActiveUid(next ? next.uid : null);
+    toast(`Đã xoá ${seqLabel(q.seq)}`);
+  };
+
+  const renderRows = () => (
+    <ul className="rows" aria-label="Danh sách rút gọn">
+      {shown.map((q) => {
+        const p = parseExTest(q.latex);
+        const isActive = active?.uid === q.uid;
+        const on = sel.has(q.uid);
+        return (
+          <li key={q.uid} className={`row${isActive ? ' is-active' : ''}${on ? ' is-checked' : ''}`}>
+            <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => toggle(sel, q.uid, setSel)} />
+            <button type="button" className="row-main" aria-current={isActive ? 'true' : undefined} title={plainSnippet(p.stem, 400)} onClick={() => { setActiveUid(q.uid); setDetailOpen(true); }}>
+              <span className="row-top">
+                <span className="mono row-no">{seqLabel(q.seq)}</span>
+                <span className="code-tag">{questionCode(q, q.level)}</span>
+                <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
+                <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
+              </span>
+              <span className="row-text">{plainSnippet(p.stem) || '(câu chưa có đề bài)'}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   const heading = chapter ? `Lớp ${gradeNum} · ${chapter.name}` : gradeNum ? `Lớp ${gradeNum}` : 'Toàn bộ ngân hàng';
 
@@ -111,7 +193,7 @@ export function BankScreen() {
         </div>
       </header>
 
-      <div className="body-row">
+      <div className={`body-row${view === 'list' ? ' is-list' : ''}${view === 'list' && !treeOpen ? ' tree-hidden' : ''}`}>
         <aside className="tree" aria-label="Mục lục">
           <h2>Chọn lớp</h2>
           <div className="gseg">
@@ -177,6 +259,11 @@ export function BankScreen() {
           <div className="scope-head">
             <h2>{heading}</h2>
             {lesson && <span>Bài: {lesson.name}</span>}
+            <div className="vseg" role="group" aria-label="Kiểu hiển thị">
+              <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Thẻ</button>
+              <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
+            </div>
+            {view === 'list' && <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>{treeOpen ? 'Ẩn mục lục' : 'Hiện mục lục'}</button>}
           </div>
 
           <div className="fgroups">
@@ -235,41 +322,17 @@ export function BankScreen() {
             </div>
           )}
 
-          {shown.map((q) => {
-            const p = parseExTest(q.latex);
-            const on = sel.has(q.uid);
-            const at = place(q.lessonId) ?? place(q.chapterId);
-            return (
-              <article key={q.uid} className={`card${on ? ' is-selected' : ''}`}>
-                <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => toggle(sel, q.uid, setSel)} />
-                <div className="card-body">
-                  <div className="card-meta">
-                    <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
-                    <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-                    <span className="code-tag">{questionCode(q, q.level)}</span>
-                    <span>{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span>
-                    {q.tags.map((t) => <span key={t} className="tag" style={{ height: 24, paddingRight: 10, fontSize: 12 }}>{t}</span>)}
-                    <span style={{ marginLeft: 'auto' }} className="mono">{seqLabel(q.seq)}</span>
-                  </div>
-                  {exact.has(q.uid)
-                    ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
-                    : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
-                </div>
-                <div className="card-acts">
-                  {isTikzReady() && (
-                    <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
-                  )}
-                  <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => setOpenUid(q.uid)}><IcEdit size={18} /></button>
-                  <button type="button" className="ico" aria-label="Nhân bản câu" title="Nhân bản" onClick={() => { const c = duplicateQuestion(q.uid); if (c) toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); }}><IcCopy /></button>
-                  {confirmDel === q.uid ? (
-                    <button type="button" className="ico danger" style={{ width: 'auto', padding: '0 8px', fontSize: 12, color: 'var(--accent)' }} onClick={() => { deleteQuestion(q.uid); setConfirmDel(null); sel.delete(q.uid); toast(`Đã xoá ${seqLabel(q.seq)}`); }} onBlur={() => setConfirmDel(null)} autoFocus>Xoá?</button>
-                  ) : (
-                    <button type="button" className="ico danger" aria-label="Xoá câu" title="Xoá" onClick={() => setConfirmDel(q.uid)}><IcTrash /></button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+          {view === 'cards' && shown.map((q) => renderCard(q, 'card'))}
+
+          {view === 'list' && shown.length > 0 && active && (
+            <div className={`split${detailOpen ? ' has-detail' : ''}`}>
+              {renderRows()}
+              <div className="detail" aria-label="Chi tiết câu đang xem">
+                <button type="button" className="linkbtn detail-back" onClick={() => setDetailOpen(false)}>‹ Quay lại danh sách</button>
+                {renderCard(active, 'detail')}
+              </div>
+            </div>
+          )}
 
           {pages > 1 && (
             <nav className="pager" aria-label="Phân trang">
