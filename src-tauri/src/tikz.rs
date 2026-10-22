@@ -202,7 +202,13 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
     let started = Instant::now();
     let preamble = opts.preamble.clone().unwrap_or_else(|| DEFAULT_PREAMBLE.to_string());
     let engine = engine_name(&opts.engine);
-    let key = hash64(&[&preamble, defs, code, engine]);
+    // pdfLaTeX (mặc định) đi đường TeX → DVI → SVG: pgf có sẵn bộ vẽ cho dvisvgm nên KHÔNG cần
+    // Ghostscript. Đường qua PDF của dvisvgm đòi Ghostscript < 10.01 hoặc mutool, mà máy mới
+    // thường có Ghostscript 10.x nên báo lỗi. lualatex/xelatex chỉ ra được PDF nên vẫn đi đường cũ.
+    let via_dvi = engine == "pdflatex";
+    let tex_prog = if via_dvi { "latex" } else { engine };
+    let route = if via_dvi { "dvi" } else { "pdf" };
+    let key = hash64(&[&preamble, defs, code, engine, route]);
 
     let svg_path = cache_dir.join(format!("{key}.svg"));
     if let Ok(s) = fs::read_to_string(&svg_path) {
@@ -220,7 +226,8 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         stage: String::from("latex"),
     })?;
 
-    let tex = format!("{preamble}\n\\begin{{document}}\n{defs}\n{code}\n\\end{{document}}\n");
+    let head = if via_dvi { format!("\\def\\pgfsysdriver{{pgfsys-dvisvgm.def}}\n{preamble}") } else { preamble.clone() };
+    let tex = format!("{head}\n\\begin{{document}}\n{defs}\n{code}\n\\end{{document}}\n");
     let tex_path = work.join("hinh.tex");
     fs::write(&tex_path, tex).map_err(|e| TikzErr {
         message: format!("Không ghi được file tạm: {e}"),
@@ -230,7 +237,7 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
 
     let limit = Duration::from_secs(opts.timeout_secs.unwrap_or(40).clamp(5, 180));
 
-    let mut c = Command::new(prog(&opts.tex_bin, engine));
+    let mut c = Command::new(prog(&opts.tex_bin, tex_prog));
     c.current_dir(&work)
         .arg("-interaction=nonstopmode")
         .arg("-halt-on-error")
@@ -242,11 +249,11 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         Ok(v) => v,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             let _ = fs::remove_dir_all(&work);
-            return Err(missing_tool(engine));
+            return Err(missing_tool(tex_prog));
         }
         Err(e) => {
             let _ = fs::remove_dir_all(&work);
-            return Err(TikzErr { message: format!("Không chạy được {engine}: {e}"), log: String::new(), stage: String::from("latex") });
+            return Err(TikzErr { message: format!("Không chạy được {tex_prog}: {e}"), log: String::new(), stage: String::from("latex") });
         }
     };
     let log = fs::read_to_string(work.join("hinh.log")).unwrap_or_else(|_| res.stdout.clone());
@@ -259,20 +266,22 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         });
     }
     let ok = res.success;
-    let pdf = work.join("hinh.pdf");
-    if !ok || !pdf.exists() {
+    let outfile = work.join(if via_dvi { "hinh.dvi" } else { "hinh.pdf" });
+    if !ok || !outfile.exists() {
         let e = TikzErr { message: first_error_line(&log), log: useful_log(&log), stage: String::from("latex") };
         let _ = fs::remove_dir_all(&work);
         return Err(e);
     }
 
     let mut d = Command::new(prog(&opts.tex_bin, "dvisvgm"));
-    d.current_dir(&work)
-        .arg("--pdf")
-        .arg("--no-fonts")
+    d.current_dir(&work);
+    if !via_dvi {
+        d.arg("--pdf");
+    }
+    d.arg("--no-fonts")
         .arg("--exact-bbox")
         .arg("--output=hinh.svg")
-        .arg("hinh.pdf");
+        .arg(if via_dvi { "hinh.dvi" } else { "hinh.pdf" });
     hide_console(&mut d);
     let svg = match run_capture(&mut d, limit) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -296,7 +305,11 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
             if !o.success || !made.exists() {
                 let _ = fs::remove_dir_all(&work);
                 return Err(TikzErr {
-                    message: String::from("Dịch ra PDF được nhưng chuyển sang SVG thì lỗi."),
+                    message: if o.stderr.contains("Ghostscript") || o.stderr.contains("mutool") {
+                        String::from("Chuyển sang SVG lỗi vì dvisvgm cần Ghostscript hoặc mutool phù hợp (bản Ghostscript quá mới hoặc chưa cài).")
+                    } else {
+                        String::from("Dịch được nhưng chuyển sang SVG thì lỗi.")
+                    },
                     log: o.stderr.chars().take(1200).collect(),
                     stage: String::from("svg"),
                 });

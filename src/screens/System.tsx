@@ -243,7 +243,7 @@ export function SystemScreen() {
         <section className="panel" aria-label="Vẽ hình TikZ">
           <h2>Vẽ hình TikZ bằng TeX Live</h2>
           <span className="sys-hint">
-            App gọi <span className="mono">{tikz.engine}</span> rồi <span className="mono">dvisvgm</span> trên máy bạn để dịch mỗi hình thành ảnh SVG.
+            App gọi <span className="mono">{tikz.engine === 'pdflatex' ? 'latex' : tikz.engine}</span> rồi <span className="mono">dvisvgm</span> trên máy bạn để dịch mỗi hình thành ảnh SVG.
             Hình đã dịch được nhớ lại nên lần sau hiện ngay. Cần TeX Live (hoặc MiKTeX) đã cài và nằm trong PATH.
           </span>
           <div className="head-actions">
@@ -259,11 +259,11 @@ export function SystemScreen() {
           </label>
           <div className="sys-row">
             <label className="sw"><input type="checkbox" checked={tikz.auto} onChange={(e) => saveTikz({ ...tikz, auto: e.target.checked })} />Tự vẽ hình khi mở câu hỏi</label>
-            <label className="lbl" style={{ maxWidth: 220 }}>Bộ dịch
+            <label className="lbl" style={{ maxWidth: 460 }}>Bộ dịch
               <select className="sel" value={tikz.engine} onChange={(e) => saveTikz({ ...tikz, engine: e.target.value as TikzSettings['engine'] })}>
-                <option value="pdflatex">pdflatex (nhanh nhất)</option>
-                <option value="lualatex">lualatex</option>
-                <option value="xelatex">xelatex</option>
+                <option value="pdflatex">pdfLaTeX — qua DVI, không cần Ghostscript (khuyên dùng)</option>
+                <option value="lualatex">lualatex (qua PDF, dvisvgm cần Ghostscript &lt; 10.01 hoặc mutool)</option>
+                <option value="xelatex">xelatex (qua PDF, như trên)</option>
               </select>
             </label>
             <label className="lbl" style={{ maxWidth: 160 }}>Giới hạn (giây)
