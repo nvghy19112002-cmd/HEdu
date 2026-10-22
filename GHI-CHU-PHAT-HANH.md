@@ -1,3 +1,11 @@
+## Có gì mới trong beta.14
+
+- **Ngân hàng có hai kiểu xem:** nút **Thẻ | Danh sách** ở đầu danh sách. “Danh sách” hiện các hàng gọn (số câu, mã ID, loại, mức độ, trích đoạn đề) bên trái và một khung **Chi tiết** đầy đủ bên phải. Đổi kiểu xem không mất bộ lọc, trang, các câu đã chọn hay công tắc “Hiện lời giải”. Chọn kiểu nào được nhớ cho máy này (mặc định vẫn là Thẻ).
+- Bấm một hàng chỉ để **xem** câu đó; ô tick vuông riêng để **chọn nhiều câu** (xuất .tex…). Xoá câu đang xem thì chuyển sang câu bên cạnh. Có thể dùng bàn phím (Tab, Enter). Cửa sổ hẹp: bấm hàng thì Chi tiết hiện đầy màn hình, có nút “Quay lại danh sách”. Mục lục (lớp/chương/bài) có nút Ẩn/Hiện.
+- **Hình ngang không còn nhỏ xíu:** hình gồm nhiều hình con xếp hàng ngang (ví dụ “bốn hình vẽ”) được phóng to hợp lý.
+- **Đáp án A/B/C/D nằm trong ô viền**, đáp án đúng nổi bật bằng viền và nền xanh khi bật hiện đáp án.
+- Dữ liệu, ID và sao lưu không đổi. (Chức năng “Kiểm duyệt câu hỏi” chưa có — đang chờ thầy duyệt cách lưu.)
+
 ## Có gì mới trong beta.13
 
 - **Sửa bảng bị mất đường kẻ dưới cùng:** `\hline` ở cuối bảng nay kẻ suốt chiều ngang (trước đây chỉ hiện ở cột đầu).
