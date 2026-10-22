@@ -197,11 +197,12 @@ a { color: var(--accent); }
 .opts { display: grid; gap: 8px 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .opts.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .opts.c1 { grid-template-columns: minmax(0, 1fr); }
-.opt { position: relative; min-width: 0; display: flex; gap: 4px; align-items: baseline; }
-.opt > b { flex: none; font-family: var(--f-ui); font-size: .82em; margin-right: 4px; }
+.opt { position: relative; min-width: 0; display: flex; gap: 4px; align-items: baseline; padding: 7px 12px; border: 1.5px solid var(--line-2); border-radius: 10px; background: #fff; }
+.opt > b { flex: none; font-family: var(--f-ui); font-size: .82em; margin-right: 4px; color: var(--ink-2); }
 .opt-body { min-width: 0; flex: 1 1 auto; }
-.opt.right b { color: var(--accent); }
-.opt.ring::before { content: ''; position: absolute; left: -9px; top: -4px; width: 30px; height: 30px; border: 2px solid var(--accent); border-radius: 50%; transform: rotate(-8deg); }
+/* đáp án đúng: viền và nền màu nổi (khi bật hiện đáp án) */
+.opt.right { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, #fff); box-shadow: 0 0 0 1px var(--ok) inset; }
+.opt.right > b { color: var(--ok); }
 .tf { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .tf li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; }
 .tf .tf-l { font-family: var(--f-ui); font-size: .8em; white-space: nowrap; }

@@ -59,10 +59,11 @@ export function naturalSize(svg: string): { w: number; h: number } | null {
 
 const TARGET = 210;          // cỡ “mong muốn” (căn bậc hai diện tích, px)
 const STRENGTH = 0.65;       // 0 = giữ nguyên, 1 = ép đúng một cỡ
+const WIDE_RATIO = 2.2, WIDE_FRAC = 0.55, WIDE_MIN = 360, WIDE_MAX = 760;
 const W_MIN = 120, W_MAX = 380, H_MAX = 300, K_MAX = 1.8;
 
 /** Kích thước hiển thị (px) sau khi cân bằng; null nghĩa là giữ nguyên. */
-export function fitSize(nat: { w: number; h: number }, p: FigPrefs): { w: number; h: number } | null {
+export function fitSize(nat: { w: number; h: number }, p: FigPrefs, colW = 0): { w: number; h: number } | null {
   if (p.mode === 'raw' && p.scale === 1) return null;
   let k = 1;
   if (p.mode === 'auto') {
@@ -70,16 +71,23 @@ export function fitSize(nat: { w: number; h: number }, p: FigPrefs): { w: number
     const lo = Math.min(W_MIN / nat.w, K_MAX);                 // không để hình nhỏ hơn sàn (tối đa phóng 1.8 lần)
     const hi = Math.min(W_MAX / nat.w, H_MAX / nat.h, K_MAX);  // không để hình vượt trần
     k = Math.min(Math.max(k0, lo), hi);
+    // Hình NGANG (nhiều hình con xếp một hàng): cỡ theo diện tích làm mỗi hình con quá nhỏ.
+    // Cho rộng tới ~55% bề rộng khung câu (tối thiểu 360px, tối đa 760px), vẫn không vượt trần chiều cao.
+    if (nat.w / nat.h >= WIDE_RATIO && colW > 0) {
+      const target = Math.min(WIDE_MAX, Math.max(WIDE_MIN, colW * WIDE_FRAC));
+      const kw = Math.min(target / nat.w, H_MAX / nat.h, K_MAX);
+      if (kw > k) k = kw;
+    }
   }
   k *= p.scale;
   return { w: Math.round(nat.w * k), h: Math.round(nat.h * k) };
 }
 
 /** Trả SVG với width/height mới (giữ nguyên viewBox nên không méo). */
-export function applyFigScale(svg: string, p: FigPrefs): string {
+export function applyFigScale(svg: string, p: FigPrefs, colW = 0): string {
   const nat = naturalSize(svg);
   if (!nat) return svg;
-  const s = fitSize(nat, p);
+  const s = fitSize(nat, p, colW);
   if (!s) return svg;
   return svg.replace(/<svg\b[^>]*>/, (tag) => {
     let t = tag.replace(/\s(width|height)\s*=\s*(["'])[^"']*\2/g, '');
