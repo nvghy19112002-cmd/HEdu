@@ -663,3 +663,13 @@ a { color: var(--accent); }
 .rv-dot { width: 9px; height: 9px; border-radius: 50%; background: #CFCABD; display: inline-block; flex: none; }
 .card-detail .card-no { display: none; }
 .selbar .sw, .list-head .sw { min-height: 0; height: 28px; padding: 0; }
+
+/* ---------- Bộ lọc dạng thả xuống (gọn một hàng) ---------- */
+.fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.fmenu { position: relative; }
+.fmenu-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 12px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--paper); font: inherit; font-size: 12.5px; color: var(--ink); cursor: pointer; max-width: 280px; }
+.fmenu-btn.on { border-color: var(--accent); background: #FFFDF9; }
+.fmenu-l { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+.fmenu-v { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fmenu-pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; min-width: 240px; max-width: min(560px, 86vw); padding: 10px; background: var(--paper); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 12px 32px rgba(26,34,48,.2); }
+.fmenu-pop .chip { height: 28px; font-size: 12.5px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; }

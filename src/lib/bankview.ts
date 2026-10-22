@@ -8,10 +8,7 @@ export function saveBankView(v: BankView): void {
   try { if (v === 'cards') localStorage.removeItem(KEY); else localStorage.setItem(KEY, v); } catch { /* bỏ qua */ }
 }
 
-// Ẩn/hiện mục lục và khung bộ lọc: cũng chỉ là tuỳ chọn giao diện theo máy.
-const FKEY = 'hedu.bankfilters';
+// Ẩn/hiện mục lục: cũng chỉ là tuỳ chọn giao diện theo máy.
 const TKEY = 'hedu.banktree';
-export const loadFiltersOpen = (): boolean => { try { return localStorage.getItem(FKEY) !== 'closed'; } catch { return true; } };
-export const saveFiltersOpen = (o: boolean): void => { try { if (o) localStorage.removeItem(FKEY); else localStorage.setItem(FKEY, 'closed'); } catch { /* bỏ qua */ } };
 export const loadTreeOpen = (): boolean | null => { try { const v = localStorage.getItem(TKEY); return v === 'open' ? true : v === 'closed' ? false : null; } catch { return null; } };
 export const saveTreeOpen = (o: boolean): void => { try { localStorage.setItem(TKEY, o ? 'open' : 'closed'); } catch { /* bỏ qua */ } };
