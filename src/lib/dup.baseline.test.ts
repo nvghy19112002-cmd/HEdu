@@ -36,6 +36,12 @@ ok(falseExact >= 3, `bộ cũ có ${falseExact} lần báo “trùng hẳn” sa
 const q = (n: number, latex: string): Question => ({ uid: `u${n}`, seq: n, latex } as unknown as Question);
 const bank = [q(1, byId['raw-1'].a)];
 ok(findDuplicates(byId['raw-1'].b, bank)[0]?.score === 1, 'findDuplicates: hai bản y hệt vẫn trả điểm 1');
+for (const id of ['tmp-frac', 'conf-true', 'conf-ds', 'tmp-immini', 'tmp-lt', 'tmp-deriv']) {
+  const h = findDuplicates(byId[id].b, [q(2, byId[id].a)], undefined, 0.5)[0];
+  ok(!h || h.score < 1, `findDuplicates (đã chuyển sang dup2): ${id} không còn là “trùng hẳn”`);
+}
+const cf = findDuplicates(byId['conf-true'].b, [q(3, byId['conf-true'].a)])[0];
+ok(cf?.kind === 'conflict', 'findDuplicates: cùng đề khác đáp án được báo là mâu thuẫn đáp án');
 
 if (failed) { console.log(`\n${failed} kiểm thử lỗi`); process.exit(1); }
 console.log('Baseline dò trùng cũ: đạt hết.');

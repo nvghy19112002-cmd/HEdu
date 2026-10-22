@@ -8,7 +8,8 @@
 //   unrelated không liên quan
 //   insufficient không đủ bằng chứng (mã lỗi/thiếu)
 // Điểm đo trên bộ này là điểm trên BỘ THỬ, không phải độ chính xác trên ngân hàng thật.
-export type DupKind = 'raw' | 'same' | 'conflict' | 'near' | 'template' | 'unrelated' | 'insufficient';
+import type { DupKind } from './dup2';
+export type { DupKind };
 export interface DupPair { id: string; note: string; a: string; b: string; expect: DupKind }
 
 const ex = (body: string) => `\\begin{ex}\n${body}\n\\end{ex}`;

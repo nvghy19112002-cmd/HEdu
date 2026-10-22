@@ -348,8 +348,8 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
           {tex == null ? 'TeX Live: chưa biên dịch' : tex === 'dang' ? 'TeX Live: đang biên dịch…' : tex === 'xong' ? (stale ? 'TeX Live: đã dịch bản cũ' : 'TeX Live: biên dịch được') : 'TeX Live: báo lỗi'}
         </span>
         {dups.length > 0 && (
-          <span className={`qs ${dups[0].score === 1 ? 'bad' : 'warn'}`}>
-            {dups[0].score === 1 ? 'Trùng hẳn' : 'Gần giống'} {questionCode(dups[0].question, dups[0].question.level)} · {Math.round(dups[0].score * 100)}%
+          <span className={`qs ${dups[0].score === 1 || dups[0].kind === 'conflict' ? 'bad' : 'warn'}`}>
+            {dups[0].score === 1 ? 'Trùng hẳn' : dups[0].kind === 'conflict' ? 'Mâu thuẫn đáp án' : 'Gần giống'} {questionCode(dups[0].question, dups[0].question.level)} · {Math.round(dups[0].score * 100)}%
           </span>
         )}
         {undo != null && <button type="button" className="linkbtn" onClick={() => { setLatex(undo); setUndo(null); }}>Hoàn tác đổi loại</button>}
