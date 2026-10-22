@@ -185,7 +185,7 @@ export function SystemScreen() {
           <div className="sys-row">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
               <h2 style={{ fontSize: 14 }}>Quay lại phiên bản trước</h2>
-              <span className="sys-hint">Dùng khi bản mới có lỗi. Dữ liệu hiện tại được giữ nguyên.</span>
+              <span className="sys-hint">Dùng khi bản mới có lỗi. Lưu ý: từ v0.1.0-beta.15 dữ liệu đổi cấu trúc nên bản cũ hơn không mở được — khi đó khôi phục từ “Sao lưu trước cập nhật” bên dưới.</span>
             </div>
             {prev.state === 'none' && <button type="button" className="btn btn-sm" disabled={!desktop || busy} onClick={() => void findPrevious()}>Xem bản trước</button>}
             {prev.state === 'checking' && <span className="sys-hint">Đang tìm…</span>}
