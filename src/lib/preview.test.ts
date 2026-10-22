@@ -2,7 +2,7 @@
 import { buildExTest, parseExTest } from './extest';
 import { checkQuestion } from './check';
 import { previewProblems, renderPartsEx, renderLatexText, type Part } from './render';
-import { sourceProblems } from './srcdiag';
+import { barePathProblems, sourceProblems } from './srcdiag';
 
 let failed = 0;
 function ok(cond: unknown, msg: string) {
@@ -120,3 +120,13 @@ console.log('Bảo toàn mã gốc của hình');
 
 if (failed) { console.log(`\n${failed} kiểm thử xem trước lỗi`); process.exit(1); }
 console.log('\nXem trước: đạt hết.');
+
+console.log('Đường vẽ thiếu \\draw (TeX không vẽ gì)');
+{
+  const bad = '\\begin{ex}\n \\begin{tikzpicture}\n  \\def\\xmin{-1};\n  (\\xmin,0)--(4,0);\n  \\draw (0,0)--(1,1);\n \\end{tikzpicture}\n\\end{ex}';
+  const r = barePathProblems(bad);
+  ok(r.length === 1 && r[0].line === 4, `báo đúng dòng ${r[0]?.line} cho (\\xmin,0)--(4,0);`);
+  const good = '\\begin{tikzpicture}\n \\draw (0,0)--(1,1);\n \\node at (0,0) {$(a,b)$};\n \\foreach \\x in {1,2} { \\draw (\\x,0)--(\\x,1); }\n \\path (0,0) edge (1,1);\n\\end{tikzpicture}';
+  ok(barePathProblems(good).length === 0, 'mã đúng không bị báo nhầm');
+  ok(barePathProblems('\\begin{tikzpicture}\n \\draw (0,0)\n (1,1)--(2,2);\n\\end{tikzpicture}').length === 0, 'đường vẽ nhiều dòng không bị báo nhầm');
+}

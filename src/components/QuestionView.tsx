@@ -1,6 +1,7 @@
 // Hiển thị một câu hỏi đã đọc từ LaTeX: đề, phương án, ý đúng/sai, đáp số, lời giải.
-import { Fragment, useMemo, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ParsedQuestion } from '../lib/extest';
+import { barePathProblems } from '../lib/srcdiag';
 import { previewProblems, renderPartsEx, type Part } from '../lib/render';
 import { TikzFigure } from './TikzFigure';
 
@@ -41,6 +42,51 @@ function optCols(texts: string[]): string {
   return 'c1';
 }
 
+/**
+ * Đáp án trắc nghiệm xếp 4 / 2 / 1 cột giống ex_test: đo bề rộng thật của đáp án dài nhất
+ * (đã dựng công thức) rồi chọn số cột mà mọi đáp án còn nằm gọn một dòng.
+ */
+function Choices({ items, defs, rightIdx, ring }: { items: { text: string; letter: string }[]; defs: string; rightIdx: Set<number>; ring: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
+  const meas = useRef<HTMLDivElement>(null);
+  const [cols, setCols] = useState<number>(() => (optCols(items.map((i) => i.text)) === 'c1' ? 1 : optCols(items.map((i) => i.text)) === 'c2' ? 2 : 4));
+  const hasFig = items.some((i) => /tikzpicture/.test(i.text));
+  useLayoutEffect(() => {
+    if (hasFig) { setCols(1); return; }
+    const el = box.current, m = meas.current;
+    if (!el || !m) return;
+    const GAP = 16, PAD = 6;
+    const calc = () => {
+      const avail = el.clientWidth;
+      if (!avail) return;
+      let max = 0;
+      m.querySelectorAll<HTMLElement>('.opt-m').forEach((n) => { max = Math.max(max, n.getBoundingClientRect().width); });
+      max += PAD;
+      const next = max * 4 + GAP * 3 <= avail ? 4 : max * 2 + GAP <= avail ? 2 : 1;
+      setCols((c) => (c === next ? c : next));
+    };
+    calc();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(calc) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [items, defs, hasFig]);
+  return (
+    <div className={`opts-wrap${cols === 4 ? '' : ` c${cols}`}`} ref={box}>
+      <div className="opts-measure" ref={meas} aria-hidden="true">
+        {items.map((o, i) => <span key={i} className="opt-m"><b>{o.letter}.</b> <Tex src={o.text} defs={defs} /></span>)}
+      </div>
+      <div className={`opts${cols === 4 ? '' : ` c${cols}`}`}>
+        {items.map((o, i) => (
+          <span key={i} className={`opt${rightIdx.has(i) ? (ring ? ' right ring' : ' right') : ''}`}>
+            <b>{o.letter}.</b>
+            <span className="opt-body"><Tex src={o.text} defs={defs} /></span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export interface QuestionViewProps {
   p: ParsedQuestion;
   number?: number;
@@ -56,6 +102,7 @@ export function QuestionView({ p, number, order, variant = 'paper', showAnswer =
   const ord = order ?? p.options.map((_, i) => i);
   const cls = variant === 'paper' ? 'q' : `q ${variant}`;
   const problems = useMemo(() => previewProblems(p, raw), [p, raw]);
+  const srcNotes = useMemo(() => (raw ? barePathProblems(raw) : []), [raw]);
   if (!p.stem && !p.options.length) return <p className="empty-q">Đề bài sẽ hiện ở đây khi bạn gõ bên trái.</p>;
 
   const main = (
@@ -65,18 +112,12 @@ export function QuestionView({ p, number, order, variant = 'paper', showAnswer =
         <Tex src={p.stem} defs={p.defs} />
       </p>
       {p.type === 'tn' && (
-        <div className={`opts ${optCols(p.options.map((o) => o.text))}`}>
-          {ord.map((k, i) => {
-            const o = p.options[k];
-            if (!o) return null;
-            const right = showAnswer && o.correct;
-            return (
-              <span key={i} className={`opt${right ? (variant === 'paper' ? ' right ring' : ' right') : ''}`}>
-                <b>{LETTERS[i]}.</b> <Tex src={o.text} defs={p.defs} />
-              </span>
-            );
-          })}
-        </div>
+        <Choices
+          items={ord.flatMap((k, i) => (p.options[k] ? [{ text: p.options[k].text, letter: LETTERS[i] }] : []))}
+          defs={p.defs}
+          rightIdx={new Set(showAnswer ? ord.flatMap((k, i) => (p.options[k]?.correct ? [i] : [])) : [])}
+          ring={variant === 'paper'}
+        />
       )}
       {p.type === 'ds' && (
         <ol className="tf">
@@ -85,8 +126,9 @@ export function QuestionView({ p, number, order, variant = 'paper', showAnswer =
             if (!o) return null;
             return (
               <li key={i}>
-                <b>{TF[i]})</b> <Tex src={o.text} defs={p.defs} />
-                {showAnswer && <span className={`mark ${o.correct ? 'd' : 's'}`}>{o.correct ? 'Đ' : 'S'}</span>}
+                <b className="tf-l">{TF[i]})</b>
+                <span className="tf-body"><Tex src={o.text} defs={p.defs} /></span>
+                {showAnswer && <span className={`mark ${o.correct ? 'd' : 's'}`} aria-label={o.correct ? 'Đúng' : 'Sai'}>{o.correct ? 'Đ' : 'S'}</span>}
               </li>
             );
           })}
@@ -105,12 +147,20 @@ export function QuestionView({ p, number, order, variant = 'paper', showAnswer =
       ) : main}
       {p.tail && <Tex as="div" className="q-tail" src={p.tail} defs={p.defs} />}
       {p.type === 'tln' && showAnswer && p.shortAnswer != null && (
-        <span className="short">Đáp án: <b><Tex src={p.shortAnswer.includes('$') ? p.shortAnswer : `$${p.shortAnswer.replace(/,/g, '{,}')}$`} /></b></span>
+        <div className="ans-box" role="note">
+          <span className="ans-box-t">Đáp án</span>
+          <span className="ans-box-v"><Tex src={p.shortAnswer.includes('$') ? p.shortAnswer : `$${p.shortAnswer.replace(/,/g, '{,}')}$`} /></span>
+        </div>
       )}
       {showSolution && p.solution && (
         <div className="sol">
           <span className="sol-t">Lời giải</span>
           <Tex as="div" src={p.solution} defs={p.defs} />
+        </div>
+      )}
+      {srcNotes.length > 0 && (
+        <div className="q-warn src" role="note">
+          <b>Lưu ý mã nguồn.</b> {srcNotes.map((s) => `${s.message} (dòng ${s.line}: ${s.snippet})`).join(' ')} HEdu vẽ đúng như TeX nên chỗ này cũng không có nét.
         </div>
       )}
       {problems.length > 0 && (

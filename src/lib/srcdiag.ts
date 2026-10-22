@@ -58,3 +58,38 @@ export function sourceProblems(raw: string, lineOffset = 0): SrcProblem[] {
   for (const s of stack.slice(0, 3)) add(s.pos, `\\begin{${s.name}} chưa có \\end{${s.name}}.`);
   return out;
 }
+
+/**
+ * Trong tikzpicture, một câu lệnh bắt đầu thẳng bằng toạ độ, vd `(\xmin,0)--(\xmax,0);`, KHÔNG có
+ * \draw/\path nên TeX không vẽ gì (xem bằng TeXstudio cũng không thấy nét). Chỉ BÁO, không sửa.
+ */
+export function barePathProblems(raw: string, lineOffset = 0): SrcProblem[] {
+  const src = maskNonCode(raw);
+  const out: SrcProblem[] = [];
+  const re = /\\begin\s*\{tikzpicture\}([\s\S]*?)\\end\s*\{tikzpicture\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    const base = m.index + m[0].indexOf(m[1]);
+    const body = m[1];
+    let depth = 0, brk = 0, start = 0;
+    const check = (end: number) => {
+      const seg = body.slice(start, end);
+      const t = seg.replace(/^\s+/, '');
+      if (/^\(/.test(t) && /--|\bto\b|\bcircle\b|\brectangle\b/.test(t)) {
+        const pos = base + start + (seg.length - t.length);
+        const w = locate(raw, pos);
+        out.push({ message: 'Câu lệnh này bắt đầu bằng toạ độ nên thiếu \\draw (hoặc \\path): TeX không vẽ nét nào. Thêm \\draw ở đầu nếu muốn vẽ.', line: w.line + lineOffset, col: w.col, snippet: w.snippet });
+      }
+    };
+    for (let i = 0; i < body.length; i++) {
+      const c = body[i];
+      if (c === '\\') { i++; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') depth = Math.max(0, depth - 1);
+      else if (c === '[') brk++;
+      else if (c === ']') brk = Math.max(0, brk - 1);
+      else if (c === ';' && depth === 0 && brk === 0) { check(i); start = i + 1; }
+    }
+  }
+  return out;
+}
