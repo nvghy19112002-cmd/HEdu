@@ -9,16 +9,16 @@ use crate::tikz::{hide_console, prog, TikzErr};
 /// Số lần gọi kpsewhich chạy song song.
 static KPSE_SLOTS: Slots = Slots::new(4);
 
-#[cfg_attr(not(test), derive(serde::Serialize))]
-#[cfg_attr(not(test), serde(rename_all = "camelCase"))]
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileHit {
     pub file: String,
     /// đường dẫn tìm thấy; None = TeX Live hiện chọn không có tệp này
     pub path: Option<String>,
 }
 
-#[cfg_attr(not(test), derive(serde::Serialize))]
-#[cfg_attr(not(test), serde(rename_all = "camelCase"))]
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PkgHit {
     /// tên gói trong TeX Live (dùng cho `tlmgr install <tên>`)
     pub package: String,
