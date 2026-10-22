@@ -126,6 +126,30 @@ console.log('Bảo toàn mã gốc của hình');
   ok(previewProblems(p).length === 0, 'câu bình thường: không có cảnh báo “chưa dựng chuẩn”');
 }
 
+console.log('Nhãn danh sách (enumitem)');
+{
+  const labs = (tex: string) => [...renderLatexText(tex).matchAll(/<span class="tx-lab">(.*?)<\/span>/g)].map((m) => m[1].replace(/<[^>]+>/g, ''));
+  const body = (o: string) => `\\begin{enumerate}${o}\\item A\\item B\\item C\\end{enumerate}`;
+  const l1 = labs(body('[\\it TH1:]'));
+  ok(l1.join('|') === 'TH1:|TH2:|TH3:', 'câu 0D0C2-5: [\\it TH1:] → TH1:, TH2:, TH3: (không lộ "it"): ' + l1.join('|'));
+  ok(renderLatexText(body('[\\it TH1:]')).includes('<i>'), 'giữ chữ nghiêng');
+  ok(labs(body('[\\it TH 1:]')).join('|') === 'TH 1:|TH 2:|TH 3:', 'có khoảng trắng: TH 1:');
+  ok(labs(body('[\\textbf{Bước} 1.]')).join('|') === 'Bước 1.|Bước 2.|Bước 3.', 'chữ trong {} giữ nguyên, số đếm ngoài {}');
+  ok(labs(body('[a)]')).join('|') === 'a)|b)|c)', 'nhãn ngắn a)');
+  ok(labs(body('[(A)]')).join('|') === '(A)|(B)|(C)', 'nhãn ngắn (A)');
+  ok(labs(body('[\\roman*)]')).join('|') === 'i)|ii)|iii)', '\\roman*');
+  ok(labs(body('[\\Roman*.]')).join('|') === 'I.|II.|III.', '\\Roman*');
+  ok(labs(body('[\\alph*)]')).join('|') === 'a)|b)|c)', '\\alph*');
+  ok(labs(body('[\\Alph*.]')).join('|') === 'A.|B.|C.', '\\Alph*');
+  ok(labs(body('[\\arabic*:]')).join('|') === '1:|2:|3:', '\\arabic*');
+  ok(labs(body('[Trường hợp 1:]')).join('|') === 'Trường hợp 1:|Trường hợp 2:|Trường hợp 3:', '"Trường hợp 1:" không bị đổi nhầm chữ');
+  ok(labs(body('')).join('|') === '1.|2.|3.', 'mặc định cấp 1');
+  const nested = labs('\\begin{enumerate}\\item X\\begin{enumerate}\\item p\\item q\\begin{enumerate}\\item r\\end{enumerate}\\end{enumerate}\\end{enumerate}');
+  ok(nested.join('|') === '1.|(a)|(b)|i.', 'danh sách lồng nhau: 1. (a) i.: ' + nested.join('|'));
+  ok(labs('\\begin{enumerate}[\\it TH1:]\\item $x$\\begin{enumerate}[a)]\\item y\\end{enumerate}\\item z\\end{enumerate}').join('|') === 'TH1:|a)|TH2:', 'lồng nhau có nhãn riêng từng cấp');
+  ok(labs('\\begin{itemize}\\item a\\end{itemize}').join('|') === '•', 'itemize giữ •');
+}
+
 if (failed) { console.log(`\n${failed} kiểm thử xem trước lỗi`); process.exit(1); }
 console.log('\nXem trước: đạt hết.');
 
