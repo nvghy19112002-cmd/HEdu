@@ -3,6 +3,7 @@
 // Mọi nút lọc đều hiện sẵn số câu để biết chỗ nào đang thiếu.
 import { useMemo, useState } from 'react';
 import { useApp } from '../app-context';
+import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
 import { IcCopy, IcEdit, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
@@ -213,10 +214,11 @@ export function BankScreen() {
           {sel.size > 0 ? (
             <div className="selbar">
               <span style={{ fontSize: 14 }}><b>Đã chọn {sel.size} câu</b></span>
+              <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
               <div className="head-actions" style={{ gap: 8 }}>
                 <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn</button>
                 <button type="button" className="btn btn-sm" onClick={exportSelected}>Xuất .tex</button>
-                <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: [...sel] })}>Thêm vào đề</button>
+                {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: [...sel] })}>Thêm vào đề</button>}
               </div>
             </div>
           ) : (
@@ -232,7 +234,7 @@ export function BankScreen() {
             const on = sel.has(q.uid);
             const at = place(q.lessonId) ?? place(q.chapterId);
             return (
-              <article key={q.uid} className={`card${on ? ' sel' : ''}`}>
+              <article key={q.uid} className={`card${on ? ' is-selected' : ''}`}>
                 <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => toggle(sel, q.uid, setSel)} />
                 <div className="card-body">
                   <div className="card-meta">
