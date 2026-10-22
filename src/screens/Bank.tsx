@@ -8,7 +8,7 @@ import { QuestionView } from '../components/QuestionView';
 import { CompiledView } from '../components/CompiledView';
 import { QuestionDrawer } from '../components/QuestionDrawer';
 import { isTikzReady } from '../lib/tikz';
-import { loadBankView, loadFiltersOpen, loadTreeOpen, saveBankView, saveFiltersOpen, saveTreeOpen, type BankView } from '../lib/bankview';
+import { loadBankView, loadTreeOpen, saveBankView, saveTreeOpen, type BankView } from '../lib/bankview';
 import { plainSnippet } from '../lib/snippet';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
@@ -16,6 +16,7 @@ import { place, useTaxonomy } from '../lib/curriculum';
 import { branchShort, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { deleteQuestion, duplicateQuestion, setReview, useBank } from '../lib/store';
+import { FilterMenu } from '../components/FilterMenu';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
 import { LEVEL_LABEL, LEVELS, REVIEW_LABEL, reviewOf, TYPE_LABEL, TYPES, type Level, type QType, type Question, type ReviewFilter, type ReviewStatus } from '../lib/types';
 
@@ -58,8 +59,6 @@ export function BankScreen() {
   const [detailOpen, setDetailOpen] = useState(false);            // cửa sổ hẹp: Chi tiết phủ lên danh sách
   const [treeOpen, setTreeOpenState] = useState(() => loadTreeOpen() ?? (loadBankView() === 'list' ? typeof window === 'undefined' || window.innerWidth >= 1500 : true));
   const setTreeOpen = (o: boolean) => { setTreeOpenState(o); saveTreeOpen(o); };
-  const [filtersOpen, setFiltersOpenState] = useState(loadFiltersOpen);
-  const setFiltersOpen = (o: boolean) => { setFiltersOpenState(o); saveFiltersOpen(o); };
   const [menuUid, setMenuUid] = useState<string | null>(null); // menu ba chấm của thẻ
 
   const index = useMemo(() => new Map(questions.map((q) => [q.uid, searchable(q)])), [questions]);
@@ -298,15 +297,11 @@ export function BankScreen() {
               <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             </div>
             <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>{treeOpen ? 'Ẩn mục lục' : 'Hiện mục lục'}</button>
-            <button type="button" className="btn btn-sm" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
-              Bộ lọc{activeFilters > 0 && <span className="chip-n on">{activeFilters}</span>} {filtersOpen ? '▴' : '▾'}
-            </button>
           </div>
 
-          {filtersOpen && <div className="fgroups">
+          <div className="fbar" role="group" aria-label="Bộ lọc">
             {lesson && lesson.forms.length > 0 && (
-              <div className="fgroup">
-                <h3>Dạng toán</h3>
+              <FilterMenu label="Dạng toán" active={!!formId} summary={formId ? shortName(lesson.forms.find((f) => f.id === formId)?.name ?? '') : 'Tất cả'}>
                 <div className="chips">
                   <button type="button" className="chip" aria-pressed={!formId} onClick={() => setFormId(null)}>Tất cả các dạng</button>
                   {lesson.forms.map((f) => (
@@ -315,10 +310,9 @@ export function BankScreen() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </FilterMenu>
             )}
-            <div className="fgroup">
-              <h3>Mức độ</h3>
+            <FilterMenu label="Mức độ" active={levels.size > 0} summary={levels.size ? [...levels].map((l) => LEVEL_LABEL[l]).join(', ') : 'Tất cả'}>
               <div className="chips">
                 <button type="button" className="chip" aria-pressed={!levels.size} onClick={() => setLevels(new Set())}>Tất cả</button>
                 {LEVELS.map((l) => (
@@ -327,20 +321,18 @@ export function BankScreen() {
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="fgroup">
-              <h3>Loại câu</h3>
+            </FilterMenu>
+            <FilterMenu label="Loại câu" active={types.size > 0} summary={types.size ? [...types].map((x) => TYPE_LABEL[x]).join(', ') : 'Tất cả'}>
               <div className="chips">
                 <button type="button" className="chip" aria-pressed={!types.size} onClick={() => setTypes(new Set())}>Tất cả</button>
-                {TYPES.map((t) => (
-                  <button key={t} type="button" className="chip" aria-pressed={types.has(t)} onClick={() => toggle(types, t, setTypes)}>
-                    {TYPE_LABEL[t]}<span className="chip-n">{tally((q) => q.type === t)}</span>
+                {TYPES.map((x) => (
+                  <button key={x} type="button" className="chip" aria-pressed={types.has(x)} onClick={() => toggle(types, x, setTypes)}>
+                    {TYPE_LABEL[x]}<span className="chip-n">{tally((q) => q.type === x)}</span>
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="fgroup">
-              <h3>Kiểm duyệt</h3>
+            </FilterMenu>
+            <FilterMenu label="Kiểm duyệt" active={reviewF !== 'all'} summary={reviewF === 'all' ? 'Tất cả' : REVIEW_LABEL[reviewF]}>
               <div className="chips">
                 {(['all', 'unreviewed', 'needs_fix', 'approved'] as const).map((r) => (
                   <button key={r} type="button" className="chip" aria-pressed={reviewF === r} onClick={() => { setReviewF(r); setPage(0); }}>
@@ -348,8 +340,9 @@ export function BankScreen() {
                   </button>
                 ))}
               </div>
-            </div>
-          </div>}
+            </FilterMenu>
+            {activeFilters > 0 && <button type="button" className="linkbtn" onClick={() => { setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setFormId(null); setPage(0); }}>Xoá {activeFilters} bộ lọc</button>}
+          </div>
 
           {sel.size > 0 ? (
             <div className="selbar">

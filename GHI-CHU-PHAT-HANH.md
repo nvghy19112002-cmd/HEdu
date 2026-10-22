@@ -1,3 +1,8 @@
+## Dự kiến cho bản kế tiếp (đã gộp vào main, chưa phát hành)
+
+- **Bộ lọc của Ngân hàng thành một hàng nút thả xuống** (Mức độ · Loại câu · Kiểm duyệt, thêm Dạng toán khi đã chọn bài). Mỗi nút hiện tóm tắt lựa chọn; bấm mở bảng có số câu từng mục; có nút “Xoá N bộ lọc”. Câu hỏi đầu tiên nay nằm cao hơn khoảng 330px ở màn 1366×768.
+- Màn Hệ thống nhắc rõ: từ beta.15 bản cũ hơn không mở được dữ liệu mới, hãy dùng “Sao lưu trước cập nhật”.
+
 ## Có gì mới trong beta.15
 
 - **Kiểm duyệt câu hỏi:** mỗi câu có trạng thái **Chưa kiểm tra / Cần sửa / Đã duyệt** do chính thầy/cô đặt (máy không tự duyệt, kể cả khi biên dịch được). Đổi ở dưới mỗi thẻ hoặc trong khung Chi tiết; “Đã duyệt” có một bước xác nhận. Nhãn màu hiện trên thẻ và trên từng hàng danh sách.
