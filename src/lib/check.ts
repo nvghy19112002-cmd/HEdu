@@ -6,7 +6,8 @@
 //   'tin'    — chỉ để biết (câu có hình TikZ nên xem trước hiện khung giữ chỗ)
 import katex from 'katex';
 import type { ParsedQuestion } from './extest';
-import { cleanForDisplay, MACROS, quietly, segments } from './render';
+import { cleanForDisplay, MACROS, previewProblems, quietly, segments } from './render';
+import { sourceProblems } from './srcdiag';
 
 export type IssueLevel = 'loi' | 'canh' | 'tin';
 
@@ -15,6 +16,8 @@ export interface Issue {
   message: string;
   /** đoạn mã gây lỗi, cắt ngắn để hiện trong danh sách */
   detail?: string;
+  /** lỗi nằm trong mã nguồn của người dùng (ngoặc/môi trường lệch), không phải do HEdu dựng sai */
+  source?: boolean;
 }
 
 const cut = (s: string, n = 90) => {
@@ -80,7 +83,8 @@ function figureKinds(src: string): string[] {
 }
 
 /** Toàn bộ các vấn đề của một câu đã đọc. */
-export function checkQuestion(p: ParsedQuestion, raw?: string): Issue[] {
+/** `lineOffset`: số dòng đứng trước câu này trong file đang nhập (để báo số dòng của cả file). */
+export function checkQuestion(p: ParsedQuestion, raw?: string, lineOffset = 0): Issue[] {
   const out: Issue[] = [];
   const whole = raw ?? '';
   const parts: [string, string][] = [
@@ -93,21 +97,34 @@ export function checkQuestion(p: ParsedQuestion, raw?: string): Issue[] {
   // 1. Lỗi cấu trúc do bộ đọc phát hiện
   for (const s of p.issues) out.push({ level: /trống|Thiếu \\begin|lẻ/.test(s) ? 'loi' : 'canh', message: s });
 
-  // 2. Ngoặc nhọn
-  for (const [name, text] of parts) {
-    if (!text) continue;
-    const b = braceBalance(text);
-    if (b !== 0) out.push({ level: 'loi', message: `Phần ${name}: ngoặc nhọn lệch ${b > 0 ? `thiếu ${b} dấu }` : `thừa ${-b} dấu }`}.`, detail: cut(text) });
+  // 2+3. Ngoặc nhọn và \begin…\end: khi có mã gốc thì soi cả câu và báo đúng dòng, cột;
+  //      không thì soi từng phần (chỉ biết phần nào lệch).
+  if (whole) {
+    for (const sp of sourceProblems(whole, lineOffset)) {
+      out.push({ level: 'loi', source: true, message: `${sp.message} (dòng ${sp.line}, cột ${sp.col})`, detail: cut(sp.snippet) });
+    }
+  } else {
+    for (const [name, text] of parts) {
+      if (!text) continue;
+      const b = braceBalance(text);
+      if (b !== 0) out.push({ level: 'loi', source: true, message: `Phần ${name}: ngoặc nhọn lệch ${b > 0 ? `thiếu ${b} dấu }` : `thừa ${-b} dấu }`}.`, detail: cut(text) });
+    }
+    for (const msg of envProblems(parts.map(([, t]) => t).join('\n'))) out.push({ level: 'loi', source: true, message: msg });
   }
-
-  // 3. Môi trường \begin … \end
-  for (const msg of envProblems(whole || parts.map(([, t]) => t).join('\n'))) out.push({ level: 'loi', message: msg });
 
   // 4. Công thức toán
   for (const [name, text] of parts) {
     if (!text || name === 'hình') continue;
     for (const issue of mathProblems(text)) out.push({ ...issue, message: `Phần ${name}: ${issue.message}` });
   }
+
+  // 4a. Mã đứng sau %[ID] trên cùng dòng bị TeX coi là chú thích
+  const firstLine = (whole.split('\n')[0] ?? '').replace(/\r$/, '');
+  const afterId = /%\s*\[[^\]]*\]\s*(\\[A-Za-z].*)$/.exec(firstLine);
+  if (afterId) out.push({ level: 'canh', source: true, message: 'Sau %[ID] còn mã trên cùng dòng; TeX coi phần đó là chú thích nên không có tác dụng.', detail: cut(afterId[1]) });
+
+  // 4b. Bản xem trước có dựng đủ không (lệnh chưa hiểu, mất hình)
+  for (const msg of previewProblems(p, raw)) out.push({ level: 'canh', message: 'Xem trước chưa dựng chuẩn. ' + msg });
 
   // 5. Hình vẽ
   const figSrc = (p.figure ?? '') + '\n' + p.stem + '\n' + (p.solution ?? '');

@@ -432,7 +432,7 @@ a { color: var(--accent); }
 /* ---- Hình TikZ đã dịch ---- */
 .fig { display: block; margin: 10px auto; text-align: center; }
 .fig-svg { display: inline-block; max-width: 100%; }
-.fig-svg svg { max-width: 100%; height: auto; }
+.fig-svg svg { max-width: 100%; height: var(--fig-h, auto); width: var(--fig-w, auto); }
 .fig-ph.err { border-color: #E0B3A8; background: var(--accent-soft); max-width: 520px; align-items: flex-start; text-align: left; }
 .fig-ph.err .fig-ph-t { color: var(--accent-ink); }
 .fig-log { display: block; width: 100%; margin-top: 6px; font-family: var(--f-code); font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 220px; overflow: auto; }
@@ -462,3 +462,41 @@ a { color: var(--accent); }
 .card-body { gap: 8px; }
 .card-meta { gap: 6px 8px; }
 .card-acts { gap: 6px; }
+
+/* ----- Xem trước chữ LaTeX: khối bố cục, danh sách, bảng, hai cột \immini (Issue #9) ----- */
+.tx-blk { display: block; }
+.tx-center { text-align: center; }
+.tx-left { text-align: left; }
+.tx-right { text-align: right; }
+.tx-center .fig, .tx-blk .fig { display: inline-block; vertical-align: middle; margin: 6px 4px; }
+.tx-hs { display: inline-block; height: 1px; }
+.tx-list { display: block; margin: 4px 0; }
+.tx-item { display: flex; gap: 8px; align-items: baseline; padding-left: 14px; }
+.tx-item .tx-lab { flex: none; min-width: 1.6em; font-weight: 600; }
+.tx-itemtxt { display: block; min-width: 0; flex: 1; }
+.tx-immini { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: center; }
+.tx-immini > .tx-col { min-width: 0; }
+.tx-colfig { text-align: center; }
+.q-immini { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; align-items: center; }
+.q-immini .q-col { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.q-immini .q-fig { text-align: center; }
+.q-immini .q-fig .fig { margin: 0 auto; }
+@media (max-width: 640px) { .q-immini, .tx-immini { grid-template-columns: minmax(0, 1fr); } }
+.tx-table { display: table; margin: 6px auto; border-collapse: collapse; }
+.tx-tr { display: table-row; }
+.tx-td { display: table-cell; padding: 3px 12px; vertical-align: middle; }
+.tx-td.a-left { text-align: left; }
+.tx-td.a-center { text-align: center; }
+.tx-td.a-right { text-align: right; }
+.tx-td.bl { border-left: 1px solid currentColor; }
+.tx-td.br { border-right: 1px solid currentColor; }
+.tx-tr.top > .tx-td { border-top: 1px solid currentColor; }
+.tx-tr.rule > .tx-td { border-top: 1px solid currentColor; padding: 0; }
+.tx-box { border: 1px solid currentColor; padding: 1px 5px; }
+.tx-tt { font-family: var(--f-code); font-size: .92em; }
+.tx-pre { font-family: var(--f-code); font-size: .85em; white-space: pre-wrap; }
+.tx-cap { display: block; font-size: .92em; text-align: center; }
+.tx-unk { font-family: var(--f-code); font-size: .82em; color: var(--accent-ink); background: var(--accent-soft); border-radius: 4px; padding: 0 3px; }
+.q-tail { margin-top: 2px; }
+.q-warn { font-family: var(--f-ui); font-size: 12.5px; line-height: 1.5; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid #E0B3A8; border-radius: 8px; padding: 6px 10px; }
+.tx-blk .fig-ph { display: inline-flex; vertical-align: middle; margin: 6px 4px; max-width: 46%; }

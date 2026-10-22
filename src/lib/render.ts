@@ -2,7 +2,8 @@
 // Công thức dùng KaTeX. Hình TikZ chưa vẽ được trong trình duyệt: hiện khung
 // giữ chỗ; bản Windows sẽ biên dịch thật bằng LaTeX.
 import katex from 'katex';
-import { extractDefs, unwrapImmini } from './extest';
+import { extractDefs, type ParsedQuestion } from './extest';
+import { renderFlow, type FigMeta } from './textflow';
 
 export const MACROS: Record<string, string> = {
   '\\R': '\\mathbb{R}',
@@ -49,33 +50,14 @@ const TIKZ_RE = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
 
 /** Dọn mã chỉ dùng cho bản in trước khi vẽ lên màn hình. */
 export function cleanForDisplay(src: string): string {
-  return unwrapImmini(extractDefs(src).text).text
-    .replace(/\\lq\\lq\s*/g, '\u201C')
-    .replace(/\\rq\\rq/g, '\u201D')
-    .replace(/\\colon\b/g, ':');
+  // \immini{…}{…}, \lq, \rq… do bộ dựng chữ (textflow.ts) xử lý theo cấu trúc, nên ở đây chỉ bỏ khai báo.
+  return extractDefs(src).text.replace(/\\colon\b/g, ':');
 }
 
 function figureLabel(code: string): string {
   if (/\\tkzTab/.test(code)) return 'Bảng biến thiên (tkz-tab)';
   if (/tdplot/.test(code)) return 'Hình không gian (tikz-3dplot)';
   return 'Hình vẽ TikZ';
-}
-
-/** Xử lý phần chữ (ngoài công thức): vài lệnh định dạng thường gặp */
-function renderTextPart(t: string): string {
-  let s = esc(t);
-  s = s.replace(/\\(begin|end)\{(center|enumerate|itemize|flushleft|flushright)\}/g, '');
-  s = s.replace(/\\item\s*/g, '<br>• ');
-  s = s.replace(/\\textbf\{([^{}]*)\}/g, '<b>$1</b>');
-  s = s.replace(/\\(textit|emph)\{([^{}]*)\}/g, '<i>$2</i>');
-  s = s.replace(/\\underline\{([^{}]*)\}/g, '<u>$1</u>');
-  s = s.replace(/\\\\(\[[^\]]*\])?/g, '<br>');
-  s = s.replace(/\\(newline|par)\b/g, '<br>');
-  s = s.replace(/\n\s*\n/g, '<br>');
-  s = s.replace(/~/g, '&nbsp;');
-  s = s.replace(/\\(%|&|#|_)/g, '$1');
-  s = s.replace(/\\(hfill|noindent|centering|medskip|bigskip|smallskip)\b/g, ' ');
-  return s;
 }
 
 /** Một mẩu của đoạn LaTeX: chữ thường hoặc công thức. */
@@ -128,46 +110,60 @@ export function maskFigures(src: string): { text: string; figures: string[] } {
 
 export { figureLabel };
 
-/** Một mảnh để vẽ: đoạn HTML đã dựng, hoặc một hình TikZ cần biên dịch riêng. */
-export type Part = { kind: 'html'; html: string } | { kind: 'figure'; code: string; label: string };
+/** Một mảnh để vẽ: đoạn HTML đã dựng, hình TikZ cần biên dịch riêng, hoặc dấu mở/đóng một khối bố cục. */
+export type Part =
+  | { kind: 'html'; html: string }
+  | { kind: 'figure'; code: string; label: string; size?: FigMeta }
+  | { kind: 'open'; cls: string }
+  | { kind: 'close' };
 
-function renderSegs(t: string): string {
-  let out = '';
-  for (const seg of segments(t)) out += seg.kind === 'math' ? renderMath(seg.value, seg.display) : renderTextPart(seg.value);
-  return out;
-}
+const hooks = { renderMath, findDollar: (s: string, from: number) => findDollar(s, from) };
 
-/** Tách đoạn LaTeX thành các mảnh chữ và các hình, để React vẽ hình bằng component riêng. */
-export function renderParts(src: string): Part[] {
-  if (!src) return [];
+export interface PartsResult { parts: Part[]; unsupported: string[]; figures: number }
+
+/** Tách đoạn LaTeX thành các mảnh chữ, hình và khối bố cục, kèm danh sách lệnh chưa dựng được. */
+export function renderPartsEx(src: string): PartsResult {
+  if (!src) return { parts: [], unsupported: [], figures: 0 };
   const { text, figures } = maskFigures(src);
+  const flow = renderFlow(text, hooks);
   const out: Part[] = [];
-  const re = /\u0000FIG(\d+)\u0000/g;
+  const re = /\u0000FIG(\d+)\u0000|\u0002O:([^\u0003]*)\u0003|\u0002C\u0003/g;
   let last = 0;
+  let nFig = 0;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    const before = text.slice(last, m.index);
-    if (before.trim()) out.push({ kind: 'html', html: renderSegs(before) });
-    const code = figures[Number(m[1])] ?? '';
-    out.push({ kind: 'figure', code, label: figureLabel(code) });
+  const html = (h: string) => { if (h.trim() || h.includes('<br') || h.includes('tx-hs')) out.push({ kind: 'html', html: h }); };
+  while ((m = re.exec(flow.html))) {
+    html(flow.html.slice(last, m.index));
     last = re.lastIndex;
+    if (m[1] != null) {
+      const code = figures[Number(m[1])] ?? '';
+      out.push({ kind: 'figure', code, label: figureLabel(code), size: flow.meta[Number(m[1])] });
+      nFig++;
+    } else if (m[2] != null) out.push({ kind: 'open', cls: m[2] });
+    else out.push({ kind: 'close' });
   }
-  const tail = text.slice(last);
-  if (tail.trim() || !out.length) out.push({ kind: 'html', html: renderSegs(tail) });
-  return out;
+  const tail = flow.html.slice(last);
+  html(tail);
+  if (!out.length) out.push({ kind: 'html', html: tail });
+  return { parts: out, unsupported: flow.unsupported, figures: nFig };
 }
 
+export function renderParts(src: string): Part[] {
+  return renderPartsEx(src).parts;
+}
+
+/** HTML thuần (không có hình thật): dùng cho thử nghiệm và nơi không chạy được TeX. */
 export function renderLatexText(src: string): string {
   if (!src) return '';
   const { text, figures } = maskFigures(src);
-  let out = '';
-  for (const seg of segments(text)) {
-    out += seg.kind === 'math' ? renderMath(seg.value, seg.display) : renderTextPart(seg.value);
-  }
-  return out.replace(/\u0000FIG(\d+)\u0000/g, (_, k) => {
-    const label = figureLabel(figures[Number(k)]);
-    return `<span class="fig-ph" role="img" aria-label="${label}"><span class="fig-ph-t">${label}</span><span class="fig-ph-s">Biên dịch khi chạy bản cài trên Windows</span></span>`;
-  });
+  const flow = renderFlow(text, hooks);
+  return flow.html
+    .replace(/\u0002O:([^\u0003]*)\u0003/g, '<div class="$1">')
+    .replace(/\u0002C\u0003/g, '</div>')
+    .replace(/\u0000FIG(\d+)\u0000/g, (_, k) => {
+      const label = figureLabel(figures[Number(k)]);
+      return `<span class="fig-ph" role="img" aria-label="${label}"><span class="fig-ph-t">${label}</span><span class="fig-ph-s">Biên dịch khi chạy bản cài trên Windows</span></span>`;
+    });
 }
 
 function findDollar(s: string, from: number): number {
@@ -176,4 +172,28 @@ function findDollar(s: string, from: number): number {
     if (s[j] === '$') return j;
   }
   return -1;
+}
+
+const countTikz = (s: string) => (s.match(/\\begin\{tikzpicture\}/g) ?? []).length;
+
+/**
+ * Những chỗ bản xem trước CHƯA dựng chuẩn một câu: lệnh chưa hiểu, hoặc số hình hiện ra
+ * khác số hình có trong mã. Rỗng nghĩa là xem trước đã dựng đủ (chưa phải đã biên dịch bằng TeX).
+ */
+export function previewProblems(p: ParsedQuestion, raw?: string): string[] {
+  const pieces = [p.stem, p.figure ?? '', ...p.options.map((o) => o.text), p.solution ?? '', p.tail ?? '', p.shortAnswer ?? ''];
+  const unsup = new Set<string>();
+  let shown = 0;
+  for (const piece of pieces) {
+    if (!piece) continue;
+    const r = renderPartsEx(piece);
+    r.unsupported.forEach((u) => unsup.add(u));
+    shown += r.figures;
+  }
+  const out: string[] = [];
+  if (unsup.size) out.push(`Chưa hiểu: ${[...unsup].slice(0, 6).join(', ')}${unsup.size > 6 ? '…' : ''}.`);
+  const want = countTikz(raw ?? pieces.join('\n')) - countTikz(p.defs ?? '') ;
+  const total = raw != null ? countTikz(raw) - countTikz(p.defs ?? '') : want;
+  if (shown !== total) out.push(`Hiện ${shown}/${total} hình trong mã.`);
+  return out;
 }
