@@ -18,6 +18,8 @@ export interface ParsedQuestion {
   layout: 'plain' | 'immini';
   /** Các khai báo \def, \newcommand phục vụ hình vẽ */
   defs: string;
+  /** Nội dung đứng SAU các phương án và trước \loigiai (thường là hình đặt sau \choice); giữ nguyên để không mất khi dựng lại */
+  tail: string;
   type: QType;
   options: Option[]; // 4 phương án (tn) hoặc 4 ý (ds)
   shortAnswer: string | null;
@@ -77,21 +79,79 @@ export function extractDefs(src: string): { text: string; defs: string } {
       s = s.slice(0, m.index) + s.slice(g[1]);
     }
   }
+  // Lệnh chuẩn bị cho hình đứng NGOÀI tikzpicture (vd \tdplotsetmaincoords, \tikzset, \definecolor):
+  // không hiện ra chữ nhưng hình cần có chúng mới dịch đúng, nên đi cùng khai báo.
+  for (const [name, n] of SETUP_CMDS) {
+    const re = new RegExp('\\\\' + name + '(?![A-Za-z])\\s*(\\[[^\\]]*\\])?', 'g');
+    for (let guard = 0; guard < 100; guard++) {
+      re.lastIndex = 0;
+      const m = re.exec(s);
+      if (!m) break;
+      let end = m.index + m[0].length;
+      let ok = true;
+      for (let k = 0; k < n; k++) {
+        const g = readGroup(s, skipSpace(s, end));
+        if (!g) { ok = false; break; }
+        end = g[1];
+      }
+      if (!ok) break;
+      defs.push(s.slice(m.index, end));
+      s = s.slice(0, m.index) + s.slice(end);
+    }
+  }
+  for (let guard = 0; guard < 100; guard++) {
+    const m = /\\tikzstyle\s*\{[^}]*\}\s*=\s*\[/.exec(s);
+    if (!m) break;
+    const close = s.indexOf(']', m.index + m[0].length);
+    if (close < 0) break;
+    defs.push(s.slice(m.index, close + 1));
+    s = s.slice(0, m.index) + s.slice(close + 1);
+  }
   return { text: unmaskTikz(s, masked.parts), defs: unmaskTikz(defs.join('\n'), masked.parts) };
 }
 
-/** \immini[tỉ lệ]{nội dung}{hình}: trả về nội dung đã mở ra và phần hình. */
+const SETUP_CMDS: [string, number][] = [
+  ['tdplotsetmaincoords', 2], ['tdplotsetrotatedcoords', 3], ['tdplotsetrotatedcoordsorigin', 1],
+  ['tikzset', 1], ['pgfmathsetmacro', 2], ['pgfmathtruncatemacro', 2], ['colorlet', 2], ['definecolor', 3],
+  ['pgfplotsset', 1], ['DeclareMathOperator', 2],
+];
+
+/** Vị trí các khối \loigiai{…} (để không lôi hình trong lời giải ra làm hình của đề). */
+function loigiaiRanges(s: string): [number, number][] {
+  const out: [number, number][] = [];
+  const re = /\\loigiai(?![A-Za-z])/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const g = readGroup(s, skipSpace(s, m.index + m[0].length));
+    if (g) { out.push([m.index, g[1]]); re.lastIndex = g[1]; }
+  }
+  return out;
+}
+
+/** \immini[tỉ lệ]{nội dung}{hình}: trả về nội dung đã mở ra và phần hình.
+ *  Chỉ mở các \immini nằm NGOÀI \loigiai; trong lời giải thì để nguyên cho bộ dựng chữ bày hai cột tại chỗ.
+ *  Giữa hai nhóm có thể xuống dòng hay thụt lề (đó là cách viết phổ biến), nên bỏ qua khoảng trắng ở giữa. */
 export function unwrapImmini(src: string): { text: string; figure: string | null } {
   let s = src;
   let figure: string | null = null;
-  for (let guard = 0; guard < 20; guard++) {
-    const m = /\\immini\s*\*?\s*(\[[^\]]*\])?\s*(?=\{)/.exec(s);
+  let from = 0;
+  for (let guard = 0; guard < 40; guard++) {
+    const re = /\\immini\s*\*?\s*(\[[^\]]*\])?\s*(?=\{)/g;
+    re.lastIndex = from;
+    const ranges = loigiaiRanges(s);
+    let m: RegExpExecArray | null = null;
+    while ((m = re.exec(s))) {
+      const at = m.index;
+      if (!ranges.some(([x, y]) => at >= x && at < y)) break;
+      re.lastIndex = ranges.find(([x, y]) => at >= x && at < y)![1];
+    }
     if (!m) break;
     const a = readGroup(s, m.index + m[0].length);
-    if (!a) { s = s.slice(0, m.index) + s.slice(m.index + m[0].length); continue; }
-    const b = readGroup(s, a[1]);
+    if (!a) { from = m.index + m[0].length; continue; } // ngoặc không đóng: để nguyên, báo lỗi ở bước kiểm tra
+    const b = readGroup(s, skipSpace(s, a[1]));
     if (b && b[0].trim()) figure = figure ? figure + '\n' + b[0].trim() : b[0].trim();
     s = s.slice(0, m.index) + a[0] + s.slice(b ? b[1] : a[1]);
+    from = m.index;
   }
   return { text: s, figure };
 }
@@ -184,6 +244,7 @@ export function parseExTest(src: string): ParsedQuestion {
   let options: Option[] = [];
   let shortAnswer: string | null = null;
   let solution: string | null = null;
+  let endOpts = -1;
 
   const cuts = [iTF, iCh, iSh, iSol].filter((x) => x >= 0);
   const stemEnd = cuts.length ? Math.min(...cuts) : body.length;
@@ -194,7 +255,8 @@ export function parseExTest(src: string): ParsedQuestion {
     let p = iTF + '\\choiceTF'.length;
     const opt = readOptional(body, p);
     if (opt) p = opt[1];
-    const [groups] = readGroups(body, p, 4);
+    const [groups, endG] = readGroups(body, p, 4);
+    endOpts = endG;
     options = groups.map(markCorrect);
     if (options.length !== 4) issues.push(`Câu đúng/sai cần đủ 4 ý, đang có ${options.length}.`);
   } else if (iCh >= 0) {
@@ -202,7 +264,8 @@ export function parseExTest(src: string): ParsedQuestion {
     let p = iCh + '\\choice'.length;
     const opt = readOptional(body, p);
     if (opt) p = opt[1];
-    const [groups] = readGroups(body, p, 4);
+    const [groups, endG] = readGroups(body, p, 4);
+    endOpts = endG;
     options = groups.map(markCorrect);
     const nTrue = options.filter((o) => o.correct).length;
     if (options.length !== 4) issues.push(`Câu trắc nghiệm cần 4 phương án, đang có ${options.length}.`);
@@ -213,20 +276,26 @@ export function parseExTest(src: string): ParsedQuestion {
     const opt = readOptional(body, p);
     if (opt) p = opt[1];
     const g = readGroup(body, skipSpace(body, p));
+    if (g) endOpts = g[1];
     shortAnswer = g ? g[0].trim() : null;
     if (!shortAnswer) issues.push('Thiếu đáp án trong \\shortans{…}.');
   }
 
+  let tail = '';
+  let afterSol = '';
   if (iSol >= 0) {
     const g = readGroup(body, skipSpace(body, iSol + '\\loigiai'.length));
     solution = g ? g[0].trim() : null;
     if (!g) issues.push('Ngoặc của \\loigiai{…} chưa đóng.');
-  }
+    if (endOpts >= 0 && endOpts <= iSol) tail = body.slice(endOpts, iSol).trim();
+    if (g) afterSol = body.slice(g[1]).trim();
+  } else if (endOpts >= 0) tail = body.slice(endOpts).trim();
+  tail = [tail, afterSol].filter(Boolean).join('\n');
 
   if (!stem) issues.push('Đề bài đang trống.');
   if (unbalancedDollar(stem + (solution ?? '') + options.map((o) => o.text).join(''))) issues.push('Số dấu $ bị lẻ — có công thức chưa đóng.');
 
-  return { stem, figure, layout, defs, type, options, shortAnswer, solution, idComment: id, issues };
+  return { stem, figure, layout, defs, tail, type, options, shortAnswer, solution, idComment: id, issues };
 }
 
 function unbalancedDollar(s: string): boolean {
@@ -244,6 +313,21 @@ export function splitExBlocks(src: string): string[] {
   const re = /\\begin\{ex\}[\s\S]*?\\end\{ex\}/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src))) out.push(m[0]);
+  return out;
+}
+
+/** Như splitExBlocks nhưng kèm số dòng (từ 1) nơi mỗi câu bắt đầu trong chuỗi lớn. */
+export function splitExBlocksAt(src: string): { text: string; line: number }[] {
+  const out: { text: string; line: number }[] = [];
+  const re = /\\begin\{ex\}[\s\S]*?\\end\{ex\}/g;
+  let m: RegExpExecArray | null;
+  let line = 1;
+  let last = 0;
+  while ((m = re.exec(src))) {
+    for (let i = last; i < m.index; i++) if (src.charCodeAt(i) === 10) line++;
+    last = m.index;
+    out.push({ text: m[0], line });
+  }
   return out;
 }
 
@@ -312,6 +396,7 @@ export function buildExTest(p: ParsedQuestion, opts: { id?: string; order?: numb
     if (p.figure) lines.push('  ' + p.figure.replace(/\n/g, '\n  '));
   }
   if (p.type === 'tln' && p.shortAnswer != null) lines.push(`  \\shortans{${p.shortAnswer}}`);
+  if (p.tail) lines.push('  ' + p.tail.replace(/\n/g, '\n  '));
   if (opts.withSolution !== false && p.solution) lines.push(`  \\loigiai{\n    ${p.solution.replace(/\n/g, '\n    ')}\n  }`);
   lines.push('\\end{ex}');
   return lines.join('\n');

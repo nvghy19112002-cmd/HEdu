@@ -6,7 +6,7 @@ import { chapters, firstLocation, grades } from '../lib/curriculum';
 import { shortName } from '../lib/taxonomy';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { findDuplicates } from '../lib/dup';
-import { parseExTest, splitExBlocks } from '../lib/extest';
+import { parseExTest, splitExBlocksAt } from '../lib/extest';
 import { parseCode, questionCode } from '../lib/id';
 import { addMany, useBank, type Draft } from '../lib/store';
 import { LEVEL_LABEL, LEVELS, TYPE_LABEL, type Level, type Location } from '../lib/types';
@@ -30,11 +30,11 @@ export function ImportScreen() {
     return () => clearTimeout(t);
   }, [src]);
 
-  const rows = useMemo(() => splitExBlocks(text250).map((latex) => {
+  const rows = useMemo(() => splitExBlocksAt(text250).map(({ text: latex, line }) => {
     const p = parseExTest(latex);
     const fromId = p.idComment ? parseCode(p.idComment) : null;
     const dup = findDuplicates(latex, questions)[0];
-    return { latex, p, fromId, dup };
+    return { latex, line, p, fromId, dup };
   }), [text250, questions]);
 
   // Kiểm tra lỗi xem trước theo từng đợt 15 câu, nhường chỗ cho giao diện giữa các đợt.
@@ -48,7 +48,7 @@ export function ImportScreen() {
     const step = () => {
       if (stop) return;
       const until = Math.min(i + 15, rows.length);
-      for (; i < until; i++) acc[i] = checkQuestion(rows[i].p, rows[i].latex);
+      for (; i < until; i++) acc[i] = checkQuestion(rows[i].p, rows[i].latex, rows[i].line - 1);
       setIssues(acc.slice());
       if (i < rows.length) setTimeout(step, 0);
     };
@@ -133,7 +133,7 @@ export function ImportScreen() {
               {shownRows.slice(0, limit).map(({ r, i }) => (
                 <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'}`}>
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
-                    <span className="chk-n">{i + 1}</span>
+                    <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của file`}>{i + 1}</span>
                     <b>{TYPE_LABEL[r.p.type]}</b>
                     <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : 'không ID'}</span>
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
