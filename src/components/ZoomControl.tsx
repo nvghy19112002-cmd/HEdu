@@ -1,0 +1,42 @@
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { getZoom, resetZoom, setZoom, stepZoom, subscribeZoom, ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN } from '../lib/zoom';
+
+export const useZoom = (): number => useSyncExternalStore(subscribeZoom, getZoom, getZoom);
+const pct = (z: number) => `${Math.round(z * 100)}%`;
+
+/** Hiện mức zoom vài giây sau mỗi lần đổi; bấm vào để về 100%. */
+export function ZoomIndicator() {
+  const z = useZoom();
+  const [shown, setShown] = useState(false);
+  const [first, setFirst] = useState(true);
+  useEffect(() => {
+    if (first) { setFirst(false); return; }
+    setShown(true);
+    const t = setTimeout(() => setShown(false), 1800);
+    return () => clearTimeout(t);
+  }, [z]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!shown) return null;
+  return (
+    <div className="zoom-ind" role="status" aria-live="polite">
+      <b>{pct(z)}</b>
+      {z !== ZOOM_DEFAULT && <button type="button" className="btn btn-sm" onClick={resetZoom}>Về 100%</button>}
+    </div>
+  );
+}
+
+/** Khối điều chỉnh trong màn Hệ thống. */
+export function ZoomPanel() {
+  const z = useZoom();
+  return (
+    <section className="panel" aria-label="Cỡ hiển thị">
+      <h2>Cỡ hiển thị</h2>
+      <span className="sys-hint">Phóng to hoặc thu nhỏ toàn bộ giao diện (80–150%). Ctrl + lăn chuột, chụm hai ngón trên bàn di chuột, hoặc phím Ctrl + / Ctrl − / Ctrl 0. Mức này chỉ lưu cho máy này, không ảnh hưởng ngân hàng câu hỏi.</span>
+      <div className="head-actions zoom-row">
+        <button type="button" className="btn btn-sm" aria-label="Thu nhỏ" disabled={z <= ZOOM_MIN} onClick={() => setZoom(stepZoom(z, -1))}>−</button>
+        <b className="zoom-val" aria-live="polite">{pct(z)}</b>
+        <button type="button" className="btn btn-sm" aria-label="Phóng to" disabled={z >= ZOOM_MAX} onClick={() => setZoom(stepZoom(z, 1))}>+</button>
+        <button type="button" className="btn btn-sm" disabled={z === ZOOM_DEFAULT} onClick={resetZoom}>Đặt lại 100%</button>
+      </div>
+    </section>
+  );
+}

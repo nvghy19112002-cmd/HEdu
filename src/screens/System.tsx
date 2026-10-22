@@ -11,6 +11,7 @@ import {
   backupInfo, checkUpdate, CHANNEL_LABEL, formatBytes, friendlyError, installUpdate, restoreBackup,
   type BackupMeta, type Channel, type Progress, type UpdateInfo,
 } from '../lib/updates';
+import { ZoomPanel } from '../components/ZoomControl';
 import { useUpdates } from '../update-context';
 
 function readFile(file: File): Promise<string> {
@@ -296,6 +297,8 @@ export function SystemScreen() {
           {fileErr && <div className="note bad"><IcAlert /><div className="note-body"><b>Không khôi phục được</b><span>{fileErr}</span></div></div>}
           <span className="sys-hint">Khôi phục từ file sẽ thay toàn bộ ngân hàng hiện tại.</span>
         </section>
+
+        <ZoomPanel />
 
         <section className="panel" aria-label="Dữ liệu">
           <h2>Dữ liệu</h2>
