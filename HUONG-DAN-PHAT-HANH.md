@@ -31,14 +31,15 @@ Trên máy người dùng luôn có đúng **1 bản sao lưu dữ liệu**: l�
 
 ## 3. Phát hành beta để thử
 
-1. Sửa `GHI-CHU-PHAT-HANH.md` (nội dung hiện ở khung "Có bản mới" của app).
-2. Đẩy tag dạng `v0.2.0-beta.1` (Claude làm giúp). GitHub tự kiểm thử, đóng gói, ký, đưa vào kênh beta (khoảng 10–15 phút).
-3. Trên máy bạn: *Hệ thống → Kênh cập nhật: Thử nghiệm → Kiểm tra bản mới → Cập nhật*.
-4. Dùng thử kỹ. Có lỗi thì sửa rồi phát hành `v0.2.0-beta.2`.
+1. Sửa `GHI-CHU-PHAT-HANH.md` (nội dung này hiện ở khung "Có bản mới" trong app).
+2. Vào kho trên GitHub → thẻ **Actions** → chọn **Phát hành** ở cột trái → nút **Run workflow** bên phải → gõ tên phiên bản dạng `v0.2.0-beta.1` → bấm **Run workflow**.
+3. GitHub tự kiểm thử, đóng gói, ký và đưa vào kênh beta (khoảng 10–15 phút). Xong thì thẻ Actions hiện dấu tích xanh.
+4. Trên máy bạn: *Hệ thống → Kênh cập nhật: Thử nghiệm → Kiểm tra bản mới → Cập nhật*.
+5. Dùng thử kỹ. Có lỗi thì sửa rồi phát hành `v0.2.0-beta.2`.
 
 ## 4. Đưa lên chính thức
 
-Khi beta ổn, đẩy tag `v0.2.0` (không có chữ beta). Bản này vào kênh Chính thức; bản chính thức cũ tự thành "bản trước"; beta cũ bị dọn.
+Khi beta chạy ổn, làm lại bước 2 nhưng gõ `v0.2.0` (không có chữ beta). Bản này vào kênh Chính thức; bản chính thức cũ tự thành "bản trước"; beta cũ bị dọn.
 
 ## 5. Có sự cố
 

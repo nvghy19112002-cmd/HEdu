@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag đã có để phát hành lại (ví dụ v0.2.0-beta.1)'
+        description: 'Phiên bản muốn phát hành, ví dụ v0.2.0-beta.1 (beta) hoặc v0.2.0 (chính thức)'
         required: true
 
 concurrency:
@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || env.TAG }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -92,7 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || env.TAG }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
