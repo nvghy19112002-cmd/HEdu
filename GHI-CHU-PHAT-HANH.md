@@ -1,5 +1,6 @@
-## Có gì mới trong beta.8
+## Có gì mới trong bản này
 
-- **Sửa lỗi "Dịch ra PDF được nhưng chuyển sang SVG thì lỗi"** (Ghostscript 10.x quá mới so với dvisvgm). Hình TikZ giờ dịch theo đường TeX → DVI → SVG nên **không cần Ghostscript**. Bạn không phải làm gì thêm.
-- Hình đã dịch hỏng trước đây không bị nhớ lại, nên sẽ tự dịch lại. Nếu hình nào vẫn lỗi, bấm *Xem log TeX* và gửi lại.
-- Mục Hệ thống ghi rõ cách dịch của từng bộ dịch; lualatex/xelatex vẫn đi đường PDF.
+- **Đã nhúng sẵn bộ gói LaTeX của bạn:** `ex_test`, `tkz-tab-vn`, `tkz-linknodes`, `ex_tkz-euclide`, `twemojis` và danh sách gói dùng chung (`shared-content`). Các lệnh như `\IntervalLR`, `\IntervalGRF` dùng được ngay khi vẽ hình, không cần cài thêm gì.
+- **Đầu file vẽ hình mặc định giống bộ đề của bạn:** nạp đủ tikz, tkz-euclide, tkz-tab, pgfplots, thư viện TikZ, tcolorbox, yhmath, esvect, twemojis… rồi `ex_test`. Xem và sửa ở Hệ thống → Vẽ hình TikZ (nếu bạn đã tự sửa đầu file trước đây, bấm khôi phục mặc định để nhận bản mới).
+- **Báo lỗi rõ hơn:** khi hình lỗi vì lệnh chưa định nghĩa, thẻ lỗi nêu tên lệnh (ví dụ `\IntervalLR`).
+- Cần TeX Live của máy có sẵn các gói chuẩn như `vietnam`, `tabvar`, `esvect`, `fontawesome`, `hobby` (bộ đề của bạn đã dùng sẵn).

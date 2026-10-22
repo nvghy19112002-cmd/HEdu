@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::proc::run_capture;
+use crate::support;
 
 /// Số thứ tự để mỗi lần dịch có thư mục tạm riêng (hai hình giống nhau dịch cùng lúc không giẫm chân nhau).
 static JOB: AtomicU64 = AtomicU64::new(0);
@@ -21,15 +22,9 @@ static JOB: AtomicU64 = AtomicU64::new(0);
 /// Đầu file mặc định. Người dùng đổi được trong mục Hệ thống nếu TeX Live của họ
 /// thiếu gói nào đó, hoặc cần thêm gói riêng.
 pub const DEFAULT_PREAMBLE: &str = r"\documentclass[border=3pt,varwidth=16cm]{standalone}
-\usepackage[utf8]{inputenc}
-\usepackage[T5]{fontenc}
-\usepackage{lmodern}
-\usepackage{amsmath,amssymb}
-\usepackage{tikz,tikz-3dplot}
-\usepackage{tkz-tab,tkz-euclide}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
-\usetikzlibrary{calc,arrows.meta,decorations.pathmorphing,patterns,shapes.geometric,intersections,angles,quotes,positioning,through,backgrounds,fit,matrix,babel}";
+\usepackage{amsmath,amssymb,mathrsfs,enumerate,etoolbox,xparse,venndiagram,pgf-pie}
+\input{shared-content}
+\usepackage{ex_test}";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,6 +140,17 @@ pub fn find_tex_bins() -> Vec<String> {
     out
 }
 
+/// Đầu file mặc định viết đầy đủ (thay \input{shared-content} bằng nội dung thật) để hiện được
+/// trong ô sửa đầu file và để giao diện biết các gói HEdu tự nạp.
+pub fn expanded_default() -> String {
+    let shared = support::FILES
+        .iter()
+        .find(|(n, _)| *n == "shared-content.tex")
+        .map(|(_, b)| String::from_utf8_lossy(b).into_owned())
+        .unwrap_or_default();
+    DEFAULT_PREAMBLE.replace("\\input{shared-content}", &shared)
+}
+
 fn hash64(parts: &[&str]) -> String {
     // FNV-1a: đủ dùng để đặt tên file đệm, không cần thư viện ngoài.
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -198,7 +204,7 @@ fn missing_tool(name: &str) -> TikzErr {
 }
 
 /// Dịch một hình. `cache_dir` là nơi giữ các .svg đã dịch.
-pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Result<TikzOut, TikzErr> {
+pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs: &str, opts: &TikzOpts) -> Result<TikzOut, TikzErr> {
     let started = Instant::now();
     let preamble = opts.preamble.clone().unwrap_or_else(|| DEFAULT_PREAMBLE.to_string());
     let engine = engine_name(&opts.engine);
@@ -208,7 +214,7 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
     let via_dvi = engine == "pdflatex";
     let tex_prog = if via_dvi { "latex" } else { engine };
     let route = if via_dvi { "dvi" } else { "pdf" };
-    let key = hash64(&[&preamble, defs, code, engine, route]);
+    let key = hash64(&[&preamble, defs, code, engine, route, &support::rev()]);
 
     let svg_path = cache_dir.join(format!("{key}.svg"));
     if let Ok(s) = fs::read_to_string(&svg_path) {
@@ -243,6 +249,7 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         .arg("-halt-on-error")
         .arg("-no-shell-escape")
         .arg("hinh.tex");
+    support::apply(&mut c, support_dir);
     hide_console(&mut c);
 
     let res = match run_capture(&mut c, limit) {
@@ -282,6 +289,7 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
         .arg("--exact-bbox")
         .arg("--output=hinh.svg")
         .arg(if via_dvi { "hinh.dvi" } else { "hinh.pdf" });
+    support::apply(&mut d, support_dir);
     hide_console(&mut d);
     let svg = match run_capture(&mut d, limit) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -328,9 +336,9 @@ pub fn render(cache_dir: &Path, code: &str, defs: &str, opts: &TikzOpts) -> Resu
 }
 
 /// Thử dịch một hình bé xíu để biết máy đã có TeX Live chưa.
-pub fn probe(cache_dir: &Path, tex_bin: Option<String>) -> Result<String, TikzErr> {
+pub fn probe(cache_dir: &Path, support_dir: &Option<PathBuf>, tex_bin: Option<String>) -> Result<String, TikzErr> {
     let opts = TikzOpts { preamble: None, engine: None, timeout_secs: Some(90), tex_bin: tex_bin.clone() };
-    render(cache_dir, r"\begin{tikzpicture}\draw(0,0)--(1,1);\end{tikzpicture}", "", &opts)?;
+    render(cache_dir, support_dir, r"\begin{tikzpicture}\draw(0,0)--(1,1);\end{tikzpicture}", "", &opts)?;
     let mut c = Command::new(prog(&tex_bin, "pdflatex"));
     c.arg("--version");
     hide_console(&mut c);
@@ -387,6 +395,13 @@ mod tests {
         assert_eq!(prog(&Some("   ".into()), "dvisvgm"), std::ffi::OsString::from("dvisvgm"));
         // thư mục không tồn tại thì quay về tên trần, để PATH lo
         assert_eq!(prog(&Some("/khong/co/dau".into()), "pdflatex"), std::ffi::OsString::from("pdflatex"));
+    }
+
+    #[test]
+    fn dau_file_mac_dinh_mo_rong_du_goi() {
+        let e = expanded_default();
+        assert!(!e.contains("\\input{shared-content}"));
+        assert!(e.contains("\\usepackage{tkz-tab}") && e.contains("\\usepackage{ex_test}"));
     }
 
     #[test]

@@ -2,6 +2,7 @@
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod proc;
 mod storage;
+mod support;
 mod texpkg;
 mod tikz;
 
@@ -210,9 +211,10 @@ async fn tikz_render(
     let dir = tikz::cache_dir_of(root.root());
     std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
     let o = opts.unwrap_or_default();
+    let sup = support::prepare(root.root());
     tauri::async_runtime::spawn_blocking(move || {
         let _slot = RENDER_SLOTS.acquire();
-        tikz::render(&dir, &code, &defs, &o)
+        tikz::render(&dir, &sup, &code, &defs, &o)
     })
         .await
         .map_err(|e| err(e.to_string()))?
@@ -225,7 +227,8 @@ async fn tikz_probe(app: AppHandle, tex_bin: Option<String>) -> Result<String, t
     let root = paths(&app).map_err(err)?;
     let dir = tikz::cache_dir_of(root.root());
     std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
-    tauri::async_runtime::spawn_blocking(move || tikz::probe(&dir, tex_bin))
+    let sup = support::prepare(root.root());
+    tauri::async_runtime::spawn_blocking(move || tikz::probe(&dir, &sup, tex_bin))
         .await
         .map_err(|e| err(e.to_string()))?
 }
@@ -244,8 +247,9 @@ async fn tikz_find() -> Vec<String> {
 
 /// Hỏi TeX Live đang chọn xem có từng tệp (.sty, .cls, thư viện tikz…) hay không.
 #[tauri::command]
-async fn tex_check_files(files: Vec<String>, tex_bin: Option<String>) -> Result<Vec<texpkg::FileHit>, tikz::TikzErr> {
-    tauri::async_runtime::spawn_blocking(move || texpkg::check_files(&files, &tex_bin))
+async fn tex_check_files(app: AppHandle, files: Vec<String>, tex_bin: Option<String>) -> Result<Vec<texpkg::FileHit>, tikz::TikzErr> {
+    let sup = paths(&app).ok().and_then(|p| support::prepare(p.root()));
+    tauri::async_runtime::spawn_blocking(move || texpkg::check_files(&files, &tex_bin, &sup))
         .await
         .map_err(|e| tikz::TikzErr { message: e.to_string(), log: String::new(), stage: String::from("latex") })?
 }
@@ -260,8 +264,8 @@ async fn tex_find_package(file: String, tex_bin: Option<String>, global: bool) -
 }
 
 #[tauri::command]
-fn tikz_default_preamble() -> &'static str {
-    tikz::DEFAULT_PREAMBLE
+fn tikz_default_preamble() -> String {
+    tikz::expanded_default()
 }
 
 pub fn run() {

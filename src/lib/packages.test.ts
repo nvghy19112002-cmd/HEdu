@@ -65,6 +65,7 @@ ok(kind('! Package xcolor Error: Option clash for package xcolor.') === 'xung-do
 ok(kind('! Undefined control sequence.') === 'cu-phap', 'lỗi mã');
 ok(kind('! fontspec Error: The fontspec package requires either XeTeX or LuaTeX. error') === 'engine', 'cần engine khác');
 ok(kind('chuyện gì đó') === 'khac', 'không rõ thì không đoán');
+ok(classifyTexLog('Undefined control sequence.', '! Undefined control sequence.\nl.16 \t\t\t\\IntervalLR\n                        {-1}{1/2}').command === '\\IntervalLR', 'nêu đúng tên lệnh chưa định nghĩa');
 
 const DIR = 'data/test';
 if (existsSync(DIR) && readdirSync(DIR).some((f) => f.endsWith('.tex'))) {
