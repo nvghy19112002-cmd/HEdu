@@ -1,3 +1,5 @@
+> **LỖI THỜI — chỉ là ảnh chụp lúc phát hành beta.9.** Mục “Còn lại”, “Chưa làm” bên dưới đã được xử lý ở beta.10. Trạng thái hiện hành: mục 7 của `AGENTS.md`.
+
 # Tổng kết sau cập nhật — v0.1.0-beta.9 (22/10/2026)
 
 Dành cho ChatGPT đọc để quyết định bước tiếp theo. Nguồn sự thật: code trên `main`, `AGENTS.md`, Issue/PR. Phần "chưa xác nhận" chưa được thử trên máy Windows thật của chủ dự án.
