@@ -776,3 +776,6 @@ a { color: var(--accent); }
 .dup-hits li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; }
 .dup-edit textarea { width: 100%; min-height: 160px; font: 13px/1.5 ui-monospace, Consolas, monospace; }
 .dup-err { padding: 10px 12px; border: 2px solid #dc2626; border-radius: 10px; background: rgba(220,38,38,.08); font-size: 14px; }
+.dc-io{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.dc-ok{margin:6px 0;padding:6px 10px;border-radius:8px;background:var(--ok-bg,#e8f5ec);color:var(--ok-fg,#1b5e36);font-size:13px}
+.dc-why{display:inline-flex;align-items:center;gap:6px;font-size:13px}
