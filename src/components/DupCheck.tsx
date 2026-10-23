@@ -1,9 +1,10 @@
 // Kiểm tra trùng: danh sách cặp nghi trùng + xem hai câu cạnh nhau.
-// Máy chỉ GỢI Ý. Không xoá / gộp / sửa gì; "Đã xem" chỉ nhớ trong phiên làm việc này.
+// Máy chỉ GỢI Ý. Không xoá / gộp / sửa câu nào. Quyết định "giữ cả hai" của giáo viên lưu ở tệp phụ (dupdecisions), không đụng dữ liệu ngân hàng.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSharedIndex, type DupPairHit, type ScanStats } from '../lib/dupindex';
 import { compareLatex, DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { PairCompare } from './PairCompare';
+import { clearDecision, DECISION_LABEL, decisionsLoaded, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, useDecisions, WHY_CHOICES, type PairDecision } from '../lib/dupdecisions';
 import { ReviewBadge } from './ReviewControl';
 import { questionCode, seqLabel } from '../lib/id';
 import { useTaxonomy } from '../lib/curriculum';
@@ -43,8 +44,10 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   const [pairs, setPairs] = useState<DupPairHit[] | null>(null);
   const [stats, setStats] = useState<ScanStats | null>(null);
   const [kinds, setKinds] = useState<Set<DupKind>>(new Set(['raw', 'conflict', 'same', 'near']));
-  const [seen, setSeen] = useState<Set<string>>(new Set()); // chỉ trong phiên
-  const [hideSeen, setHideSeen] = useState(false);
+  const [tab, setTab] = useState<'open' | 'later' | 'done'>('open');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const dv = useDecisions();
+  const fileIn = useRef<HTMLInputElement>(null);
   const [listOpen, setListOpen] = useState(true);
   const [scopeOpen, setScopeOpen] = useState(true); // sau khi quét thì thu gọn để dành chỗ cho phần so sánh
   const [cur, setCur] = useState<string | null>(null);
@@ -52,6 +55,7 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
 
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.drw')) onClose(); }; document.addEventListener('keydown', h); return () => document.removeEventListener('keydown', h); }, [onClose]);
   useEffect(() => () => { abort.current.aborted = true; }, []);
+  useEffect(() => { if (decisionsLoaded()) return; void loadDecisions().then((r) => { if (!r.ok) setMsg({ ok: false, text: `Không đọc được tệp quyết định (${r.error}). HEdu sẽ KHÔNG ghi đè tệp đó; quyết định bạn đặt lúc này chỉ giữ tới khi đóng cửa sổ.` }); }); }, []);
 
   const selCount = selected?.size ?? 0;
   const uids = useMemo(() => (isAll(scope) ? undefined : scopeUids(questions, scope, tax, selected)), [questions, scope, tax, selected]);
@@ -77,7 +81,14 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   };
 
   const counts = useMemo(() => { const c: Record<string, number> = {}; for (const p of pairs ?? []) c[p.result.kind] = (c[p.result.kind] ?? 0) + 1; return c; }, [pairs]);
-  const list = useMemo(() => (pairs ?? []).filter((p) => kinds.has(p.result.kind) && (!hideSeen || !seen.has(pk(p))) && byUid.has(p.a) && byUid.has(p.b)), [pairs, kinds, hideSeen, seen, byUid]);
+  const tabOf = (p: DupPairHit): 'open' | 'later' | 'done' => {
+    const st = statusOf(byUid.get(p.a)!, byUid.get(p.b)!);
+    if (st.status !== 'valid') return 'open';
+    return st.rec!.d === 'review_later' ? 'later' : 'done';
+  };
+  const base = useMemo(() => (pairs ?? []).filter((p) => kinds.has(p.result.kind) && byUid.has(p.a) && byUid.has(p.b)), [pairs, kinds, byUid]);
+  const tabCounts = useMemo(() => { const c = { open: 0, later: 0, done: 0 }; for (const p of base) c[tabOf(p)]++; return c; }, [base, dv]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = useMemo(() => base.filter((p) => tabOf(p) === tab), [base, tab, dv]); // eslint-disable-line react-hooks/exhaustive-deps
   const active = list.find((p) => pk(p) === cur) ?? list[0];
   const changed = pairs !== null ? changedSince(snap.current, questions) : 0;
   const scopeChanged = pairs !== null && scannedKey !== scopeKey(scope, mode);
@@ -155,6 +166,9 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
       {changed > 0 && !busy && <p className="dc-stale" role="status">Có {changed} câu đã thêm/sửa/xoá sau lần quét này — danh sách bên dưới có thể đã lỗi thời. Bấm “Quét lại” để cập nhật.</p>}
       {scopeChanged && !busy && <p className="dc-stale" role="status">Phạm vi hoặc kiểu đối chiếu đã đổi so với lần quét ({scannedLabel}). Danh sách bên dưới thuộc lần quét cũ — bấm “Quét” để quét theo phạm vi mới.</p>}
 
+      {msg && <p className={msg.ok ? 'dc-ok' : 'dc-stale'} role="status">{msg.text} <button type="button" className="btn btn-sm" onClick={() => setMsg(null)}>Đóng</button></p>}
+      {!isDecisionsWritable() && decisionsLoaded() && !msg && <p className="dc-stale" role="status">Tệp quyết định không ghi được — quyết định chỉ giữ tạm trong phiên này.</p>}
+
       {pairs === null && !busy && <p className="dc-empty">Bấm “Quét” để tìm các cặp câu nghi trùng. Quét chỉ đọc, không thay đổi câu nào.</p>}
 
       {pairs !== null && (
@@ -163,7 +177,21 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
             <div className="chips" role="group" aria-label="Loại nghi vấn">
               {SHOWN.map((k) => <button key={k} type="button" className="chip" aria-pressed={kinds.has(k)} onClick={() => toggleKind(k)}>{DUP_KIND_LABEL[k]}<span className="chip-n">{counts[k] ?? 0}</span></button>)}
             </div>
-            <label className="dc-chk"><input type="checkbox" checked={hideSeen} onChange={(e) => setHideSeen(e.target.checked)} /> Ẩn các cặp đã xem (chỉ trong phiên này)</label>
+            <div className="chips" role="tablist" aria-label="Trạng thái xử lý">
+              {([['open', 'Chưa xử lý'], ['later', 'Để xem sau'], ['done', 'Đã quyết định giữ']] as const).map(([k, l]) => <button key={k} type="button" role="tab" className="chip" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => { setTab(k); setPage(0); }}>{l}<span className="chip-n">{tabCounts[k]}</span></button>)}
+            </div>
+            <div className="dc-io">
+              <button type="button" className="btn btn-sm" onClick={() => {
+                const blob = new Blob([exportDecisions()], { type: 'application/json' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hedu-quyet-dinh-trung.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+              }}>Xuất quyết định</button>
+              <button type="button" className="btn btn-sm" onClick={() => fileIn.current?.click()}>Nhập quyết định</button>
+              <input ref={fileIn} type="file" accept="application/json,.json" hidden onChange={async (e) => {
+                const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+                try { const r = await importDecisions(await f.text()); setMsg({ ok: r.saved, text: `Đã nhập: thêm ${r.added}, cập nhật ${r.updated}, bỏ qua ${r.skipped}.${r.saved ? '' : ' Nhưng CHƯA lưu được vào tệp — hãy thử lại.'}` }); }
+                catch (err) { setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) }); }
+              }} />
+            </div>
             {stats && <p className="dc-stat">{pairs.length} cặp · phía A {stats.sideA} câu, phía đối chiếu {stats.sideB} câu · {stats.comparisons} phép so · {(stats.ms / 1000).toFixed(1)} giây. Ứng viên được chọn theo từ khoá hiếm nên có thể bỏ sót cặp chỉ giống ở các từ rất phổ biến.</p>}
             {!list.length && <p className="dc-empty">Không có cặp nào ở các nhóm đang chọn.</p>}
             <ul className="dc-list">
@@ -171,7 +199,7 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
                 const A = byUid.get(p.a)!, B = byUid.get(p.b)!;
                 return (
                   <li key={pk(p)}>
-                    <button type="button" className={`dc-row${active && pk(p) === pk(active) ? ' on' : ''}${seen.has(pk(p)) ? ' seen' : ''}`} onClick={() => setCur(pk(p))}>
+                    <button type="button" className={`dc-row${active && pk(p) === pk(active) ? ' on' : ''}${tab !== 'open' ? ' seen' : ''}`} onClick={() => setCur(pk(p))}>
                       <span className={`dc-kind k-${p.result.kind}`}>{DUP_KIND_LABEL[p.result.kind]}</span>
                       <span className="mono">{seqLabel(A.seq)} ↔ {seqLabel(B.seq)}</span>
                       <span className="dc-sc">tương đồng {Math.round(p.result.score * 100)}%</span>
@@ -193,7 +221,7 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
             <button type="button" className="btn btn-sm dc-lt" aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>{listOpen ? '◀ Ẩn danh sách' : '▶ Hiện danh sách cặp'}</button>
             {active ? (
               <PairView key={pk(active)} hit={active} A={byUid.get(active.a)!} B={byUid.get(active.b)!} snap={snap.current}
-                onOpen={onOpen} onGoto={onGoto} seenNow={seen.has(pk(active))} onSeen={() => setSeen((x) => new Set(x).add(pk(active)))} />
+                onOpen={onOpen} onGoto={onGoto} onMsg={setMsg} />
             ) : <p className="dc-empty">Chọn một cặp ở bên trái.</p>}
           </div>
         </div>
@@ -202,11 +230,19 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   );
 }
 
-function PairView({ hit, A, B, snap, onOpen, onGoto, seenNow, onSeen }: { hit: DupPairHit; A: Question; B: Question; snap: Map<string, string>; onOpen: (uid: string) => void; onGoto: (uid: string) => void; seenNow: boolean; onSeen: () => void }) {
+function PairView({ hit, A, B, snap, onOpen, onGoto, onMsg }: { hit: DupPairHit; A: Question; B: Question; snap: Map<string, string>; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onMsg: (m: { ok: boolean; text: string } | null) => void }) {
   // Luôn so lại trên nội dung HIỆN TẠI: nếu giáo viên vừa sửa câu thì kết quả quét cũ không còn đúng.
   const live = useMemo(() => compareLatex(A.latex, B.latex), [A.latex, B.latex]);
   const edited = snap.get(A.uid) !== A.latex || snap.get(B.uid) !== B.latex;
   const [del, setDel] = useState(false);
+  useDecisions();
+  const st = statusOf(A, B);
+  const [why, setWhy] = useState(st.rec?.why ?? '');
+  const decide = async (d: PairDecision) => {
+    const saved = await setDecision(A, B, d, why || undefined);
+    onMsg(saved ? null : { ok: false, text: 'Chưa lưu được quyết định vào tệp (đang giữ tạm trong phiên). Bạn có thể bấm lại hoặc dùng “Xuất quyết định” để lưu ra file.' });
+  };
+  const undo = async () => { const saved = await clearDecision(A, B); onMsg(saved ? null : { ok: false, text: 'Chưa ghi được việc bỏ quyết định vào tệp.' }); };
   const side = (q: Question, title: string) => ({
     title,
     latex: q.latex,
@@ -227,7 +263,15 @@ function PairView({ hit, A, B, snap, onOpen, onGoto, seenNow, onSeen }: { hit: D
       note={edited ? <p className="dc-flags" role="status">Một trong hai câu đã được sửa sau lần quét — kết quả bên dưới đã so sánh lại trên nội dung hiện tại{hit.result.kind !== live.kind ? ` (trước: ${DUP_KIND_LABEL[hit.result.kind]})` : ''}.</p> : null}
       footer={
         <>
-          <button type="button" className="btn btn-sm" disabled={seenNow} onClick={onSeen}>{seenNow ? 'Đã xem' : 'Đánh dấu đã xem'}</button>
+          {st.status === 'stale' && <p className="dc-flags" role="status">Trước đây bạn đã quyết định “{DECISION_LABEL[st.rec!.d]}” cho cặp này, nhưng nội dung một câu đã đổi — cần xem lại.</p>}
+          {st.status === 'valid' && <p className="dc-ok" role="status">Đã quyết định: <b>{DECISION_LABEL[st.rec!.d]}</b>{st.rec!.why ? ` (${st.rec!.why})` : ''} <button type="button" className="btn btn-sm" onClick={undo}>Bỏ quyết định</button></p>}
+          <label className="dc-why">Lý do (tuỳ chọn)
+            <select value={why} onChange={(e) => setWhy(e.target.value)}>
+              <option value="">—</option>
+              {WHY_CHOICES.map((w) => <option key={w} value={w}>{w}</option>)}
+            </select>
+          </label>
+          {(['not_duplicate', 'legit_variant', 'review_later'] as const).map((d) => <button key={d} type="button" className="btn btn-sm" disabled={st.status === 'valid' && st.rec!.d === d} onClick={() => decide(d)}>{DECISION_LABEL[d]}</button>)}
           <span className="dc-del">
             <button type="button" className="btn btn-sm" aria-expanded={del} onClick={() => setDel(!del)}>Loại một câu… ▾</button>
             {del && (

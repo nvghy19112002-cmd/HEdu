@@ -1,0 +1,124 @@
+// Quyết định của giáo viên về các cặp câu nghi trùng ("không phải trùng", "biến thể hợp lệ", "để xem sau").
+// Lưu ở TỆP PHỤ (không nằm trong dữ liệu ngân hàng, không đổi schema 3). Mất tệp này không làm mất câu hỏi nào.
+//
+// Khoá bản ghi = cặp UID không thứ tự + "dấu vân tay nội dung" của CẢ HAI câu + phiên bản thuật toán.
+// Không dùng #seq hay ID6 (chúng là nhãn hiển thị, không phải danh tính bền vững).
+// Câu bị sửa nội dung ⇒ quyết định cũ HẾT HIỆU LỰC (cặp quay lại "Chưa xử lý"), không áp dụng mù quáng.
+import { useSyncExternalStore } from 'react';
+import { fingerprint } from './dup2';
+import { invoke, isDesktop } from './platform';
+import type { Question } from './types';
+
+/** Tăng khi ý nghĩa của nhãn/so sánh đổi hẳn; quyết định ghi bởi phiên bản khác bị coi là cũ. */
+export const DUP_ALGO_VERSION = 1;
+export type PairDecision = 'not_duplicate' | 'legit_variant' | 'review_later';
+export const DECISION_LABEL: Record<PairDecision, string> = {
+  not_duplicate: 'Giữ cả hai — không phải trùng',
+  legit_variant: 'Giữ cả hai — biến thể hợp lệ',
+  review_later: 'Để xem sau',
+};
+export const WHY_CHOICES = ['Khác điều kiện', 'Khác số liệu', 'Khác hình', 'Cố ý giữ (đề/bài khác nhau)', 'Lý do khác'];
+
+export interface DecisionRec { a: string; b: string; fa: string; fb: string; algo: number; d: PairDecision; why?: string; at: number }
+export interface DecisionFile { v: 1; recs: DecisionRec[] }
+export type DecisionStatus = 'none' | 'valid' | 'stale';
+
+export interface Backend { load(): Promise<string | null>; save(json: string): Promise<void> }
+const KEY = 'hedu.dup.v1';
+const web: Backend = {
+  async load() { try { return localStorage.getItem(KEY); } catch { return null; } },
+  async save(json) { localStorage.setItem(KEY, json); },
+};
+const desktop: Backend = {
+  load: () => invoke<string | null>('load_dup_decisions'),
+  save: (json) => invoke<void>('save_dup_decisions', { json }),
+};
+
+let backend: Backend | null = null;
+let recs = new Map<string, DecisionRec>();
+let loaded = false;
+let writable = true;
+let version = 0;
+const subs = new Set<() => void>();
+const emit = () => { version++; subs.forEach((f) => f()); };
+
+export const pairKey = (x: string, y: string): string => (x <= y ? `${x}|${y}` : `${y}|${x}`);
+const isRec = (r: unknown): r is DecisionRec => {
+  const x = r as DecisionRec;
+  return !!x && typeof x.a === 'string' && typeof x.b === 'string' && typeof x.fa === 'string' && typeof x.fb === 'string' && typeof x.algo === 'number' && typeof x.at === 'number'
+    && (x.d === 'not_duplicate' || x.d === 'legit_variant' || x.d === 'review_later');
+};
+
+/** Chỉ dùng trong kiểm thử. */
+export function _reset(b: Backend | null) { backend = b; recs = new Map(); loaded = false; writable = true; version = 0; }
+
+export async function loadDecisions(): Promise<{ ok: boolean; error?: string }> {
+  const be = backend ?? (isDesktop() ? desktop : web);
+  backend = be;
+  try {
+    const json = await be.load();
+    recs = new Map();
+    if (json) {
+      const f = JSON.parse(json) as Partial<DecisionFile>;
+      if (f.v !== 1 || !Array.isArray(f.recs)) throw new Error('Tệp quyết định có cấu trúc không hiểu được.');
+      for (const r of f.recs) if (isRec(r)) recs.set(pairKey(r.a, r.b), r);
+    }
+    loaded = true; writable = true; emit();
+    return { ok: true };
+  } catch (e) {
+    // không ghi đè một tệp mình không đọc được
+    loaded = true; writable = false; emit();
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+const dump = (): string => JSON.stringify({ v: 1, recs: [...recs.values()] } satisfies DecisionFile);
+async function persist(): Promise<boolean> {
+  if (!writable || !backend) return false;
+  try { await backend.save(dump()); return true; } catch { return false; }
+}
+
+/** Trạng thái của quyết định đang lưu cho một cặp, đối chiếu với nội dung HIỆN TẠI của hai câu. */
+export function statusOf(a: Question, b: Question): { status: DecisionStatus; rec?: DecisionRec } {
+  const rec = recs.get(pairKey(a.uid, b.uid));
+  if (!rec) return { status: 'none' };
+  const [fa, fb] = a.uid <= b.uid ? [fingerprint(a.latex).rawKey, fingerprint(b.latex).rawKey] : [fingerprint(b.latex).rawKey, fingerprint(a.latex).rawKey];
+  const [ra, rb] = rec.a <= rec.b ? [rec.fa, rec.fb] : [rec.fb, rec.fa];
+  return fa === ra && fb === rb && rec.algo === DUP_ALGO_VERSION ? { status: 'valid', rec } : { status: 'stale', rec };
+}
+
+/** true nếu đã ghi bền vững; false nếu chỉ giữ trong bộ nhớ (ghi lỗi hoặc tệp không đọc được). */
+export async function setDecision(a: Question, b: Question, d: PairDecision, why?: string): Promise<boolean> {
+  const [x, y] = a.uid <= b.uid ? [a, b] : [b, a];
+  recs.set(pairKey(a.uid, b.uid), { a: x.uid, b: y.uid, fa: fingerprint(x.latex).rawKey, fb: fingerprint(y.latex).rawKey, algo: DUP_ALGO_VERSION, d, ...(why ? { why } : {}), at: Date.now() });
+  emit();
+  return persist();
+}
+export async function clearDecision(a: Question, b: Question): Promise<boolean> {
+  recs.delete(pairKey(a.uid, b.uid));
+  emit();
+  return persist();
+}
+
+export const decisionCount = (): number => recs.size;
+export const isDecisionsWritable = (): boolean => writable;
+export const decisionsLoaded = (): boolean => loaded;
+
+export function exportDecisions(): string { return JSON.stringify({ v: 1, recs: [...recs.values()].sort((p, q) => p.at - q.at) }, null, 1); }
+/** Gộp từ file xuất; trùng khoá thì giữ bản MỚI hơn. */
+export async function importDecisions(json: string): Promise<{ added: number; updated: number; skipped: number; saved: boolean }> {
+  const f = JSON.parse(json) as Partial<DecisionFile>;
+  if (f.v !== 1 || !Array.isArray(f.recs)) throw new Error('Đây không phải file quyết định của HEdu.');
+  let added = 0, updated = 0, skipped = 0;
+  for (const r of f.recs) {
+    if (!isRec(r)) { skipped++; continue; }
+    const k = pairKey(r.a, r.b), cur = recs.get(k);
+    if (!cur) { recs.set(k, r); added++; } else if (r.at > cur.at) { recs.set(k, r); updated++; } else skipped++;
+  }
+  emit();
+  return { added, updated, skipped, saved: await persist() };
+}
+
+export function useDecisions(): number {
+  return useSyncExternalStore((cb) => { subs.add(cb); return () => subs.delete(cb); }, () => version, () => version);
+}

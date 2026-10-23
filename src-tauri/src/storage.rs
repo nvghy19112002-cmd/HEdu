@@ -8,7 +8,11 @@
 //!       hedu.json
 //!       meta.json
 //!
-//! Tổng cộng tối đa 4 file. Mỗi lần cập nhật, thư mục before-update bị xoá và tạo lại,
+//!   data/dup-decisions.json   quyết định "không trùng / giữ cả hai" của giáo viên (tệp phụ, KHÔNG nằm trong hedu.json)
+//!   data/dup-decisions.json.bak  bản ghi liền trước của tệp phụ
+//!
+//! Tệp phụ chỉ là trí nhớ về các cặp câu đã xem; mất tệp này KHÔNG làm mất câu hỏi nào.
+//! Tổng cộng tối đa 4 file dữ liệu chính + 2 file của tệp phụ. Mỗi lần cập nhật, thư mục before-update bị xoá và tạo lại,
 //! nên không bao giờ tích tụ nhiều bản.
 
 use std::fs;
@@ -38,6 +42,15 @@ impl Paths {
     }
     fn bak(&self) -> PathBuf {
         self.data_dir().join("hedu.json.bak")
+    }
+    fn sidecar(&self) -> PathBuf {
+        self.data_dir().join("dup-decisions.json")
+    }
+    fn sidecar_tmp(&self) -> PathBuf {
+        self.data_dir().join("dup-decisions.json.tmp")
+    }
+    fn sidecar_bak(&self) -> PathBuf {
+        self.data_dir().join("dup-decisions.json.bak")
     }
     fn backup_dir(&self) -> PathBuf {
         self.root.join("backups").join("before-update")
@@ -72,6 +85,43 @@ pub fn write_atomic(p: &Paths, bytes: &[u8]) -> io::Result<()> {
     }
     fs::rename(p.tmp(), p.data())?;
     Ok(())
+}
+
+/// Ghi tệp phụ (quyết định cặp trùng) theo cùng cách: file tạm → .bak → đổi tên. Không đụng hedu.json.
+pub fn write_sidecar(p: &Paths, bytes: &[u8]) -> io::Result<()> {
+    fs::create_dir_all(p.data_dir())?;
+    {
+        let mut f = fs::File::create(p.sidecar_tmp())?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    if p.sidecar().exists() {
+        fs::copy(p.sidecar(), p.sidecar_bak())?;
+    }
+    fs::rename(p.sidecar_tmp(), p.sidecar())?;
+    Ok(())
+}
+
+/// Đọc tệp phụ. Chưa có ⇒ None. File chính hỏng ⇒ thử .bak; cả hai hỏng ⇒ lỗi (giao diện không được ghi đè).
+pub fn read_sidecar(p: &Paths, is_valid: impl Fn(&[u8]) -> bool) -> io::Result<Option<Vec<u8>>> {
+    match fs::read(p.sidecar()) {
+        Ok(b) if is_valid(&b) => return Ok(Some(b)),
+        Ok(_) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    match fs::read(p.sidecar_bak()) {
+        Ok(b) if is_valid(&b) => Ok(Some(b)),
+        Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "Tệp quyết định trùng không đọc được.")),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            if p.sidecar().exists() {
+                Err(io::Error::new(io::ErrorKind::InvalidData, "Tệp quyết định trùng không đọc được và chưa có bản dự phòng."))
+            } else {
+                Ok(None)
+            }
+        }
+        Err(e) => Err(e),
+    }
 }
 
 pub struct Loaded {
@@ -414,5 +464,24 @@ mod tests {
         assert_eq!(extract_str(&m, "fromVersion"), "a\"b\\c");
         assert_eq!(extract_str(&m, "toVersion"), "d\ne");
         assert_eq!(extract_num(&m, "schema"), Some(2));
+    }
+
+    #[test]
+    fn sidecar_ghi_doc_va_khong_dung_vao_du_lieu_chinh() {
+        let p = temp_paths();
+        assert!(read_sidecar(&p, |_| true).unwrap().is_none());
+        write_atomic(&p, b"{\"questions\":[]}").unwrap();
+        write_sidecar(&p, b"{\"v\":1,\"recs\":[]}").unwrap();
+        write_sidecar(&p, b"{\"v\":1,\"recs\":[1]}").unwrap();
+        assert_eq!(read_sidecar(&p, |b| !b.is_empty()).unwrap().unwrap(), b"{\"v\":1,\"recs\":[1]}".to_vec());
+        // dữ liệu chính còn nguyên
+        assert_eq!(fs::read(p.data()).unwrap(), b"{\"questions\":[]}".to_vec());
+        // file chính của tệp phụ hỏng ⇒ lấy .bak
+        fs::write(p.sidecar(), b"hong").unwrap();
+        let got = read_sidecar(&p, |b| b.starts_with(b"{")).unwrap().unwrap();
+        assert_eq!(got, b"{\"v\":1,\"recs\":[]}".to_vec());
+        // cả hai hỏng ⇒ lỗi, không âm thầm coi là rỗng
+        fs::write(p.sidecar_bak(), b"hong").unwrap();
+        assert!(read_sidecar(&p, |b| b.starts_with(b"{")).is_err());
     }
 }

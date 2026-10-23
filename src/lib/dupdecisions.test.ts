@@ -1,0 +1,82 @@
+import { _reset, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
+import type { Question } from './types';
+
+let failed = 0;
+const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) failed++; };
+const Q = (uid: string, latex: string) => ({ uid, latex }) as unknown as Question;
+const E = (s: string) => `\\begin{ex}\n${s}\n\\choice{$1$}{$2$}{$3$}{$4$}\n\\end{ex}`;
+const mem = (init: string | null = null) => {
+  const b = { data: init, saves: 0, fail: false, loadFail: false } as { data: string | null; saves: number; fail: boolean; loadFail: boolean } & Backend;
+  b.load = async () => { if (b.loadFail) throw new Error('đọc lỗi'); return b.data; };
+  b.save = async (j: string) => { if (b.fail) throw new Error('ghi lỗi'); b.data = j; b.saves++; };
+  return b;
+};
+
+(async () => {
+  const A = Q('ua', E('Cho hàm số $y=x^3-3x+2$. Tìm cực đại của hàm số trên tập số thực.'));
+  const B = Q('ub', E('Cho hàm số $y=x^3-3x+5$. Tìm cực đại của hàm số trên tập số thực.'));
+
+  console.log('Quyết định: ghi, đọc lại, khoá không thứ tự');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    ok(statusOf(A, B).status === 'none', 'chưa có quyết định ⇒ none');
+    ok(await setDecision(A, B, 'not_duplicate', 'Khác số liệu') === true, 'ghi thành công trả true');
+    ok(statusOf(B, A).status === 'valid' && statusOf(A, B).rec?.why === 'Khác số liệu', 'đảo thứ tự A/B vẫn nhận ra cùng một cặp');
+    _reset(be); await loadDecisions();
+    ok(statusOf(A, B).status === 'valid', 'tải lại từ tệp: quyết định còn nguyên');
+  }
+  console.log('Quyết định: sửa nội dung ⇒ hết hiệu lực');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    await setDecision(A, B, 'legit_variant');
+    const B2 = Q('ub', B.latex.replace('+5', '+6'));
+    ok(statusOf(A, B2).status === 'stale', 'câu B đổi nội dung ⇒ stale (không áp quyết định cũ)');
+    ok(statusOf(Q('uc', A.latex), B).status === 'none', 'uid khác ⇒ không áp dụng');
+  }
+  console.log('Quyết định: bỏ quyết định');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    await setDecision(A, B, 'review_later'); await clearDecision(B, A);
+    ok(statusOf(A, B).status === 'none' && JSON.parse(be.data!).recs.length === 0, 'bỏ quyết định ⇒ cặp quay về chưa xử lý và tệp được cập nhật');
+  }
+  console.log('Quyết định: lỗi ghi / lỗi đọc không làm mất dữ liệu');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    await setDecision(A, B, 'not_duplicate');
+    be.fail = true;
+    ok(await setDecision(A, Q('uc', 'x'), 'review_later') === false, 'ghi lỗi ⇒ trả false để giao diện báo người dùng');
+    ok(JSON.parse(be.data!).recs.length === 1, 'tệp cũ không bị hỏng khi ghi lỗi');
+
+    const bad = mem('{không phải json'); _reset(bad);
+    const r = await loadDecisions();
+    ok(!r.ok && !isDecisionsWritable(), 'tệp hỏng ⇒ báo lỗi và KHÔNG cho ghi đè');
+    ok(await setDecision(A, B, 'not_duplicate') === false && bad.data === '{không phải json' && bad.saves === 0, 'tệp hỏng được giữ nguyên, không bị ghi đè');
+
+    const lf = mem(); lf.loadFail = true; _reset(lf);
+    ok(!(await loadDecisions()).ok && !isDecisionsWritable(), 'không đọc được ⇒ không ghi đè');
+
+    const wrong = mem(JSON.stringify({ v: 2, recs: [] })); _reset(wrong);
+    ok(!(await loadDecisions()).ok, 'phiên bản tệp lạ ⇒ không đọc bừa');
+  }
+  console.log('Quyết định: xuất / nhập');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    await setDecision(A, B, 'not_duplicate');
+    const exp = exportDecisions();
+    const be2 = mem(); _reset(be2); await loadDecisions();
+    const r = await importDecisions(exp);
+    ok(r.added === 1 && r.saved && statusOf(A, B).status === 'valid', 'nhập file xuất ⇒ thêm 1 và lưu');
+    const r2 = await importDecisions(exp);
+    ok(r2.added === 0 && r2.skipped === 1, 'nhập lại cùng file ⇒ không nhân đôi');
+    const newer = JSON.stringify({ v: 1, recs: [{ ...JSON.parse(exp).recs[0], d: 'legit_variant', at: Date.now() + 1000 }] });
+    const r3 = await importDecisions(newer);
+    ok(r3.updated === 1 && statusOf(A, B).rec?.d === 'legit_variant', 'bản mới hơn thắng khi trùng khoá');
+    let threw = false; try { await importDecisions('{"v":9}'); } catch { threw = true; }
+    ok(threw, 'file không phải của HEdu ⇒ báo lỗi');
+    const junk = await importDecisions(JSON.stringify({ v: 1, recs: [{ a: 1 }, null] }));
+    ok(junk.skipped === 2, 'bản ghi sai cấu trúc bị bỏ qua, không làm hỏng');
+  }
+  ok(DUP_ALGO_VERSION === 1, 'phiên bản thuật toán ghi trong bản ghi');
+  if (failed) { console.error(`\n${failed} lỗi`); process.exit(1); }
+  console.log('\nOK');
+})();

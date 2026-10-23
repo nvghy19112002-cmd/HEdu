@@ -72,6 +72,31 @@ fn save_data(app: AppHandle, gate: State<Gate>, json: String) -> Result<(), Stri
     storage::write_atomic(&paths(&app)?, json.as_bytes()).map_err(io_err)
 }
 
+/// Tệp phụ hợp lệ = JSON object có số "v" và mảng "recs".
+fn sidecar_valid(bytes: &[u8]) -> bool {
+    serde_json::from_slice::<Value>(bytes)
+        .map(|v| v.get("v").map(Value::is_number).unwrap_or(false) && v.get("recs").map(Value::is_array).unwrap_or(false))
+        .unwrap_or(false)
+}
+
+/// Quyết định "không trùng / giữ cả hai" của giáo viên. Tệp riêng, không phải schema 3.
+#[tauri::command]
+fn load_dup_decisions(app: AppHandle) -> Result<Option<String>, String> {
+    let p = paths(&app)?;
+    Ok(storage::read_sidecar(&p, sidecar_valid)
+        .map_err(io_err)?
+        .map(|b| String::from_utf8_lossy(&b).into_owned()))
+}
+
+#[tauri::command]
+fn save_dup_decisions(app: AppHandle, gate: State<Gate>, json: String) -> Result<(), String> {
+    if !sidecar_valid(json.as_bytes()) {
+        return Err("Dữ liệu quyết định không hợp lệ, không ghi.".into());
+    }
+    let _g = gate.0.lock().map_err(|_| "khóa ghi bị lỗi".to_string())?;
+    storage::write_sidecar(&paths(&app)?, json.as_bytes()).map_err(io_err)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AppInfo {
@@ -281,6 +306,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_data,
             save_data,
+            load_dup_decisions,
+            save_dup_decisions,
             app_info,
             check_update,
             install_update,
