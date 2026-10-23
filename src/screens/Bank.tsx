@@ -58,7 +58,7 @@ export function BankScreen() {
   const setView = (v: BankView) => { setViewState(v); saveBankView(v); };
   const [activeUid, setActiveUid] = useState<string | null>(null); // câu đang xem ở chế độ Danh sách (khác với ô chọn nhiều)
   const [detailOpen, setDetailOpen] = useState(false);            // cửa sổ hẹp: Chi tiết phủ lên danh sách
-  const [treeOpen, setTreeOpenState] = useState(() => loadTreeOpen() ?? (loadBankView() === 'list' ? typeof window === 'undefined' || window.innerWidth >= 1500 : true));
+  const [treeOpen, setTreeOpenState] = useState(() => loadTreeOpen() ?? (typeof window !== 'undefined' && window.innerWidth < 1000 ? false : loadBankView() === 'list' ? typeof window === 'undefined' || window.innerWidth >= 1500 : true));
   const setTreeOpen = (o: boolean) => { setTreeOpenState(o); saveTreeOpen(o); };
   const [dupOpen, setDupOpen] = useState(false); // màn Kiểm tra trùng
   const [menuUid, setMenuUid] = useState<string | null>(null); // menu ba chấm của thẻ
@@ -299,65 +299,65 @@ export function BankScreen() {
             <label className="search sm">
               <IcSearch size={16} />
               <span className="sr-only">Tìm câu hỏi</span>
-              <input type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Gõ từ khoá để tìm câu, ví dụ: tiệm cận, xác suất, hoặc mã 2D1H1" />
+              <input type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu hoặc mã (vd 2D1H1)" />
               <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
-                <option value="here">trong mục đang chọn</option>
-                <option value="all">toàn bộ ngân hàng</option>
+                <option value="here">mục này</option>
+                <option value="all">toàn kho</option>
               </select>
               <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
             </label>
+            <div className="fbar" role="group" aria-label="Bộ lọc">
+              {lesson && lesson.forms.length > 0 && (
+                <FilterMenu label="Dạng toán" active={!!formId} summary={formId ? shortName(lesson.forms.find((f) => f.id === formId)?.name ?? '') : 'Tất cả'}>
+                  <div className="chips">
+                    <button type="button" className="chip" aria-pressed={!formId} onClick={() => setFormId(null)}>Tất cả các dạng</button>
+                    {lesson.forms.map((f) => (
+                      <button key={f.id} type="button" className="chip" aria-pressed={formId === f.id} onClick={() => setFormId(formId === f.id ? null : f.id)}>
+                        {shortName(f.name)}<span className="chip-n">{base.filter((q) => q.formId === f.id).length}</span>
+                      </button>
+                    ))}
+                  </div>
+                </FilterMenu>
+              )}
+              <FilterMenu label="Mức độ" active={levels.size > 0} summary={levels.size ? [...levels].map((l) => LEVEL_LABEL[l]).join(', ') : 'Tất cả'}>
+                <div className="chips">
+                  <button type="button" className="chip" aria-pressed={!levels.size} onClick={() => setLevels(new Set())}>Tất cả</button>
+                  {LEVELS.map((l) => (
+                    <button key={l} type="button" className="chip" aria-pressed={levels.has(l)} onClick={() => toggle(levels, l, setLevels)}>
+                      {LEVEL_LABEL[l]}<span className="chip-n">{tally((q) => q.level === l)}</span>
+                    </button>
+                  ))}
+                </div>
+              </FilterMenu>
+              <FilterMenu label="Loại câu" active={types.size > 0} summary={types.size ? [...types].map((x) => TYPE_LABEL[x]).join(', ') : 'Tất cả'}>
+                <div className="chips">
+                  <button type="button" className="chip" aria-pressed={!types.size} onClick={() => setTypes(new Set())}>Tất cả</button>
+                  {TYPES.map((x) => (
+                    <button key={x} type="button" className="chip" aria-pressed={types.has(x)} onClick={() => toggle(types, x, setTypes)}>
+                      {TYPE_LABEL[x]}<span className="chip-n">{tally((q) => q.type === x)}</span>
+                    </button>
+                  ))}
+                </div>
+              </FilterMenu>
+              <FilterMenu label="Kiểm duyệt" active={reviewF !== 'all'} summary={reviewF === 'all' ? 'Tất cả' : REVIEW_LABEL[reviewF]}>
+                <div className="chips">
+                  {(['all', 'unreviewed', 'needs_fix', 'approved'] as const).map((r) => (
+                    <button key={r} type="button" className="chip" aria-pressed={reviewF === r} onClick={() => { setReviewF(r); setPage(0); }}>
+                      {r === 'all' ? 'Tất cả' : REVIEW_LABEL[r]}<span className="chip-n">{reviewTally(r)}</span>
+                    </button>
+                  ))}
+                </div>
+              </FilterMenu>
+              {activeFilters > 0 && <button type="button" className="linkbtn" onClick={() => { setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setFormId(null); setPage(0); }}>Xoá {activeFilters} bộ lọc</button>}
+            </div>
             <div className="vseg" role="group" aria-label="Kiểu hiển thị">
               <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Thẻ</button>
               <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             </div>
             <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
-            <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>{treeOpen ? 'Ẩn mục lục' : 'Hiện mục lục'}</button>
+            <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>Mục lục</button>
           </div>
 
-          <div className="fbar" role="group" aria-label="Bộ lọc">
-            {lesson && lesson.forms.length > 0 && (
-              <FilterMenu label="Dạng toán" active={!!formId} summary={formId ? shortName(lesson.forms.find((f) => f.id === formId)?.name ?? '') : 'Tất cả'}>
-                <div className="chips">
-                  <button type="button" className="chip" aria-pressed={!formId} onClick={() => setFormId(null)}>Tất cả các dạng</button>
-                  {lesson.forms.map((f) => (
-                    <button key={f.id} type="button" className="chip" aria-pressed={formId === f.id} onClick={() => setFormId(formId === f.id ? null : f.id)}>
-                      {shortName(f.name)}<span className="chip-n">{base.filter((q) => q.formId === f.id).length}</span>
-                    </button>
-                  ))}
-                </div>
-              </FilterMenu>
-            )}
-            <FilterMenu label="Mức độ" active={levels.size > 0} summary={levels.size ? [...levels].map((l) => LEVEL_LABEL[l]).join(', ') : 'Tất cả'}>
-              <div className="chips">
-                <button type="button" className="chip" aria-pressed={!levels.size} onClick={() => setLevels(new Set())}>Tất cả</button>
-                {LEVELS.map((l) => (
-                  <button key={l} type="button" className="chip" aria-pressed={levels.has(l)} onClick={() => toggle(levels, l, setLevels)}>
-                    {LEVEL_LABEL[l]}<span className="chip-n">{tally((q) => q.level === l)}</span>
-                  </button>
-                ))}
-              </div>
-            </FilterMenu>
-            <FilterMenu label="Loại câu" active={types.size > 0} summary={types.size ? [...types].map((x) => TYPE_LABEL[x]).join(', ') : 'Tất cả'}>
-              <div className="chips">
-                <button type="button" className="chip" aria-pressed={!types.size} onClick={() => setTypes(new Set())}>Tất cả</button>
-                {TYPES.map((x) => (
-                  <button key={x} type="button" className="chip" aria-pressed={types.has(x)} onClick={() => toggle(types, x, setTypes)}>
-                    {TYPE_LABEL[x]}<span className="chip-n">{tally((q) => q.type === x)}</span>
-                  </button>
-                ))}
-              </div>
-            </FilterMenu>
-            <FilterMenu label="Kiểm duyệt" active={reviewF !== 'all'} summary={reviewF === 'all' ? 'Tất cả' : REVIEW_LABEL[reviewF]}>
-              <div className="chips">
-                {(['all', 'unreviewed', 'needs_fix', 'approved'] as const).map((r) => (
-                  <button key={r} type="button" className="chip" aria-pressed={reviewF === r} onClick={() => { setReviewF(r); setPage(0); }}>
-                    {r === 'all' ? 'Tất cả' : REVIEW_LABEL[r]}<span className="chip-n">{reviewTally(r)}</span>
-                  </button>
-                ))}
-              </div>
-            </FilterMenu>
-            {activeFilters > 0 && <button type="button" className="linkbtn" onClick={() => { setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setFormId(null); setPage(0); }}>Xoá {activeFilters} bộ lọc</button>}
-          </div>
 
           {sel.size > 0 ? (
             <div className="selbar">

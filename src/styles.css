@@ -823,3 +823,22 @@ a { color: var(--accent); }
 .dc-io{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
 .dc-ok{margin:6px 0;padding:6px 10px;border-radius: 8px;background:var(--ok-bg,var(--ok-bg));color:var(--ok-fg,var(--ok-ink));font-size: 13px}
 .dc-why{display:inline-flex;align-items:center;gap:6px;font-size: 13px}
+
+/* ---------- V3 PR-C: Ngân hàng — đầu trang 48px, thanh công cụ một hàng ---------- */
+.page-head.bank-head { padding: 6px 24px; min-height: 48px; flex-wrap: nowrap; align-items: center; }
+.bank-head h1 { font-size: 20px; }
+.body-row { padding-left: 24px; padding-right: 24px; gap: 16px; }
+.qbar { gap: 6px 8px; }
+.qbar .fbar { display: contents; }
+.qbar .search { flex: 1 1 200px; }
+.qbar .search .scope-sel { max-width: 150px; }
+.qbar .vseg, .qbar .btn-sm, .fmenu-btn { flex: none; }
+.list-head, .selbar { min-height: 28px; }
+.qlist { gap: 8px; }
+.qbar .search input { min-width: 120px; font-size: 14px; }
+.qbar .search .kbd { display: none; }
+.qbar .btn-sm[aria-pressed="true"] { background: var(--pri-soft); border-color: var(--pri); color: var(--pri-ink); }
+.qbar .fmenu-l { letter-spacing: .02em; }
+.qbar .search { padding: 0 8px; gap: 6px; }
+.qbar .search .scope-sel { max-width: 84px; }
+.qbar .vseg button { padding: 0 10px; }
