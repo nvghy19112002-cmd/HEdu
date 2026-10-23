@@ -196,9 +196,16 @@ export function ImportScreen() {
 
   return (
     <>
-      <header className="page-head"><h1>Nhập câu hỏi</h1></header>
+      <header className="page-head"><h1>Nhập câu hỏi</h1>
+        <ol className="steps" aria-label="Các bước nhập">
+          {['Dán hoặc mở file', 'Chọn vị trí', 'Rà soát', 'Nhập'].map((t, k) => {
+            const cur = !rows.length ? 0 : confirm ? 3 : anaDone ? 2 : 1;
+            return <li key={t} aria-current={k === cur ? 'step' : undefined} className={k < cur ? 'done' : ''}><b>{k + 1}</b>{t}</li>;
+          })}
+        </ol>
+      </header>
       <div className="simple">
-        <div className="panel">
+        <div className={`panel${rows.length ? ' is-compact' : ''}`}>
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>
           <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
             Mỗi câu nằm trong <span className="mono">\begin{'{ex}'} … \end{'{ex}'}</span>. Câu có sẵn ID dạng <span className="mono">%[2D1H1-1]</span> sẽ tự vào đúng bài và mức độ; câu không có ID dùng vị trí chọn bên dưới. HEdu sẽ so từng câu với ngân hàng và với các câu khác trong file, rồi để bạn quyết định câu nào nhập, câu nào bỏ qua.
@@ -214,7 +221,7 @@ export function ImportScreen() {
         {rows.length > 0 && (
           <div className="panel">
             <h2>Vị trí cho câu không có ID</h2>
-            <div className="grid2">
+            <div className="grid2 grid4">
               <label className="lbl">Lớp<select className="sel" value={loc.grade} onChange={(e) => setLoc(firstLocation(Number(e.target.value)))}>{grades().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
               <label className="lbl">Chương<select className="sel" value={chapter?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, e.target.value))}>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
               <label className="lbl">Bài<select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>{(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{shortName(l.name)}</option>)}</select></label>
@@ -244,11 +251,13 @@ export function ImportScreen() {
                 {anaDone && <span className="chk-pill ok">Đã rà soát trùng xong</span>}
               </div>
               {anaDone && (
-                <div className="chips" role="group" aria-label="Lọc theo kết quả rà soát">
-                  {([['all', 'Tất cả', rows.length], ['new', 'Mới', statusCount.new ?? 0], ['sure', 'Trùng chắc', statusCount.sure ?? 0], ['conflict', 'Mâu thuẫn đáp án', statusCount.conflict ?? 0], ['near', 'Có thể trùng', statusCount.near ?? 0], ['template', 'Cùng mẫu khác dữ kiện', statusCount.template ?? 0], ['unread', 'Cần sửa mã', statusCount.unread ?? 0], ['hold', 'Chưa quyết định', sum.holdN]] as [typeof statusF, string, number][]).map(([k, label, n]) => (
-                    <button key={k} type="button" className="chip" aria-pressed={statusF === k} onClick={() => setStatusF(k)}>{label}<span className="chip-n">{n}</span></button>
-                  ))}
-                </div>
+                <label className="dc-kindsel">Lọc theo kết quả rà soát
+                  <select value={statusF} onChange={(e) => setStatusF(e.target.value as typeof statusF)}>
+                    {([['all', 'Tất cả', rows.length], ['new', 'Mới', statusCount.new ?? 0], ['sure', 'Trùng chắc', statusCount.sure ?? 0], ['conflict', 'Mâu thuẫn đáp án', statusCount.conflict ?? 0], ['near', 'Có thể trùng', statusCount.near ?? 0], ['template', 'Cùng mẫu khác dữ kiện', statusCount.template ?? 0], ['unread', 'Cần sửa mã', statusCount.unread ?? 0], ['hold', 'Chưa quyết định', sum.holdN]] as [typeof statusF, string, number][]).map(([k, label, n]) => (
+                      <option key={k} value={k}>{label} ({n})</option>
+                    ))}
+                  </select>
+                </label>
               )}
               {anaDone && (
                 <p className="dup-plan" role="status">
@@ -387,7 +396,7 @@ export function ImportScreen() {
                 <div className="head-actions"><button type="button" className="btn btn-sm btn-accent" onClick={retrySave}>Thử ghi lại</button></div>
               </div>
             )}
-            <div className="head-actions">
+            <div className="head-actions imp-bar">
               <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => setConfirm(true)}>
                 {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : `Nhập ${importCount} câu vào ngân hàng`}
               </button>

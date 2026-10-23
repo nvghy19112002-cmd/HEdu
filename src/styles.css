@@ -852,3 +852,22 @@ a { color: var(--accent); }
 .dc-io { display: inline-flex; gap: 6px; margin: 0; }
 .dc-list { max-height: calc(100vh - 250px); }
 .dc-card-b { max-height: clamp(260px, calc(100vh - 360px), 640px); }
+
+/* ---------- V3 PR-E: Nhập liệu — chỉ báo bước, ô dán gọn, thanh nhập ghim đáy ---------- */
+.steps { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; font-size: 13px; color: var(--ink-3); }
+.steps li { display: inline-flex; align-items: center; gap: 6px; }
+.steps li b { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 999px; border: 1px solid var(--line-ctl); font-size: 12px; font-weight: 600; background: var(--paper); }
+.steps li.done b { background: var(--ok); border-color: var(--ok); color: var(--on-dark); }
+.steps li[aria-current="step"] { color: var(--ink); font-weight: 600; }
+.steps li[aria-current="step"] b { background: var(--pri); border-color: var(--pri); color: var(--on-dark); }
+.page-head:has(.steps) { align-items: center; }
+.panel.is-compact textarea { height: 72px; min-height: 72px; }
+.panel.is-compact > span { display: none; }
+.grid4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.imp-bar { position: sticky; bottom: 0; z-index: 5; padding: 8px 0; background: var(--bg); border-top: 1px solid var(--line); }
+@media (max-width: 760px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.panel.is-compact { padding: 10px 14px; gap: 8px; }
+.simple { gap: 12px; }
+.simple .panel { padding: 12px 14px; gap: 8px; }
+.simple .panel h2 { font-size: 14px; }
+.dup-sum { padding: 8px 10px; gap: 6px; }
