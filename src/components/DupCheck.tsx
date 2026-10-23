@@ -2,9 +2,8 @@
 // Máy chỉ GỢI Ý. Không xoá / gộp / sửa gì; "Đã xem" chỉ nhớ trong phiên làm việc này.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DupIndex, type DupPairHit, type ScanStats } from '../lib/dupindex';
-import { DUP_KIND_LABEL, fingerprint, type DupKind } from '../lib/dup2';
-import { parseExTest } from '../lib/extest';
-import { QuestionView } from './QuestionView';
+import { compareLatex, DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
+import { PairCompare } from './PairCompare';
 import { ReviewBadge } from './ReviewControl';
 import { questionCode, seqLabel } from '../lib/id';
 import { useTaxonomy } from '../lib/curriculum';
@@ -29,7 +28,7 @@ function changedSince(snap: Map<string, string>, qs: Question[]): number {
   return n;
 }
 
-export function DupCheck({ questions, selected, onClose, onOpen }: { questions: Question[]; selected?: ReadonlySet<string>; onClose: () => void; onOpen: (uid: string) => void }) {
+export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { questions: Question[]; selected?: ReadonlySet<string>; onClose: () => void; onOpen: (uid: string) => void; onGoto: (uid: string) => void }) {
   const { tax } = useTaxonomy();
   const [scope, setScope] = useState<Scope>(ALL_SCOPE);
   const [mode, setMode] = useState<ScanMode>('inside');
@@ -46,8 +45,9 @@ export function DupCheck({ questions, selected, onClose, onOpen }: { questions: 
   const [kinds, setKinds] = useState<Set<DupKind>>(new Set(['raw', 'conflict', 'same', 'near']));
   const [seen, setSeen] = useState<Set<string>>(new Set()); // chỉ trong phiên
   const [hideSeen, setHideSeen] = useState(false);
+  const [listOpen, setListOpen] = useState(true);
+  const [scopeOpen, setScopeOpen] = useState(true); // sau khi quét thì thu gọn để dành chỗ cho phần so sánh
   const [cur, setCur] = useState<string | null>(null);
-  const [showSol, setShowSol] = useState(false);
   const pk = (p: DupPairHit) => p.a + '|' + p.b;
 
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.drw')) onClose(); }; document.addEventListener('keydown', h); return () => document.removeEventListener('keydown', h); }, [onClose]);
@@ -73,7 +73,7 @@ export function DupCheck({ questions, selected, onClose, onOpen }: { questions: 
     setBusy(null);
     if (r.stats.aborted) return; // dừng giữa chừng: giữ kết quả cũ, KHÔNG coi là "không trùng"
     snap.current = snapshot;
-    setPairs(r.pairs); setStats(r.stats); setScannedKey(key); setScannedLabel(label); setPage(0); setCur(r.pairs[0] ? pk(r.pairs[0]) : null);
+    setScopeOpen(false); setPairs(r.pairs); setStats(r.stats); setScannedKey(key); setScannedLabel(label); setPage(0); setCur(r.pairs[0] ? pk(r.pairs[0]) : null);
   };
 
   const counts = useMemo(() => { const c: Record<string, number> = {}; for (const p of pairs ?? []) c[p.result.kind] = (c[p.result.kind] ?? 0) + 1; return c; }, [pairs]);
@@ -99,7 +99,13 @@ export function DupCheck({ questions, selected, onClose, onOpen }: { questions: 
         </div>
       </header>
 
-      <div className="dc-scope" role="group" aria-label="Phạm vi quét">
+      {!scopeOpen && (
+        <div className="dc-scope-min">
+          <span><b>Phạm vi:</b> {scopeLabel(tax, scope, selCount, shortName)} · {mode === 'vsAll' && !isAll(scope) ? 'đối chiếu với toàn ngân hàng' : 'trong phạm vi'} · {sideA} câu</span>
+          <button type="button" className="btn btn-sm" aria-expanded={false} onClick={() => setScopeOpen(true)}>Đổi phạm vi ▾</button>
+        </div>
+      )}
+      <div className="dc-scope" role="group" aria-label="Phạm vi quét" hidden={!scopeOpen}>
         <label>Khối
           <select value={scope.grades.length === 1 ? String(scope.grades[0]) : ''} onChange={(e) => setScope(setLevel(scope, 'grade', e.target.value ? [Number(e.target.value)] : []))}>
             <option value="">Tất cả</option>
@@ -152,8 +158,8 @@ export function DupCheck({ questions, selected, onClose, onOpen }: { questions: 
       {pairs === null && !busy && <p className="dc-empty">Bấm “Quét” để tìm các cặp câu nghi trùng. Quét chỉ đọc, không thay đổi câu nào.</p>}
 
       {pairs !== null && (
-        <div className="dc-body">
-          <div className="dc-left">
+        <div className={`dc-body${listOpen ? '' : ' no-list'}`}>
+          {listOpen && <div className="dc-left">
             <div className="chips" role="group" aria-label="Loại nghi vấn">
               {SHOWN.map((k) => <button key={k} type="button" className="chip" aria-pressed={kinds.has(k)} onClick={() => toggleKind(k)}>{DUP_KIND_LABEL[k]}<span className="chip-n">{counts[k] ?? 0}</span></button>)}
             </div>
@@ -181,12 +187,13 @@ export function DupCheck({ questions, selected, onClose, onOpen }: { questions: 
                 <button type="button" className="btn btn-sm" disabled={pageNo >= pages - 1} onClick={() => setPage(pageNo + 1)}>Sau ›</button>
               </div>
             )}
-          </div>
+          </div>}
 
           <div className="dc-right">
+            <button type="button" className="btn btn-sm dc-lt" aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>{listOpen ? '◀ Ẩn danh sách' : '▶ Hiện danh sách cặp'}</button>
             {active ? (
-              <Compare key={pk(active)} hit={active} A={byUid.get(active.a)!} B={byUid.get(active.b)!} showSol={showSol} setShowSol={setShowSol}
-                onOpen={onOpen} seenNow={seen.has(pk(active))} onSeen={() => setSeen((s) => new Set(s).add(pk(active)))} />
+              <PairView key={pk(active)} hit={active} A={byUid.get(active.a)!} B={byUid.get(active.b)!} snap={snap.current}
+                onOpen={onOpen} onGoto={onGoto} seenNow={seen.has(pk(active))} onSeen={() => setSeen((x) => new Set(x).add(pk(active)))} />
             ) : <p className="dc-empty">Chọn một cặp ở bên trái.</p>}
           </div>
         </div>
@@ -195,45 +202,44 @@ export function DupCheck({ questions, selected, onClose, onOpen }: { questions: 
   );
 }
 
-function Compare({ hit, A, B, showSol, setShowSol, onOpen, seenNow, onSeen }: { hit: DupPairHit; A: Question; B: Question; showSol: boolean; setShowSol: (v: boolean) => void; onOpen: (uid: string) => void; seenNow: boolean; onSeen: () => void }) {
-  const fa = fingerprint(A.latex), fb = fingerprint(B.latex);
-  const parts: [string, boolean][] = [
-    ['Loại câu', fa.type === fb.type], ['Đề bài', fa.stemKey === fb.stemKey], ['Phương án', fa.optSet === fb.optSet],
-    ['Đáp án đúng', fa.ansKey === fb.ansKey], ['Hình', fa.figKey === fb.figKey], ['Lời giải', fa.solKey === fb.solKey],
-  ];
-  const r = hit.result;
+function PairView({ hit, A, B, snap, onOpen, onGoto, seenNow, onSeen }: { hit: DupPairHit; A: Question; B: Question; snap: Map<string, string>; onOpen: (uid: string) => void; onGoto: (uid: string) => void; seenNow: boolean; onSeen: () => void }) {
+  // Luôn so lại trên nội dung HIỆN TẠI: nếu giáo viên vừa sửa câu thì kết quả quét cũ không còn đúng.
+  const live = useMemo(() => compareLatex(A.latex, B.latex), [A.latex, B.latex]);
+  const edited = snap.get(A.uid) !== A.latex || snap.get(B.uid) !== B.latex;
+  const [del, setDel] = useState(false);
+  const side = (q: Question, title: string) => ({
+    title,
+    latex: q.latex,
+    badges: (
+      <>
+        <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
+        <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
+        <ReviewBadge q={q} />
+        <span className="code-tag">{questionCode(q, q.level)}</span>
+        <span className="mono card-no">{seqLabel(q.seq)}</span>
+      </>
+    ),
+    actions: <button type="button" className="btn btn-sm" onClick={() => onOpen(q.uid)}>Mở sửa {title.replace('Câu ', '')}</button>,
+  });
   return (
-    <div className="dc-cmp">
-      <div className="dc-why">
-        <b className={`dc-kind k-${r.kind}`}>{DUP_KIND_LABEL[r.kind]}</b>
-        {!r.reasons.length && <span>{HINT[r.kind]}</span>}
-        {r.reasons.map((t, i) => <p key={i}>{t}</p>)}
-        {r.flags.length > 0 && <p className="dc-flags">Khác nhau: {r.flags.join(' · ')}</p>}
-        <p className="dc-sc">Mức tương đồng {Math.round(r.score * 100)}% (chữ {Math.round(r.text * 100)}%, công thức {Math.round(r.math * 100)}%) — chỉ để tham khảo.</p>
-        <div className="dc-parts" aria-label="Đối chiếu từng phần">
-          {parts.map(([n, eq]) => <span key={n} className={`dc-part ${eq ? 'eq' : 'ne'}`}>{n}: {eq ? 'giống' : 'khác'}</span>)}
-        </div>
-        <div className="dc-btns">
-          <label className="dc-chk"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} /> Hiện lời giải</label>
+    <PairCompare
+      A={side(A, 'Câu A')} B={side(B, 'Câu B')} result={live}
+      note={edited ? <p className="dc-flags" role="status">Một trong hai câu đã được sửa sau lần quét — kết quả bên dưới đã so sánh lại trên nội dung hiện tại{hit.result.kind !== live.kind ? ` (trước: ${DUP_KIND_LABEL[hit.result.kind]})` : ''}.</p> : null}
+      footer={
+        <>
           <button type="button" className="btn btn-sm" disabled={seenNow} onClick={onSeen}>{seenNow ? 'Đã xem' : 'Đánh dấu đã xem'}</button>
-        </div>
-      </div>
-      <div className="dc-pair">
-        {[A, B].map((q, n) => (
-          <article key={q.uid} className="dc-card">
-            <div className="card-meta">
-              <b>{n === 0 ? 'Câu A' : 'Câu B'}</b>
-              <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
-              <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-              <ReviewBadge q={q} />
-              <span className="code-tag">{questionCode(q, q.level)}</span>
-              <span className="mono card-no">{seqLabel(q.seq)}</span>
-              <button type="button" className="btn btn-sm dc-open" onClick={() => onOpen(q.uid)}>Mở để sửa</button>
-            </div>
-            <QuestionView p={parseExTest(q.latex)} variant="compact" showSolution={showSol} raw={q.latex} />
-          </article>
-        ))}
-      </div>
-    </div>
+          <span className="dc-del">
+            <button type="button" className="btn btn-sm" aria-expanded={del} onClick={() => setDel(!del)}>Loại một câu… ▾</button>
+            {del && (
+              <span className="dc-del-pop" role="group" aria-label="Đi tới Ngân hàng để xoá">
+                <small>HEdu không xoá ở đây. Chọn câu để chuyển tới Ngân hàng, rồi dùng “⋯ → Xoá câu” (có hỏi lại).</small>
+                <button type="button" className="btn btn-sm" onClick={() => onGoto(A.uid)}>Tới câu A {seqLabel(A.seq)}</button>
+                <button type="button" className="btn btn-sm" onClick={() => onGoto(B.uid)}>Tới câu B {seqLabel(B.seq)}</button>
+              </span>
+            )}
+          </span>
+        </>
+      }
+    />
   );
 }
