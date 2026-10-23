@@ -16,7 +16,7 @@ import { place, useTaxonomy } from '../lib/curriculum';
 import { gradeLabel, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank } from '../lib/store';
-import { moveToTrash } from '../lib/trashflow';
+import { moveToTrash, trashBlockReason } from '../lib/trashflow';
 import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
 import { attrCount, chapterBranchMap, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
@@ -190,6 +190,8 @@ export function BankScreen() {
     const i = shown.findIndex((x) => x.uid === q.uid);
     const next = shown[i + 1] ?? shown[i - 1] ?? null;
     setConfirmDel(null);
+    const block = await trashBlockReason([q]);
+    if (block) { toast(block); return; }
     if (!(await moveToTrash(q))) { toast('Không lưu được thùng rác nên CHƯA xoá câu. Hãy thử lại hoặc tạo file sao lưu trước.'); return; }
     setSel((s) => { const n = new Set(s); n.delete(q.uid); return n; });
     if (active?.uid === q.uid) setActiveUid(next ? next.uid : null);

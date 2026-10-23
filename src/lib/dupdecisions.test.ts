@@ -1,4 +1,4 @@
-import { _reset, goldList, goldOf, goldSet, restoreSidecar, sidecarForBackup, trashAdd, trashList, trashRemove, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
+import { _reset, TRASH_CAP, trashRoomFor, goldList, goldOf, goldSet, restoreSidecar, sidecarForBackup, trashAdd, trashList, trashRemove, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
 import type { Question } from './types';
 
 let failed = 0;
@@ -111,6 +111,28 @@ const mem = (init: string | null = null) => {
     const r2 = await restoreSidecar(file);
     ok(r2.added === 0 && trashList().length === 1, 'khôi phục lần hai không nhân đôi');
     ok((await restoreSidecar(undefined)).added === 0 && (await restoreSidecar({ v: 2 })).added === 0, 'file sao lưu cũ (không có phần tệp phụ) ⇒ bỏ qua, không lỗi');
+  }
+  console.log('Thùng rác đầy: từ chối, không cắt âm thầm (PR-0)');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    // dựng sẵn thùng rác đầy bằng tệp (nhanh, không ghi 1000 lần)
+    const full = Array.from({ length: TRASH_CAP }, (_, i) => ({ q: { ...Q('t' + i, E('Câu ' + i)), seq: i }, at: 1000 + i }));
+    be.data = JSON.stringify({ v: 1, recs: [], trash: full, gold: [] }); _reset(be); await loadDecisions();
+    ok(trashList().length === TRASH_CAP, `thùng rác đang đầy (${TRASH_CAP})`);
+    const savesBefore = be.saves;
+    ok(await trashAdd(A) === false, 'thùng rác đầy ⇒ trashAdd TỪ CHỐI (false)');
+    ok(trashList().length === TRASH_CAP && trashList().some((t) => t.q.uid === 't0') && !trashList().some((t) => t.q.uid === 'ua'), 'không câu cũ nào bị bỏ, câu mới không lọt vào');
+    ok(be.saves === savesBefore, 'từ chối thì không ghi gì xuống tệp');
+    ok(trashRoomFor([A]) === false && trashRoomFor([Q('t5', 'x')]) === true && trashRoomFor([]) === true, 'câu đã có sẵn trong thùng rác không tốn thêm chỗ');
+    ok(await trashAdd(Q('t5', E('Câu 5 đã sửa'))) === true && trashList().length === TRASH_CAP, 'cất lại câu đã có uid trong thùng rác: thay bản ghi, vẫn đủ 1000');
+    ok(await trashRemove('t1') === true && await trashAdd(A) === true && trashList().length === TRASH_CAP && trashList()[0].q.uid === 'ua', 'giải phóng 1 chỗ thì cất được');
+    // khôi phục từ sao lưu khi đầy: không cắt, đếm phần bỏ qua
+    const dst = mem(); _reset(dst);
+    dst.data = JSON.stringify({ v: 1, recs: [], trash: full.slice(0, TRASH_CAP - 1), gold: [] }); _reset(dst); await loadDecisions();
+    const extra = [0, 1, 2].map((i) => ({ q: { ...Q('n' + i, E('Mới ' + i)), seq: 5000 + i }, at: 9000 + i }));
+    const r = await restoreSidecar({ v: 1, recs: [], trash: extra, gold: [] });
+    ok(r.added === 1 && r.skippedTrash === 2 && trashList().length === TRASH_CAP, 'khôi phục sao lưu khi gần đầy: thêm 1, bỏ qua 2 và BÁO số bỏ qua, không cắt câu đang có');
+    ok(trashList().some((t) => t.q.uid === 't0'), 'câu cũ nhất vẫn còn');
   }
 
   if (failed) { console.error(`\n${failed} lỗi`); process.exit(1); }
