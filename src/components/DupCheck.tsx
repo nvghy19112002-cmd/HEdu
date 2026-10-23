@@ -11,7 +11,7 @@ import { questionCode, seqLabel } from '../lib/id';
 import { useTaxonomy } from '../lib/curriculum';
 import { shortName } from '../lib/taxonomy';
 import { trashBlockReason } from '../lib/trashflow';
-import { ALL_SCOPE, isAll, scopeKey, scopeLabel, scopeOptions, scopeUids, setLevel, type ScanMode, type Scope } from '../lib/dupscope';
+import { ALL_SCOPE, changedCount, isAll, scopeKey, scopeLabel, scopeOptions, scopeUids, setLevel, type ScanMode, type Scope } from '../lib/dupscope';
 import { LEVEL_LABEL, TYPE_LABEL, type Question } from '../lib/types';
 
 const SHOWN: DupKind[] = ['raw', 'conflict', 'same', 'near', 'template', 'insufficient'];
@@ -25,11 +25,6 @@ const HINT: Record<DupKind, string> = {
 };
 const PAGE = 50;
 /** Đã đổi so với lúc quét? So từng câu (uid + nội dung), không dựa vào đồng hồ. */
-function changedSince(snap: Map<string, string>, qs: Question[]): number {
-  let n = Math.abs(snap.size - qs.length);
-  for (const q of qs) if (snap.get(q.uid) !== q.latex) n++;
-  return n;
-}
 
 export function DupCheck({ questions, selected, initialSelection, onClose, onOpen, onGoto, onTrash }: { questions: Question[]; selected?: ReadonlySet<string>; initialSelection?: boolean; onClose: () => void; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onTrash: (q: Question) => Promise<boolean> }) {
   const { tax } = useTaxonomy();
@@ -94,7 +89,7 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
   const tabCounts = useMemo(() => { const c = { open: 0, later: 0, done: 0 }; for (const p of base) c[tabOf(p)]++; return c; }, [base, dv]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => base.filter((p) => tabOf(p) === tab), [base, tab, dv]); // eslint-disable-line react-hooks/exhaustive-deps
   const active = list.find((p) => pk(p) === cur) ?? list[0];
-  const changed = pairs !== null ? changedSince(snap.current, questions) : 0;
+  const changed = pairs !== null ? changedCount(snap.current, questions) : 0;
   const scopeChanged = pairs !== null && scannedKey !== scopeKey(scope, mode);
   const pages = Math.max(1, Math.ceil(list.length / PAGE));
   const pageNo = Math.min(page, pages - 1);

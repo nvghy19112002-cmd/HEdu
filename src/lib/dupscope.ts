@@ -14,7 +14,17 @@ export interface Scope {
 }
 export const ALL_SCOPE: Scope = { grades: [], branch: '', chapterId: '', lessonId: '', formId: '', selection: false };
 export const isAll = (s: Scope) => !s.selection && !s.grades.length && !s.branch && !s.chapterId && !s.lessonId && !s.formId;
-export const scopeKey = (s: Scope, mode: ScanMode) => JSON.stringify([...s.grades].sort(), s.branch, s.chapterId, s.lessonId, s.formId, s.selection, mode);
+/** Khoá nhận diện một phạm vi quét: mọi trường (kể cả kiểu đối chiếu) đều nằm trong MỘT mảng. */
+export const scopeKey = (s: Scope, mode: ScanMode) => JSON.stringify([[...s.grades].sort((a, b) => a - b), s.branch, s.chapterId, s.lessonId, s.formId, s.selection, mode]);
+
+/** Số câu đã đổi so với lúc quét: thêm mới, sửa LaTeX, hoặc đã xoá. Mỗi câu chỉ đếm một lần. */
+export function changedCount(snap: ReadonlyMap<string, string>, qs: readonly { uid: string; latex: string }[]): number {
+  let n = 0;
+  const now = new Set<string>();
+  for (const q of qs) { now.add(q.uid); if (snap.get(q.uid) !== q.latex) n++; }
+  for (const u of snap.keys()) if (!now.has(u)) n++;
+  return n;
+}
 
 export function inScope(q: Question, s: Scope, ix: TaxIndex, selected?: ReadonlySet<string>): boolean {
   if (s.selection) return !!selected?.has(q.uid);

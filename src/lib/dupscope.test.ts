@@ -1,4 +1,4 @@
-import { ALL_SCOPE, inScope, isAll, scopeLabel, scopeOptions, scopeUids, setLevel, type Scope } from './dupscope';
+import { changedCount, scopeKey, ALL_SCOPE, inScope, isAll, scopeLabel, scopeOptions, scopeUids, setLevel, type Scope } from './dupscope';
 import { buildDefault, indexOf } from './taxonomy';
 import { DupIndex } from './dupindex';
 import type { Question } from './types';
@@ -67,6 +67,27 @@ console.log('Quét theo phạm vi: trong phạm vi / đối chiếu toàn kho');
   // cặp có phía ngoài phạm vi nằm TRƯỚC trong danh sách vẫn được tìm một lần
   const rev = [...list].reverse();
   ok(pairKeys(await new DupIndex().scan(rev, { scope, vsAll: true })).join() === 'in1+in2,in3+out3', 'thứ tự danh sách đảo ngược cho cùng kết quả');
-  if (failed) { console.log(`\n${failed} kiểm thử dupscope lỗi`); process.exit(1); }
+  console.log('scopeKey / changedCount');
+{
+  const base: Scope = { ...ALL_SCOPE };
+  const k0 = scopeKey(base, 'inside');
+  const variants: [string, Scope, 'inside' | 'vsAll'][] = [
+    ['Khối', { ...base, grades: [10] }, 'inside'], ['Phân môn', { ...base, branch: 'DS' }, 'inside'], ['Chương', { ...base, chapterId: 'c1' }, 'inside'],
+    ['Bài', { ...base, lessonId: 'l1' }, 'inside'], ['Dạng', { ...base, formId: 'f1' }, 'inside'], ['Câu đã chọn', { ...base, selection: true }, 'inside'], ['Kiểu đối chiếu', base, 'vsAll'],
+  ];
+  for (const [n, sc, m] of variants) ok(scopeKey(sc, m) !== k0, `đổi ${n} ⇒ khoá đổi`);
+  ok(new Set(variants.map(([, sc, m]) => scopeKey(sc, m))).size === variants.length, 'mỗi thay đổi cho một khoá riêng');
+  ok(scopeKey({ ...base, grades: [12, 10] }, 'inside') === scopeKey({ ...base, grades: [10, 12] }, 'inside'), 'thứ tự khối không ảnh hưởng');
+  ok(scopeKey({ ...base, chapterId: 'x' }, 'vsAll') === scopeKey({ ...base, chapterId: 'x' }, 'vsAll'), 'phạm vi giống nhau ⇒ cùng khoá');
+  const snap = new Map([['a', 'A'], ['b', 'B'], ['c', 'C']]);
+  const q = (uid: string, latex: string) => ({ uid, latex });
+  ok(changedCount(snap, [q('a', 'A'), q('b', 'B'), q('c', 'C')]) === 0, 'không đổi ⇒ 0');
+  ok(changedCount(snap, [q('a', 'A'), q('b', 'B'), q('c', 'C'), q('d', 'D')]) === 1, 'thêm 1 câu ⇒ 1 (không đếm đôi)');
+  ok(changedCount(snap, [q('a', 'A'), q('b', 'B2'), q('c', 'C')]) === 1, 'sửa 1 câu ⇒ 1');
+  ok(changedCount(snap, [q('a', 'A'), q('b', 'B')]) === 1, 'xoá 1 câu ⇒ 1');
+  ok(changedCount(snap, [q('a', 'A'), q('b', 'B'), q('d', 'D')]) === 2, 'vừa thêm vừa xoá ⇒ 2');
+  ok(changedCount(snap, [q('a', 'A '), q('b', 'B'), q('c', 'C')]) === 1, 'sửa LaTeX, UID giữ nguyên ⇒ 1');
+}
+if (failed) { console.log(`\n${failed} kiểm thử dupscope lỗi`); process.exit(1); }
   console.log('dupscope: đạt hết.');
 })();
