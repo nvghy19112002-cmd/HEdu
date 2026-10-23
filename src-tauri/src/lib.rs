@@ -3,6 +3,7 @@
 mod proc;
 mod storage;
 mod support;
+mod texfolder;
 mod texpkg;
 mod tikz;
 
@@ -303,6 +304,12 @@ fn save_text_file(path: String, text: String) -> Result<(), String> {
     std::fs::write(&path, text.as_bytes()).map_err(|e| format!("Không ghi được file: {e}"))
 }
 
+/// Xuất thư mục biên dịch được vào `parent`/`name` (thư mục mới, không ghi đè). Trả về đường dẫn thư mục.
+#[tauri::command]
+fn export_tex_folder(parent: String, name: String, files: Vec<texfolder::OutFile>) -> Result<String, String> {
+    texfolder::write_project(&parent, &name, &files)
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -331,7 +338,8 @@ pub fn run() {
             tikz_find,
             tex_check_files,
             tex_find_package,
-            save_text_file
+            save_text_file,
+            export_tex_folder
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");

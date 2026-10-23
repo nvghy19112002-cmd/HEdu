@@ -1,0 +1,420 @@
+// Mẫu khaibaochung.tex cho kiểu xuất "Thư mục biên dịch được" (xem texproject.ts).
+// Dựa trên tệp mẫu của chủ dự án (de-kiem-tra-chat-luong-lan-2/khaibaochung.tex); thông tin cá nhân đã thay bằng chỗ trống.
+// Nội dung dưới đây được chép NGUYÊN VĂN ra file; đừng sửa dấu \ hay thụt lề tuỳ tiện.
+export const KHAIBAOCHUNG_TEX = String.raw`% ============================================================================
+% khaibaochung.tex — KHAI BÁO CHUNG của bộ đề xuất từ HEdu (documentclass nằm ở main.tex).
+% Mẫu gốc do chủ dự án cung cấp; HEdu chỉ thay các thông tin cá nhân bằng chỗ trống để điền.
+% Biên dịch: pdflatex main.tex (chạy 2 lần để số trang/mục lục đúng). Xem CAN-CO-GI.md.
+% ============================================================================
+\usepackage{amsmath,amssymb,mathrsfs,fancyhdr,enumerate,currfile,venndiagram,pgf-pie,xparse}
+\usepackage{etoolbox}
+\usepackage{zref-lastpage}
+\usepackage{zref-user}
+% Gói & thư viện dựng nội dung câu hỏi (tikz + thư viện, pgfplots, multirow/makecell/diagbox,
+% fontawesome/pifont, yhmath, esvect, twemojis, hộp tcolorbox, \hoac/\heva) nằm trong
+% shared-content.tex (cùng thư mục) — DÙNG CHUNG với xem trước trong HEdu.
+% Muốn thêm gói cho nội dung câu hỏi thì thêm vào shared-content.tex, đừng khai lại ở đây.
+%
+% PHẢI đứng TRƯỚC mathpazo: yhmath (trong file chung) thay font ký hiệu lớn, nạp sau mathpazo thì
+% chiều cao dòng công thức đổi ⇒ cả trang đề trôi dọc ~1,3 mm và dồn dần xuống dưới. Đã đo bằng
+% cách rasterise PDF cũ/mới rồi so từng điểm ảnh.
+\input{shared-content}
+\usepackage{mathpazo}
+\usepackage[loigiai]{ex_test}
+%\usepackage[dethi]{ex_test}
+\usepackage[tikz]{bclogo}
+\usepackage[
+top=1.3cm,
+bottom=1.3cm,
+left=1.5cm,
+right=1cm,
+headsep=10pt,   % nhỏ lại
+footskip=22pt  % khoảng cách từ nội dung xuống footer
+]{geometry}
+\usepackage[hidelinks,unicode,hypertexnames=false]{hyperref}
+\makeatletter
+\let\MakeUppercaseUnsupportedInPdfStrings\@firstofone
+\makeatother
+\usepackage[final]{pdfpages}
+% tcolorbox + diagbox nay ở shared-content.tex (nạp phía trên).
+\usepackage{xcolor}
+%%%=====Định nghĩa lại \shortans thành oly
+\makeatletter
+\AtBeginDocument{%
+	\let\shortansORI\shortans
+	\RenewDocumentCommand{\shortans}{o m}{%
+		\shortansORI[oly]{#2}%
+	}%
+}
+\makeatother
+%%%%%%%%%%%%%%%%%%%
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{3}
+\usepackage{titlesec}
+\usepackage{titletoc}
+\makeatletter
+%%%%%%%%%%%%%%======Khai báo màu
+\definecolor{myred}{RGB}{210,0,0}
+%Khai báo chapter, section, subsection, subsubsection
+% Chapter
+\titlecontents{chapter}
+[0em]
+{\bfseries}
+{CHƯƠNG~\thecontentslabel\quad}
+{\MakeUppercase}
+{\hfill\contentspage}
+% Section
+\titlecontents{section}
+[2.7em]
+{}
+{Bài~\thecontentslabel\quad}
+{\MakeUppercase}
+{\titlerule*[0.5pc]{.}\contentspage}
+% subsection
+\titlecontents{subsection}
+[4.8em]
+{}
+{\thecontentslabel\quad}
+{\MakeUppercase}
+{\titlerule*[0.5pc]{.}\contentspage}
+% subsubsection
+\titlecontents{subsubsection}
+[6.6em]
+{}
+{\thecontentslabel\quad}
+{\MakeUppercase}
+{\titlerule*[0.5pc]{.}\contentspage}
+% chapter
+\titleformat{\chapter}
+{\bfseries\large\color{myred}}
+{CHƯƠNG \thechapter.}
+{0.5em}{\MakeUppercase}
+[\tikz{\draw[myred, line width=1pt,double,thick] (0,0)--(\textwidth,0);}]
+\titlespacing*{\chapter}{0pt}{-7pt}{5pt}
+% Section
+\titleformat{\section}
+{\bfseries\large\color{myred}}
+{BÀI \arabic{section}.}{0.3em}{\MakeUppercase}
+\titlespacing*{\section}{0pt}{0pt}{0pt}
+% Subsection
+\renewcommand{\thesubsection}{\Alph{subsection}}
+\titleformat{\subsection}
+{\bfseries}
+{\Alph{subsection}.}{0.3em}{\MakeUppercase}
+\titlespacing*{\subsection}{0pt}{0pt}{0pt}
+% Subsubsection
+\titleformat{\subsubsection}
+{\bfseries}
+{\arabic{subsubsection}.}{0.5em}{}
+\titlespacing*{\subsubsection}{0pt}{0pt}{0pt}
+% Paragraph
+\renewcommand{\theparagraph}{\arabic{paragraph})}
+\titleformat{\paragraph}
+{\bfseries}
+{\arabic{subsubsection}.\arabic{paragraph}.}{0.3em}{}
+\titlespacing*{\paragraph}{0pt}{0pt}{0pt}
+%part
+\titleformat{\part}[display]
+{\Large\bfseries\color{red!50!blue}}{
+	\thispagestyle{empty}
+	\centering
+	\begin{tikzpicture}
+		\fill[red!50!blue] (-1.5,-1) rectangle (1.5,1);
+		\draw(0,1.5)node{\fontfamily{ccr}\selectfont\Large PHẦN};
+		\draw(0,0)node{\color{white}\fontsize{60pt}{1pt}\selectfont\thepart};
+	\end{tikzpicture}
+}
+{0.5em}
+{\titlerule[2.5pt]\vskip3pt\titlerule\vskip4pt\centering\fontsize{60pt}{1pt}\fontfamily{qhv}\selectfont\MakeUppercase}
+\makeatother
+%=====Đổi màu phương án đúng
+\def\colorEX{\color{blue}}
+%Môi trường bài tập tự luận
+\newtheorem{bt}{Bài}
+%Định nghĩa thêm cách gõ vectơ, khuyến khích gõ \overrightarrow
+% (esvect nạp ở shared-content.tex; hai dòng \def dưới đây chỉ có ở bản xuất đề này,
+%  xem trước trong HEdu cố ý không có vì gây lỗi "Undefined control sequence".)
+\def\vec{\vv}
+\def\overrightarrow{\vv}
+%Làm lại mục lục part
+\makeatletter
+\renewcommand*\l@part[2]{%
+	\ifnum \c@tocdepth >\m@ne
+	\addpenalty{-\@highpenalty}%
+	\vskip 1.0em \@plus\p@
+	\setlength\@tempdima{1.5em}%
+	\begingroup
+	\parindent \z@ \rightskip \@pnumwidth
+	\parfillskip -\@pnumwidth
+	\leavevmode
+	\advance\leftskip\@tempdima
+	\hskip -\leftskip
+	\colorbox{violet}{\strut%
+		\makebox[\dimexpr\textwidth-1\fboxsep-6pt\relax][l]{%
+			%\fontsize{12pt}{1pt}
+			\color{white}\bfseries\fontfamily{qag}\selectfont\hspace*{0.3\textwidth} PHẦN #1%
+			\nobreak\hfill\nobreak\hb@xt@\@pnumwidth{\hss #2}}}\par\smallskip
+	\penalty\@highpenalty
+	\endgroup
+	\fi}
+\makeatother
+%Lệnh song song
+\DeclareSymbolFont{symbolsC}{U}{txsyc}{m}{n}
+\DeclareMathSymbol{\varparallel}{\mathrel}{symbolsC}{9}
+\DeclareMathSymbol{\parallel}{\mathrel}{symbolsC}{9}
+%Hệ hoặc, hệ và: \hoac / \heva nay ở shared-content.tex.
+%Giãn dòng
+% \renewcommand{\baselinestretch}{1.4}
+%Thay đổi đếm alpha môi trường enumerate
+\makeatletter
+\renewcommand{\labelenumi}{\alph{enumi})}
+\makeatother
+%Tạo biến đếm số đề và khung tiêu đề
+\def\khoi{12}
+\def\made{1010}
+\newcounter{demsode}[section]
+\setcounter{demsode}{0}
+\newenvironment{name}[8]{
+	\setcounter{phan}{0}
+	\setcounter{page}{1}
+	\noindent
+	\begin{minipage}[]{0.45\textwidth}
+		\centering
+		\MakeUppercase{#1}\\
+		\MakeUppercase{#2}\\
+		{#3}\\
+		{#4}
+	\end{minipage}
+	\begin{minipage}[]{0.55\textwidth}
+		\centering
+		\MakeUppercase{#5}\\
+		{#6}\\
+		{#7}\\
+		{#8}
+	\end{minipage}
+	\\[1mm]
+	\tikz \draw[double] (0,0)--(\textwidth,0);\\
+	\textit{Họ và tên thí sinh:} \tikz \draw[dotted,very thin] (0,0)--(\textwidth/3,0); 
+	\textit{Số báo danh:}\tikz \draw[dotted,very thin] (0,0)--(\textwidth/4.6,0);\quad
+	Mã đề: \fbox{\color{blue} \bf \large\fontfamily{anttlc}\selectfont \made}
+	%=====
+	\stepcounter{demsode}
+	\addcontentsline{toc}{section}{Đề \thedemsode. \MakeUppercase{#5}}
+	%	\gdef\socaulc{12}
+	%	\gdef\socauds{4}
+	%	\gdef\socaukq{6}
+	%	\gdef\socautl{3}
+}
+{}
+%%%%%%%%%%%%%%
+\newcommand{\indapan}[1]{
+	%	\begin{center}
+		%		\fbox{\large \textbf{\color{purple} \large BẢNG ĐÁP ÁN}}
+		%	\end{center}
+	\IfFileExists{#1-Phan-I}{
+		\noindent
+		\inputansbox{12}{#1-Phan-I}
+	}{\null}
+	\IfFileExists{#1-Phan-II}{
+		\noindent
+		\inputansbox{2}{#1-Phan-II}
+	}{\null}
+	\IfFileExists{#1-Phan-III}{
+		\noindent
+		\inputansbox{3}{#1-Phan-III}
+	}{\null}
+}
+\newcommand{\indapancuoi}[1]{
+	\phantomsection
+	\begin{center}
+		\fbox{\large \textbf{\color{purple} \large BẢNG ĐÁP ÁN ĐỀ SỐ \thedemsode}}
+	\end{center}
+	\IfFileExists{#1-Phan-I}{
+		\noindent
+		\inputansbox{12}{#1-Phan-I}
+	}{\null}
+	\IfFileExists{#1-Phan-II}{
+		\noindent
+		\inputansbox[2]{2}{#1-Phan-II}
+	}{\null}
+	\IfFileExists{#1-Phan-III}{
+		\noindent
+		\inputansbox[2]{6}{#1-Phan-III}
+	}{\null}
+	\addcontentsline{toc}{section}{Đề số \thedemsode}
+	\addtocounter{demsode}{1}
+	\newpage}
+%Cấu trúc đề mới
+\def\socaulc{12}
+\def\socauds{4}
+\def\socaukq{6}
+\def\socautl{3}
+\newcounter{phan}
+\setcounter{phan}{0}
+\renewcommand{\thephan}{\Roman{phan}}
+% PHẦN I
+\newcommand{\caulc}{
+	\stepcounter{phan}
+	\par\noindent
+	{\textbf{PHẦN \thephan. Câu trắc nghiệm nhiều phương án lựa chọn.} Thí sinh trả lời từ câu 1 đến câu \socaulc. Mỗi câu hỏi thí sinh chỉ chọn một phương án.}
+	\par
+	\setcounter{ex}{0}
+}
+% PHẦN II
+\newcommand{\cauds}{
+	\stepcounter{phan}
+	\par\noindent
+	{\textbf{PHẦN \thephan. Câu trắc nghiệm đúng sai.} Thí sinh trả lời từ câu 1 đến câu \socauds. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.}
+	\par
+	\setcounter{ex}{0}
+}
+% PHẦN III
+\newcommand{\caukq}{
+	\stepcounter{phan}
+	\par\noindent
+	{\textbf{PHẦN \thephan. Câu trắc nghiệm trả lời ngắn.} Thí sinh trả lời từ câu 1 đến câu \socaukq.}
+	\par
+	\setcounter{ex}{0}
+}
+% PHẦN IV
+\newcommand{\cautl}{
+	\stepcounter{phan}
+	\par\noindent
+	\textbf{PHẦN \thephan. Câu tự luận.}
+	\par
+	\setcounter{ex}{0}
+	\setcounter{bt}{0}
+}
+%%%%=======Reset phan, ex, bt khi dùng \subsubsection
+\pretocmd{\subsection}{
+	\setcounter{phan}{0}
+	\setcounter{ex}{0}
+	\setcounter{bt}{0}
+}{}{}
+\pretocmd{\subsubsection}{
+	\setcounter{phan}{0}
+	\setcounter{ex}{0}
+	\setcounter{bt}{0}
+}{}{}
+%================================================
+% LOẠI 1
+%================================================
+\newcommand{\StyleLoaiMot}{
+	\fancyhf{}
+	
+	\fancyfoot[LE,RO]{%
+		Trang \thepage/\zpageref{\made-lastpage}
+		\;--\;
+		Mã đề \made
+	}
+	
+	\renewcommand{\headrulewidth}{0pt}
+	\renewcommand{\footrulewidth}{0pt}
+}
+
+%================================================
+% LOẠI 2
+%================================================
+\newcommand{\StyleLoaiHai}{
+	\fancyhf{}
+	
+	\fancyhead[L]{\color{red!50!white}\faPhone\,Số điện thoại liên hệ}
+	\fancyhead[R]{\color{red!50!white}Lưu hành nội bộ}
+	
+	\fancyfoot[L,R]{\color{red!50!white}Giáo viên: Họ và tên}
+	\fancyfoot[LE,RO]{\thepage}
+	
+	\renewcommand{\headrulewidth}{0.5pt}
+	\renewcommand{\footrulewidth}{0.5pt}
+}
+
+%================================================
+% LỆNH CHUYỂN STYLE
+%================================================
+\newcommand{\HeaderLoaiMot}{
+	\pagestyle{fancy}
+	\StyleLoaiMot
+	
+	\fancypagestyle{plain}{
+		\StyleLoaiMot
+	}
+}
+\newcommand{\HeaderLoaiHai}{
+	\pagestyle{fancy}
+	\StyleLoaiHai
+	
+	\fancypagestyle{plain}{
+		\StyleLoaiHai
+	}
+}
+%%%%%%%----------chọn loại header, footer
+\HeaderLoaiMot
+%\HeaderLoaiHai
+%%%%%%%%%===Khung + các hộp ghi chú (khung, boxdn…boxtc, dn/dl/luuy/nx/pp/chuy/note/tc)
+%%%%%%%%%   nay ở shared-content.tex để xem trước và đề in ra hiện GIỐNG NHAU.
+\newcounter{vd}
+\newenvironment{vd}
+{\refstepcounter{vd}%
+	\begin{khung}\textcolor{black}{\textbf{Ví dụ \thevd. }}}{\end{khung}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%======dòng chấm, oli
+\newcommand{\dongcham}[1]{
+	\def\sod{#1}
+	\pgfmathsetmacro{\sodong}{2*\sod -1} 
+	\columnsep=10pt
+	\vspace*{-3.5mm}
+	\begin{multicols}{2}
+		\foreach \dotline in{1,...,\sodong}
+		{\noindent\color{black!90}{\tiny\dotfill}\\[2mm]}
+		{\noindent\color{black!90}{\tiny\dotfill}}\\[-4mm]
+	\end{multicols}
+}
+\newcommand{\dc}[2][1.3]{%
+	\begingroup
+	% đặt parskip = 0 chỉ trong nhóm này
+	\setlength{\parskip}{0pt}%
+	\setlength{\parindent}{0pt}% nếu bạn không muốn indent
+	% bắt đầu in dòng dotfill
+	\par\nobreak
+	\noindent\rule{0pt}{#1\baselineskip}%
+	\foreach \i in {1,...,#2}{%
+		\noindent
+		\makebox[\linewidth]{\rule{0pt}{#1\baselineskip}\tiny\dotfill}\par
+	}%
+	\endgroup
+}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\oli}[1]{%
+	\noindent
+	\ifdim\textwidth>10cm
+	\tikz{\draw[gray!70, dashed, step=\textwidth/24] 
+		(0,0) grid (\textwidth,{#1*\textwidth/24});}
+	\else
+	\tikz{\draw[gray!70, dashed, step=\textwidth/13] 
+		(0,0) grid (\textwidth,{#1*\textwidth/13});}
+	\fi
+}
+%%%%%%==============lệnh chia hai cột
+\newcommand{\chiahaicot}[2]{
+	\noindent
+	\begin{minipage}[t]{0.5\textwidth}
+		\begin{khung}
+			#1
+		\end{khung}
+	\end{minipage}
+	\begin{minipage}[t]{0.5\textwidth}
+		\begin{khung}
+			#2
+		\end{khung}
+	\end{minipage}
+}
+%%%%%%%%%%%%======================
+\newcommand{\anloigiai}{
+	\hideansEX{vd}
+	\hideansEX{ex}
+	\hideansEX{bt}
+}
+\newcommand{\tatdongcham}{
+	\renewcommand{\dc}[2][1.2]{}
+	\renewcommand{\dongcham}[1]{}
+}`;

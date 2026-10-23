@@ -5,7 +5,7 @@
 interface TauriGlobal {
   core: { invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> };
   webview?: { getCurrentWebview(): { setZoom(f: number): Promise<void> } };
-  dialog?: { save(o: { title?: string; defaultPath?: string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null> };
+  dialog?: { save(o: { title?: string; defaultPath?: string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>; open?(o: { title?: string; directory?: boolean; multiple?: boolean }): Promise<string | string[] | null> };
   event: { listen<T>(name: string, cb: (e: { payload: T }) => void): Promise<() => void> };
 }
 
