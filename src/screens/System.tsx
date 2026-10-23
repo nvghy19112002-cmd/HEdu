@@ -41,6 +41,7 @@ export function SystemScreen() {
   const [backup, setBackup] = useState<BackupMeta | null>(null);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [restoreErr, setRestoreErr] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<{ name: string; text: string } | null>(null);
   const [tikz, setTikzState] = useState<TikzSettings>(() => getTikz());
   const [defPre, setDefPre] = useState('');
   const [probing, setProbing] = useState(false);
@@ -125,6 +126,7 @@ export function SystemScreen() {
           </div>
         )}
 
+        <h2 className="sys-group">Cập nhật</h2>
         <section className="panel" aria-label="Phiên bản và cập nhật">
           <div className="sys-row">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -212,6 +214,7 @@ export function SystemScreen() {
           )}
         </section>
 
+        <h2 className="sys-group">Dữ liệu và sao lưu</h2>
         <section className="panel" aria-label="Sao lưu trước cập nhật">
           <h2>Sao lưu trước cập nhật</h2>
           <span className="sys-hint">Trước mỗi lần cập nhật, app tự chép dữ liệu sang một bản sao lưu. Chỉ giữ đúng một bản gần nhất; bản cũ hơn bị xoá để không chiếm chỗ.</span>
@@ -241,6 +244,70 @@ export function SystemScreen() {
           {restoreErr && <div className="note bad"><IcAlert /><div className="note-body"><b>Không khôi phục được</b><span>{restoreErr}</span></div></div>}
         </section>
 
+        <section className="panel" aria-label="Sao lưu thủ công">
+          <h2>Sao lưu thủ công</h2>
+          <span className="sys-hint">Ngân hàng hiện có <b style={{ color: 'var(--ink)' }}>{questions.length} câu</b>. Bản sao lưu là một file duy nhất, cất ở USB hoặc Google Drive là đủ.</span>
+          <div className="head-actions">
+            <button type="button" className="btn btn-dark btn-sm" onClick={() => showFile({ title: 'Bản sao lưu ngân hàng', name: `hedu-sao-luu-${today}.json`, text: exportBackup(), mime: 'application/json' })}>Tạo file sao lưu</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => file.current?.click()}>Khôi phục từ file…</button>
+            <input ref={file} type="file" accept=".json" hidden onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              try { setPendingFile({ name: f.name, text: await readFile(f) }); setFileErr(null); } catch (x) { setFileErr((x as Error).message); }
+            }} />
+          </div>
+          {pendingFile && (
+            <div className="note warn" role="alertdialog" aria-label="Xác nhận khôi phục từ file">
+              <IcAlert />
+              <div className="note-body">
+                <b>Thay toàn bộ ngân hàng bằng file “{pendingFile.name}”?</b>
+                <span>Ngân hàng hiện có {questions.length} câu sẽ bị thay bằng nội dung file. Nên bấm “Tạo file sao lưu” trước nếu chưa có bản sao lưu gần đây.</span>
+                <div className="head-actions">
+                  <button type="button" className="btn btn-sm" autoFocus onClick={() => setPendingFile(null)}>Giữ ngân hàng hiện tại</button>
+                  <button type="button" className="btn btn-accent btn-sm" onClick={() => {
+                    try { const n = importBackup(pendingFile.text); setFileErr(null); toast(`Đã khôi phục ${n} câu từ file.`); } catch (x) { setFileErr((x as Error).message); }
+                    setPendingFile(null);
+                  }}>Thay bằng file này</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {fileErr && <div className="note bad"><IcAlert /><div className="note-body"><b>Không khôi phục được</b><span>{fileErr}</span></div></div>}
+          <span className="sys-hint">Khôi phục từ file sẽ thay toàn bộ ngân hàng hiện tại. Bản sao lưu chỉ gồm câu hỏi và khung chương trình; các quyết định “giữ cả hai” của Kiểm tra trùng nằm ở tệp riêng — dùng “Xuất quyết định” trong màn Kiểm tra trùng nếu muốn giữ riêng.</span>
+        </section>
+
+        <section className="panel" aria-label="Dữ liệu">
+          <h2>Dữ liệu</h2>
+          {desktop ? (
+            <>
+              <span className="sys-hint">Dữ liệu nằm ngoài thư mục cài đặt nên cập nhật hay cài lại app không làm mất.{up.info && <> Vị trí: <span className="mono" style={{ wordBreak: 'break-all' }}>{up.info.dataDir}</span></>}</span>
+              <div className="head-actions">
+                <button type="button" className="btn btn-sm" onClick={() => toast(`Đã thêm ${addSamples()} câu mẫu.`)}>Nạp 15 câu mẫu Toán 12</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="sys-hint">Bản xem thử đi kèm 15 câu Toán 12 mẫu. Đưa ngân hàng về đúng bộ mẫu ban đầu (xoá câu bạn đã thêm).</span>
+              <div className="head-actions">
+                {armedReset ? (
+                  <>
+                    <button type="button" className="btn btn-accent btn-sm" onClick={() => { resetToSample(); setArmedReset(false); toast('Đã đưa về dữ liệu mẫu.'); }}>Xác nhận đặt lại</button>
+                    <button type="button" className="btn btn-sm" onClick={() => setArmedReset(false)}>Huỷ</button>
+                  </>
+                ) : (
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setArmedReset(true)}>Đặt lại dữ liệu mẫu</button>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+
+        <h2 className="sys-group">Hiển thị</h2>
+        <ZoomPanel />
+        <FigScalePanel />
+
+        <h2 className="sys-group">Vẽ hình TikZ</h2>
         <section className="panel" aria-label="Vẽ hình TikZ">
           <h2>Vẽ hình TikZ bằng TeX Live</h2>
           <span className="sys-hint">
@@ -279,52 +346,6 @@ export function SystemScreen() {
               <button type="button" className="btn btn-sm" onClick={() => saveTikz({ ...tikz, preamble: defPre })}>Chép mặc định ra để sửa</button>
             </div>
           </details>
-        </section>
-
-        <section className="panel" aria-label="Sao lưu thủ công">
-          <h2>Sao lưu thủ công</h2>
-          <span className="sys-hint">Ngân hàng hiện có <b style={{ color: 'var(--ink)' }}>{questions.length} câu</b>. Bản sao lưu là một file duy nhất, cất ở USB hoặc Google Drive là đủ.</span>
-          <div className="head-actions">
-            <button type="button" className="btn btn-dark btn-sm" onClick={() => showFile({ title: 'Bản sao lưu ngân hàng', name: `hedu-sao-luu-${today}.json`, text: exportBackup(), mime: 'application/json' })}>Tạo file sao lưu</button>
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => file.current?.click()}>Khôi phục từ file…</button>
-            <input ref={file} type="file" accept=".json" hidden onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.target.value = '';
-              if (!f) return;
-              try { const n = importBackup(await readFile(f)); setFileErr(null); toast(`Đã khôi phục ${n} câu từ file.`); } catch (x) { setFileErr((x as Error).message); }
-            }} />
-          </div>
-          {fileErr && <div className="note bad"><IcAlert /><div className="note-body"><b>Không khôi phục được</b><span>{fileErr}</span></div></div>}
-          <span className="sys-hint">Khôi phục từ file sẽ thay toàn bộ ngân hàng hiện tại.</span>
-        </section>
-
-        <ZoomPanel />
-        <FigScalePanel />
-
-        <section className="panel" aria-label="Dữ liệu">
-          <h2>Dữ liệu</h2>
-          {desktop ? (
-            <>
-              <span className="sys-hint">Dữ liệu nằm ngoài thư mục cài đặt nên cập nhật hay cài lại app không làm mất.{up.info && <> Vị trí: <span className="mono" style={{ wordBreak: 'break-all' }}>{up.info.dataDir}</span></>}</span>
-              <div className="head-actions">
-                <button type="button" className="btn btn-sm" onClick={() => toast(`Đã thêm ${addSamples()} câu mẫu.`)}>Nạp 15 câu mẫu Toán 12</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <span className="sys-hint">Bản xem thử đi kèm 15 câu Toán 12 mẫu. Đưa ngân hàng về đúng bộ mẫu ban đầu (xoá câu bạn đã thêm).</span>
-              <div className="head-actions">
-                {armedReset ? (
-                  <>
-                    <button type="button" className="btn btn-accent btn-sm" onClick={() => { resetToSample(); setArmedReset(false); toast('Đã đưa về dữ liệu mẫu.'); }}>Xác nhận đặt lại</button>
-                    <button type="button" className="btn btn-sm" onClick={() => setArmedReset(false)}>Huỷ</button>
-                  </>
-                ) : (
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setArmedReset(true)}>Đặt lại dữ liệu mẫu</button>
-                )}
-              </div>
-            </>
-          )}
         </section>
       </div>
     </>

@@ -119,7 +119,7 @@ export function CurriculumScreen() {
     <>
       <header className="page-head">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <h1>Khung chương trình</h1>
+          <h1>Chương trình</h1>
           <span className="crumbs">{tax.name} · {n.grades} lớp · {n.chapters} chương · {n.lessons} bài · {n.forms} dạng</span>
         </div>
         <div className="head-actions">
@@ -131,7 +131,19 @@ export function CurriculumScreen() {
 
       <div className="simple">
         <div className="panel">
-          <h2>Đổi sách giáo khoa hay đổi khung</h2>
+          <h2>Cây mục lục</h2>
+          {edit && <span className="sys-hint">Bấm vào tên để sửa, vào ô mã để đổi mã (một ký tự). Nút + thêm mục con.</span>}
+          <ul className="cttree">
+            {tax.grades.map((g) => <Node key={g.id} node={g} kind="grade" depth={0} />)}
+          </ul>
+          {edit && (
+            <div className="head-actions">
+              <button type="button" className="btn btn-sm" onClick={() => change(addChild(tax, null, 'Lớp mới'))}>+ Thêm lớp</button>
+            </div>
+          )}
+        </div>
+        <details className="panel ct-tools">
+          <summary><h2>Đổi sách giáo khoa hay đổi khung — nạp, xuất, đưa về mặc định</h2></summary>
           <span className="sys-hint">
             Mã câu hỏi ghép từ mã các cấp: <span className="mono">[Lớp][Phân môn][Chương][Mức độ][Bài]-[Dạng]</span>, ví dụ <span className="mono">2D1H1-1</span>.
             Sửa cây là mã đổi theo, không cần cài lại app. Câu hỏi gắn với nút theo khoá riêng nên đổi tên hay đổi mã không làm mất vị trí của câu.
@@ -149,20 +161,8 @@ export function CurriculumScreen() {
             )}
             <input ref={file} type="file" accept=".json" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) await onLoadFile(f); e.target.value = ''; }} />
           </div>
-        </div>
+        </details>
 
-        <div className="panel">
-          <h2>Cây mục lục</h2>
-          {edit && <span className="sys-hint">Bấm vào tên để sửa, vào ô mã để đổi mã (một ký tự). Nút + thêm mục con.</span>}
-          <ul className="cttree">
-            {tax.grades.map((g) => <Node key={g.id} node={g} kind="grade" depth={0} />)}
-          </ul>
-          {edit && (
-            <div className="head-actions">
-              <button type="button" className="btn btn-sm" onClick={() => change(addChild(tax, null, 'Lớp mới'))}>+ Thêm lớp</button>
-            </div>
-          )}
-        </div>
       </div>
     </>
   );
