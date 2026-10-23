@@ -8,3 +8,4 @@ src-tauri/gen/
 .env
 .DS_Store
 data/test/
+.ui-shots/
