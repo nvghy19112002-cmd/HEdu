@@ -12,3 +12,4 @@ for (const name of ['lib.test', 'bank.test', 'packages.test', 'preview.test', 'x
   execFileSync(process.execPath, [out], { stdio: 'inherit' });
 }
 execFileSync(process.execPath, ['scripts/release-scripts.test.mjs'], { stdio: 'inherit' });
+execFileSync(process.execPath, ['scripts/ui-fixtures.test.mjs'], { stdio: 'inherit' });
