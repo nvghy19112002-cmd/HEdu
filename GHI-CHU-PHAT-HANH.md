@@ -1,4 +1,4 @@
-## Đang chờ phát hành (V5, chưa có số bản): Mục lục & Bộ lọc luôn là ô chọn
+## Có gì mới trong beta.22 (V5): Mục lục & Bộ lọc luôn là ô chọn
 Chỉ đổi giao diện và logic lọc; KHÔNG đổi schema, ID6, cây mục lục, LaTeX, kiểm tra trùng, thùng rác, nhãn chuẩn, sao lưu.
 - Lớp, Phân môn, Chương, Bài, Dạng LUÔN là ô chọn (bỏ `SEG_MAX`), luôn đủ 5 ô vị trí + 4 ô thuộc tính; ô cấp dưới chưa chọn được thì mờ và ghi lý do, nên bố cục không nhảy khi chọn.
 - Hộp chọn luôn có ô tìm (tên hoặc mã, bỏ dấu), cuộn được, có số câu từng mục; mục 0 câu mờ nhưng chọn được. Gõ chữ ngay trên ô khi đang đóng rồi Enter để chọn (vd gõ 12, Enter). Mỗi ô đang lọc có nút ✕ (đổi cấp trên thì cấp dưới tự về Tất cả).
