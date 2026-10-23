@@ -55,7 +55,7 @@ function Choices({ items, defs, rightIdx, ring }: { items: { text: string; lette
     if (hasFig) { setCols(1); return; }
     const el = box.current, m = meas.current;
     if (!el || !m) return;
-    const GAP = 16, PAD = 30; // PAD = đệm + viền của ô đáp án
+    const GAP = 20, PAD = 14; // PAD = đệm hai bên của đáp án (không còn viền)
     const calc = () => {
       const avail = el.clientWidth;
       if (!avail) return;
@@ -73,12 +73,12 @@ function Choices({ items, defs, rightIdx, ring }: { items: { text: string; lette
   return (
     <div className={`opts-wrap${cols === 4 ? '' : ` c${cols}`}`} ref={box}>
       <div className="opts-measure" ref={meas} aria-hidden="true">
-        {items.map((o, i) => <span key={i} className="opt-m"><b>{o.letter}.</b> <Tex src={o.text} defs={defs} /></span>)}
+        {items.map((o, i) => <span key={i} className="opt-m"><b>{o.letter}</b><Tex src={o.text} defs={defs} /></span>)}
       </div>
       <div className={`opts${cols === 4 ? '' : ` c${cols}`}`}>
         {items.map((o, i) => (
           <span key={i} className={`opt${rightIdx.has(i) ? (ring ? ' right ring' : ' right') : ''}`}>
-            <b>{o.letter}.</b>
+            <b>{o.letter}</b>
             <span className="opt-body"><Tex src={o.text} defs={defs} /></span>
           </span>
         ))}

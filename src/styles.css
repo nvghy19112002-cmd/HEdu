@@ -237,28 +237,30 @@ a { color: var(--accent); }
 .opts-wrap { position: relative; }
 .opts-measure { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; height: 0; overflow: hidden; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-start; }
 .opt-m { display: inline-block; white-space: nowrap; }
-.opt-m b { font-family: var(--f-ui); font-size: .82em; margin-right: 4px; }
-.opts { display: grid; gap: 8px 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.opt-m b { display: inline-block; width: 22px; margin-right: 8px; }
+.opts { display: grid; gap: 2px 20px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .opts.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .opts.c1 { grid-template-columns: minmax(0, 1fr); }
-.opt { position: relative; min-width: 0; display: flex; gap: 4px; align-items: baseline; padding: 7px 12px; border: 1.5px solid var(--line-2); border-radius: 8px; background: var(--paper); }
-.opt > b { flex: none; font-family: var(--f-ui); font-size: .82em; margin-right: 4px; color: var(--ink-2); }
+/* Đáp án trắc nghiệm: nhẹ như trang đề in — chữ cái trong vòng tròn nhỏ, không còn khung to quanh từng đáp án */
+.opt { position: relative; min-width: 0; max-width: 100%; justify-self: start; display: flex; gap: 8px; align-items: center; padding: 2px 10px 2px 4px; border-radius: 6px; line-height: 1.4; }
+.opt > b { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--line-ctl); border-radius: 50%; font-family: var(--f-ui); font-size: 12px; font-weight: 700; line-height: 1; color: var(--ink-2); }
 .opt-body { min-width: 0; flex: 1 1 auto; }
-/* đáp án đúng: viền và nền màu nổi (khi bật hiện đáp án) */
-.opt.right { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, var(--paper)); box-shadow: 0 0 0 1px var(--ok) inset; }
-.opt.right > b { color: var(--ok); }
-.tf { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.tf li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; }
+/* đáp án đúng (khi bật hiện đáp án): nền xanh lá nhạt + chữ cái đặc */
+.opt.right { background: var(--ok-bg); }
+.opt.right > b { background: var(--ok); border-color: var(--ok); color: var(--on-dark); }
+.tf { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tf li { display: grid; grid-template-columns: auto auto minmax(0, 1fr); column-gap: 8px; align-items: baseline; }
 .tf .tf-l { font-family: var(--f-ui); font-size: .8em; white-space: nowrap; }
-.tf .tf-body { min-width: 0; }
-/* khung bao chữ Đ / S, giống hộp tcolorbox nhỏ */
-.tf .mark { align-self: center; display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 6px; border: 2px solid currentColor; border-radius: 8px; font-family: var(--f-ui); font-size: 14px; font-weight: 800; line-height: 1; box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent); }
-.tf .mark.d { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--paper)); }
-.tf .mark.s { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--paper)); }
-/* khung đáp án trả lời ngắn */
-.ans-box { align-self: flex-start; display: inline-flex; align-items: stretch; margin-top: 4px; border: 2px solid var(--ok); border-radius: 8px; overflow: hidden; background: var(--paper); box-shadow: 0 2px 6px color-mix(in srgb, var(--ink) 8%, transparent); }
-.ans-box-t { display: inline-flex; align-items: center; padding: 6px 12px; background: var(--ok); color: var(--on-dark); font-family: var(--f-ui); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.ans-box-v { display: inline-flex; align-items: center; padding: 6px 16px; font-size: 1.15em; color: var(--ink); }
+.tf .tf-l { grid-column: 1; }
+.tf .tf-body { grid-column: 3; min-width: 0; }
+/* nhãn Đ / S nhỏ gọn, nằm ngay sau a) b) c) d) để đọc liền mạch */
+.tf .mark { grid-column: 2; grid-row: 1; align-self: center; display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 6px; border: 1px solid currentColor; border-radius: 5px; font-family: var(--f-ui); font-size: 12px; font-weight: 700; line-height: 1; }
+.tf .mark.d { color: var(--ok-ink); background: var(--ok-bg); border-color: var(--ok-line); }
+.tf .mark.s { color: var(--danger-ink); background: var(--danger-soft); border-color: var(--danger-line); }
+/* đáp án trả lời ngắn: một nhãn gọn một dòng */
+.ans-box { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; margin-top: 2px; padding: 1px 10px 1px 8px; line-height: 1.35; border: 1px solid var(--ok-line); border-radius: 6px; background: var(--ok-bg); }
+.ans-box-t { font-family: var(--f-ui); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ok-ink); }
+.ans-box-v { display: inline-flex; align-items: center; font-size: 1.05em; font-weight: 600; color: var(--ink); }
 .q-warn.src { border-style: dashed; }
 .short { font-family: var(--f-ui); font-size: 13px; color: var(--ink-2); }
 .short b { font-family: var(--f-math); font-size: 16px; color: var(--ink); }
@@ -920,8 +922,6 @@ a { color: var(--accent); }
 .fs-note { margin: 0; padding: 6px 8px; font-size: 12px; background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); border-radius: 4px; }
 .fs-hint, .fs-none { margin: 0; font-size: 12px; color: var(--ink-3); }
 .fs-seg { display: grid; gap: 4px; }
-.fs-seg.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.fs-seg.g2 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 .fs-seg button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 36px; padding: 3px 4px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--paper); font: inherit; color: var(--ink); cursor: pointer; line-height: 1.15; }
 .fs-seg button b, .fs-seg button span { font-size: 13px; font-weight: 600; }
 .fs-seg button small { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }

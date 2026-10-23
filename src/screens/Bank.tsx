@@ -13,7 +13,7 @@ import { plainSnippet } from '../lib/snippet';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
-import { shortName } from '../lib/taxonomy';
+import { gradeLabel, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank } from '../lib/store';
 import { moveToTrash } from '../lib/trashflow';
@@ -220,7 +220,7 @@ export function BankScreen() {
     </ul>
   );
 
-  const heading = wideOn ? 'Kết quả tìm trong toàn kho' : chapter ? `Lớp ${gradeNum} · ${chapter.name}` : gradeNum ? `Lớp ${gradeNum}` : 'Toàn bộ ngân hàng';
+  const heading = wideOn ? 'Kết quả tìm trong toàn kho' : chapter && gradeObj ? `${gradeLabel(gradeObj)} · ${chapter.name}` : gradeObj ? gradeLabel(gradeObj) : 'Toàn bộ ngân hàng';
 
   return (
     <>
