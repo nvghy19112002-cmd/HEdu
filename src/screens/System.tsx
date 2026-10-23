@@ -6,7 +6,11 @@ import { IcAlert, IcCheckCircle } from '../components/Icons';
 import { isDesktop } from '../lib/platform';
 import { clearTikzCache, defaultPreamble, findTeX, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
 import { asTikzErr } from '../lib/tikz';
-import { addSamples, exportBackup, importBackup, resetToSample, useBank } from '../lib/store';
+import { addSamples, exportBackup, importBackup, resetToSample, restoreQuestion, useBank } from '../lib/store';
+import { decisionsLoaded, loadDecisions, trashList, trashRemove, useDecisions } from '../lib/dupdecisions';
+import { plainSnippet } from '../lib/snippet';
+import { parseExTest } from '../lib/extest';
+import { seqLabel } from '../lib/id';
 import {
   backupInfo, checkUpdate, CHANNEL_LABEL, formatBytes, friendlyError, installUpdate, restoreBackup,
   type BackupMeta, type Channel, type Progress, type UpdateInfo,
@@ -248,7 +252,7 @@ export function SystemScreen() {
           <h2>Sao lưu thủ công</h2>
           <span className="sys-hint">Ngân hàng hiện có <b style={{ color: 'var(--ink)' }}>{questions.length} câu</b>. Bản sao lưu là một file duy nhất, cất ở USB hoặc Google Drive là đủ.</span>
           <div className="head-actions">
-            <button type="button" className="btn btn-dark btn-sm" onClick={() => showFile({ title: 'Bản sao lưu ngân hàng', name: `hedu-sao-luu-${today}.json`, text: exportBackup(), mime: 'application/json' })}>Tạo file sao lưu</button>
+            <button type="button" className="btn btn-dark btn-sm" onClick={async () => { if (!decisionsLoaded()) await loadDecisions(); showFile({ title: 'Bản sao lưu ngân hàng', name: `hedu-sao-luu-${today}.json`, text: exportBackup(), mime: 'application/json' }); }}>Tạo file sao lưu</button>
             <button type="button" className="btn btn-outline btn-sm" onClick={() => file.current?.click()}>Khôi phục từ file…</button>
             <input ref={file} type="file" accept=".json" hidden onChange={async (e) => {
               const f = e.target.files?.[0];
@@ -274,8 +278,10 @@ export function SystemScreen() {
             </div>
           )}
           {fileErr && <div className="note bad"><IcAlert /><div className="note-body"><b>Không khôi phục được</b><span>{fileErr}</span></div></div>}
-          <span className="sys-hint">Khôi phục từ file sẽ thay toàn bộ ngân hàng hiện tại. Bản sao lưu chỉ gồm câu hỏi và khung chương trình; các quyết định “giữ cả hai” của Kiểm tra trùng nằm ở tệp riêng — dùng “Xuất quyết định” trong màn Kiểm tra trùng nếu muốn giữ riêng.</span>
+          <span className="sys-hint">Khôi phục từ file sẽ thay toàn bộ ngân hàng hiện tại. Bản sao lưu gồm câu hỏi, khung chương trình, quyết định “giữ cả hai” của Kiểm tra trùng, thùng rác và nhãn chuẩn; khi khôi phục, phần quyết định/thùng rác được GỘP vào dữ liệu đang có (không xoá gì).</span>
         </section>
+
+        <TrashPanel />
 
         <section className="panel" aria-label="Dữ liệu">
           <h2>Dữ liệu</h2>
@@ -349,5 +355,39 @@ export function SystemScreen() {
         </section>
       </div>
     </>
+  );
+}
+
+
+function TrashPanel() {
+  const { toast } = useApp();
+  useDecisions();
+  const [ask, setAsk] = useState<string | null>(null);
+  useEffect(() => { if (!decisionsLoaded()) void loadDecisions(); }, []);
+  const items = trashList();
+  return (
+    <section className="panel" aria-label="Thùng rác">
+      <h2>Thùng rác ({items.length} câu)</h2>
+      <span className="sys-hint">Câu bị xoá ở Ngân hàng hoặc Kiểm tra trùng nằm ở đây, còn nguyên mã LaTeX, để khôi phục khi cần. Khôi phục giữ số thứ tự cũ nếu số đó chưa có câu khác dùng. Thùng rác lưu tối đa 1.000 câu gần nhất.</span>
+      {items.length === 0 && <span className="sys-hint">Thùng rác trống.</span>}
+      <ul className="trash-list">
+        {items.slice(0, 50).map(({ q, at }) => (
+          <li key={q.uid}>
+            <span className="mono">{seqLabel(q.seq)}</span>
+            <span className="trash-t">{plainSnippet(parseExTest(q.latex).stem) || '(câu chưa có đề bài)'}</span>
+            <span className="muted sm">{new Date(at).toLocaleDateString('vi-VN')}</span>
+            <button type="button" className="btn btn-sm" onClick={async () => {
+              if (!restoreQuestion(q)) { toast('Câu này đã có trong ngân hàng, không khôi phục thêm.'); }
+              else toast(`Đã khôi phục câu ${seqLabel(q.seq)}.`);
+              if (!(await trashRemove(q.uid))) toast('Đã khôi phục nhưng chưa xoá được khỏi thùng rác (không ghi được tệp).');
+            }}>Khôi phục</button>
+            {ask === q.uid
+              ? <><button type="button" className="btn btn-sm btn-accent" onClick={async () => { setAsk(null); if (!(await trashRemove(q.uid))) toast('Chưa ghi được tệp, câu vẫn nằm trong thùng rác.'); }}>Xoá hẳn</button><button type="button" className="btn btn-sm" autoFocus onClick={() => setAsk(null)}>Giữ lại</button></>
+              : <button type="button" className="btn btn-sm btn-outline" onClick={() => setAsk(q.uid)}>Xoá hẳn…</button>}
+          </li>
+        ))}
+      </ul>
+      {items.length > 50 && <span className="sys-hint">Đang hiện 50 câu gần nhất trong {items.length}.</span>}
+    </section>
   );
 }

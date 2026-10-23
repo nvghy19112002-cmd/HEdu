@@ -25,7 +25,8 @@ function Toks({ toks }: { toks: Tok[] }) {
   return <>{out}</>;
 }
 
-export function PairCompare({ A, B, result, note, footer }: { A: CmpSide; B: CmpSide; result: PairResult; note?: ReactNode; footer?: ReactNode }) {
+/** blind = ẩn nhận định của máy (loại nghi vấn, điểm, lý do) để giáo viên gắn nhãn không bị gợi ý. */
+export function PairCompare({ A, B, result, note, footer, blind }: { A: CmpSide; B: CmpSide; result: PairResult; note?: ReactNode; footer?: ReactNode; blind?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1200);
   const [tab, setTab] = useState<Tab>('view');
@@ -62,7 +63,7 @@ export function PairCompare({ A, B, result, note, footer }: { A: CmpSide; B: Cmp
 
   return (
     <div className="dc-cmp" ref={root}>
-      <div className="dc-why">
+      {!blind && <div className="dc-why">
         <div className="dc-why-h">
           <b className={`dc-kind k-${r.kind}`}>{DUP_KIND_LABEL[r.kind]}</b>
           <span className="dc-sc">Mức tương đồng {Math.round(r.score * 100)}% (chữ {Math.round(r.text * 100)}%, công thức {Math.round(r.math * 100)}%) — chỉ để tham khảo, không phải xác suất trùng.</span>
@@ -74,7 +75,7 @@ export function PairCompare({ A, B, result, note, footer }: { A: CmpSide; B: Cmp
           {rows.filter((x) => !/^(Phương án \d|Ý )/.test(x.label)).map((x) => <span key={x.label} className={`dc-part ${x.same ? 'eq' : 'ne'}`}>{x.label}: {x.same ? 'giống' : 'khác'}</span>)}
           {(() => { const o = rows.filter((x) => /^(Phương án \d|Ý )/.test(x.label)); const bad = o.filter((x) => !x.same).length; return o.length ? <span className={`dc-part ${bad ? 'ne' : 'eq'}`}>Phương án/ý: {bad ? `${bad}/${o.length} khác` : 'giống'}</span> : null; })()}
         </div>
-      </div>
+      </div>}
 
       <div className="dc-tools">
         <div className="vseg" role="tablist" aria-label="Cách xem">

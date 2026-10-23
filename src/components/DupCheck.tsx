@@ -6,6 +6,7 @@ import { compareLatex, DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { PairCompare } from './PairCompare';
 import { clearDecision, DECISION_LABEL, decisionsLoaded, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, useDecisions, WHY_CHOICES, type PairDecision } from '../lib/dupdecisions';
 import { ReviewBadge } from './ReviewControl';
+import { GoldPanel } from './GoldPanel';
 import { questionCode, seqLabel } from '../lib/id';
 import { useTaxonomy } from '../lib/curriculum';
 import { shortName } from '../lib/taxonomy';
@@ -29,7 +30,7 @@ function changedSince(snap: Map<string, string>, qs: Question[]): number {
   return n;
 }
 
-export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { questions: Question[]; selected?: ReadonlySet<string>; onClose: () => void; onOpen: (uid: string) => void; onGoto: (uid: string) => void }) {
+export function DupCheck({ questions, selected, onClose, onOpen, onGoto, onTrash }: { questions: Question[]; selected?: ReadonlySet<string>; onClose: () => void; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onTrash: (q: Question) => Promise<boolean> }) {
   const { tax } = useTaxonomy();
   const [scope, setScope] = useState<Scope>(ALL_SCOPE);
   const [mode, setMode] = useState<ScanMode>('inside');
@@ -50,11 +51,12 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   const dv = useDecisions();
   const fileIn = useRef<HTMLInputElement>(null);
   const [listOpen, setListOpen] = useState(true);
+  const [goldOpen, setGoldOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(true); // sau khi quét thì thu gọn để dành chỗ cho phần so sánh
   const [cur, setCur] = useState<string | null>(null);
   const pk = (p: DupPairHit) => p.a + '|' + p.b;
 
-  useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.drw')) onClose(); }; document.addEventListener('keydown', h); return () => document.removeEventListener('keydown', h); }, [onClose]);
+  useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.drw') && !document.querySelector('.gold')) onClose(); }; document.addEventListener('keydown', h); return () => document.removeEventListener('keydown', h); }, [onClose]);
   useEffect(() => () => { abort.current.aborted = true; }, []);
   useEffect(() => { if (decisionsLoaded()) return; void loadDecisions().then((r) => { if (!r.ok) setMsg({ ok: false, text: `Không đọc được tệp quyết định (${r.error}). HEdu sẽ KHÔNG ghi đè tệp đó; quyết định bạn đặt lúc này chỉ giữ tới khi đóng cửa sổ.` }); }); }, []);
 
@@ -99,6 +101,7 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
 
   return (
     <div className="dc" role="dialog" aria-modal="true" aria-label="Kiểm tra trùng">
+      {goldOpen && <GoldPanel questions={questions} pairs={pairs ?? []} onClose={() => setGoldOpen(false)} />}
       <header className="dc-head">
         <h2>Kiểm tra trùng</h2>
         <p className="dc-note">Máy chỉ gợi ý để bạn xem lại. “Mức tương đồng” không phải bằng chứng hai câu trùng nhau. Bạn quyết định giữ, sửa hay xoá — ở màn Ngân hàng.</p>
@@ -118,6 +121,7 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
               catch (err) { setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) }); }
             }} />
           </span>
+          <button type="button" className="btn btn-sm" onClick={() => setGoldOpen(true)} title="Gắn nhãn khoảng 150 cặp để đo độ chính xác của bộ dò trên ngân hàng thật">Nhãn chuẩn</button>
           <button type="button" className="btn btn-sm" onClick={onClose}>Đóng</button>
         </div>
       </header>
@@ -225,7 +229,7 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
             <button type="button" className="btn btn-sm dc-lt" aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>{listOpen ? '◀ Ẩn danh sách' : '▶ Hiện danh sách cặp'}</button>
             {active ? (
               <PairView key={pk(active)} hit={active} A={byUid.get(active.a)!} B={byUid.get(active.b)!} snap={snap.current}
-                onOpen={onOpen} onGoto={onGoto} onMsg={setMsg} />
+                onOpen={onOpen} onGoto={onGoto} onTrash={onTrash} onMsg={setMsg} />
             ) : <p className="dc-empty">Chọn một cặp ở bên trái.</p>}
           </div>
         </div>
@@ -234,11 +238,12 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   );
 }
 
-function PairView({ hit, A, B, snap, onOpen, onGoto, onMsg }: { hit: DupPairHit; A: Question; B: Question; snap: Map<string, string>; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onMsg: (m: { ok: boolean; text: string } | null) => void }) {
+function PairView({ hit, A, B, snap, onOpen, onGoto, onTrash, onMsg }: { onTrash: (q: Question) => Promise<boolean>; hit: DupPairHit; A: Question; B: Question; snap: Map<string, string>; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onMsg: (m: { ok: boolean; text: string } | null) => void }) {
   // Luôn so lại trên nội dung HIỆN TẠI: nếu giáo viên vừa sửa câu thì kết quả quét cũ không còn đúng.
   const live = useMemo(() => compareLatex(A.latex, B.latex), [A.latex, B.latex]);
   const edited = snap.get(A.uid) !== A.latex || snap.get(B.uid) !== B.latex;
   const [del, setDel] = useState(false);
+  const [ask, setAsk] = useState<string | null>(null);
   useDecisions();
   const st = statusOf(A, B);
   const [why, setWhy] = useState(st.rec?.why ?? '');
@@ -277,12 +282,23 @@ function PairView({ hit, A, B, snap, onOpen, onGoto, onMsg }: { hit: DupPairHit;
           </label>
           {(['not_duplicate', 'legit_variant', 'review_later'] as const).map((d) => <button key={d} type="button" className="btn btn-sm" disabled={st.status === 'valid' && st.rec!.d === d} onClick={() => decide(d)}>{DECISION_LABEL[d]}</button>)}
           <span className="dc-del">
-            <button type="button" className="btn btn-sm" aria-expanded={del} onClick={() => setDel(!del)}>Loại một câu… ▾</button>
+            <button type="button" className="btn btn-sm" aria-expanded={del} onClick={() => { setDel(!del); setAsk(null); }}>Loại một câu… ▾</button>
             {del && (
-              <span className="dc-del-pop" role="group" aria-label="Đi tới Ngân hàng để xoá">
-                <small>HEdu không xoá ở đây. Chọn câu để chuyển tới Ngân hàng, rồi dùng “⋯ → Xoá câu” (có hỏi lại).</small>
-                <button type="button" className="btn btn-sm" onClick={() => onGoto(A.uid)}>Tới câu A {seqLabel(A.seq)}</button>
-                <button type="button" className="btn btn-sm" onClick={() => onGoto(B.uid)}>Tới câu B {seqLabel(B.seq)}</button>
+              <span className="dc-del-pop" role="group" aria-label="Chuyển một câu vào thùng rác">
+                <small>Câu được chuyển vào <b>thùng rác</b> (Hệ thống → Thùng rác), không mất hẳn: có thể khôi phục. Cặp còn lại không bị ảnh hưởng.</small>
+                {([[A, 'A'], [B, 'B']] as const).map(([q, tag]) => ask === q.uid ? (
+                  <span key={tag} className="dc-confirm" role="alertdialog" aria-label={`Xác nhận chuyển câu ${tag} vào thùng rác`}>
+                    <b>Chuyển câu {tag} ({seqLabel(q.seq)} · {questionCode(q, q.level)}) vào thùng rác?</b>
+                    <button type="button" className="btn btn-sm btn-accent" onClick={async () => {
+                      const ok = await onTrash(q); setAsk(null); setDel(false);
+                      onMsg(ok ? { ok: true, text: `Đã chuyển câu ${seqLabel(q.seq)} vào thùng rác. Khôi phục ở Hệ thống → Thùng rác.` } : { ok: false, text: 'Không lưu được thùng rác nên CHƯA xoá câu nào. Thử lại hoặc tạo file sao lưu trước.' });
+                    }}>Chuyển vào thùng rác</button>
+                    <button type="button" className="btn btn-sm" autoFocus onClick={() => setAsk(null)}>Giữ lại</button>
+                  </span>
+                ) : (
+                  <button key={tag} type="button" className="btn btn-sm" onClick={() => setAsk(q.uid)}>Chuyển câu {tag} {seqLabel(q.seq)} vào thùng rác…</button>
+                ))}
+                <button type="button" className="linkbtn" onClick={() => onGoto(A.uid)}>Hoặc tới Ngân hàng xem câu A</button>
               </span>
             )}
           </span>

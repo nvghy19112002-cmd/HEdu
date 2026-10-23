@@ -10,6 +10,7 @@ import { invoke, isDesktop } from './platform';
 import { seedQuestions } from './seed';
 import type { Level, ReviewStatus, Location, Question, Taxonomy } from './types';
 import { resetTaxonomy, setTaxonomy } from './curriculum';
+import { restoreSidecar, sidecarForBackup } from './dupdecisions';
 
 export interface AppState {
   schema: number;
@@ -187,6 +188,15 @@ export function deleteQuestion(id: string) {
   set({ ...state, questions: state.questions.filter((q) => q.uid !== id) });
 }
 
+/** Đưa lại một câu lấy từ thùng rác, giữ nguyên uid và số thứ tự cũ. Trả false nếu uid đã có (không ghi đè). */
+export function restoreQuestion(q: Question): boolean {
+  if (state.questions.some((x) => x.uid === q.uid)) return false;
+  const seqTaken = state.questions.some((x) => x.seq === q.seq);
+  const back: Question = seqTaken ? { ...q, seq: state.nextSeq } : q; // số cũ đã có câu khác dùng ⇒ cấp số mới, không đụng câu kia
+  set({ ...state, questions: [...state.questions, back], nextSeq: Math.max(state.nextSeq, back.seq + 1) });
+  return true;
+}
+
 export function duplicateQuestion(id: string): Question | undefined {
   const q = state.questions.find((x) => x.uid === id);
   if (!q) return undefined;
@@ -194,7 +204,7 @@ export function duplicateQuestion(id: string): Question | undefined {
 }
 
 export function exportBackup(): string {
-  return JSON.stringify({ app: 'HEdu', exportedAt: new Date().toISOString(), ...state }, null, 2);
+  return JSON.stringify({ app: 'HEdu', exportedAt: new Date().toISOString(), ...state, dupSidecar: sidecarForBackup() }, null, 2);
 }
 
 /** Khôi phục từ file sao lưu (thay toàn bộ). Trả về số câu. */
@@ -206,6 +216,8 @@ export function importBackup(json: string): number {
   const taxonomy = (m.taxonomy ?? null) as Taxonomy | null;
   if (taxonomy) setTaxonomy(taxonomy); else resetTaxonomy();
   set({ schema: m.schema, questions, nextSeq, taxonomy });
+  // quyết định trùng / thùng rác / nhãn chuẩn đi kèm file sao lưu: GỘP vào tệp phụ hiện có (không xoá gì)
+  if (m.dupSidecar) void restoreSidecar(m.dupSidecar).catch(() => undefined);
   return questions.length;
 }
 
