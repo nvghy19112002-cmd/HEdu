@@ -18,7 +18,8 @@ import { questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank } from '../lib/store';
 import { moveToTrash } from '../lib/trashflow';
 import { BankSidebar } from '../components/BankSidebar';
-import { attrCount, chapterBranchMap, clearAttrs, computeFacets, emptyFilters, sanitize, type BankFilters } from '../lib/bankfilter';
+import { BankEmpty } from '../components/BankEmpty';
+import { attrCount, chapterBranchMap, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
 import { LEVEL_LABEL, REVIEW_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
@@ -65,15 +66,14 @@ export function BankScreen() {
   const setF = (n: BankFilters) => { setPage(0); setF0(n); };
   const hasText = text.trim().length > 0;
   const wideOn = wide && hasText;
-  const gradeNum = f.gradeNum;
-  const gradeObj = tax.grades.find((g) => g.grade === gradeNum) ?? null;
+  const gradeObj = tax.grades.find((g) => g.id === f.gradeId) ?? null;
   const chapter = gradeObj?.branches.flatMap((b) => b.chapters).find((c) => c.id === f.chapterId) ?? null;
   const lesson = chapter?.lessons.find((l) => l.id === f.lessonId) ?? null;
 
   /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
   const facets = useMemo(() => {
     const words = fold(text.trim()).split(/\s+/).filter(Boolean);
-    return computeFacets(questions, f, { chapterBranch: chapterBranchMap(tax), wide: wideOn, textOk: (uid) => words.every((w) => index.get(uid)!.includes(w)) });
+    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)), wideOn));
   }, [questions, f, text, wideOn, tax, index]);
   const list = facets.list;
 
@@ -98,7 +98,8 @@ export function BankScreen() {
     const q = questions.find((x) => x.uid === uid);
     if (!q) return;
     setDupOpen(false); setWide(false); setText('');
-    setF0({ ...emptyFilters(), gradeNum: q.grade, branchId: chapterBranchMap(tax).get(q.chapterId) ?? null, chapterId: q.chapterId || null, lessonId: q.lessonId || null });
+    const tm = taxMaps(tax);
+    setF0({ ...emptyFilters(), gradeId: tm.chapterGrade.get(q.chapterId) ?? tm.gradeByNum.get(q.grade) ?? null, branchId: chapterBranchMap(tax).get(q.chapterId) ?? null, chapterId: q.chapterId || null, lessonId: q.lessonId || null });
     const sc = questions.filter((x) => x.grade === q.grade && (!q.chapterId || x.chapterId === q.chapterId) && (!q.lessonId || x.lessonId === q.lessonId)).sort((a, b) => b.updatedAt - a.updatedAt);
     setPage(Math.floor(Math.max(0, sc.findIndex((x) => x.uid === uid)) / PER_PAGE));
     setView('list'); setActiveUid(uid); setDetailOpen(true);
@@ -108,7 +109,7 @@ export function BankScreen() {
   const clearFilters = () => setF(clearAttrs(f));
   const resetEverything = () => { setF(emptyFilters()); setText(''); setWide(false); };
   const nAttr = attrCount(f);
-  const canReset = f.gradeNum != null || nAttr > 0 || hasText || wide;
+  const canReset = f.gradeId != null || nAttr > 0 || hasText || wide;
 
   // Thanh trái: gắn cố định khi đủ rộng và đang mở; ngược lại là ngăn trượt (cùng một thành phần, cùng trạng thái).
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
@@ -302,10 +303,9 @@ export function BankScreen() {
           )}
 
           {!list.length && (
-            <div className="empty">
-              <span>{questions.length ? 'Không có câu nào khớp bộ lọc.' : 'Ngân hàng đang trống. Bấm “+ Câu hỏi mới”, hoặc nhập cả file .tex ở mục Nhập liệu.'}</span>
-              {questions.length > 0 && canReset && <button type="button" className="btn btn-sm" onClick={resetEverything}>Đặt lại toàn bộ</button>}
-            </div>
+            <BankEmpty tax={tax} f={f} facets={facets} totalQuestions={questions.length} text={text} wide={wideOn} onF={setF}
+              onClearText={() => { setText(''); setWide(false); setPage(0); }} onWide={() => setWide(true)} onClearAttrs={clearFilters}
+              onNew={() => go({ screen: 'editor' })} onImport={() => go({ screen: 'import' })} />
           )}
         </section>
       </div>
