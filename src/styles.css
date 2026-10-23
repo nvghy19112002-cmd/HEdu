@@ -757,3 +757,22 @@ a { color: var(--accent); }
 .dc-left .chip { padding: 3px 9px; font-size: 12.5px; }
 .dc-scope[hidden] { display: none; }
 .dc-why { gap: 4px; padding: 10px 12px; }
+
+/* --- rà soát trùng khi nhập (PR-4) --- */
+.dup-sum { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--paper); }
+.dup-plan { margin: 0; font-size: 14px; }
+.dup-hold { color: #b45309; }
+.dup-bulk { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; }
+.chk-line { display: flex; align-items: center; gap: 8px; }
+.chk-line .chk-head { flex: 1 1 auto; min-width: 0; }
+.dec-sel select { height: 32px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: inherit; padding: 0 6px; font-size: 13px; }
+.chk-row.dec-skip .chk-head { opacity: .6; }
+.chk-row.dec-hold .dec-sel select { border-color: #d97706; box-shadow: 0 0 0 2px rgba(217,119,6,.2); }
+.chk-tag.d-sure { background: rgba(220,38,38,.14); color: #b91c1c; }
+.chk-tag.d-conflict { background: rgba(217,119,6,.2); color: #92400e; }
+.chk-tag.d-near { background: rgba(37,99,235,.14); color: #1d4ed8; }
+.dup-hits { display: flex; flex-direction: column; gap: 8px; padding: 8px 4px; }
+.dup-hits ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dup-hits li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; }
+.dup-edit textarea { width: 100%; min-height: 160px; font: 13px/1.5 ui-monospace, Consolas, monospace; }
+.dup-err { padding: 10px 12px; border: 2px solid #dc2626; border-radius: 10px; background: rgba(220,38,38,.08); font-size: 14px; }

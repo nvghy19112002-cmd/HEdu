@@ -108,6 +108,8 @@ export function flushSave(): Promise<void> {
   return pending;
 }
 let lastSaveOk = true;
+/** Lần ghi gần nhất xuống đĩa có thành công không (dùng để báo trung thực sau khi nhập hàng loạt). */
+export const isLastSaveOk = (): boolean => lastSaveOk;
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => { void flushSave(); });

@@ -1,7 +1,7 @@
 // Kiểm tra trùng: danh sách cặp nghi trùng + xem hai câu cạnh nhau.
 // Máy chỉ GỢI Ý. Không xoá / gộp / sửa gì; "Đã xem" chỉ nhớ trong phiên làm việc này.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DupIndex, type DupPairHit, type ScanStats } from '../lib/dupindex';
+import { getSharedIndex, type DupPairHit, type ScanStats } from '../lib/dupindex';
 import { compareLatex, DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { PairCompare } from './PairCompare';
 import { ReviewBadge } from './ReviewControl';
@@ -37,7 +37,7 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   const [scannedKey, setScannedKey] = useState('');
   const [scannedLabel, setScannedLabel] = useState('');
   const byUid = useMemo(() => new Map(questions.map((q) => [q.uid, q])), [questions]);
-  const idx = useRef(new DupIndex());
+  const idx = useRef(getSharedIndex());
   const abort = useRef({ aborted: false });
   const [busy, setBusy] = useState<{ done: number; total: number; phase: string } | null>(null);
   const [pairs, setPairs] = useState<DupPairHit[] | null>(null);

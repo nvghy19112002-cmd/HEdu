@@ -1,5 +1,5 @@
 // Màn Nhập liệu: dán hoặc mở file LaTeX, xem trước rồi nhập hàng loạt vào ngân hàng.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CompiledView, FailureBox } from '../components/CompiledView';
 import { compileBatch, CATEGORY_ORDER, type Category, type Failure } from '../lib/xemchuan';
 import { isTikzReady } from '../lib/tikz';
@@ -8,10 +8,14 @@ import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, grades } from '../lib/curriculum';
 import { shortName } from '../lib/taxonomy';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
-import { findDuplicates } from '../lib/dup';
+import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
+import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
+import { PairCompare } from '../components/PairCompare';
+import { QuestionDrawer } from '../components/QuestionDrawer';
+import { seqLabel } from '../lib/id';
 import { parseExTest, splitExBlocksAt } from '../lib/extest';
 import { parseCode, questionCode } from '../lib/id';
-import { addMany, useBank, type Draft } from '../lib/store';
+import { addMany, flushSave, getState, isLastSaveOk, useBank, type Draft } from '../lib/store';
 import { LEVEL_LABEL, LEVELS, TYPE_LABEL, type Level, type Location } from '../lib/types';
 
 function readFile(file: File): Promise<string> {
@@ -36,9 +40,57 @@ export function ImportScreen() {
   const rows = useMemo(() => splitExBlocksAt(text250).map(({ text: latex, line }) => {
     const p = parseExTest(latex);
     const fromId = p.idComment ? parseCode(p.idComment) : null;
-    const dup = findDuplicates(latex, questions)[0];
-    return { latex, line, p, fromId, dup };
-  }), [text250, questions]);
+    return { latex, line, p, fromId };
+  }), [text250]);
+
+  // ---- Rà soát trùng: câu mới ↔ kho, câu mới ↔ câu mới trong lô ----
+  const [edits, setEdits] = useState<Record<number, string>>({});   // câu mới được giáo viên sửa tại chỗ (không ghi ngược vào ô dán)
+  const [userDec, setUserDec] = useState<Record<string, Decision>>({});
+  const [ana, setAna] = useState<AnalyzeResult | null>(null);
+  const [anaProg, setAnaProg] = useState<{ done: number; total: number; phase: string } | null>(null);
+  const [statusF, setStatusF] = useState<'all' | 'new' | 'sure' | 'near' | 'conflict' | 'template' | 'unread' | 'hold'>('all');
+  const [cmpKey, setCmpKey] = useState<string | null>(null);
+  const [editRow, setEditRow] = useState<number | null>(null);
+  const [openBank, setOpenBank] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [bulkAsk, setBulkAsk] = useState(false);
+  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); }, [text250]);
+  const latexOf = (i: number) => edits[i] ?? rows[i]?.latex ?? '';
+  const drafts = useMemo(() => rows.map((r, i) => ({ id: `d${i}`, latex: edits[i] ?? r.latex })), [rows, edits]);
+  const draftIds = useMemo(() => new Map(drafts.map((d, i) => [d.id, i] as const)), [drafts]);
+  useEffect(() => {
+    if (!drafts.length) { setAna(null); setAnaProg(null); return; }
+    const sig = { aborted: false };
+    setAna(null);
+    const t = setTimeout(async () => {
+      const r = await analyzeDrafts(drafts, questions, { signal: sig, onProgress: (done, total, phase) => { if (!sig.aborted) setAnaProg({ done, total, phase: phase === 'bank' ? 'Đang đọc ngân hàng' : 'Đang so với ngân hàng và trong file' }); } });
+      if (sig.aborted) return;
+      setAnaProg(null);
+      setAna(r);
+    }, edits && Object.keys(edits).length ? 350 : 0);
+    return () => { sig.aborted = true; clearTimeout(t); };
+  }, [drafts, questions]);
+  const anaDone = !!ana && ana.complete;
+  const defaults = useMemo(() => defaultDecisions(drafts, ana ? ana.rows : drafts.map(() => undefined)), [drafts, ana]);
+  const decOf = (i: number): Decision => userDec[`d${i}`] ?? defaults[`d${i}`] ?? 'hold';
+  const decisions = useMemo(() => Object.fromEntries(drafts.map((d, i) => [d.id, userDec[d.id] ?? defaults[d.id] ?? 'hold'])) as Record<string, Decision>, [drafts, defaults, userDec]);
+  const sum = useMemo(() => summarize(drafts, ana ? ana.rows : drafts.map(() => undefined), decisions), [drafts, ana, decisions]);
+  const statusOf = (i: number): { key: typeof statusF; label: string } => {
+    const a = ana?.rows[i];
+    if (!a) return { key: 'hold', label: 'Chưa phân tích' };
+    if (a.hits.some((h) => h.kind === 'conflict')) return { key: 'conflict', label: 'Mâu thuẫn đáp án' };
+    if (a.hits.some((h) => h.kind === 'raw' || h.kind === 'same')) return { key: 'sure', label: 'Trùng chắc' };
+    if (a.hits.some((h) => h.kind === 'near')) return { key: 'near', label: 'Có thể trùng' };
+    if (a.unreadable) return { key: 'unread', label: 'Mã chưa đọc đủ' };
+    if (a.hits.some((h) => h.kind === 'template')) return { key: 'template', label: 'Cùng mẫu khác dữ kiện' };
+    return { key: 'new', label: 'Mới' };
+  };
+  const statusCount = useMemo(() => {
+    const c: Record<string, number> = {};
+    rows.forEach((_, i) => { const k = statusOf(i).key; c[k] = (c[k] ?? 0) + 1; });
+    return c;
+  }, [rows, ana]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kiểm tra lỗi xem trước theo từng đợt 15 câu, nhường chỗ cho giao diện giữa các đợt.
   const [issues, setIssues] = useState<(Issue[] | undefined)[]>([]);
@@ -62,7 +114,6 @@ export function ImportScreen() {
   const done = issues.filter(Boolean).length;
   const checking = rows.length > 0 && done < rows.length;
   const worstOf = (i: number) => (issues[i] ? worstLevel(issues[i]!) : null);
-  const importable = rows.filter((r) => !(r.dup && r.dup.score === 1));
   const nErr = issues.filter((x) => x && worstLevel(x) === 'loi').length;
   const nWarn = issues.filter((x) => x && worstLevel(x) === 'canh').length;
   const nFig = issues.filter((x) => x?.some((y) => y.level === 'tin')).length;
@@ -100,18 +151,47 @@ export function ImportScreen() {
     .map((r, i) => ({ r, i }))
     .filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh')
     .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i))
-    .filter(({ i }) => !texOnlyBad || tex[i]?.ok === false);
+    .filter(({ i }) => !texOnlyBad || tex[i]?.ok === false)
+    .filter(({ i }) => statusF === 'all' || (statusF === 'hold' ? decOf(i) === 'hold' : statusOf(i).key === statusF));
 
   const chs = chapters(loc.grade);
   const chapter = chs.find((c) => c.id === loc.chapterId) ?? chs[0];
   const lesson = chapter?.lessons.find((l) => l.id === loc.lessonId) ?? chapter?.lessons[0];
 
-  const run = () => {
-    const drafts: Draft[] = importable.map((r) => ({ latex: r.latex.trim(), level: r.fromId?.level ?? level, tags: [], ...(r.fromId?.loc ?? loc) }));
-    const added = addMany(drafts);
-    toast(`Đã nhập ${added.length} câu vào ngân hàng.`);
+  const importCount = sum.importN;
+  const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0;
+  const toDrafts = (): Draft[] => rows.flatMap((r, i) => {
+    if (decOf(i) !== 'import') return [];
+    const text = latexOf(i).trim();
+    const fromId = edits[i] != null ? (parseExTest(text).idComment ? parseCode(parseExTest(text).idComment!) : null) : r.fromId;
+    return [{ latex: text, level: fromId?.level ?? level, tags: [], ...(fromId?.loc ?? loc) } as Draft];
+  });
+  /** Bước cuối: rà soát LẠI theo kho hiện hành (chống kho đổi sau lúc xem), rồi mới ghi. */
+  const commit = async () => {
+    setConfirm(false);
+    if (!ana) return;
+    const fresh = await analyzeDrafts(drafts, getState().questions);
+    if (!fresh.complete || bankHitSignature(fresh.rows) !== bankHitSignature(ana.rows)) {
+      setAna(fresh);
+      toast('Ngân hàng vừa có thay đổi nên HEdu đã rà soát lại. Xem lại các câu nghi trùng rồi bấm Nhập một lần nữa.');
+      return;
+    }
+    const added = addMany(toDrafts());
+    await flushSave();
+    if (!isLastSaveOk()) {
+      setSaveErr(`Đã đưa ${added.length} câu vào ngân hàng trong phiên này nhưng CHƯA ghi được xuống đĩa. Đừng đóng app. Nội dung dán vẫn được giữ lại; các câu đã thêm sẽ hiện là “trùng chắc”, nên thử lại không bị nhân đôi.`);
+      return;
+    }
+    toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.`);
     setSrc('');
     go({ screen: 'bank' });
+  };
+  const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); setSrc(''); go({ screen: 'bank' }); } };
+  const setDec = (i: number, d: Decision) => setUserDec((u) => ({ ...u, [`d${i}`]: d }));
+  const sureRows = rows.map((_, i) => i).filter((i) => statusOf(i).key === 'sure' && decOf(i) !== 'skip');
+  const hitLabel = (h: DraftHit): string => {
+    if (h.with === 'bank') { const q = questions.find((x) => x.uid === h.other); return `Câu ${q ? seqLabel(q.seq) : '(đã xoá)'} trong ngân hàng`; }
+    const j = draftIds.get(h.other); return `Câu ${j != null ? j + 1 : '?'} trong file${j != null ? ` (dòng ${rows[j].line})` : ''}`;
   };
 
   return (
@@ -121,7 +201,7 @@ export function ImportScreen() {
         <div className="panel">
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>
           <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-            Mỗi câu nằm trong <span className="mono">\begin{'{ex}'} … \end{'{ex}'}</span>. Câu có sẵn ID dạng <span className="mono">%[2D1H1-1]</span> sẽ tự vào đúng bài và mức độ; câu không có ID dùng vị trí chọn bên dưới. Câu trùng hẳn với ngân hàng sẽ được bỏ qua.
+            Mỗi câu nằm trong <span className="mono">\begin{'{ex}'} … \end{'{ex}'}</span>. Câu có sẵn ID dạng <span className="mono">%[2D1H1-1]</span> sẽ tự vào đúng bài và mức độ; câu không có ID dùng vị trí chọn bên dưới. HEdu sẽ so từng câu với ngân hàng và với các câu khác trong file, rồi để bạn quyết định câu nào nhập, câu nào bỏ qua.
           </span>
           <textarea value={src} onChange={(e) => setSrc(e.target.value)} placeholder={'\\begin{ex}%[2D1N1-1]\n  Đề bài ...\n  \\choice\n  {\\True A}{B}{C}{D}\n\\end{ex}'} aria-label="Mã LaTeX cần nhập" spellCheck={false} />
           <div className="head-actions">
@@ -157,6 +237,35 @@ export function ImportScreen() {
             {!checking && nErr > 0 && (
               <span className="sys-hint">Câu lỗi vẫn nhập được, nhưng phần xem trước sẽ vỡ cho tới khi bạn sửa. Bấm vào câu để xem lỗi ở đâu.</span>
             )}
+            <div className="dup-sum" role="group" aria-label="Rà soát trùng trước khi nhập">
+              <div className="chk-sum">
+                {anaProg && <span className="chk-pill" role="status">Rà soát trùng: {anaProg.phase} {anaProg.done}/{anaProg.total}…</span>}
+                {!anaDone && !anaProg && rows.length > 0 && <span className="chk-pill warn" role="status">Chưa rà soát trùng xong — chưa thể nhập</span>}
+                {anaDone && <span className="chk-pill ok">Đã rà soát trùng xong</span>}
+              </div>
+              {anaDone && (
+                <div className="chips" role="group" aria-label="Lọc theo kết quả rà soát">
+                  {([['all', 'Tất cả', rows.length], ['new', 'Mới', statusCount.new ?? 0], ['sure', 'Trùng chắc', statusCount.sure ?? 0], ['conflict', 'Mâu thuẫn đáp án', statusCount.conflict ?? 0], ['near', 'Có thể trùng', statusCount.near ?? 0], ['template', 'Cùng mẫu khác dữ kiện', statusCount.template ?? 0], ['unread', 'Cần sửa mã', statusCount.unread ?? 0], ['hold', 'Chưa quyết định', sum.holdN]] as [typeof statusF, string, number][]).map(([k, label, n]) => (
+                    <button key={k} type="button" className="chip" aria-pressed={statusF === k} onClick={() => setStatusF(k)}>{label}<span className="chip-n">{n}</span></button>
+                  ))}
+                </div>
+              )}
+              {anaDone && (
+                <p className="dup-plan" role="status">
+                  Kế hoạch nhập: <b>nhập {sum.importN}</b> · <b>bỏ qua {sum.skipN}</b>{sum.holdN > 0 && <> · <b className="dup-hold">{sum.holdN} câu chưa quyết định</b></>}
+                  {sum.keptSuspect > 0 && <> · {sum.keptSuspect} câu nghi trùng được bạn chọn nhập</>}
+                </p>
+              )}
+              {anaDone && sureRows.length > 0 && (
+                <div className="head-actions">
+                  {!bulkAsk
+                    ? <button type="button" className="btn btn-sm" onClick={() => { setStatusF('sure'); setBulkAsk(true); }}>Xem {sureRows.length} câu trùng chắc đang để nhập…</button>
+                    : <span className="dup-bulk">Bỏ qua {sureRows.length} câu trùng chắc (đang hiện ở danh sách dưới)?
+                        <button type="button" className="btn btn-sm btn-accent" onClick={() => { setUserDec((u) => ({ ...u, ...Object.fromEntries(sureRows.map((i) => [`d${i}`, 'skip' as Decision])) })); setBulkAsk(false); }}>Xác nhận bỏ qua {sureRows.length} câu</button>
+                        <button type="button" className="btn btn-sm" onClick={() => setBulkAsk(false)}>Huỷ</button></span>}
+                </div>
+              )}
+            </div>
             {isTikzReady() && (
               <div className="tex-batch">
                 <div className="tex-batch-h">
@@ -183,16 +292,27 @@ export function ImportScreen() {
             )}
             <ol className="chk-list">
               {shownRows.slice(0, limit).map(({ r, i }) => (
-                <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'}`}>
+                <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'} dec-${decOf(i)}`}>
+                  <div className="chk-line">
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
                     <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của file`}>{i + 1}</span>
                     <b>{TYPE_LABEL[r.p.type]}</b>
                     <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : 'không ID'}</span>
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
-                    {r.dup && <span className="chk-tag dup">{r.dup.score === 1 ? 'trùng hẳn, bỏ qua' : `giống ${Math.round(r.dup.score * 100)}%`}</span>}
+                    {anaDone && statusOf(i).key !== 'new' && <span className={`chk-tag dup d-${statusOf(i).key}`}>{statusOf(i).label}{(ana!.rows[i]?.hits.length ?? 0) > 0 ? ` · ${ana!.rows[i]!.hits.length}` : ''}</span>}
+                    {edits[i] != null && <span className="chk-tag tin">đã sửa tại chỗ</span>}
                     {tex[i] && <span className={`chk-tag ${tex[i].ok ? 'tin' : 'loi'}`}>{tex[i].ok ? 'TeX đạt' : `TeX: ${(tex[i] as { fail: Failure }).fail.label}`}</span>}
                     {worstOf(i) && <span className={`chk-tag ${worstOf(i)}`}>{worstOf(i) === 'tin' ? 'có hình' : LEVEL_TEXT[worstOf(i)!]}</span>}
                   </button>
+                  <label className="dec-sel">
+                    <span className="sr-only">Quyết định cho câu {i + 1}</span>
+                    <select value={decOf(i)} disabled={!anaDone} onChange={(e) => setDec(i, e.target.value as Decision)} aria-label={`Quyết định cho câu ${i + 1}`}>
+                      <option value="import">Nhập</option>
+                      <option value="skip">Bỏ qua</option>
+                      <option value="hold" disabled>{anaDone ? 'Chưa quyết định' : 'Chờ rà soát…'}</option>
+                    </select>
+                  </label>
+                  </div>
                   {openRow === i && isTikzReady() && (
                     <div className="chk-tex">
                       {exactRow === i
@@ -201,6 +321,44 @@ export function ImportScreen() {
                             {tex[i] && !tex[i].ok && <FailureBox fail={(tex[i] as { fail: Failure }).fail} />}
                             <button type="button" className="btn btn-sm" onClick={() => setExactRow(i)}>Xem chuẩn câu này</button>
                           </>}
+                    </div>
+                  )}
+                  {openRow === i && anaDone && (ana!.rows[i]?.hits.length ?? 0) > 0 && (
+                    <div className="dup-hits">
+                      <b>Giống với:</b>
+                      <ul>
+                        {ana!.rows[i]!.hits.map((h, k) => (
+                          <li key={k}>
+                            <span className={`dc-kind k-${h.kind}`}>{DUP_KIND_LABEL[h.kind]}</span> {hitLabel(h)} · tương đồng {Math.round(h.result.score * 100)}%
+                            <button type="button" className="btn btn-sm" aria-pressed={cmpKey === `${i}:${k}`} onClick={() => setCmpKey(cmpKey === `${i}:${k}` ? null : `${i}:${k}`)}>{cmpKey === `${i}:${k}` ? 'Ẩn so sánh' : 'So sánh'}</button>
+                          </li>
+                        ))}
+                      </ul>
+                      {(() => {
+                        const m = /^(\d+):(\d+)$/.exec(cmpKey ?? '');
+                        if (!m || Number(m[1]) !== i) return null;
+                        const h = ana!.rows[i]!.hits[Number(m[2])];
+                        if (!h) return null;
+                        let other: { title: string; latex: string; actions?: ReactNode } | null = null;
+                        if (h.with === 'bank') { const q = questions.find((x) => x.uid === h.other); if (q) other = { title: `Câu ${seqLabel(q.seq)} trong kho`, latex: q.latex, actions: <button type="button" className="btn btn-sm" onClick={() => setOpenBank(q.uid)}>Mở câu trong kho</button> }; }
+                        else { const j = draftIds.get(h.other); if (j != null) other = { title: `Câu ${j + 1} trong file`, latex: latexOf(j) }; }
+                        if (!other) return <p className="sys-hint">Câu này không còn trong ngân hàng (có thể vừa bị xoá).</p>;
+                        return (
+                          <PairCompare
+                            A={{ title: `Câu mới ${i + 1}`, latex: latexOf(i), actions: <button type="button" className="btn btn-sm" onClick={() => setEditRow(editRow === i ? null : i)}>{editRow === i ? 'Xong sửa' : 'Sửa câu mới'}</button> }}
+                            B={other} result={h.result}
+                            note={<p className="dc-sc">Chỉ so sánh để bạn quyết định. HEdu không tự sửa hay xoá câu nào.</p>}
+                          />
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {openRow === i && editRow === i && (
+                    <div className="dup-edit">
+                      <label className="lbl">Sửa câu mới (chỉ áp dụng cho lần nhập này, không đổi ô dán ở trên)
+                        <textarea value={latexOf(i)} onChange={(e) => setEdits((c) => ({ ...c, [i]: e.target.value }))} spellCheck={false} aria-label={`Mã LaTeX câu mới ${i + 1}`} />
+                      </label>
+                      {edits[i] != null && <button type="button" className="btn btn-sm" onClick={() => setEdits((c) => { const n = { ...c }; delete n[i]; return n; })}>Khôi phục bản gốc</button>}
                     </div>
                   )}
                   {openRow === i && (issues[i]?.length ?? 0) > 0 && (
@@ -223,7 +381,30 @@ export function ImportScreen() {
                 <button type="button" className="btn btn-sm" onClick={() => setLimit(shownRows.length)}>Hiện hết</button>
               </div>
             )}
-            <div><button type="button" className="btn btn-accent" disabled={!importable.length || checking} onClick={run}>{checking ? 'Đang kiểm tra…' : `Nhập ${importable.length} câu vào ngân hàng`}</button></div>
+            {saveErr && (
+              <div className="dup-err" role="alert">
+                <b>Chưa ghi được dữ liệu.</b> {saveErr}
+                <div className="head-actions"><button type="button" className="btn btn-sm btn-accent" onClick={retrySave}>Thử ghi lại</button></div>
+              </div>
+            )}
+            <div className="head-actions">
+              <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => setConfirm(true)}>
+                {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : `Nhập ${importCount} câu vào ngân hàng`}
+              </button>
+              {anaDone && sum.holdN > 0 && <button type="button" className="btn btn-sm" onClick={() => setStatusF('hold')}>Xem các câu chưa quyết định</button>}
+            </div>
+            {confirm && (
+              <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Xác nhận nhập">
+                <b>Sẽ nhập {sum.importN} câu, bỏ qua {sum.skipN} câu.</b>
+                {sum.keptSuspect > 0 && <p>Trong số nhập có {sum.keptSuspect} câu HEdu đánh dấu nghi trùng mà bạn đã chọn giữ{sum.keptPairs > 0 ? `, trong đó ${sum.keptPairs} cặp trùng nhau ngay trong file sẽ được nhập cả hai` : ''}.</p>}
+                <p>HEdu sẽ rà soát lại với ngân hàng ngay trước khi ghi. Không câu nào trong ngân hàng bị sửa hay xoá.</p>
+                <div className="head-actions">
+                  <button type="button" className="btn btn-accent" autoFocus onClick={commit}>Nhập {sum.importN} câu</button>
+                  <button type="button" className="btn" onClick={() => setConfirm(false)}>Quay lại</button>
+                </div>
+              </div>
+            )}
+            {openBank && questions.find((q) => q.uid === openBank) && <QuestionDrawer q={questions.find((q) => q.uid === openBank)!} onClose={() => setOpenBank(null)} onDirty={() => undefined} />}
           </div>
         )}
       </div>

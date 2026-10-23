@@ -105,6 +105,32 @@ export class DupIndex {
     return { ids: [...out], capped: capped || ranked.length > topK };
   }
 
+  /** Đồng bộ chỉ mục với danh sách hiện tại (thêm/sửa/xoá), chia lượt để không treo giao diện. false nếu bị huỷ. */
+  async sync(qs: QLike[], o: { batch?: number; signal?: { aborted: boolean }; onProgress?: (done: number, total: number) => void } = {}): Promise<boolean> {
+    const batch = o.batch ?? 200;
+    const seen = new Set(qs.map((q) => q.uid));
+    for (const u of [...this.fps.keys()]) if (!seen.has(u)) this.remove(u);
+    for (let i = 0; i < qs.length; i++) {
+      this.upsert(qs[i].uid, qs[i].latex);
+      if ((i + 1) % batch === 0) {
+        o.onProgress?.(i + 1, qs.length);
+        await yieldUi();
+        if (o.signal?.aborted) return false;
+      }
+    }
+    return true;
+  }
+
+  /** Các câu trong chỉ mục liên quan tới một bản nháp CHƯA có trong kho (không đưa nháp vào chỉ mục). */
+  relatedFp(f: Fingerprint, opt: Pick<ScanOptions, 'topK' | 'probe' | 'minShared'> & { exclude?: string } = {}): { uid: string; result: PairResult }[] {
+    const out: { uid: string; result: PairResult }[] = [];
+    for (const u of this.candidates(opt.exclude ?? '\u0000', f, opt.topK, opt.probe, opt.minShared).ids) {
+      const g = this.fps.get(u);
+      if (g) out.push({ uid: u, result: comparePair(f, g) });
+    }
+    return out;
+  }
+
   /** Các cặp nghi trùng liên quan tới MỘT câu (dùng cho Trình sửa / Nhập liệu). */
   related(uid: string, opt: Pick<ScanOptions, 'topK' | 'probe' | 'minShared' | 'keep'> = {}): DupPairHit[] {
     const f = this.fps.get(uid);
@@ -127,16 +153,7 @@ export class DupIndex {
     const keep = opt.keep ?? defaultKeep;
     const sideA = opt.scope ? qs.filter((q) => opt.scope!.has(q.uid)).length : qs.length;
     const stats: ScanStats = { sideA, sideB: opt.scope && !opt.vsAll ? sideA : qs.length, questions: qs.length, comparisons: 0, candidatesCapped: 0, ms: 0, aborted: false };
-    const seen = new Set(qs.map((q) => q.uid));
-    for (const u of [...this.fps.keys()]) if (!seen.has(u)) this.remove(u);
-    for (let i = 0; i < qs.length; i++) {
-      this.upsert(qs[i].uid, qs[i].latex);
-      if ((i + 1) % batch === 0) {
-        opt.onProgress?.(i + 1, qs.length, 'index');
-        await yieldUi();
-        if (opt.signal?.aborted) { stats.aborted = true; stats.ms = Date.now() - t0; return { pairs: [], stats }; }
-      }
-    }
+    if (!(await this.sync(qs, { batch, signal: opt.signal, onProgress: (d, t) => opt.onProgress?.(d, t, 'index') }))) { stats.aborted = true; stats.ms = Date.now() - t0; return { pairs: [], stats }; }
     const rank = new Map(qs.map((q, i) => [q.uid, i] as const));
     const pairs: DupPairHit[] = [];
     const inA = (u: string) => !opt.scope || opt.scope.has(u);
@@ -175,3 +192,7 @@ function sortPairs(p: DupPairHit[], rank?: Map<string, number>): DupPairHit[] {
   return p.sort((x, y) => DUP_KIND_RANK[x.result.kind] - DUP_KIND_RANK[y.result.kind] || y.result.score - x.result.score
     || (rank ? r(x.a) - r(y.a) || r(x.b) - r(y.b) : x.a < y.a ? -1 : x.a > y.a ? 1 : x.b < y.b ? -1 : 1));
 }
+
+/** Chỉ mục dùng chung cho cả màn Kiểm tra trùng và màn Nhập liệu (dựng một lần, cập nhật gia tăng). */
+const shared = new DupIndex();
+export const getSharedIndex = (): DupIndex => shared;
