@@ -1,14 +1,15 @@
 // Màn hình Ngân hàng câu hỏi.
 // Bố cục: thanh trái "Mục lục & bộ lọc" (Lớp → Phân môn → Chương → Bài → Dạng; Mức độ, Loại, Hình, Kiểm duyệt); cột phải tìm kiếm và xem câu.
 // Mọi lựa chọn đều hiện sẵn số câu (đếm theo chiều) để biết chỗ nào đang thiếu.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
 import { CompiledView } from '../components/CompiledView';
 import { QuestionDrawer } from '../components/QuestionDrawer';
 import { isTikzReady } from '../lib/tikz';
-import { loadBankView, loadTreeOpen, saveBankView, saveTreeOpen, type BankView } from '../lib/bankview';
+import { loadBankView, loadPerPage, loadSort, loadTreeOpen, PER_PAGE_CHOICES, saveBankView, savePerPage, saveSort, saveTreeOpen, type BankView, type PerPage } from '../lib/bankview';
+import { loadSession, saveSession } from '../lib/banksession';
 import { plainSnippet } from '../lib/snippet';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
@@ -21,11 +22,11 @@ import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
-import { DEFAULT_SORT, sortedCopy } from '../lib/qsort';
-import { attrCount, chapterBranchMap, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
+import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
+import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
-import { LEVEL_LABEL, REVIEW_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
+import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 
 function fold(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
@@ -43,9 +44,10 @@ export function BankScreen() {
   const { questions } = useBank();
   const { tax } = useTaxonomy();
 
-  const [f0, setF0] = useState<BankFilters>(emptyFilters); // vị trí + thuộc tính; luôn đi qua sanitize trước khi dùng
-  const [text, setText] = useState('');
-  const [wide, setWide] = useState(false); // tìm trong toàn bộ ngân hàng thay vì mục đang chọn (chỉ có hiệu lực khi đang có chữ tìm)
+  const sess = useRef(loadSession()).current; // quay lại từ màn khác thì giữ bộ lọc/tìm/sắp xếp/trang (chỉ trong bộ nhớ)
+  const [f0, setF0] = useState<BankFilters>(() => sess?.f0 ?? emptyFilters()); // vị trí + thuộc tính; luôn đi qua sanitize trước khi dùng
+  const [text, setText] = useState(() => sess?.text ?? '');
+  const [wide, setWide] = useState(() => sess?.wide ?? false); // tìm trong toàn bộ ngân hàng thay vì mục đang chọn (chỉ có hiệu lực khi đang có chữ tìm)
   const [showSol, setShowSol] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [onlySel, setOnlySel] = useState(false); // chỉ xem các câu đã chọn (không đổi bộ lọc)
@@ -55,8 +57,15 @@ export function BankScreen() {
   const [exact, setExact] = useState<Set<string>>(new Set()); // các câu đang ở chế độ “Xem chuẩn”
   const [openUid, setOpenUid] = useState<string | null>(nav.openUid ?? null); // câu đang sửa ở ngăn bên phải
   const opened = openUid ? questions.find((q) => q.uid === openUid) : undefined;
-  const [page, setPage] = useState(0);
-  const PER_PAGE = 20;
+  const [page, setPage] = useState(() => sess?.page ?? 0);
+  const [perPage, setPerPageState] = useState<PerPage>(loadPerPage);
+  const PER_PAGE: number = perPage;
+  const [sort, setSortState] = useState<SortMode>(() => sess?.sort ?? loadSort());
+  const setSort = (m: SortMode) => { setSortState(m); saveSort(m); setPage(0); };
+  const setPerPage = (n: PerPage) => { setPerPageState(n); savePerPage(n); setPage(0); };
+  const qlistRef = useRef<HTMLElement>(null);
+  /** Chuyển trang; từ pager cuối danh sách thì cuộn về đầu danh sách để thấy câu đầu trang mới. */
+  const goPage = (n: number, scroll = false) => { setPage(n); if (scroll) requestAnimationFrame(() => { const el = qlistRef.current; if (el) window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - 8) }); }); };
   const [view, setViewState] = useState<BankView>(loadBankView);
   const setView = (v: BankView) => { setViewState(v); saveBankView(v); };
   const [activeUid, setActiveUid] = useState<string | null>(null); // câu đang xem ở chế độ Danh sách (khác với ô chọn nhiều)
@@ -79,18 +88,19 @@ export function BankScreen() {
   /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
   const facets = useMemo(() => {
     const words = fold(text.trim()).split(/\s+/).filter(Boolean);
-    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)), wideOn, DEFAULT_SORT));
-  }, [questions, f, text, wideOn, tax, index]);
+    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)), wideOn, sort));
+  }, [questions, f, text, wideOn, tax, index, sort]);
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
   useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
   useEffect(() => { if (onlySel && sel.size === 0) setOnlySel(false); }, [onlySel, sel]);
-  const selectedQs = useMemo(() => sortedCopy(questions.filter((q) => sel.has(q.uid)), DEFAULT_SORT), [questions, sel]);
+  const selectedQs = useMemo(() => sortedCopy(questions.filter((q) => sel.has(q.uid)), sort), [questions, sel, sort]);
   const resultUids = useMemo(() => new Set(facets.list.map((q) => q.uid)), [facets.list]);
   const list = onlySel ? selectedQs : facets.list;
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
+  useEffect(() => { saveSession({ f0, text, wide, sort, page: cur }); }, [f0, text, wide, sort, cur]);
   const shown = list.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
   const shownUids = useMemo(() => shown.map((q) => q.uid), [shown]);
   const counts = selCounts(sel, shownUids, onlySel ? null : resultUids);
@@ -100,6 +110,20 @@ export function BankScreen() {
   // Câu đang xem: nếu không còn nằm trong trang hiện tại (đổi lọc/trang/xoá) thì lấy câu đầu tiên hợp lệ.
   const active = shown.find((q) => q.uid === activeUid) ?? shown[0] ?? null;
   useEffect(() => { if (!active) setDetailOpen(false); }, [active]);
+  const activeIdx = active ? list.findIndex((q) => q.uid === active.uid) : -1;
+  /** Câu trước/sau theo thứ tự của CẢ danh sách (qua ranh giới trang); giữ nguyên lựa chọn và bộ lọc. */
+  const stepActive = (d: number, keepFocus = false) => {
+    const t = list[activeIdx + d];
+    if (!t) return;
+    setActiveUid(t.uid); setPage(Math.floor((activeIdx + d) / PER_PAGE)); setDetailOpen(true);
+    if (keepFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>(`.row-main[data-uid="${t.uid}"]`)?.focus());
+  };
+  /** ↑ ↓ chỉ khi đang đứng trên một hàng của danh sách (không cướp phím ở ô nhập). */
+  const onRowsKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+    if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || !(e.target as HTMLElement).classList.contains('row-main')) return;
+    e.preventDefault();
+    stepActive(e.key === 'ArrowDown' ? 1 : -1, true);
+  };
   // Menu ba chấm: bấm ra ngoài thì đóng
   useEffect(() => {
     if (!menuUid) return;
@@ -122,6 +146,28 @@ export function BankScreen() {
     setView('list'); setActiveUid(uid); setDetailOpen(true);
     toast(`Đã chuyển tới ${seqLabel(q.seq)}. Muốn xoá: nút ⋯ → Xoá câu (có hỏi lại).`);
   };
+
+  /** Câu mới ở vị trí đang duyệt: chỉ khi đã chọn Lớp và không đang tìm toàn kho; mức độ chỉ gợi ý khi chọn đúng một mức. */
+  const newHere = () => {
+    if (wideOn || !gradeObj) { go({ screen: 'editor', fromBank: true }); return; }
+    const branch = gradeObj.branches.find((b) => b.id === f.branchId);
+    const ch = chapter ?? (branch ?? gradeObj.branches[0])?.chapters[0] ?? null;
+    const ls = lesson ?? ch?.lessons[0] ?? null;
+    const fm = (ls && f.formId ? ls.forms.find((x) => x.id === f.formId) : null) ?? ls?.forms[0] ?? null;
+    const level = levelsActive(f) && f.levels.size === 1 ? LEVELS.find((l) => f.levels.has(l)) : undefined;
+    const label = [gradeLabel(gradeObj), ch && chapter ? shortName(ch.name) : null, ls && lesson ? shortName(ls.name) : null].filter(Boolean).join(' › ');
+    go({ screen: 'editor', fromBank: true, newAt: { grade: gradeObj.grade, chapterId: ch?.id ?? '', lessonId: ls?.id ?? '', formId: fm?.id ?? '', level, label } });
+  };
+
+  // Từ màn Soạn quay về: dừng ở câu vừa lưu nếu nó nằm trong bộ lọc hiện tại
+  const focusDone = useRef(false);
+  useEffect(() => {
+    if (focusDone.current || !nav.focusUid) return;
+    focusDone.current = true;
+    const i = facets.list.findIndex((q) => q.uid === nav.focusUid);
+    if (i >= 0) { setPage(Math.floor(i / PER_PAGE)); setActiveUid(nav.focusUid); }
+    else toast('Câu vừa lưu nằm ngoài bộ lọc hiện tại. Bấm “Đặt lại toàn bộ” để thấy tất cả.');
+  }, [nav.focusUid, facets.list, toast, PER_PAGE]);
 
   const clearFilters = () => setF(clearAttrs(f));
   const resetEverything = () => { setF(emptyFilters()); setText(''); setWide(false); };
@@ -157,7 +203,7 @@ export function BankScreen() {
   };
   const runExport = () => {
     const body = selectedQs.map((q) => buildExTest(parseExTest(q.latex), { id: questionCode(q, q.level) })).join('\n\n');
-    showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: Mới cập nhật)\n\n${body}\n`, mime: 'application/x-tex' });
+    showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: ${SORT_LABEL[sort]})\n\n${body}\n`, mime: 'application/x-tex' });
   };
   const exportSelected = () => {
     const n = selectedQs.length, v = exportVerdict(n);
@@ -229,7 +275,7 @@ export function BankScreen() {
   };
 
   const renderRows = () => (
-    <ul className="rows" aria-label="Danh sách rút gọn">
+    <ul className="rows" aria-label="Danh sách rút gọn" onKeyDown={onRowsKey}>
       {shown.map((q) => {
         const p = parseExTest(q.latex);
         const isActive = active?.uid === q.uid;
@@ -237,7 +283,7 @@ export function BankScreen() {
         return (
           <li key={q.uid} className={`row${isActive ? ' is-active' : ''}${on ? ' is-checked' : ''}`}>
             <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
-            <button type="button" className="row-main" aria-current={isActive ? 'true' : undefined} title={plainSnippet(p.stem, 400)} onClick={() => { setActiveUid(q.uid); setDetailOpen(true); }}>
+            <button type="button" className="row-main" data-uid={q.uid} aria-current={isActive ? 'true' : undefined} title={plainSnippet(p.stem, 400)} onClick={() => { setActiveUid(q.uid); setDetailOpen(true); }}>
               <span className="row-top">
                 <span className="mono row-no">{seqLabel(q.seq)}</span>
                 <span className="code-tag">{questionCode(q, q.level)}</span>
@@ -261,7 +307,7 @@ export function BankScreen() {
         <h1>Ngân hàng câu hỏi</h1>
         <div className="head-actions">
           <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'import' })}>Nhập từ file</button>
-          <button type="button" className="btn btn-accent" onClick={() => go({ screen: 'editor' })}>+ Câu hỏi mới</button>
+          <button type="button" className="btn btn-accent" onClick={newHere} title="Soạn câu mới; nếu đang xem một chương/bài thì điền sẵn vị trí đó">+ Câu hỏi mới</button>
         </div>
       </header>
 
@@ -270,7 +316,7 @@ export function BankScreen() {
           <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => setTreeOpen(false)} />
         )}
 
-        <section className="qlist" aria-label="Danh sách câu hỏi">
+        <section ref={qlistRef} className="qlist" aria-label="Danh sách câu hỏi">
           <div className="qbar">
             <label className="search sm">
               <IcSearch size={16} />
@@ -303,7 +349,7 @@ export function BankScreen() {
                 <small>{nf.format(counts.inPage)} ở trang này · {nf.format(counts.outPage)} ngoài trang{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} ngoài bộ lọc` : ''}</small>
               </span>
               <div className="selbar-grp">
-                <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo thứ tự đang xem">Xuất .tex</button>
+                <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo kiểu sắp xếp đang chọn">Xuất .tex</button>
                 <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
                 {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
                 <span className="selbar-sep" aria-hidden="true" />
@@ -315,20 +361,41 @@ export function BankScreen() {
           )}
           {onlySel && <div className="selbar-view" role="status"><span>Đang chỉ xem <b>{nf.format(sel.size)}</b> câu đã chọn (bộ lọc và chữ tìm tạm không áp dụng).</span><button type="button" className="linkbtn" onClick={() => { setOnlySel(false); setPage(0); }}>Quay lại kết quả lọc</button></div>}
           <div className="list-head">
-            <span className="lh-left">
-              {shown.length > 0 && (
+            <span><b className="lh-title">{onlySel ? 'Các câu đã chọn' : heading}</b>{lesson && !onlySel ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
+            <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
+          </div>
+          {shown.length > 0 && (
+            <div className="qtools">
+              <span className="lh-left">
                 <label className="lh-sel" title="Chọn hoặc bỏ chọn các câu đang hiện ở trang này">
                   <input ref={masterRef} type="checkbox" checked={pState === 'all'} onChange={() => (pState === 'all' ? deselectPage() : selectPage())} />
                   Chọn trang ({shown.length})
                 </label>
-              )}
-              {!onlySel && list.length > shown.length && counts.total - counts.outScope < facets.list.length && (
-                <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(facets.list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(facets.list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
-              )}
-              <span><b className="lh-title">{onlySel ? 'Các câu đã chọn' : heading}</b>{lesson && !onlySel ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
-            </span>
-            <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
-          </div>
+                {!onlySel && list.length > shown.length && counts.total - counts.outScope < facets.list.length && (
+                  <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(facets.list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(facets.list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
+                )}
+              </span>
+              <span className="qtools-r">
+                <label className="qsel">Sắp xếp
+                  <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
+                    {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}
+                  </select>
+                </label>
+                <label className="qsel">
+                  <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value) as PerPage)} aria-label="Số câu mỗi trang">
+                    {PER_PAGE_CHOICES.map((n) => <option key={n} value={n}>{n} câu/trang</option>)}
+                  </select>
+                </label>
+                {pages > 1 && (
+                  <span className="pager-top" role="group" aria-label="Chuyển trang">
+                    <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => goPage(cur - 1)} aria-label="Trang trước">‹</button>
+                    <span><b>{cur + 1}</b> / {nf.format(pages)}</span>
+                    <button type="button" className="btn btn-sm" disabled={cur >= pages - 1} onClick={() => goPage(cur + 1)} aria-label="Trang sau">›</button>
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
 
           {view === 'cards' && shown.map((q) => renderCard(q, 'card'))}
 
@@ -337,6 +404,11 @@ export function BankScreen() {
               {renderRows()}
               <div className="detail" aria-label="Chi tiết câu đang xem">
                 <button type="button" className="linkbtn detail-back" onClick={() => setDetailOpen(false)}>‹ Quay lại danh sách</button>
+                <div className="detail-nav" role="group" aria-label="Chuyển giữa các câu">
+                  <button type="button" className="btn btn-sm" disabled={activeIdx <= 0} onClick={() => stepActive(-1)} title="Câu trước (phím ↑ khi đang ở danh sách)">‹ Câu trước</button>
+                  <span><b>{nf.format(activeIdx + 1)}</b> / {nf.format(list.length)}</span>
+                  <button type="button" className="btn btn-sm" disabled={activeIdx < 0 || activeIdx >= list.length - 1} onClick={() => stepActive(1)} title="Câu tiếp (phím ↓ khi đang ở danh sách)">Câu tiếp ›</button>
+                </div>
                 {renderCard(active, 'detail')}
               </div>
             </div>
@@ -344,16 +416,16 @@ export function BankScreen() {
 
           {pages > 1 && (
             <nav className="pager" aria-label="Phân trang">
-              <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => setPage(cur - 1)}>‹ Trước</button>
+              <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => goPage(cur - 1, true)}>‹ Trước</button>
               <span>Trang <b>{cur + 1}</b> / {nf.format(pages)}</span>
-              <button type="button" className="btn btn-sm" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>Sau ›</button>
+              <button type="button" className="btn btn-sm" disabled={cur >= pages - 1} onClick={() => goPage(cur + 1, true)}>Sau ›</button>
             </nav>
           )}
 
           {!list.length && (
             <BankEmpty tax={tax} f={f} facets={facets} totalQuestions={questions.length} text={text} wide={wideOn} onF={setF}
               onClearText={() => { setText(''); setWide(false); setPage(0); }} onWide={() => setWide(true)} onClearAttrs={clearFilters}
-              onNew={() => go({ screen: 'editor' })} onImport={() => go({ screen: 'import' })} />
+              onNew={newHere} onImport={() => go({ screen: 'import' })} />
           )}
         </section>
       </div>

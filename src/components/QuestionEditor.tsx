@@ -2,7 +2,7 @@
 // Một nơi duy nhất lo: đọc câu (parseExTest), kiểm tra, ID6, kiểm tra trùng, lưu, nháp, xem trước, Xem chuẩn.
 // Bố cục: thanh ngữ cảnh gọn + bảng “Thuộc tính” gập được, hai khung (Mã LaTeX | Xem trước), dải trạng thái.
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { useApp } from '../app-context';
+import { useApp, type NewAt } from '../app-context';
 import { chapters, firstLocation, grades } from '../lib/curriculum';
 import { checkQuestion, type Issue } from '../lib/check';
 import { findDuplicates } from '../lib/dup';
@@ -52,22 +52,32 @@ export interface QuestionEditorProps {
   onSaved?(q: Question): void;
   /** nút Đóng của ngăn sửa */
   onClose?(): void;
+  /** Câu mới từ Ngân hàng: gợi ý vị trí (và mức độ) đang duyệt. Không bao giờ đè bản nháp chưa lưu mà không hỏi. */
+  prefill?: NewAt;
+  /** nút "Về Ngân hàng" (khi màn Soạn được mở từ Ngân hàng) */
+  onBack?(): void;
   /** để bên ngoài (ngăn sửa) hỏi “có rời đi được không” theo cùng một cách với go() */
   leaveRef?: MutableRefObject<((proceed: () => void) => boolean) | null>;
 }
 
-export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, leaveRef }: QuestionEditorProps) {
+export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, leaveRef, prefill, onBack }: QuestionEditorProps) {
   const { go, toast, setGuard } = useApp();
   const { questions } = useBank();
 
-  const init = useMemo<Draft>(() => {
-    if (editing) return { latex: editing.latex, loc: { grade: editing.grade, chapterId: editing.chapterId, lessonId: editing.lessonId, formId: editing.formId }, level: editing.level, tags: [...editing.tags] };
+  const defaultLatex = () => { const sample = questions[0]; return sample ? sample.latex.replace('x^3 - 3x^2 + 2', 'x^3 - 3x^2 + 4') : TEMPLATES.tn; };
+  const prefillLoc = (): Location | null => (prefill ? { grade: prefill.grade, chapterId: prefill.chapterId, lessonId: prefill.lessonId, formId: prefill.formId } : null);
+  const boot = useMemo<{ init: Draft; conflict: boolean }>(() => {
+    if (editing) return { init: { latex: editing.latex, loc: { grade: editing.grade, chapterId: editing.chapterId, lessonId: editing.lessonId, formId: editing.formId }, level: editing.level, tags: [...editing.tags] }, conflict: false };
+    const dl = defaultLatex();
     const d = loadDraft();
-    if (d) return d;
-    const sample = questions[0];
-    return { latex: sample ? sample.latex.replace('x^3 - 3x^2 + 2', 'x^3 - 3x^2 + 4') : TEMPLATES.tn, loc: firstLocation(12), level: 'TH', tags: [] };
+    const real = !!d && d.latex !== dl; // bản nháp có nội dung do người dùng gõ (không phải mẫu mặc định)
+    const pre: Draft = { latex: dl, loc: prefillLoc() ?? firstLocation(12), level: prefill?.level ?? 'TH', tags: [] };
+    if (d && (!prefill || real)) return { init: d, conflict: !!prefill && real };
+    return { init: pre, conflict: false };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const init = boot.init;
+  const [conflict, setConflict] = useState(boot.conflict);
 
   const [latex, setLatex] = useState(init.latex);
   const [loc, setLoc] = useState<Location>(init.loc);
@@ -193,12 +203,22 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
           <span className={`status-chip${editing && dirty ? ' dirty' : ''}`} role="status">{statusText}</span>
         </div>
         <div className="head-actions">
-          {editing && variant === 'page' && <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'editor' })}>+ Câu mới</button>}
+          {onBack && variant === 'page' && <button type="button" className="btn btn-outline" onClick={onBack}>‹ Về Ngân hàng</button>}
+          {editing && variant === 'page' && <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'editor', fromBank: !!onBack })}>+ Câu mới</button>}
           <button type="button" className="btn btn-accent" onClick={() => save()} disabled={!!editing && !dirty} title="Ctrl S">{editing ? 'Lưu câu hỏi' : 'Lưu vào ngân hàng'}</button>
           {variant === 'drawer' && <button type="button" className="btn btn-outline" onClick={onClose}>Đóng</button>}
         </div>
       </header>
 
+      {conflict && prefill && (
+        <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Bản nháp chưa lưu">
+          <span><b>Đang có bản nháp câu hỏi chưa lưu.</b> Bạn vừa chọn soạn câu mới ở <b>{prefill.label}</b>. Muốn làm gì?</span>
+          <div className="head-actions">
+            <button type="button" className="btn btn-sm btn-accent" autoFocus onClick={() => setConflict(false)}>Giữ bản nháp</button>
+            <button type="button" className="btn btn-sm" onClick={() => { setLatex(defaultLatex()); setLoc(prefillLoc() ?? firstLocation(12)); setLevel(prefill.level ?? 'TH'); setTags([]); setConflict(false); }}>Bỏ bản nháp, soạn câu mới ở đây</button>
+          </div>
+        </div>
+      )}
       {leaving && (
         <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Thay đổi chưa lưu">
           <span><b>Câu này có thay đổi chưa lưu.</b> Muốn đóng thì chọn một trong ba:</span>

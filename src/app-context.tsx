@@ -11,6 +11,23 @@ export interface Nav {
   examPick?: string[];
   /** mở sẵn ngăn sửa bên phải của câu này khi vào Ngân hàng */
   openUid?: string;
+  /** Câu mới: điền sẵn vị trí đang duyệt ở Ngân hàng (chỉ gợi ý; không đè bản nháp chưa lưu) */
+  newAt?: NewAt;
+  /** màn Soạn được mở từ Ngân hàng: hiện nút "Về Ngân hàng" */
+  fromBank?: boolean;
+  /** về Ngân hàng và dừng ở câu này (vd câu vừa lưu) */
+  focusUid?: string;
+}
+
+export interface NewAt {
+  grade: number;
+  chapterId: string;
+  lessonId: string;
+  formId: string;
+  /** gợi ý mức độ khi chỉ chọn đúng một mức ở bộ lọc */
+  level?: 'NB' | 'TH' | 'VD' | 'VDC';
+  /** tên vị trí để hiện cho người dùng, vd "Lớp 12 › Chương 1 › Bài 2" */
+  label: string;
 }
 
 /**

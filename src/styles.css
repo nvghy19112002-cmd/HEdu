@@ -997,3 +997,16 @@ a { color: var(--accent); }
 .btn-danger { background: var(--danger); border-color: var(--danger); color: var(--on-dark); font-weight: 600; }
 .btn-danger:hover:not(:disabled) { background: var(--danger-ink); }
 .list-head .sw { white-space: nowrap; flex: none; }
+
+/* Công cụ danh sách (beta.23): chọn trang, sắp xếp, số câu/trang, pager trên; điều hướng câu trước/sau */
+.qtools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; min-height: 32px; }
+.qtools-r { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: auto; }
+.qsel { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.qsel select { height: 28px; padding: 0 8px; border: 1px solid var(--line-ctl); border-radius: 4px; background: var(--paper); color: var(--ink); font: inherit; font-size: 13px; }
+.qsel select:focus-visible { outline: 2px solid var(--pri); outline-offset: 1px; }
+.pager-top { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.pager-top b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.pager-top .btn[disabled] { opacity: .45; cursor: default; }
+.detail-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 2px 8px; font-size: 13px; color: var(--ink-2); }
+.detail-nav b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.detail-nav .btn[disabled] { opacity: .45; cursor: default; }
