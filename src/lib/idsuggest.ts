@@ -18,7 +18,7 @@ export const CONFIDENCE_LABEL: Record<SuggestConfidence, string> = {
 };
 
 /** Ngưỡng đo được ở GĐ0 (nhãn "cao": đúng 95–98%, phủ 13–15% trên kho thử). Đổi ngưỡng ⇒ đo lại. */
-export const SUGGEST_THRESHOLDS = { knnTopK: 25, highMinFamilies: 2, highMinShare: 0.8, highMinScore: 0.3, fewSamples: 5 } as const;
+export const SUGGEST_THRESHOLDS = { knnTopK: 25, highMinFamilies: 2, highMinShare: 0.8, highMinScore: 0.3, fewSamples: 5, minSamplesForVua: 2 } as const;
 
 /** Các loại cặp coi là cùng một "họ" (gần trùng / cùng mẫu): cả họ chỉ được một phiếu. */
 const FAMILY_KINDS: ReadonlySet<DupKind> = new Set<DupKind>(['raw', 'same', 'near', 'template', 'conflict']);
@@ -199,6 +199,8 @@ export class IdSuggester {
     } else {
       const n = (this.support.get(best.formId) ?? 0) - (self?.formId === best.formId ? 1 : 0);
       if (n < T.fewSamples) notes.push(`Dạng này mới có ${n} câu mẫu — nên kiểm tra kỹ.`);
+      // một câu mẫu duy nhất: hai nguồn "đồng thuận" chỉ vì cùng dựa vào câu đó ⇒ không đủ để gọi là "vừa"
+      if (n < T.minSamplesForVua && confidence === 'vua') confidence = 'thap';
     }
     return {
       key: input.key, best, alternatives, confidence,

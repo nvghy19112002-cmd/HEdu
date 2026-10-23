@@ -22,7 +22,9 @@ import { decisionsLoaded, loadDecisions } from '../lib/dupdecisions';
 import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { AutoIdDialog } from '../components/AutoIdDialog';
 import { BatchTrashDialog } from '../components/BatchDialogs';
+import { AUTO_ID_MAX } from '../lib/idapply';
 import { withReview } from '../lib/batchops';
 import { exportSizeMB } from '../lib/texexport';
 import { verbatimTex } from '../lib/texproject';
@@ -68,7 +70,7 @@ export function BankScreen() {
   const [showSol, setShowSol] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [ask, setAsk] = useState<null | { title: string; body: string; label: string; run: () => void }>(null);
-  const [batch, setBatch] = useState<null | 'trash'>(null); // hộp thoại thao tác hàng loạt
+  const [batch, setBatch] = useState<null | 'trash' | 'autoid'>(null); // hộp thoại thao tác hàng loạt
   const [batchBusy, setBatchBusy] = useState(false);
   const [undo, setUndo] = useState<null | { qs: Question[]; n: number }>(null); // dải "Hoàn tác" sau khi chuyển vào Thùng rác
   const busyRef = useRef(false); // chống bấm liên tiếp trước khi giao diện kịp khoá nút
@@ -437,6 +439,7 @@ export function BankScreen() {
               <div className="selbar-grp">
                 <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo kiểu sắp xếp đang chọn">Xuất .tex</button>
                 <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
+                <button type="button" className="btn btn-sm" onClick={() => { if (sel.size > AUTO_ID_MAX) toast(`Gán ID tự động: mỗi lượt tối đa ${nf.format(AUTO_ID_MAX)} câu (đang chọn ${nf.format(sel.size)}). Hãy bỏ bớt rồi làm từng lượt.`); else setBatch('autoid'); }} title={`Gợi ý vị trí (ID) theo các câu đã có trong ngân hàng, xem trước rồi mới áp dụng — tối đa ${AUTO_ID_MAX} câu/lượt`}>Gán ID tự động</button>
                 {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
                 <span className="selbar-more">
                   <button ref={moreBtnRef} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
@@ -537,6 +540,7 @@ export function BankScreen() {
           <button type="button" className="ico" aria-label="Đóng" onClick={() => setUndo(null)}>×</button>
         </div>
       )}
+      {batch === 'autoid' && <AutoIdDialog qs={selectedQs} onClose={() => setBatch(null)} onDone={(m) => { setBatch(null); toast(m); }} />}
       {batch === 'trash' && <BatchTrashDialog qs={selectedQs} busy={batchBusy} onRun={() => { void runTrashBatch(); }} onCancel={() => setBatch(null)} />}
       {exportPick && <ExportChoiceDialog qs={selectedQs} onFileOnly={runFileOnly} onClose={() => setExportPick(false)} onToast={toast} />}
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
