@@ -31,9 +31,9 @@ function changedSince(snap: Map<string, string>, qs: Question[]): number {
   return n;
 }
 
-export function DupCheck({ questions, selected, onClose, onOpen, onGoto, onTrash }: { questions: Question[]; selected?: ReadonlySet<string>; onClose: () => void; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onTrash: (q: Question) => Promise<boolean> }) {
+export function DupCheck({ questions, selected, initialSelection, onClose, onOpen, onGoto, onTrash }: { questions: Question[]; selected?: ReadonlySet<string>; initialSelection?: boolean; onClose: () => void; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onTrash: (q: Question) => Promise<boolean> }) {
   const { tax } = useTaxonomy();
-  const [scope, setScope] = useState<Scope>(ALL_SCOPE);
+  const [scope, setScope] = useState<Scope>(() => (initialSelection && selected?.size ? { ...ALL_SCOPE, selection: true } : ALL_SCOPE));
   const [mode, setMode] = useState<ScanMode>('inside');
   const [page, setPage] = useState(0);
   const snap = useRef<Map<string, string>>(new Map());

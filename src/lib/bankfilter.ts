@@ -1,6 +1,7 @@
 // Logic thuần của Mục lục & Bộ lọc ở màn Ngân hàng (không phụ thuộc React): trạng thái, cascade, lọc, đếm theo chiều.
 // Hai nhóm: VỊ TRÍ (Lớp → Phân môn → Chương → Bài → Dạng) và THUỘC TÍNH (Mức độ, Loại câu, Hình, Kiểm duyệt).
 import { figureOf, FIGURE_LABEL, type FigureFilter } from './figure';
+import { comparator, DEFAULT_SORT, type SortMode } from './qsort';
 import { LEVEL_LABEL, LEVELS, REVIEW_LABEL, reviewOf, TYPE_LABEL, TYPES, type Level, type QType, type Question, type ReviewFilter, type Taxonomy } from './types';
 
 export interface BankFilters {
@@ -103,10 +104,12 @@ export interface FilterCtx {
   textOk: (uid: string) => boolean;
   /** "Toàn kho": bỏ qua VỊ TRÍ khi tìm; chỉ nên bật khi đang có chữ tìm */
   wide: boolean;
+  /** kiểu sắp xếp của danh sách (mặc định: mới cập nhật) */
+  sort?: SortMode;
 }
 
 /** Dựng ngữ cảnh lọc từ cây. */
-export const facetCtx = (tax: Taxonomy, textOk: (uid: string) => boolean, wide: boolean): FilterCtx => ({ ...taxMaps(tax), textOk, wide });
+export const facetCtx = (tax: Taxonomy, textOk: (uid: string) => boolean, wide: boolean, sort?: SortMode): FilterCtx => ({ ...taxMaps(tax), textOk, wide, sort });
 
 export interface Facets {
   /** Các câu hiện ra (đã sắp theo mới sửa trước) */
@@ -181,7 +184,7 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
       if ((fails & ~B_REV) === 0) r.review[rv]++;
     }
   }
-  r.list.sort((a, b) => b.updatedAt - a.updatedAt);
+  r.list.sort(comparator(ctx.sort ?? DEFAULT_SORT));
   return r;
 }
 

@@ -978,3 +978,22 @@ a { color: var(--accent); }
 .be-chip em { flex: none; font-style: normal; font-weight: 700; font-size: 12px; background: var(--paper); color: var(--ok-ink); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
 .be-chip button { flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--pri-ink); cursor: pointer; font-size: 11px; }
 .be-chip button:hover { background: var(--paper); }
+
+/* Hộp xác nhận dùng chung + thanh chọn nhiều (beta.23) */
+.cfm-scrim { position: fixed; inset: 0; z-index: 80; background: color-mix(in srgb, var(--ink) 42%, transparent); }
+.cfm { position: fixed; z-index: 81; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: var(--paper); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 16px 48px color-mix(in srgb, var(--ink) 28%, transparent); padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 10px; }
+.cfm.is-danger { border-color: var(--danger-line); }
+.cfm h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--ink); text-wrap: balance; }
+.cfm-body { font-size: 13px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; }
+.cfm-body p { margin: 0; }
+.cfm-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.selbar-n small { display: block; font-size: 12px; font-weight: 400; color: var(--rail-ink); }
+.selbar-grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.selbar-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--ink-2); }
+.selbar-view { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; border-radius: 8px; background: var(--pri-soft); border: 1px solid var(--pri-line); color: var(--pri-ink); font-size: 13px; }
+.lh-sel { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.lh-sel input { width: 16px; height: 16px; accent-color: var(--pri); }
+.lh-left { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-width: 0; }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: var(--on-dark); font-weight: 600; }
+.btn-danger:hover:not(:disabled) { background: var(--danger-ink); }
+.list-head .sw { white-space: nowrap; flex: none; }
