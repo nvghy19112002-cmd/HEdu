@@ -24,7 +24,9 @@ import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BatchTrashDialog } from '../components/BatchDialogs';
 import { withReview } from '../lib/batchops';
-import { buildTexFile, exportSizeMB } from '../lib/texexport';
+import { exportSizeMB } from '../lib/texexport';
+import { verbatimTex } from '../lib/texproject';
+import { ExportChoiceDialog } from '../components/ExportChoiceDialog';
 import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
@@ -283,10 +285,12 @@ export function BankScreen() {
     document.addEventListener('keydown', k);
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
   }, [moreSel]);
-  const runExport = () => {
-    const text = buildTexFile(selectedQs, (q) => questionCode(q, q.level), `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: ${SORT_LABEL[sort]}) — mã LaTeX gốc, chỉ cập nhật dòng %[ID]`);
-    showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text, mime: 'application/x-tex' });
+  const [exportPick, setExportPick] = useState(false);
+  const runFileOnly = () => {
+    setExportPick(false);
+    showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: verbatimTex(selectedQs), mime: 'application/x-tex' });
   };
+  const runExport = () => setExportPick(true);
   const exportSelected = () => {
     const n = selectedQs.length, v = exportVerdict(n);
     if (v === 'refuse') { toast(`Mỗi lần xuất .tex tối đa ${nf.format(EXPORT_MAX)} câu (đang chọn ${nf.format(n)}). Hãy bỏ bớt hoặc xuất theo từng chương.`); return; }
@@ -534,6 +538,7 @@ export function BankScreen() {
         </div>
       )}
       {batch === 'trash' && <BatchTrashDialog qs={selectedQs} busy={batchBusy} onRun={() => { void runTrashBatch(); }} onCancel={() => setBatch(null)} />}
+      {exportPick && <ExportChoiceDialog qs={selectedQs} onFileOnly={runFileOnly} onClose={() => setExportPick(false)} onToast={toast} />}
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
