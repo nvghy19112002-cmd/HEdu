@@ -1,4 +1,4 @@
-## Chưa phát hành — bổ sung cho Kiểm tra trùng
+## Có gì mới trong beta.20 (Kiểm tra trùng: sao lưu, thùng rác, nhãn chuẩn)
 
 - **Sao lưu đầy đủ hơn**: file sao lưu thủ công nay kèm cả quyết định "trùng/giữ cả hai", thùng rác và bộ nhãn chuẩn; khôi phục là GỘP (bản mới hơn thắng, không xoá gì).
 - **Thùng rác**: loại câu trong Kiểm tra trùng hoặc xoá ở Ngân hàng đều phải xác nhận và chuyển vào thùng rác (Hệ thống → Thùng rác: Khôi phục / Xoá hẳn). Câu chỉ rời ngân hàng sau khi thùng rác đã ghi xong.
