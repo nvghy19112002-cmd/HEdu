@@ -12,13 +12,13 @@ Kho: `nvghy19112002-cmd/HEdu` (công khai), nhánh `main`.
 |---|---|
 | Chủ dự án | Nêu yêu cầu, xác nhận đúng sai về Toán, duyệt thay đổi lớn, nghiệm thu trên app thật, bấm phát hành |
 | ChatGPT | Phân tích yêu cầu, viết phiếu việc, review PR có chọn lọc. KHÔNG sửa code trừ khi chủ dự án giao riêng và chỉ định khu vực |
-| Claude | Xác minh code mới nhất, chọn cách làm, viết code + test, tạo PR/commit, phát hành |
+| Claude | Xác minh code mới nhất, chọn cách làm, viết code + test, tạo nhánh/commit/PR. Gộp PR chỉ khi chủ dự án đồng ý; phát hành chỉ khi chủ dự án yêu cầu rõ (mục 5) |
 
 Một việc chỉ có MỘT người triển khai. Hai AI không sửa cùng file / cùng nhánh.
 Khi mâu thuẫn, thứ tự ưu tiên: (1) quyết định mới nhất của chủ dự án → (2) code, test, config trên nhánh làm việc → (3) Issue/PR → (4) README/tài liệu → (5) bộ nhớ AI và PDF bàn giao (chỉ là nền, phải kiểm chứng).
 
 ## 3. Quy mô việc (giữ ngắn để tiết kiệm token)
-- **S** (sửa nhỏ, giao diện, chữ): chủ dự án nói thẳng với Claude, không cần Issue. Claude làm, chạy test, commit, báo 2–3 dòng.
+- **S** (sửa nhỏ, giao diện, chữ): chủ dự án nói thẳng với Claude, không cần Issue. Claude làm trên nhánh, chạy test, mở PR, báo 2–3 dòng (vẫn theo quy trình PR ở mục 5).
 - **M** (tính năng vừa): phiếu ngắn (hiện trạng, kết quả mong muốn, tiêu chí nghiệm thu). Issue hoặc chat đều được.
 - **L** (đổi dữ liệu, kiến trúc, phát hành): bắt buộc có rủi ro, kế hoạch chia giai đoạn, tương thích ngược, và chủ dự án duyệt TRƯỚC khi làm.
 
@@ -35,9 +35,21 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 7. **Toán học**: không tự đổi nghiệp vụ Toán; nghi ngờ thì hỏi chủ dự án.
 
 ## 5. Kiểm tra trước khi nói "xong"
-- `npm test` phải qua (gồm `lib.test`, `bank.test` trên dữ liệu thật nếu có, `release-scripts.test`).
-- Code Rust chỉ được xác minh bằng CI trên Windows (môi trường làm việc của Claude không biên dịch được Tauri). Đừng khẳng định "chạy được trên Windows" khi CI chưa xanh.
+- `npm test` phải qua (gồm `lib.test`, `bank.test` trên dữ liệu thật nếu có, `release-scripts.test`). `npm run build` phải qua.
+- Rust: chạy `cargo test --lib` (trong `src-tauri/`) tại máy trước khi mở PR nếu máy có Rust (máy Windows của chủ dự án có). CI Windows vẫn BẮT BUỘC xanh trước khi gộp; máy không có Rust/crates.io thì chỉ dựa vào CI. Đừng khẳng định "chạy được trên Windows" khi CI chưa xanh.
+- **Chạy thử app Tauri KHÔNG được chạm dữ liệu thật.** `npx tauri dev` mặc định dùng `identifier` `vn.hedu.app` = cùng thư mục `%APPDATA%\vn.hedu.app` với bản đã cài (ngân hàng câu hỏi thật). Luôn chạy với mã nhận diện riêng:
+  `npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu)"}'`
+  Dữ liệu thử nằm ở `%APPDATA%\vn.hedu.app.thu` (ban đầu trống). Cổng 1420 phải trống (tắt `npm run dev` cũ trước). Bản chạy thử không tự cập nhật được (chưa gắn kho GitHub). Không sửa `identifier` trong `tauri.conf.json`. Xem giao diện bằng trình duyệt (`npm run dev`, http://localhost:1420) chỉ dùng dữ liệu mẫu, an toàn.
 - Trước phát hành: test, build Windows xanh, dữ liệu người dùng an toàn, có phương án quay lại.
+
+**Quy trình mọi thay đổi (kể cả việc S, kể cả chỉ sửa tài liệu):**
+1. Tạo nhánh `claude/<tên-ngắn>` từ `main` mới nhất. Không commit thẳng vào `main`.
+2. Lập trình + test kèm theo.
+3. Kiểm tra tại máy: `npm test`, `npm run build`, `cargo test --lib` khi đụng Rust, chạy thử app (cách trên) khi đụng giao diện/Rust.
+4. Mở PR (không phải bản nháp) vào `main`, mô tả: thay đổi · lý do · đã kiểm gì · điều người duyệt cần biết.
+5. Đợi CI (`giao-dien` + `windows`) xanh, báo chủ dự án và HỎI trước khi gộp. Chỉ squash-merge khi chủ dự án đồng ý rõ cho đúng PR đó.
+6. Sau khi gộp: cập nhật `main` tại máy, xoá nhánh.
+7. Phát hành (`release.yml`) chỉ khi chủ dự án yêu cầu rõ; đồng ý gộp KHÔNG phải là đồng ý phát hành.
 
 ## 6. Tiết kiệm token
 - Đọc đúng file cần thiết, không đọc lại toàn repo. Mở rộng khi có bằng chứng.
@@ -59,7 +71,7 @@ F1 Danh sách / Chi tiết (nhánh `claude/f1-bank-list-detail`, UI-only, KHÔNG
 Chờ chủ dự án nghiệm thu trên máy Windows thật (chưa ai xác nhận): cập nhật trong app tới beta.10; hình TikZ qua DVI với `D:\texlive\texlive\2026\bin\windows`; câu #0053 với `ex_test` nhúng; “Xem chuẩn” với TeX Live thật; ngăn sửa; chụm ngón/Ctrl+lăn để zoom và quyền Tauri; đầu file đã tự lưu từ trước phải bấm “khôi phục mặc định” mới nhận đầu file mới.
 Issue: #3, #7, #9 đã đóng (“ĐÃ XỬ LÝ beta.10 — chờ nghiệm thu”, mở lại nếu nghiệm thu thấy lỗi). #1 còn mở với 3 mục: lưu đầu file theo từng câu (đổi schema, cần duyệt riêng), hủy hẳn tiến trình con TeX trên Windows, nghiệm thu máy thật.
 Chưa làm: lưu bằng SQLite (loại L, cần duyệt thiết kế); bảng danh sách + khung xem trước; luồng tạo đề 3 bước (Tạo đề đang ẩn); xuất Word/PDF; nhập từ Word; nhập MathHub ~60.000 câu. “Word Equation/MathType” và mở rộng ngoài lớp 10–12 chỉ là hướng nghiên cứu.
-Ghi nhớ kỹ thuật: `node_modules` đang bị git theo dõi như một liên kết (symlink) — chưa xử lý, đừng chạy `npm i` làm mất nó (nếu mất: `git checkout node_modules`).
+Ghi nhớ kỹ thuật: `node_modules` đang bị git theo dõi như một liên kết (symlink) — chưa xử lý, đừng chạy `npm i` làm mất nó (nếu mất: `git checkout node_modules`). Trên máy Windows (`D:\HEdu`) đã đặt `git update-index --skip-worktree node_modules` rồi `npm install` thành thư mục thật — đừng commit thay đổi `node_modules`.
 
 Đợt sau beta.15 (PR #23 nhãn enumerate + sửa tách `\item` sau danh sách lồng, PR #24 `src/lib/crisp.ts` nét ngang/dọc SVG sắc nét, PR-C bố cục Ngân hàng gọn: `.qbar`, Bộ lọc thu gọn `hedu.bankfilters`, mục lục ẩn được `hedu.banktree`, menu ba chấm `.more-menu`, hộp “thay đổi chưa lưu” dạng modal). Không đổi schema/ID/dữ liệu/updater. Chưa phát hành (đợi chủ dự án nghiệm thu).
 
