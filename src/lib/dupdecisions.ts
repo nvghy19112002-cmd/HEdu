@@ -20,7 +20,20 @@ export const DECISION_LABEL: Record<PairDecision, string> = {
 export const WHY_CHOICES = ['Khác điều kiện', 'Khác số liệu', 'Khác hình', 'Cố ý giữ (đề/bài khác nhau)', 'Lý do khác'];
 
 export interface DecisionRec { a: string; b: string; fa: string; fb: string; algo: number; d: PairDecision; why?: string; at: number }
-export interface DecisionFile { v: 1; recs: DecisionRec[] }
+/** Câu đã chuyển vào thùng rác (còn nguyên để khôi phục). */
+export interface TrashRec { q: Question; at: number }
+export type GoldLabel = 'true_dup' | 'keep_both' | 'different' | 'unsure';
+export const GOLD_LABEL: Record<GoldLabel, string> = {
+  true_dup: 'Trùng thật (chỉ cần giữ một câu)',
+  keep_both: 'Giống nhưng giữ cả hai',
+  different: 'Khác nhau',
+  unsure: 'Chưa chắc',
+};
+/** Nhãn chuẩn do giáo viên gắn: dùng để đo độ chính xác của bộ dò trên ngân hàng thật. `kind` = nhãn của bộ dò lúc gắn ('none' = bộ dò không báo cặp này). */
+export interface GoldRec { a: string; b: string; fa: string; fb: string; label: GoldLabel; kind: string; at: number }
+/** Tệp phụ: `recs` giữ nguyên như bản beta.18 (bản cũ đọc được); `trash` và `gold` là phần thêm, bản cũ bỏ qua. */
+export interface DecisionFile { v: 1; recs: DecisionRec[]; trash?: TrashRec[]; gold?: GoldRec[] }
+export const TRASH_CAP = 1000;
 export type DecisionStatus = 'none' | 'valid' | 'stale';
 
 export interface Backend { load(): Promise<string | null>; save(json: string): Promise<void> }
@@ -36,6 +49,8 @@ const desktop: Backend = {
 
 let backend: Backend | null = null;
 let recs = new Map<string, DecisionRec>();
+let trash: TrashRec[] = [];
+let gold = new Map<string, GoldRec>();
 let loaded = false;
 let writable = true;
 let version = 0;
@@ -49,19 +64,24 @@ const isRec = (r: unknown): r is DecisionRec => {
     && (x.d === 'not_duplicate' || x.d === 'legit_variant' || x.d === 'review_later');
 };
 
+const isTrash = (r: unknown): r is TrashRec => { const x = r as TrashRec; return !!x && typeof x.at === 'number' && !!x.q && typeof x.q.uid === 'string' && typeof x.q.latex === 'string'; };
+const isGold = (r: unknown): r is GoldRec => { const x = r as GoldRec; return !!x && typeof x.a === 'string' && typeof x.b === 'string' && typeof x.fa === 'string' && typeof x.fb === 'string' && typeof x.kind === 'string' && typeof x.at === 'number' && (x.label === 'true_dup' || x.label === 'keep_both' || x.label === 'different' || x.label === 'unsure'); };
+
 /** Chỉ dùng trong kiểm thử. */
-export function _reset(b: Backend | null) { backend = b; recs = new Map(); loaded = false; writable = true; version = 0; }
+export function _reset(b: Backend | null) { backend = b; recs = new Map(); trash = []; gold = new Map(); loaded = false; writable = true; version = 0; }
 
 export async function loadDecisions(): Promise<{ ok: boolean; error?: string }> {
   const be = backend ?? (isDesktop() ? desktop : web);
   backend = be;
   try {
     const json = await be.load();
-    recs = new Map();
+    recs = new Map(); trash = []; gold = new Map();
     if (json) {
       const f = JSON.parse(json) as Partial<DecisionFile>;
       if (f.v !== 1 || !Array.isArray(f.recs)) throw new Error('Tệp quyết định có cấu trúc không hiểu được.');
       for (const r of f.recs) if (isRec(r)) recs.set(pairKey(r.a, r.b), r);
+      if (Array.isArray(f.trash)) trash = f.trash.filter(isTrash);
+      if (Array.isArray(f.gold)) for (const g of f.gold) if (isGold(g)) gold.set(pairKey(g.a, g.b), g);
     }
     loaded = true; writable = true; emit();
     return { ok: true };
@@ -72,7 +92,7 @@ export async function loadDecisions(): Promise<{ ok: boolean; error?: string }> 
   }
 }
 
-const dump = (): string => JSON.stringify({ v: 1, recs: [...recs.values()] } satisfies DecisionFile);
+const dump = (): string => JSON.stringify({ v: 1, recs: [...recs.values()], ...(trash.length ? { trash } : {}), ...(gold.size ? { gold: [...gold.values()] } : {}) } satisfies DecisionFile);
 async function persist(): Promise<boolean> {
   if (!writable || !backend) return false;
   try { await backend.save(dump()); return true; } catch { return false; }
@@ -121,4 +141,59 @@ export async function importDecisions(json: string): Promise<{ added: number; up
 
 export function useDecisions(): number {
   return useSyncExternalStore((cb) => { subs.add(cb); return () => subs.delete(cb); }, () => version, () => version);
+}
+
+// ---------- Thùng rác ----------
+export const trashList = (): TrashRec[] => [...trash].sort((x, y) => y.at - x.at);
+export const trashCount = (): number => trash.length;
+/** Cất một câu vào thùng rác. true = đã ghi bền vững (chỉ khi đó mới nên xoá câu khỏi ngân hàng). */
+export async function trashAdd(q: Question): Promise<boolean> {
+  if (!writable || !backend) return false;
+  const prev = trash;
+  trash = [{ q: JSON.parse(JSON.stringify(q)) as Question, at: Date.now() }, ...trash.filter((t) => t.q.uid !== q.uid)].slice(0, TRASH_CAP);
+  emit();
+  const ok = await persist();
+  if (!ok) { trash = prev; emit(); }
+  return ok;
+}
+export async function trashRemove(uid: string): Promise<boolean> {
+  const prev = trash;
+  trash = trash.filter((t) => t.q.uid !== uid);
+  emit();
+  const ok = await persist();
+  if (!ok) { trash = prev; emit(); }
+  return ok;
+}
+
+// ---------- Nhãn chuẩn ----------
+export const goldList = (): GoldRec[] => [...gold.values()].sort((x, y) => x.at - y.at);
+export const goldOf = (a: Question, b: Question): GoldRec | undefined => {
+  const g = gold.get(pairKey(a.uid, b.uid));
+  if (!g) return undefined;
+  const [fa, fb] = a.uid <= b.uid ? [fingerprint(a.latex).rawKey, fingerprint(b.latex).rawKey] : [fingerprint(b.latex).rawKey, fingerprint(a.latex).rawKey];
+  return g.fa === fa && g.fb === fb ? g : undefined; // câu đã sửa ⇒ nhãn cũ không còn dùng để đo
+};
+export async function goldSet(a: Question, b: Question, label: GoldLabel, kind: string): Promise<boolean> {
+  const [x, y] = a.uid <= b.uid ? [a, b] : [b, a];
+  gold.set(pairKey(a.uid, b.uid), { a: x.uid, b: y.uid, fa: fingerprint(x.latex).rawKey, fb: fingerprint(y.latex).rawKey, label, kind, at: Date.now() });
+  emit();
+  return persist();
+}
+export async function goldClear(): Promise<boolean> { gold = new Map(); emit(); return persist(); }
+
+// ---------- Sao lưu thủ công ----------
+/** Phần tệp phụ đưa vào file sao lưu ngân hàng (quyết định, thùng rác, nhãn chuẩn). */
+export function sidecarForBackup(): DecisionFile { return { v: 1, recs: [...recs.values()], trash, gold: [...gold.values()] }; }
+/** Khôi phục phần tệp phụ từ file sao lưu: GỘP (không xoá thứ đang có); trùng khoá thì giữ bản mới hơn. */
+export async function restoreSidecar(f: unknown): Promise<{ added: number; saved: boolean }> {
+  const x = f as Partial<DecisionFile> | undefined;
+  if (!x || x.v !== 1 || !Array.isArray(x.recs)) return { added: 0, saved: true };
+  if (!loaded) await loadDecisions();
+  let added = 0;
+  for (const r of x.recs) { if (!isRec(r)) continue; const k = pairKey(r.a, r.b), cur = recs.get(k); if (!cur || r.at > cur.at) { recs.set(k, r); if (!cur) added++; } }
+  if (Array.isArray(x.trash)) for (const t of x.trash) if (isTrash(t) && !trash.some((u) => u.q.uid === t.q.uid)) { trash.push(t); added++; }
+  trash = trash.slice(0, TRASH_CAP);
+  if (Array.isArray(x.gold)) for (const g of x.gold) { if (!isGold(g)) continue; const k = pairKey(g.a, g.b), cur = gold.get(k); if (!cur || g.at > cur.at) { gold.set(k, g); if (!cur) added++; } }
+  emit();
+  return { added, saved: await persist() };
 }

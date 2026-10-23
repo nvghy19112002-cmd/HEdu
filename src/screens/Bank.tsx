@@ -15,7 +15,8 @@ import { buildExTest, parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
 import { branchShort, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
-import { deleteQuestion, duplicateQuestion, setReview, useBank } from '../lib/store';
+import { duplicateQuestion, setReview, useBank } from '../lib/store';
+import { moveToTrash } from '../lib/trashflow';
 import { FilterMenu } from '../components/FilterMenu';
 import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
@@ -195,14 +196,14 @@ export function BankScreen() {
   };
 
   /** Xoá một câu: bỏ khỏi ô chọn, và nếu đang xem câu đó thì chuyển sang câu liền kề còn lại. */
-  const removeQuestion = (q: Question) => {
+  const removeQuestion = async (q: Question) => {
     const i = shown.findIndex((x) => x.uid === q.uid);
     const next = shown[i + 1] ?? shown[i - 1] ?? null;
-    deleteQuestion(q.uid);
     setConfirmDel(null);
+    if (!(await moveToTrash(q))) { toast('Không lưu được thùng rác nên CHƯA xoá câu. Hãy thử lại hoặc tạo file sao lưu trước.'); return; }
     setSel((s) => { const n = new Set(s); n.delete(q.uid); return n; });
     if (active?.uid === q.uid) setActiveUid(next ? next.uid : null);
-    toast(`Đã xoá ${seqLabel(q.seq)}`);
+    toast(`Đã chuyển ${seqLabel(q.seq)} vào thùng rác (khôi phục ở Hệ thống → Thùng rác).`);
   };
 
   const renderRows = () => (
@@ -405,7 +406,7 @@ export function BankScreen() {
           )}
         </section>
       </div>
-      {dupOpen && <DupCheck questions={questions} selected={sel} onClose={() => setDupOpen(false)} onOpen={setOpenUid} onGoto={gotoQuestion} />}
+      {dupOpen && <DupCheck questions={questions} selected={sel} onClose={() => setDupOpen(false)} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
   );

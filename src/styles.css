@@ -890,3 +890,17 @@ a { color: var(--accent); }
 .ct-tools > summary::-webkit-details-marker { display: none; }
 .ct-tools > summary h2 { display: inline; font-size: 14px; }
 .ct-tools[open] > summary { margin-bottom: 8px; }
+.dc-confirm { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--warn-line); border-radius: 8px; background: var(--warn-bg); font-size: 13px; }
+.trash-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.trash-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--line-3); }
+.trash-t { flex: 1 1 220px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+
+/* ---------- Bộ nhãn chuẩn ---------- */
+.dc.gold { z-index: 57; }
+.gold-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gold-btns { gap: 8px; }
+.gold-tbl { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.gold-tbl th, .gold-tbl td { padding: 6px 10px; border-bottom: 1px solid var(--line-3); text-align: left; }
+.gold-tbl td { text-align: center; font-variant-numeric: tabular-nums; }
+.gold-sum { margin: 8px 0 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.gold-rep { display: flex; flex-direction: column; gap: 10px; }

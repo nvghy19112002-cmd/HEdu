@@ -1,4 +1,4 @@
-import { _reset, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
+import { _reset, goldList, goldOf, goldSet, restoreSidecar, sidecarForBackup, trashAdd, trashList, trashRemove, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
 import type { Question } from './types';
 
 let failed = 0;
@@ -77,6 +77,42 @@ const mem = (init: string | null = null) => {
     ok(junk.skipped === 2, 'bản ghi sai cấu trúc bị bỏ qua, không làm hỏng');
   }
   ok(DUP_ALGO_VERSION === 1, 'phiên bản thuật toán ghi trong bản ghi');
+  console.log('Thùng rác, nhãn chuẩn, sao lưu (V3)');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    await setDecision(A, B, 'not_duplicate');
+    ok(await trashAdd(A) === true && trashList().length === 1 && trashList()[0].q.uid === 'ua', 'cất câu vào thùng rác, ghi bền vững');
+    ok(await goldSet(A, B, 'true_dup', 'raw') === true && goldOf(A, B)?.label === 'true_dup', 'ghi nhãn chuẩn');
+    const saved = JSON.parse(be.data!);
+    ok(saved.v === 1 && Array.isArray(saved.recs) && saved.recs.length === 1 && saved.trash.length === 1 && saved.gold.length === 1, 'tệp có đủ recs + trash + gold; recs giữ nguyên định dạng cũ');
+    await setDecision(B, A, 'legit_variant');
+    const after = JSON.parse(be.data!);
+    ok(after.trash.length === 1 && after.gold.length === 1, 'ghi lại quyết định KHÔNG làm mất thùng rác/nhãn chuẩn');
+    _reset(be); await loadDecisions();
+    ok(trashList().length === 1 && goldList().length === 1, 'tải lại: thùng rác và nhãn chuẩn còn nguyên');
+    ok(goldOf(Q('ua', A.latex + ' khác'), B) === undefined, 'câu đã sửa ⇒ nhãn chuẩn cũ không còn dùng để đo');
+    ok(await trashRemove('ua') === true && trashList().length === 0, 'xoá hẳn khỏi thùng rác');
+  }
+  {
+    const be = mem(); be.fail = true; _reset(be); await loadDecisions();
+    ok(await trashAdd(A) === false && trashList().length === 0, 'ghi lỗi ⇒ trả false và KHÔNG giữ trong thùng rác (để giao diện không xoá câu)');
+  }
+  {
+    const old = mem(JSON.stringify({ v: 1, recs: [] })); _reset(old); const r = await loadDecisions();
+    ok(r.ok && trashList().length === 0 && goldList().length === 0, 'tệp beta.18 (không có trash/gold) đọc bình thường');
+  }
+  {
+    const src = mem(); _reset(src); await loadDecisions();
+    await setDecision(A, B, 'not_duplicate'); await trashAdd(A); await goldSet(A, B, 'different', 'near');
+    const file = JSON.parse(JSON.stringify(sidecarForBackup()));
+    const dst = mem(); _reset(dst); await loadDecisions();
+    const r = await restoreSidecar(file);
+    ok(r.saved && r.added === 3 && statusOf(A, B).status === 'valid' && trashList().length === 1 && goldList().length === 1, 'khôi phục từ file sao lưu: quyết định + thùng rác + nhãn chuẩn');
+    const r2 = await restoreSidecar(file);
+    ok(r2.added === 0 && trashList().length === 1, 'khôi phục lần hai không nhân đôi');
+    ok((await restoreSidecar(undefined)).added === 0 && (await restoreSidecar({ v: 2 })).added === 0, 'file sao lưu cũ (không có phần tệp phụ) ⇒ bỏ qua, không lỗi');
+  }
+
   if (failed) { console.error(`\n${failed} lỗi`); process.exit(1); }
   console.log('\nOK');
 })();

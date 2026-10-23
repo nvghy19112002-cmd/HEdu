@@ -4,6 +4,7 @@ import { BootGate } from './components/BootGate';
 import { CommandPalette } from './components/CommandPalette';
 import { ZoomIndicator } from './components/ZoomControl';
 import { startZoom } from './lib/zoom';
+import { loadDecisions } from './lib/dupdecisions';
 import { FileDialog } from './components/FileDialog';
 import { IcBackup, IcBank, IcEdit, IcExam, IcImport, IcTree } from './components/Icons';
 import { featureOn, type FeatureKey } from './lib/features';
@@ -69,6 +70,8 @@ function Shell({ recovered }: { recovered: boolean }) {
   }, [toast]);
 
   useEffect(() => startZoom(), []);
+  // nạp tệp phụ (quyết định trùng, thùng rác) ngay khi mở app để sao lưu luôn đầy đủ
+  useEffect(() => { void loadDecisions(); }, []);
 
   useEffect(() => {
     if (recovered) toast('File dữ liệu bị lỗi nên HEdu đã lấy lại từ bản dự phòng. Nên kiểm tra các câu vừa soạn gần đây.');

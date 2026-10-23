@@ -1,3 +1,10 @@
+## Chưa phát hành — bổ sung cho Kiểm tra trùng
+
+- **Sao lưu đầy đủ hơn**: file sao lưu thủ công nay kèm cả quyết định "trùng/giữ cả hai", thùng rác và bộ nhãn chuẩn; khôi phục là GỘP (bản mới hơn thắng, không xoá gì).
+- **Thùng rác**: loại câu trong Kiểm tra trùng hoặc xoá ở Ngân hàng đều phải xác nhận và chuyển vào thùng rác (Hệ thống → Thùng rác: Khôi phục / Xoá hẳn). Câu chỉ rời ngân hàng sau khi thùng rác đã ghi xong.
+- **Nhãn chuẩn**: gắn mù ~150 cặp (không hiện nhận định của máy) để đo độ chính xác thật của bộ phát hiện trên kho của thầy/cô; có báo cáo từng loại.
+- Không đổi schema, không đổi Rust. Bản beta.18 cũ sẽ bỏ qua phần thêm này và có thể làm mất nếu tự ghi lại file.
+
 ## Có gì mới trong beta.19 (giao diện V3 — "Mực xanh & giấy ô ly")
 
 Chỉ đổi giao diện. Dữ liệu ngân hàng (schema 3), ID, khung chương trình, LaTeX gốc và thuật toán kiểm tra trùng **không đổi**; Tạo đề vẫn tạm ẩn.
