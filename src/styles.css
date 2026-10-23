@@ -871,3 +871,14 @@ a { color: var(--accent); }
 .simple .panel { padding: 12px 14px; gap: 8px; }
 .simple .panel h2 { font-size: 14px; }
 .dup-sum { padding: 8px 10px; gap: 6px; }
+
+/* ---------- V3 PR-F: Trình sửa — 3 chế độ xem, thanh Lưu cố định ---------- */
+.qe-vmode { align-self: flex-start; }
+@media (min-width: 1001px) {
+  .qe-panes[data-vmode="code"], .qe-panes[data-vmode="view"] { grid-template-columns: minmax(0, 1fr); }
+  .qe-panes[data-vmode="code"] .qe-view, .qe-panes[data-vmode="view"] .qe-code { display: none; }
+}
+.qe-page .qe-head { position: sticky; top: 0; z-index: 6; background: var(--bg); padding: 6px 0; }
+.qe-page { padding-top: 8px; }
+.qe-title h1 { font-size: 20px; }
+@media (max-width: 1000px) { .qe-vmode { display: none; } }

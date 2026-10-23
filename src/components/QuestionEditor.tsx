@@ -77,6 +77,9 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
   const [pos, setPos] = useState({ line: 1, col: 1 });
   const [attrs, setAttrs] = useState(!editing);
   const [pane, setPane] = useState<'code' | 'view'>('code'); // chỉ dùng khi khung hẹp
+  // 3 chế độ xem (V3): Mã / Mã + Xem trước / Xem trước. Lưu theo máy, không đụng dữ liệu câu hỏi.
+  const [vmode, setVmodeState] = useState<'code' | 'both' | 'view'>(() => { try { const v = localStorage.getItem('hedu.qemode'); return v === 'code' || v === 'view' ? v : 'both'; } catch { return 'both'; } });
+  const setVmode = (v: 'code' | 'both' | 'view') => { setVmodeState(v); try { localStorage.setItem('hedu.qemode', v); } catch { /* không lưu được thì thôi */ } };
   const [mode, setMode] = useState<'quick' | 'exact'>('quick');
   const [snap, setSnap] = useState<string | null>(null);
   const [tex, setTex] = useState<'dang' | 'xong' | 'loi' | null>(null);
@@ -297,12 +300,18 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
         </div>
       )}
 
+      <div className="seg sm qe-vmode" role="group" aria-label="Chế độ xem">
+        {([['code', 'Mã'], ['both', 'Mã + Xem trước'], ['view', 'Xem trước']] as const).map(([k, l]) => (
+          <button key={k} type="button" aria-pressed={vmode === k} onClick={() => setVmode(k)}>{l}</button>
+        ))}
+      </div>
+
       <div className="qe-tabs" role="tablist" aria-label="Khung đang xem">
         <button type="button" role="tab" aria-selected={pane === 'code'} onClick={() => setPane('code')}>Mã LaTeX</button>
         <button type="button" role="tab" aria-selected={pane === 'view'} onClick={() => setPane('view')}>Xem trước</button>
       </div>
 
-      <div className="qe-panes" data-pane={pane}>
+      <div className="qe-panes" data-pane={pane} data-vmode={vmode}>
         <section className="qe-code" aria-label="Mã LaTeX">
           <div className="qe-bar">
             <h2>Mã LaTeX</h2>
