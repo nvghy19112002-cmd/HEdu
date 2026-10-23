@@ -46,7 +46,7 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 - Trao đổi giữa hai AI qua Issue/PR hoặc file Markdown ngắn, không dán cả hội thoại.
 
 ## 7. Trạng thái (Claude cập nhật sau mỗi đợt)
-Mới nhất đã phát hành: `v0.1.0-beta.10` trên kênh beta (22/10/2026). Chưa có bản chính thức (stable) từ các đợt này; beta trước stable.
+Mới nhất đã phát hành: `v0.1.0-beta.20` trên kênh beta (23/10/2026). Tổng kết chi tiết từng bản: `TONG-KET-BETA20.md`. Chưa có bản chính thức (stable) từ các đợt này; beta trước stable.
 Đã phát hành, theo bản:
 - beta.7: bảng “Gói LaTeX” (đọc khai báo gói, `kpsewhich`, `tlmgr search` có hỏi trước khi dùng mạng, không tự cài), phân loại lỗi log TeX, dịch hình an toàn hơn (Issue #1 P1–P4, PR #4).
 - beta.8: dịch hình qua DVI, không cần Ghostscript (PR #5).
@@ -64,3 +64,4 @@ Ghi nhớ kỹ thuật: `node_modules` đang bị git theo dõi như một liên
 Đợt sau beta.15 (PR #23 nhãn enumerate + sửa tách `\item` sau danh sách lồng, PR #24 `src/lib/crisp.ts` nét ngang/dọc SVG sắc nét, PR-C bố cục Ngân hàng gọn: `.qbar`, Bộ lọc thu gọn `hedu.bankfilters`, mục lục ẩn được `hedu.banktree`, menu ba chấm `.more-menu`, hộp “thay đổi chưa lưu” dạng modal). Không đổi schema/ID/dữ liệu/updater. Chưa phát hành (đợi chủ dự án nghiệm thu).
 
 Đợt giao diện V3 (PR #39–#46, phát hành beta.19): token màu Hướng B ở đầu `src/styles.css` (đừng thêm mã màu rời), thang cỡ chữ 12/13/14/16/20/24, bo góc 4/8/12, nút 28/36; Ngân hàng một hàng công cụ; Kiểm tra trùng chọn loại bằng một ô (ẩn "Cùng mẫu" mặc định); Nhập liệu có chỉ báo bước; trình sửa 3 chế độ xem (`hedu.qemode`); Hệ thống 4 nhóm + hỏi xác nhận khi khôi phục từ file. Bộ chụp ảnh `scripts/ui-shots.mjs` (dữ liệu giả lập, không dùng dữ liệu thật). Không đổi schema/ID/dữ liệu.
+beta.20 (PR #48, không đổi schema/Rust): file sao lưu thủ công có khoá `dupSidecar` (quyết định trùng + `trash` + `gold`, khôi phục là gộp); thùng rác (`trashflow.ts`, câu chỉ rời ngân hàng sau khi thùng rác ghi xong; Hệ thống → Thùng rác); bộ nhãn chuẩn gắn mù ~150 cặp (`goldset.ts`, `GoldPanel.tsx`). Bản chụp trước cập nhật (Rust) chưa gồm tệp phụ; chưa nghiệm thu máy Windows thật.
