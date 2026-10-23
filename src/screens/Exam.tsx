@@ -196,7 +196,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                 <div><b>{title.toUpperCase()}</b><span>Môn: Toán {grade} · Thời gian: {minutes} phút</span></div>
               </div>
               <div className="sheet-code">Mã đề {variant?.code ?? '101'}</div>
-              {stale && <p className="sheet-part" style={{ color: 'var(--accent)' }}>Thiết lập đã đổi — bấm “Sinh {n} mã đề” để cập nhật.</p>}
+              {stale && <p className="sheet-part" style={{ color: 'var(--danger)' }}>Thiết lập đã đổi — bấm “Sinh {n} mã đề” để cập nhật.</p>}
               {variant ? (
                 variant.parts.map((items, pi) => items.length > 0 && (
                   <div key={pi} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -275,7 +275,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canGenerate} onClick={generate}>Sinh {n} mã đề</button>
-            {!canGenerate && mode === 'matrix' && miss.length > 0 && <span style={{ fontSize: 12.5, color: 'var(--accent)' }}>Ngân hàng chưa đủ câu cho ma trận — soạn thêm hoặc giảm số câu ở ô viền đỏ.</span>}
+            {!canGenerate && mode === 'matrix' && miss.length > 0 && <span style={{ fontSize: 12.5, color: 'var(--danger)' }}>Ngân hàng chưa đủ câu cho ma trận — soạn thêm hoặc giảm số câu ở ô viền đỏ.</span>}
             <div className="grid2" style={{ gap: 10 }}>
               <button type="button" className="btn btn-accent" style={{ height: 48 }} disabled={!result} onClick={() => toast('Xuất Word sẽ chạy trong bản cài trên Windows.')}>Xuất Word</button>
               <button type="button" className="btn btn-outline" style={{ height: 48 }} disabled={!result} onClick={exportTex}>Xuất .tex</button>
