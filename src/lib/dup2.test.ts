@@ -70,5 +70,14 @@ ok(compareLatex('\\begin{ex}\nCho $x>1. Tìm x.\\shortans{2}\n\\end{ex}', '\\beg
 }
 ok(DUP_PAIRS.every((p) => !(['raw', 'same'].includes(compareLatex(p.a, p.b).kind) && /\\True/.test(p.a) !== /\\True/.test(p.b))), '15. không tự sửa \\True: so sánh không ghi gì (chỉ đọc)');
 
+
+console.log('Không được làm mất chữ của đề khi bỏ tên môi trường / màu');
+{
+  const t = (c: string) => `\\begin{ex}\n${c}\n\\shortans{1}\n\\end{ex}`;
+  ok(compareLatex(t('Tính \\textcolor{red}{giá trị lớn nhất} của $x$.'), t('Tính \\textcolor{red}{giá trị nhỏ nhất} của $x$.')).kind !== 'same', 'chữ trong \\textcolor vẫn được so (lớn nhất ≠ nhỏ nhất)');
+  ok(compareLatex(t('\\begin{center}Tìm giá trị lớn nhất\\end{center}'), t('\\begin{center}Tìm giá trị nhỏ nhất\\end{center}')).kind !== 'same', 'chữ trong môi trường center vẫn được so');
+  ok(compareLatex(t('\\begin{enumerate}[a)]\\item Tính $1+1$\\end{enumerate}'), t('\\begin{enumerate}[1)]\\item Tính $1+1$\\end{enumerate}')).kind === 'same', 'nhãn danh sách [a)] ≠ nội dung');
+}
+
 if (failed) { console.log(`\n${failed} kiểm thử dup2 lỗi`); process.exit(1); }
 console.log('dup2: đạt hết.');

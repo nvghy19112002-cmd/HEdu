@@ -19,6 +19,31 @@ function synth(i: number): string {
 }
 function bank(n: number): QLike[] { seed = 777; return Array.from({ length: n }, (_, i) => ({ uid: `u${i}`, latex: synth(i) })); }
 
+
+// ---- ngân hàng cùng khuôn + cặp cài sẵn để đo "độ phủ ứng viên" so với vét cạn ----
+function templated(N: number, planted: number): { qs: QLike[]; pl: { a: string; b: string; kind: string }[] } {
+  let sd = 99; const r = () => ((sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const TOP = ['đạo hàm', 'tích phân', 'giới hạn', 'xác suất', 'số phức', 'mặt cầu', 'cấp số cộng', 'logarit', 'hình chóp', 'tiệm cận'];
+  const mk = (a: number, b: number, c: number, t: string, verb: string, o: number[]) => {
+    const v = [`$${a}$`, `$${b}$`, `$${c}$`, `$${a + b}$`];
+    return `\\begin{ex}\n${verb} ${t} của hàm số $f(x)=${a}x^{${b % 5 + 2}}+${b}x+${c}$.\n\\choice${o.map((i) => `{${i === 0 ? '\\True ' : ''}${v[i]}}`).join('')}\n\\end{ex}`;
+  };
+  const qs: QLike[] = []; const meta: { a: number; b: number; c: number; t: string }[] = [];
+  for (let i = 0; i < N; i++) { const a = 1 + Math.floor(r() * 40), b = 1 + Math.floor(r() * 40), c = Math.floor(r() * 60), t = TOP[Math.floor(r() * TOP.length)]; meta.push({ a, b, c, t }); qs.push({ uid: 'u' + i, latex: mk(a, b, c, t, 'Tính', [0, 1, 2, 3]) }); }
+  const pl: { a: string; b: string; kind: string }[] = [];
+  for (let i = 0; i < planted; i++) {
+    const k = Math.floor(r() * N), m = meta[k], kind = ['same', 'near', 'conflict'][i % 3];
+    const latex = kind === 'same' ? `\\begin{ex}\nTính ${m.t} của hàm số $f(x)=${m.a}x^{${m.b % 5 + 2}}+${m.b}x+${m.c}$.\n\\choice{$${m.b}$}{$${m.a + m.b}$}{\\True $${m.a}$}{$${m.c}$}\n\\end{ex}`
+      : kind === 'near' ? mk(m.a, m.b, m.c, m.t, 'Hãy tính', [0, 1, 2, 3]) : mk(m.a, m.b, m.c, m.t, 'Tính', [1, 0, 2, 3]);
+    qs.push({ uid: 'p' + i, latex }); pl.push({ a: 'u' + k, b: 'p' + i, kind });
+  }
+  return { qs, pl };
+}
+function recall(pairs: { a: string; b: string }[], pl: { a: string; b: string; kind: string }[]): number {
+  const got = new Set(pairs.flatMap((p) => [p.a + '|' + p.b, p.b + '|' + p.a]));
+  return pl.filter((p) => got.has(p.a + '|' + p.b)).length / Math.max(1, pl.length);
+}
+
 (async () => {
   console.log('Quét ngân hàng: đúng kết quả');
   const small = bank(300);
@@ -37,6 +62,32 @@ function bank(n: number): QLike[] { seed = 777; return Array.from({ length: n },
   ok(JSON.stringify(r1.pairs.map((x) => [x.a, x.b, x.result.kind])) === JSON.stringify(r2.pairs.map((x) => [x.a, x.b, x.result.kind])), 'quét hai lần (kích thước lượt khác nhau) cho cùng thứ tự kết quả');
   ok(r1.pairs.every((x) => x.a !== x.b), 'không có cặp tự so với chính nó');
   ok(new Set(r1.pairs.map((x) => x.a + '|' + x.b)).size === r1.pairs.length, 'mỗi cặp chỉ xuất hiện một lần');
+
+
+  console.log('Độ phủ ứng viên (candidate recall) so với vét cạn');
+  {
+    const { qs: sq, pl } = templated(700, 60);
+    const ex: Set<string> = new Set();
+    for (let i = 0; i < sq.length; i++) for (let j = i + 1; j < sq.length; j++) {
+      const k = compareLatex(sq[i].latex, sq[j].latex).kind;
+      if (k === 'raw' || k === 'same' || k === 'conflict' || k === 'near') ex.add(sq[i].uid + '|' + sq[j].uid);
+    }
+    const ix = new DupIndex(); ix.dfCapOverride = 5; // ép "ngân hàng lớn": mọi từ khoá chung đều bị coi là quá phổ biến
+    const rs = await ix.scan(sq, { batch: 100 });
+    const gotAll = new Set(rs.pairs.map((p) => p.a + '|' + p.b));
+    const missed = [...ex].filter((k) => !gotAll.has(k) && !gotAll.has(k.split('|').reverse().join('|')));
+    ok(ex.size >= 60, `vét cạn thấy ${ex.size} cặp cùng câu/gần trùng/mâu thuẫn (gồm ${pl.length} cặp cài sẵn)`);
+    ok(missed.length === 0, `chỉ mục không bỏ sót cặp nào so với vét cạn (bỏ sót ${missed.length}/${ex.size}) ở chế độ ép từ khoá phổ biến`);
+    ok(recall(rs.pairs, pl) === 1, 'độ phủ cặp cài sẵn = 100% khi từ khoá phổ biến bị loại');
+  }
+  if (process.env.DUP_BENCH) {
+    const { qs: bq, pl } = templated(30000, 150);
+    const rb = await new DupIndex().scan(bq, { batch: 1000 });
+    const byk: Record<string, number> = {};
+    for (const k of ['same', 'near', 'conflict']) byk[k] = recall(rb.pairs, pl.filter((p) => p.kind === k));
+    console.log('  ℹ 30.000 câu cùng khuôn, độ phủ cặp cài sẵn theo nhãn:', JSON.stringify(byk));
+    ok(Object.values(byk).every((v) => v === 1), '30.000 câu cùng khuôn: độ phủ cài sẵn 100% cho same/near/conflict');
+  }
 
   console.log('Cập nhật từng phần');
   idx.upsert('pb0', planted[0].a);
