@@ -842,3 +842,13 @@ a { color: var(--accent); }
 .qbar .search { padding: 0 8px; gap: 6px; }
 .qbar .search .scope-sel { max-width: 84px; }
 .qbar .vseg button { padding: 0 10px; }
+
+/* ---------- V3 PR-D: Kiểm tra trùng — danh sách | đối chiếu gọn ---------- */
+.dc-body { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); gap: 12px; }
+.dc-kindsel { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-3); }
+.dc-kindsel select { height: 32px; width: 100%; min-width: 0; border: 1px solid var(--line-ctl); border-radius: 8px; background: var(--paper); color: var(--ink); padding: 0 6px; font-size: 13px; }
+.dc-stat summary { cursor: pointer; }
+.dc-stat { font-size: 12px; color: var(--ink-3); }
+.dc-io { display: inline-flex; gap: 6px; margin: 0; }
+.dc-list { max-height: calc(100vh - 250px); }
+.dc-card-b { max-height: clamp(260px, calc(100vh - 360px), 640px); }

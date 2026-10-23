@@ -43,7 +43,8 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   const [busy, setBusy] = useState<{ done: number; total: number; phase: string } | null>(null);
   const [pairs, setPairs] = useState<DupPairHit[] | null>(null);
   const [stats, setStats] = useState<ScanStats | null>(null);
-  const [kinds, setKinds] = useState<Set<DupKind>>(new Set(['raw', 'conflict', 'same', 'near']));
+  const [kindKey, setKindKey] = useState<string>('default');
+  const kinds = useMemo<Set<DupKind>>(() => (kindKey === 'default' ? new Set<DupKind>(['raw', 'conflict', 'same', 'near']) : kindKey === 'all' ? new Set<DupKind>(SHOWN) : new Set<DupKind>([kindKey as DupKind])), [kindKey]);
   const [tab, setTab] = useState<'open' | 'later' | 'done'>('open');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const dv = useDecisions();
@@ -95,7 +96,6 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
   const pages = Math.max(1, Math.ceil(list.length / PAGE));
   const pageNo = Math.min(page, pages - 1);
   const shown = list.slice(pageNo * PAGE, pageNo * PAGE + PAGE);
-  const toggleKind = (k: DupKind) => setKinds((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   return (
     <div className="dc" role="dialog" aria-modal="true" aria-label="Kiểm tra trùng">
@@ -106,6 +106,18 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
           {busy
             ? <button type="button" className="btn btn-sm" onClick={() => { abort.current.aborted = true; }}>Dừng quét</button>
             : <button type="button" className="btn btn-primary btn-sm" onClick={run}>{pairs ? 'Quét lại' : `Quét ${sideA} câu`}</button>}
+        <span className="dc-io">
+            <button type="button" className="btn btn-sm" onClick={() => {
+              const blob = new Blob([exportDecisions()], { type: 'application/json' });
+              const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hedu-quyet-dinh-trung.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            }}>Xuất quyết định</button>
+            <button type="button" className="btn btn-sm" onClick={() => fileIn.current?.click()}>Nhập quyết định</button>
+            <input ref={fileIn} type="file" accept="application/json,.json" hidden onChange={async (e) => {
+              const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+              try { const r = await importDecisions(await f.text()); setMsg({ ok: r.saved, text: `Đã nhập: thêm ${r.added}, cập nhật ${r.updated}, bỏ qua ${r.skipped}.${r.saved ? '' : ' Nhưng CHƯA lưu được vào tệp — hãy thử lại.'}` }); }
+              catch (err) { setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) }); }
+            }} />
+          </span>
           <button type="button" className="btn btn-sm" onClick={onClose}>Đóng</button>
         </div>
       </header>
@@ -174,25 +186,17 @@ export function DupCheck({ questions, selected, onClose, onOpen, onGoto }: { que
       {pairs !== null && (
         <div className={`dc-body${listOpen ? '' : ' no-list'}`}>
           {listOpen && <div className="dc-left">
-            <div className="chips" role="group" aria-label="Loại nghi vấn">
-              {SHOWN.map((k) => <button key={k} type="button" className="chip" aria-pressed={kinds.has(k)} onClick={() => toggleKind(k)}>{DUP_KIND_LABEL[k]}<span className="chip-n">{counts[k] ?? 0}</span></button>)}
-            </div>
+            <label className="dc-kindsel">Loại nghi vấn
+              <select value={kindKey} onChange={(e) => { setKindKey(e.target.value); setPage(0); }}>
+                <option value="default">Cần xem — trùng chắc và gần trùng ({(counts.raw ?? 0) + (counts.conflict ?? 0) + (counts.same ?? 0) + (counts.near ?? 0)})</option>
+                {SHOWN.map((k) => <option key={k} value={k}>{DUP_KIND_LABEL[k]} ({counts[k] ?? 0})</option>)}
+                <option value="all">Tất cả loại, kể cả cùng mẫu ({pairs.length})</option>
+              </select>
+            </label>
             <div className="chips" role="tablist" aria-label="Trạng thái xử lý">
-              {([['open', 'Chưa xử lý'], ['later', 'Để xem sau'], ['done', 'Đã quyết định giữ']] as const).map(([k, l]) => <button key={k} type="button" role="tab" className="chip" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => { setTab(k); setPage(0); }}>{l}<span className="chip-n">{tabCounts[k]}</span></button>)}
+              {([['open', 'Chưa xử lý'], ['later', 'Xem sau'], ['done', 'Đã giữ']] as const).map(([k, l]) => <button key={k} type="button" role="tab" className="chip" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => { setTab(k); setPage(0); }}>{l}<span className="chip-n">{tabCounts[k]}</span></button>)}
             </div>
-            <div className="dc-io">
-              <button type="button" className="btn btn-sm" onClick={() => {
-                const blob = new Blob([exportDecisions()], { type: 'application/json' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hedu-quyet-dinh-trung.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-              }}>Xuất quyết định</button>
-              <button type="button" className="btn btn-sm" onClick={() => fileIn.current?.click()}>Nhập quyết định</button>
-              <input ref={fileIn} type="file" accept="application/json,.json" hidden onChange={async (e) => {
-                const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
-                try { const r = await importDecisions(await f.text()); setMsg({ ok: r.saved, text: `Đã nhập: thêm ${r.added}, cập nhật ${r.updated}, bỏ qua ${r.skipped}.${r.saved ? '' : ' Nhưng CHƯA lưu được vào tệp — hãy thử lại.'}` }); }
-                catch (err) { setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) }); }
-              }} />
-            </div>
-            {stats && <p className="dc-stat">{pairs.length} cặp · phía A {stats.sideA} câu, phía đối chiếu {stats.sideB} câu · {stats.comparisons} phép so · {(stats.ms / 1000).toFixed(1)} giây. Ứng viên được chọn theo từ khoá hiếm nên có thể bỏ sót cặp chỉ giống ở các từ rất phổ biến.</p>}
+            {stats && <details className="dc-stat"><summary>{pairs.length} cặp · {stats.comparisons} phép so · {(stats.ms / 1000).toFixed(1)} giây</summary>Phía A {stats.sideA} câu, phía đối chiếu {stats.sideB} câu. Ứng viên được chọn theo từ khoá hiếm nên có thể bỏ sót cặp chỉ giống ở các từ rất phổ biến.</details>}
             {!list.length && <p className="dc-empty">Không có cặp nào ở các nhóm đang chọn.</p>}
             <ul className="dc-list">
               {shown.map((p) => {
