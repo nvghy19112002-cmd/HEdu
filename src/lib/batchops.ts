@@ -1,7 +1,7 @@
-// Thao tác hàng loạt KHÔNG nguy hiểm: gắn/bỏ nhãn, đổi mức độ, đánh dấu Cần sửa / Chưa kiểm tra.
+// Thao tác hàng loạt KHÔNG nguy hiểm: gắn/bỏ nhãn (chưa gắn vào giao diện), đánh dấu Cần sửa / Chưa kiểm tra.
 // Logic thuần (không đụng kho dữ liệu) để xem trước "bao nhiêu câu sẽ đổi" và để test.
 // KHÔNG có: duyệt hàng loạt, đổi loại câu, sửa LaTeX, xoá hàng loạt (xoá nằm ở PR-D, có cổng an toàn riêng).
-import type { Level, Question, ReviewStatus } from './types';
+import type { Question, ReviewStatus } from './types';
 
 export const TAG_MAX_LEN = 40;
 
@@ -56,13 +56,10 @@ export function tagChangeCount(qs: readonly Question[], ops: TagOps): number {
   return n;
 }
 
-export const levelChangeCount = (qs: readonly Question[], level: Level): number => qs.reduce((n, q) => n + (q.level === level ? 0 : 1), 0);
-
 export const reviewChangeCount = (qs: readonly Question[], status: ReviewStatus | undefined): number => qs.reduce((n, q) => n + (q.review === status ? 0 : 1), 0);
 
 /** Bộ biến đổi từng câu cho `updateMany`: mỗi hàm CHỈ đổi đúng một trường (uid, seq, latex, loại câu, ngày sửa giữ nguyên). */
 export const withTags = (ops: TagOps) => (q: Question): Question | null => { const t = applyTagOps(q.tags, ops); return t === q.tags ? null : { ...q, tags: t }; };
-export const withLevel = (level: Level) => (q: Question): Question | null => (q.level === level ? null : { ...q, level });
 export const withReview = (status: ReviewStatus | undefined) => (q: Question): Question | null => {
   if (q.review === status) return null;
   const n: Question = { ...q };

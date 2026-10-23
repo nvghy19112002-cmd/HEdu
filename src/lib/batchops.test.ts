@@ -1,4 +1,4 @@
-import { applyTagOps, parseTagInput, tagChangeCount, tagCounts, withLevel, withReview, withTags } from './batchops';
+import { applyTagOps, parseTagInput, tagChangeCount, tagCounts, withReview, withTags } from './batchops';
 import { addMany, getState, initStore, updateMany } from './store';
 import type { Question } from './types';
 let fail = 0;
@@ -40,12 +40,6 @@ ok(JSON.parse(mem.json!).questions.filter((q: Question) => U.has(q.uid)).every((
 const r1b = await updateMany(uids, withTags({ add: ['ôn thi'], remove: [] }));
 ok(r1b.ok && r1b.changed === 0 && saves === 1, 'làm lại lần nữa: 0 câu đổi, không ghi thêm');
 
-const half = uids.slice(0, 20);
-const r2 = await updateMany(half, withLevel('VDC'));
-ok(r2.ok && r2.changed === 20, 'đổi mức độ 20 câu');
-ok(getState().questions.filter((q) => U.has(q.uid) && q.level === 'VDC').length === 20 && getState().questions.filter((q) => U.has(q.uid) && q.level === 'NB').length === 30, 'đúng 20 câu đổi, 30 câu khác giữ NB');
-ok(getState().questions.every((q) => q.latex === snap.get(q.uid)!.latex && q.seq === snap.get(q.uid)!.seq), 'đổi mức độ không đụng latex/seq');
-
 const r3 = await updateMany(uids.slice(0, 10), withReview('needs_fix'));
 ok(r3.ok && r3.changed === 10 && getState().questions.filter((q) => q.review === 'needs_fix').length === 10, 'đánh dấu Cần sửa 10 câu');
 const r4 = await updateMany(uids.slice(0, 4), withReview(undefined));
@@ -60,7 +54,7 @@ failNext = false;
 ok(!r5.ok && r5.changed === 0, 'báo thất bại, không báo đã đổi');
 ok(getState() === keep, 'bộ nhớ trở lại đúng như trước');
 ok(!JSON.parse(mem.json!).questions.some((q: Question) => q.tags.includes('hỏng')), 'đĩa không có dữ liệu hỏng');
-const r6 = await updateMany(['không-có-uid'], withLevel('TH'));
+const r6 = await updateMany(['không-có-uid'], withReview('needs_fix'));
 ok(r6.ok && r6.changed === 0, 'uid không tồn tại ⇒ 0 câu đổi');
 
 console.log('Thống kê nhãn');

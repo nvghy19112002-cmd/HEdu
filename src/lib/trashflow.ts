@@ -1,7 +1,7 @@
 // Xoá câu = chuyển vào thùng rác (tệp phụ). Chỉ xoá khỏi ngân hàng KHI thùng rác đã ghi bền vững,
 // nên không bao giờ có trạng thái "đã xoá mà không còn bản nào".
 import { decisionsLoaded, loadDecisions, TRASH_CAP, trashAdd, trashAddMany, trashCount, trashRemoveMany, trashRoomFor } from './dupdecisions';
-import { deleteMany, deleteQuestion } from './store';
+import { deleteMany, deleteQuestion, restoreMany } from './store';
 import type { Question } from './types';
 
 export async function moveToTrash(q: Question): Promise<boolean> {
@@ -43,4 +43,17 @@ export async function moveManyToTrash(qs: readonly Question[]): Promise<MoveMany
   if (r.ok) return { ok: true, moved: r.changed };
   const undone = await trashRemoveMany(ids);
   return { ok: false, why: 'bank-write', moved: 0, strayInTrash: undone ? undefined : ids.length, message: 'Không ghi được ngân hàng nên CHƯA xoá câu nào (mọi câu vẫn còn nguyên).' };
+}
+
+export type UndoResult = { ok: true; restored: number; strayInTrash?: number } | { ok: false; message: string };
+
+/**
+ * Hoàn tác "Chuyển vào Thùng rác": đưa các câu về ngân hàng TRƯỚC (ghi một lần, kiểm tra), rồi mới gỡ khỏi thùng rác.
+ * Nếu gỡ khỏi thùng rác lỗi thì câu nằm ở cả hai nơi (không mất) và có báo.
+ */
+export async function undoMoveToTrash(qs: readonly Question[]): Promise<UndoResult> {
+  const r = await restoreMany(qs);
+  if (!r.ok) return { ok: false, message: 'Không ghi được ngân hàng nên CHƯA hoàn tác (các câu vẫn nằm trong Thùng rác, không mất).' };
+  if (!(await trashRemoveMany(qs.map((q) => q.uid)))) return { ok: true, restored: r.changed, strayInTrash: qs.length };
+  return { ok: true, restored: r.changed };
 }

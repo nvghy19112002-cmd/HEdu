@@ -34,7 +34,7 @@ function changedSince(snap: Map<string, string>, qs: Question[]): number {
 export function DupCheck({ questions, selected, initialSelection, onClose, onOpen, onGoto, onTrash }: { questions: Question[]; selected?: ReadonlySet<string>; initialSelection?: boolean; onClose: () => void; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onTrash: (q: Question) => Promise<boolean> }) {
   const { tax } = useTaxonomy();
   const [scope, setScope] = useState<Scope>(() => (initialSelection && selected?.size ? { ...ALL_SCOPE, selection: true } : ALL_SCOPE));
-  const [mode, setMode] = useState<ScanMode>('inside');
+  const [mode, setMode] = useState<ScanMode>(initialSelection && selected?.size ? 'vsAll' : 'inside'); // từ thanh chọn: đối chiếu với TOÀN ngân hàng (gồm cả so với nhau)
   const [page, setPage] = useState(0);
   const snap = useRef<Map<string, string>>(new Map());
   const [scannedKey, setScannedKey] = useState('');

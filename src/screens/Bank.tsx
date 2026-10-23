@@ -17,12 +17,12 @@ import { place, useTaxonomy } from '../lib/curriculum';
 import { gradeLabel, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank, updateMany } from '../lib/store';
-import { moveManyToTrash, moveToTrash, trashBlockReason } from '../lib/trashflow';
+import { moveManyToTrash, moveToTrash, trashBlockReason, undoMoveToTrash } from '../lib/trashflow';
 import { decisionsLoaded, loadDecisions } from '../lib/dupdecisions';
 import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { BatchLevelDialog, BatchTagDialog, BatchTrashDialog } from '../components/BatchDialogs';
+import { BatchTrashDialog } from '../components/BatchDialogs';
 import { withReview } from '../lib/batchops';
 import { buildTexFile, exportSizeMB } from '../lib/texexport';
 import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
@@ -65,10 +65,12 @@ export function BankScreen() {
   const [wide, setWide] = useState(() => sess?.wide ?? false); // tìm trong toàn bộ ngân hàng thay vì mục đang chọn (chỉ có hiệu lực khi đang có chữ tìm)
   const [showSol, setShowSol] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
-  const [onlySel, setOnlySel] = useState(false); // chỉ xem các câu đã chọn (không đổi bộ lọc)
   const [ask, setAsk] = useState<null | { title: string; body: string; label: string; run: () => void }>(null);
-  const [batch, setBatch] = useState<null | 'tag' | 'level' | 'trash'>(null); // hộp thoại thao tác hàng loạt
+  const [batch, setBatch] = useState<null | 'trash'>(null); // hộp thoại thao tác hàng loạt
   const [batchBusy, setBatchBusy] = useState(false);
+  const [undo, setUndo] = useState<null | { qs: Question[]; n: number }>(null); // dải "Hoàn tác" sau khi chuyển vào Thùng rác
+  const busyRef = useRef(false); // chống bấm liên tiếp trước khi giao diện kịp khoá nút
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
   const [moreSel, setMoreSel] = useState(false); // menu "Thao tác khác" của thanh chọn
   const [dupSel, setDupSel] = useState(false); // mở Kiểm tra trùng với phạm vi "các câu đang chọn"
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -114,17 +116,16 @@ export function BankScreen() {
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
   useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
-  useEffect(() => { if (onlySel && sel.size === 0) setOnlySel(false); }, [onlySel, sel]);
   const selectedQs = useMemo(() => sortedCopy(questions.filter((q) => sel.has(q.uid)), sort), [questions, sel, sort]);
   const resultUids = useMemo(() => new Set(facets.list.map((q) => q.uid)), [facets.list]);
-  const list = onlySel ? selectedQs : facets.list;
+  const list = facets.list;
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
   useEffect(() => { saveSession({ f0, text, wide, sort, page: cur }); }, [f0, text, wide, sort, cur]);
   const shown = list.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
   const shownUids = useMemo(() => shown.map((q) => q.uid), [shown]);
-  const counts = selCounts(sel, shownUids, onlySel ? null : resultUids);
+  const counts = selCounts(sel, shownUids, resultUids);
   const pState = pageState(sel, shownUids);
   const masterRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (masterRef.current) masterRef.current.indeterminate = pState === 'some'; }, [pState]);
@@ -224,9 +225,11 @@ export function BankScreen() {
   };
   /** Chạy một thao tác hàng loạt: ghi MỘT lần, báo trung thực "Đã lưu X/Y" hoặc "Chưa lưu được". Giữ nguyên lựa chọn. */
   const runBatch = async (fn: (q: Question) => Question | null, what: string) => {
-    if (batchBusy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBatchBusy(true);
     const r = await updateMany(sel, fn);
+    busyRef.current = false;
     setBatchBusy(false);
     setBatch(null);
     if (!r.ok) toast(`Chưa lưu được ${what} — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi thử lại.`);
@@ -236,14 +239,50 @@ export function BankScreen() {
   const openTrashBatch = async () => { if (!decisionsLoaded()) await loadDecisions(); setBatch('trash'); };
   /** Xoá hàng loạt vào Thùng rác: tất cả hoặc không câu nào; chỉ nói "Đã chuyển N câu" khi cả thùng rác và ngân hàng đã ghi xong. */
   const runTrashBatch = async () => {
-    if (batchBusy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBatchBusy(true);
-    const r = await moveManyToTrash(selectedQs);
+    const moved = selectedQs;
+    const r = await moveManyToTrash(moved);
+    busyRef.current = false;
     setBatchBusy(false);
     setBatch(null);
-    if (r.ok) { toast(`Đã chuyển ${nf.format(r.moved)} câu vào Thùng rác. Khôi phục ở Hệ thống → Thùng rác.`); return; }
+    if (r.ok) { setUndo({ qs: moved, n: r.moved }); return; }
     toast(r.strayInTrash ? `${r.message} Lưu ý: ${nf.format(r.strayInTrash)} câu đang có bản trong Thùng rác (không mất gì); vào Hệ thống → Thùng rác nếu cần dọn.` : r.message);
   };
+  const runUndo = async () => {
+    if (!undo || busyRef.current) return;
+    busyRef.current = true;
+    const u = undo;
+    const r = await undoMoveToTrash(u.qs);
+    busyRef.current = false;
+    setUndo(null);
+    if (!r.ok) { toast(r.message); return; }
+    toast(r.strayInTrash ? `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng. Lưu ý: còn bản trong Thùng rác (không mất gì), có thể dọn ở Hệ thống → Thùng rác.` : `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng.`);
+  };
+  useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 30000); return () => clearTimeout(t); }, [undo]);
+  // Đổi bộ lọc hoặc chữ tìm ⇒ bỏ chọn các câu ngoài kết quả mới (mọi câu đang chọn luôn nhìn thấy được). Đổi trang/sắp xếp/kiểu xem thì giữ.
+  const filterSeen = useRef(false);
+  useEffect(() => {
+    if (!filterSeen.current) { filterSeen.current = true; return; }
+    setSel((s) => {
+      if (s.size === 0) return s;
+      const kept = new Set<string>();
+      for (const u of s) if (resultUids.has(u)) kept.add(u);
+      if (kept.size === s.size) return s;
+      toast(`Đã bỏ chọn ${nf.format(s.size - kept.size)} câu nằm ngoài bộ lọc mới.`);
+      return kept;
+    });
+  }, [f0, text, wideOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Menu "Thao tác khác": bấm ra ngoài hoặc Esc thì đóng (Esc trả focus về nút)
+  useEffect(() => {
+    if (!moreSel) return;
+    const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.('.selbar-more')) setMoreSel(false); };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); setMoreSel(false); moreBtnRef.current?.focus(); } };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
+  }, [moreSel]);
   const runExport = () => {
     const text = buildTexFile(selectedQs, (q) => questionCode(q, q.level), `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: ${SORT_LABEL[sort]}) — mã LaTeX gốc, chỉ cập nhật dòng %[ID]`);
     showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text, mime: 'application/x-tex' });
@@ -395,12 +434,10 @@ export function BankScreen() {
                 <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo kiểu sắp xếp đang chọn">Xuất .tex</button>
                 <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
                 {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
-                <button type="button" className="btn btn-sm" onClick={() => setBatch('tag')} title="Thêm hoặc bỏ nhãn cho các câu đã chọn">Gắn nhãn</button>
-                <button type="button" className="btn btn-sm" onClick={() => setBatch('level')} title="Đổi mức độ cho các câu đã chọn">Đổi mức độ</button>
                 <span className="selbar-more">
-                  <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
+                  <button ref={moreBtnRef} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
                   {moreSel && (
-                    <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMoreSel(false); } }} onMouseLeave={() => undefined}>
+                    <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMoreSel(false); moreBtnRef.current?.focus(); } }}>
                       <button type="button" role="menuitem" autoFocus onClick={() => { setMoreSel(false); setAsk({ title: `Đánh dấu “Cần sửa” cho ${nf.format(sel.size)} câu?`, body: 'Chỉ đổi trạng thái kiểm duyệt. Nội dung câu không đổi. (HEdu không có “Đã duyệt hàng loạt”: việc duyệt do thầy/cô xác nhận từng câu.)', label: 'Đánh dấu Cần sửa', run: () => { void runBatch(withReview('needs_fix'), 'đánh dấu Cần sửa'); } }); }}>Đánh dấu “Cần sửa”</button>
                       <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đưa ${nf.format(sel.size)} câu về “Chưa kiểm tra”?`, body: 'Các câu đang “Đã duyệt” hoặc “Cần sửa” sẽ trở về “Chưa kiểm tra”. Nội dung không đổi.', label: 'Về Chưa kiểm tra', run: () => { void runBatch(withReview(undefined), 'đưa về Chưa kiểm tra'); } }); }}>Về “Chưa kiểm tra”</button>
                       <button type="button" role="menuitem" className="danger" onClick={() => { setMoreSel(false); void openTrashBatch(); }}>Chuyển vào Thùng rác…</button>
@@ -409,14 +446,12 @@ export function BankScreen() {
                 </span>
                 <span className="selbar-sep" aria-hidden="true" />
                 {counts.inPage > 0 && <button type="button" className="btn btn-sm" onClick={deselectPage} title="Chỉ bỏ các câu của trang này, giữ các trang khác">Bỏ chọn trang</button>}
-                <button type="button" className="btn btn-sm" aria-pressed={onlySel} onClick={() => { setOnlySel(!onlySel); setPage(0); }} title="Chỉ liệt kê các câu đã chọn, không đổi bộ lọc">{onlySel ? 'Xem tất cả kết quả' : 'Chỉ xem đã chọn'}</button>
-                <button type="button" className="btn btn-sm" onClick={() => { setSel(new Set()); setOnlySel(false); }}>Bỏ chọn tất cả</button>
+                <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
               </div>
             </div>
           )}
-          {onlySel && <div className="selbar-view" role="status"><span>Đang chỉ xem <b>{nf.format(sel.size)}</b> câu đã chọn (bộ lọc và chữ tìm tạm không áp dụng).</span><button type="button" className="linkbtn" onClick={() => { setOnlySel(false); setPage(0); }}>Quay lại kết quả lọc</button></div>}
           <div className="list-head">
-            <span><b className="lh-title">{onlySel ? 'Các câu đã chọn' : heading}</b>{lesson && !onlySel ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
+            <span><b className="lh-title">{heading}</b>{lesson ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
             <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
           </div>
           {shown.length > 0 && (
@@ -426,7 +461,7 @@ export function BankScreen() {
                   <input ref={masterRef} type="checkbox" checked={pState === 'all'} onChange={() => (pState === 'all' ? deselectPage() : selectPage())} />
                   Chọn trang ({shown.length})
                 </label>
-                {!onlySel && list.length > shown.length && counts.total - counts.outScope < facets.list.length && (
+                {list.length > shown.length && counts.total - counts.outScope < facets.list.length && (
                   <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(facets.list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(facets.list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
                 )}
               </span>
@@ -491,8 +526,13 @@ export function BankScreen() {
         </>
       )}
       {dupOpen && <DupCheck questions={questions} selected={sel} initialSelection={dupSel} onClose={() => { setDupOpen(false); setDupSel(false); }} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
-      {batch === 'tag' && <BatchTagDialog qs={selectedQs} busy={batchBusy} onRun={(fn) => { void runBatch(fn, 'nhãn'); }} onCancel={() => setBatch(null)} />}
-      {batch === 'level' && <BatchLevelDialog qs={selectedQs} busy={batchBusy} onRun={(fn) => { void runBatch(fn, 'mức độ'); }} onCancel={() => setBatch(null)} />}
+      {undo && (
+        <div className="undo-bar" role="status">
+          <span>Đã chuyển <b>{nf.format(undo.n)}</b> câu vào Thùng rác.</span>
+          <button type="button" className="btn btn-sm btn-accent" onClick={() => { void runUndo(); }}>Hoàn tác</button>
+          <button type="button" className="ico" aria-label="Đóng" onClick={() => setUndo(null)}>×</button>
+        </div>
+      )}
       {batch === 'trash' && <BatchTrashDialog qs={selectedQs} busy={batchBusy} onRun={() => { void runTrashBatch(); }} onCancel={() => setBatch(null)} />}
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
