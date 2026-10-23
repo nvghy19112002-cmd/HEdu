@@ -62,3 +62,5 @@ Chưa làm: lưu bằng SQLite (loại L, cần duyệt thiết kế); bảng da
 Ghi nhớ kỹ thuật: `node_modules` đang bị git theo dõi như một liên kết (symlink) — chưa xử lý, đừng chạy `npm i` làm mất nó (nếu mất: `git checkout node_modules`).
 
 Đợt sau beta.15 (PR #23 nhãn enumerate + sửa tách `\item` sau danh sách lồng, PR #24 `src/lib/crisp.ts` nét ngang/dọc SVG sắc nét, PR-C bố cục Ngân hàng gọn: `.qbar`, Bộ lọc thu gọn `hedu.bankfilters`, mục lục ẩn được `hedu.banktree`, menu ba chấm `.more-menu`, hộp “thay đổi chưa lưu” dạng modal). Không đổi schema/ID/dữ liệu/updater. Chưa phát hành (đợi chủ dự án nghiệm thu).
+
+Đợt giao diện V3 (PR #39–#46, phát hành beta.19): token màu Hướng B ở đầu `src/styles.css` (đừng thêm mã màu rời), thang cỡ chữ 12/13/14/16/20/24, bo góc 4/8/12, nút 28/36; Ngân hàng một hàng công cụ; Kiểm tra trùng chọn loại bằng một ô (ẩn "Cùng mẫu" mặc định); Nhập liệu có chỉ báo bước; trình sửa 3 chế độ xem (`hedu.qemode`); Hệ thống 4 nhóm + hỏi xác nhận khi khôi phục từ file. Bộ chụp ảnh `scripts/ui-shots.mjs` (dữ liệu giả lập, không dùng dữ liệu thật). Không đổi schema/ID/dữ liệu.

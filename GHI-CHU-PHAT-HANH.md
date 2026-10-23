@@ -1,4 +1,17 @@
-## Có gì mới trong bản kế tiếp (kiểm tra trùng V2 — chưa phát hành)
+## Có gì mới trong beta.19 (giao diện V3 — "Mực xanh & giấy ô ly")
+
+Chỉ đổi giao diện. Dữ liệu ngân hàng (schema 3), ID, khung chương trình, LaTeX gốc và thuật toán kiểm tra trùng **không đổi**; Tạo đề vẫn tạm ẩn.
+
+- **Bảng màu mới:** xanh mực cho nút chính và mục đang chọn, đỏ chỉ dành cho lỗi/xoá; mọi màu gom về một chỗ; chữ và viền đạt độ tương phản chuẩn.
+- **Khung ứng dụng:** thanh bên trái gọn (64px), cỡ chữ và độ bo góc thống nhất, nút thấp hơn; mục "Khung CT" đổi tên **Chương trình**.
+- **Ngân hàng:** tìm kiếm, bộ lọc, kiểu xem, Kiểm tra trùng và Mục lục nằm trên **một hàng**; câu đầu tiên lên cao hơn (1366×768: từ y=186 xuống 124). Cửa sổ hẹp/zoom 150% tự ẩn mục lục lần đầu (bấm "Mục lục" để bật).
+- **Kiểm tra trùng:** một ô chọn loại nghi vấn, "Cùng mẫu" ẩn mặc định; hàng cặp đầu tiên từ y≈620 lên ≈228, vùng so sánh rộng hơn.
+- **Nhập liệu:** chỉ báo 4 bước; dán 3 câu là thấy ngay kết quả rà soát; nút "Nhập N câu" ghim đáy.
+- **Trình sửa câu:** ba chế độ xem **Mã | Mã + Xem trước | Xem trước**, nhớ theo máy.
+- **Hệ thống:** chia 4 nhóm; "Khôi phục từ file…" nay **hỏi xác nhận** trước khi thay toàn bộ ngân hàng.
+- Giới hạn đã biết: chưa có ô Lớp/Phân môn thả xuống (giữ cây mục lục); quyết định Nhập/Bỏ/Chờ ở màn Nhập liệu vẫn là ô chọn; Kiểm tra trùng vẫn là lớp phủ toàn màn hình; chưa nghiệm thu trên máy Windows thật.
+
+## Có gì mới trong beta.18 (kiểm tra trùng V2)
 
 - **Xử lý cặp trùng ngay trong màn Kiểm tra trùng:** hai câu hiện cân xứng (cạnh nhau khi rộng, xếp dọc khi hẹp), Toán/TikZ không bị méo; có tab “Khác biệt” theo ký hiệu. “Mở sửa” rồi quay lại đúng cặp; “Loại một câu…” đưa tới Ngân hàng để xoá (HEdu không tự xoá, không tự gộp).
 - **Quét theo phạm vi:** Khối 10/11/12 · Phân môn · Chương · Bài · Dạng · các câu đang chọn · toàn ngân hàng; có kiểu “đối chiếu với toàn ngân hàng”. Quét bị dừng giữa chừng không bao giờ hiện là “không trùng”; câu bị sửa sau khi quét được báo là danh sách đã cũ.
