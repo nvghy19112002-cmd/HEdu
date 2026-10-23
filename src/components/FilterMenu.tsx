@@ -15,9 +15,9 @@ export function FilterMenu({ label, summary, active, children }: { label: string
   }, [open]);
   return (
     <div className="fmenu" ref={root}>
-      <button type="button" className={`fmenu-btn${active ? ' on' : ''}`} aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className={`fmenu-btn${active ? ' on' : ''}`} aria-haspopup="true" title={`${label}: ${summary}`} aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="fmenu-l">{label}</span>
-        <span className="fmenu-v">{summary}</span>
+        {active && <span className="fmenu-v">{summary}</span>}
         <span aria-hidden="true">▾</span>
       </button>
       {open && <div className="fmenu-pop" role="group" aria-label={label}>{children}</div>}
