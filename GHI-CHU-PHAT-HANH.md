@@ -1,4 +1,4 @@
-## Có gì mới trong beta.26 (chờ phát hành): Gán ID tự động (chỉ đối chiếu ngân hàng, không AI)
+## Có gì mới trong beta.26 (đã phát hành 24/10/2026, kênh beta): Gán ID tự động (chỉ đối chiếu ngân hàng, không AI)
 Không đổi schema (3), công thức ID6, LaTeX gốc, cây mục lục, thuật toán dò trùng. Không gửi dữ liệu ra ngoài. Gồm PR #72–#75 (chủ dự án duyệt phạm vi GĐ1 ngày 24/10/2026).
 - **Gán ID tự động ở Ngân hàng**: chọn câu (tối đa 200/lượt) → **Gán ID tự động** → bảng xem trước: ID hiện tại → dự kiến, vị trí gợi ý (★) hoặc 2 phương án khác hoặc giữ nguyên, nhãn tin cậy cao/vừa/thấp/không đủ căn cứ. Chỉ câu **tin cậy cao** được tick sẵn. **Mức độ không bao giờ tự đổi** (ô "Đổi mức độ" phải tick riêng, gợi ý chỉ tham khảo). Kiểm lại ngay trước khi ghi: câu đã sửa/xoá, cây đã đổi, vị trí sai đường dẫn/khác lớp ⇒ không ghi. Chỉ đổi vị trí; nội dung, nhãn, kiểm duyệt, ngày sửa giữ nguyên.
 - **Hoàn tác trong phiên**: thanh "Đã gán vị trí mới cho N câu — Hoàn tác"; câu đã bị sửa tiếp/xoá sau lần gán thì giữ nguyên (hỏi trước). Đóng app thì hết hoàn tác.
