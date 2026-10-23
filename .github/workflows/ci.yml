@@ -46,4 +46,9 @@ jobs:
         working-directory: src-tauri
         env:
           HEDU_REPO: ${{ github.repository }}
-        run: cargo test --lib
+        run: |
+          set +e
+          cargo test --lib 2>&1 | tee ../rust-ci.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then grep -nE "^(error|warning: unused)|panicked|FAILED|failed" -A4 ../rust-ci.log | head -40 | sed 's/^/::error::/' ; fi
+          exit $code
