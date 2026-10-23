@@ -93,9 +93,16 @@ export async function loadDecisions(): Promise<{ ok: boolean; error?: string }> 
 }
 
 const dump = (): string => JSON.stringify({ v: 1, recs: [...recs.values()], ...(trash.length ? { trash } : {}), ...(gold.size ? { gold: [...gold.values()] } : {}) } satisfies DecisionFile);
-async function persist(): Promise<boolean> {
-  if (!writable || !backend) return false;
-  try { await backend.save(dump()); return true; } catch { return false; }
+// Ghi lần lượt, không chồng nhau: bản ghi đến sau luôn là bản cuối cùng trên đĩa.
+let chain: Promise<unknown> = Promise.resolve();
+function persist(): Promise<boolean> {
+  const run = async (): Promise<boolean> => {
+    if (!writable || !backend) return false;
+    try { await backend.save(dump()); return true; } catch { return false; }
+  };
+  const p = chain.then(run, run);
+  chain = p;
+  return p;
 }
 
 /** Trạng thái của quyết định đang lưu cho một cặp, đối chiếu với nội dung HIỆN TẠI của hai câu. */
