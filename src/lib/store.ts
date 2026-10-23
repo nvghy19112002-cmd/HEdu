@@ -176,6 +176,34 @@ export async function setReview(id: string, status: ReviewStatus | undefined): P
   return false;
 }
 
+export interface BatchResult { ok: boolean; /** số câu thật sự đổi và đã ghi bền vững */ changed: number; /** số câu được yêu cầu */ total: number }
+
+/**
+ * Sửa nhiều câu trong MỘT lần: một lần cập nhật bộ nhớ, một lần ghi đĩa, rồi kiểm tra lần ghi có thành công không.
+ * `fn` trả null = không đổi câu đó. Ghi lỗi (hoặc kho chỉ-đọc) ⇒ hoàn lại toàn bộ như cũ, changed = 0, ok = false.
+ * Độ phức tạp O(N) cho kho N câu (tra bằng Set), không gọi saveQuestion từng câu.
+ */
+export async function updateMany(uids: Iterable<string>, fn: (q: Question) => Question | null): Promise<BatchResult> {
+  const want = new Set(uids);
+  const total = want.size;
+  if (!writable) return { ok: false, changed: 0, total };
+  const before = state;
+  let changed = 0;
+  const questions = state.questions.map((q) => {
+    if (!want.has(q.uid)) return q;
+    const n = fn(q);
+    if (!n) return q;
+    changed++;
+    return n;
+  });
+  if (changed === 0) return { ok: true, changed: 0, total };
+  set({ ...state, questions });
+  await flushSave();
+  if (lastSaveOk) return { ok: true, changed, total };
+  set(before);
+  return { ok: false, changed: 0, total };
+}
+
 export function addMany(drafts: Draft[]): Question[] {
   const now = Date.now();
   let seq = state.nextSeq;
