@@ -1,3 +1,13 @@
+## Có gì mới trong bản kế tiếp (kiểm tra trùng V2 — chưa phát hành)
+
+- **Xử lý cặp trùng ngay trong màn Kiểm tra trùng:** hai câu hiện cân xứng (cạnh nhau khi rộng, xếp dọc khi hẹp), Toán/TikZ không bị méo; có tab “Khác biệt” theo ký hiệu. “Mở sửa” rồi quay lại đúng cặp; “Loại một câu…” đưa tới Ngân hàng để xoá (HEdu không tự xoá, không tự gộp).
+- **Quét theo phạm vi:** Khối 10/11/12 · Phân môn · Chương · Bài · Dạng · các câu đang chọn · toàn ngân hàng; có kiểu “đối chiếu với toàn ngân hàng”. Quét bị dừng giữa chừng không bao giờ hiện là “không trùng”; câu bị sửa sau khi quét được báo là danh sách đã cũ.
+- **Bộ dò chính xác hơn:** sửa lỗi nhầm cặp chỉ khác `\begin{center}`, tên môi trường, màu, cột bảng; bổ sung lớp ứng viên theo “dấu vân tay sự kiện” để không bỏ sót ở ngân hàng lớn. Có bộ 40 cặp thử và kiểm thử hiệu năng.
+- **Nhập file .tex / dán LaTeX:** rà trùng cả mới↔ngân hàng và mới↔mới, quyết định từng câu (nhập / bỏ qua / giữ lại xem), kiểm tra lại ngay trước khi ghi.
+- **Nhớ quyết định:** “Giữ cả hai — không phải trùng / biến thể hợp lệ” và “Để xem sau” lưu ở tệp phụ riêng (không đổi dữ liệu ngân hàng); sửa nội dung một câu thì quyết định cũ tự hết hiệu lực. Có xuất/nhập file quyết định.
+- Giới hạn đã biết: tệp quyết định không nằm trong “Sao lưu trước cập nhật” (dùng Xuất quyết định để lưu riêng); chưa có xoá/thùng rác trực tiếp; chưa tích hợp AI.
+- Dữ liệu ngân hàng (schema 3), ID và sao lưu không đổi.
+
 ## Có gì mới trong beta.16
 
 - **Bộ lọc của Ngân hàng thành một hàng nút thả xuống** (Mức độ · Loại câu · Kiểm duyệt, thêm Dạng toán khi đã chọn bài). Mỗi nút hiện tóm tắt lựa chọn; bấm mở bảng có số câu từng mục; có nút “Xoá N bộ lọc”. Câu hỏi đầu tiên nay nằm cao hơn khoảng 330px ở màn 1366×768.
