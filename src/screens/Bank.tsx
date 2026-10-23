@@ -121,6 +121,18 @@ export function BankScreen() {
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
   }, [menuUid]);
 
+  /** Từ màn Kiểm tra trùng: chuyển tới đúng câu trong Ngân hàng (xem ở chế độ Danh sách) để giáo viên tự xoá có xác nhận. */
+  const gotoQuestion = (uid: string) => {
+    const q = questions.find((x) => x.uid === uid);
+    if (!q) return;
+    setDupOpen(false); setWide(false); setText(''); setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setFormId(null);
+    setGradeNum(q.grade); setChapterId(q.chapterId || null); setLessonId(q.lessonId || null);
+    const sc = questions.filter((x) => x.grade === q.grade && (!q.chapterId || x.chapterId === q.chapterId) && (!q.lessonId || x.lessonId === q.lessonId)).sort((a, b) => b.updatedAt - a.updatedAt);
+    setPage(Math.floor(Math.max(0, sc.findIndex((x) => x.uid === uid)) / PER_PAGE));
+    setView('list'); setActiveUid(uid); setDetailOpen(true);
+    toast(`Đã chuyển tới ${seqLabel(q.seq)}. Muốn xoá: nút ⋯ → Xoá câu (có hỏi lại).`);
+  };
+
   const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); apply(n); };
   const pickGrade = (g: number | null) => { setPage(0); setGradeNum(g); setChapterId(null); setLessonId(null); setFormId(null); };
   const pickChapter = (id: string) => { setPage(0); setChapterId(id === chapterId ? null : id); setLessonId(null); setFormId(null); };
@@ -393,7 +405,7 @@ export function BankScreen() {
           )}
         </section>
       </div>
-      {dupOpen && <DupCheck questions={questions} selected={sel} onClose={() => setDupOpen(false)} onOpen={setOpenUid} />}
+      {dupOpen && <DupCheck questions={questions} selected={sel} onClose={() => setDupOpen(false)} onOpen={setOpenUid} onGoto={gotoQuestion} />}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
   );
