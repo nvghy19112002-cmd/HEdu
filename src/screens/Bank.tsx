@@ -393,7 +393,7 @@ export function BankScreen() {
           )}
         </section>
       </div>
-      {dupOpen && <DupCheck questions={questions} onClose={() => setDupOpen(false)} onOpen={setOpenUid} />}
+      {dupOpen && <DupCheck questions={questions} selected={sel} onClose={() => setDupOpen(false)} onOpen={setOpenUid} />}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
   );
