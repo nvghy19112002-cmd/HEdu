@@ -245,7 +245,7 @@ export function toJson(tax: Taxonomy): string {
   const node = (code: string, name: string, children?: unknown[]) => (children && children.length ? { code, name, children } : { code, name });
   return JSON.stringify(
     {
-      _chuThich: 'Cây mục lục của HEdu. Nạp lại bằng nút "Nạp cây từ file…" trong mục Khung CT.',
+      _chuThich: 'Cây mục lục của HEdu. Nạp lại bằng nút "Nạp cây từ file…" trong mục Chương trình.',
       name: tax.name,
       format: FORMAT,
       levels: [

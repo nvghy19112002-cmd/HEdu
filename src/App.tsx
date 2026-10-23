@@ -21,7 +21,7 @@ const NAV: { s: Screen; label: string; Icon: typeof IcEdit; feature?: FeatureKey
   { s: 'bank', label: 'Ngân hàng', Icon: IcBank },
   { s: 'exam', label: 'Tạo đề', Icon: IcExam, feature: 'exam' },
   { s: 'import', label: 'Nhập liệu', Icon: IcImport },
-  { s: 'curriculum', label: 'Khung CT', Icon: IcTree },
+  { s: 'curriculum', label: 'Chương trình', Icon: IcTree },
 ];
 
 export function App({ boot }: { boot: BootResult }) {
