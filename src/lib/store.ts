@@ -223,6 +223,35 @@ export async function deleteMany(uids: Iterable<string>): Promise<BatchResult> {
   return { ok: false, changed: 0, total };
 }
 
+/**
+ * Đưa NHIỀU câu từ thùng rác trở lại ngân hàng bằng MỘT lần cập nhật + MỘT lần ghi (giữ uid, nội dung; số thứ tự cũ nếu còn trống,
+ * nếu đã có câu khác dùng thì cấp số mới như restoreQuestion). Câu đã có uid trong ngân hàng thì bỏ qua (không ghi đè).
+ * Ghi lỗi ⇒ hoàn lại, ok = false.
+ */
+export async function restoreMany(qs: readonly Question[]): Promise<BatchResult> {
+  const total = qs.length;
+  if (!writable) return { ok: false, changed: 0, total };
+  const have = new Set(state.questions.map((x) => x.uid));
+  const seqs = new Set(state.questions.map((x) => x.seq));
+  let next = state.nextSeq;
+  const add: Question[] = [];
+  for (const q of qs) {
+    if (have.has(q.uid)) continue;
+    have.add(q.uid);
+    const b: Question = seqs.has(q.seq) ? { ...q, seq: next } : q;
+    seqs.add(b.seq);
+    next = Math.max(next, b.seq + 1);
+    add.push(b);
+  }
+  if (add.length === 0) return { ok: true, changed: 0, total };
+  const before = state;
+  set({ ...state, questions: [...state.questions, ...add], nextSeq: next });
+  await flushSave();
+  if (lastSaveOk) return { ok: true, changed: add.length, total };
+  set(before);
+  return { ok: false, changed: 0, total };
+}
+
 export function addMany(drafts: Draft[]): Question[] {
   const now = Date.now();
   let seq = state.nextSeq;

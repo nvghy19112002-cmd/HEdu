@@ -1,7 +1,7 @@
-// Hộp thoại cho thao tác hàng loạt: Gắn nhãn, Đổi mức độ. Có xem trước "bao nhiêu câu sẽ đổi" trước khi bấm.
+// Hộp thoại cho thao tác hàng loạt: Gắn nhãn (hiện CHƯA gắn vào thanh chọn — chủ dự án chưa cần), Chuyển vào Thùng rác. Có xem trước "bao nhiêu câu sẽ đổi" trước khi bấm.
 import { useMemo, useState } from 'react';
-import { levelChangeCount, parseTagInput, tagChangeCount, tagCounts, withLevel, withTags } from '../lib/batchops';
-import { LEVEL_LABEL, LEVELS, type Level, type Question } from '../lib/types';
+import { parseTagInput, tagChangeCount, tagCounts, withTags } from '../lib/batchops';
+import type { Question } from '../lib/types';
 import { TRASH_CAP, trashCount } from '../lib/dupdecisions';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -42,33 +42,6 @@ export function BatchTagDialog({ qs, busy, onRun, onCancel }: { qs: Question[]; 
         </>
       )}
       <p className="bd-sum" role="status">{none ? 'Nhập nhãn cần thêm hoặc chọn nhãn cần bỏ.' : n === 0 ? 'Các câu đã chọn đã đúng như vậy, không có gì thay đổi.' : `${nf.format(n)} / ${nf.format(qs.length)} câu sẽ thay đổi. Nhãn khác của từng câu được giữ nguyên.`}</p>
-    </ConfirmDialog>
-  );
-}
-
-export function BatchLevelDialog({ qs, busy, onRun, onCancel }: { qs: Question[]; busy: boolean; onRun: (fn: (q: Question) => Question | null) => void; onCancel: () => void }) {
-  const [lv, setLv] = useState<Level | null>(null);
-  const cnt = useMemo(() => { const m = new Map<Level, number>(); qs.forEach((q) => m.set(q.level, (m.get(q.level) ?? 0) + 1)); return m; }, [qs]);
-  const n = lv ? levelChangeCount(qs, lv) : 0;
-  return (
-    <ConfirmDialog
-      title={`Đổi mức độ cho ${nf.format(qs.length)} câu`}
-      confirmLabel={lv && n > 0 ? `Đổi ${nf.format(n)} câu sang ${LEVEL_LABEL[lv]}` : 'Chọn mức độ mới'}
-      busy={busy}
-      disabled={!lv || n === 0}
-      onConfirm={() => lv && onRun(withLevel(lv))}
-      onCancel={onCancel}
-    >
-      <div className="bd-lab">Mức độ mới</div>
-      <div className="bd-levels" role="radiogroup" aria-label="Mức độ mới">
-        {LEVELS.map((l) => (
-          <button key={l} type="button" role="radio" aria-checked={lv === l} className={`bd-lv${lv === l ? ' is-on' : ''}`} onClick={() => setLv(l)}>
-            {LEVEL_LABEL[l]}<small>{nf.format(cnt.get(l) ?? 0)} câu hiện tại</small>
-          </button>
-        ))}
-      </div>
-      <p className="bd-sum" role="status">{!lv ? 'Chọn mức độ muốn gán cho tất cả các câu đã chọn.' : n === 0 ? 'Các câu đã chọn đều đang ở mức này.' : `${nf.format(n)} / ${nf.format(qs.length)} câu sẽ đổi mức độ.`}</p>
-      <p className="bd-note">Lưu ý: mã ID hiển thị (chữ N/H/V/C) đổi theo mức độ. Nội dung LaTeX, số thứ tự, trạng thái kiểm duyệt và nhãn không đổi.</p>
     </ConfirmDialog>
   );
 }

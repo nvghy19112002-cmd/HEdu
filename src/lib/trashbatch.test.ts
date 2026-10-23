@@ -1,5 +1,5 @@
 import { _reset, loadDecisions, TRASH_CAP, trashAddMany, trashCount, trashList, type Backend } from './dupdecisions';
-import { moveManyToTrash } from './trashflow';
+import { moveManyToTrash, undoMoveToTrash } from './trashflow';
 import { addMany, getState, initStore } from './store';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
@@ -108,6 +108,43 @@ console.log('Xoá hàng loạt: lỗi ghi');
   const before = getState().questions.length;
   const r = await moveManyToTrash(pick(e.uids));
   ok(!r.ok && getState().questions.length === before, 'tệp thùng rác chỉ-đọc/hỏng: từ chối, không xoá câu nào');
+}
+
+console.log('Hoàn tác xoá hàng loạt');
+{
+  const e = await setup(25);
+  const qs = pick(e.uids);
+  const snap = JSON.stringify(qs);
+  const before = getState().questions.length;
+  await moveManyToTrash(qs);
+  ok(getState().questions.length === before - 25 && trashCount() === 25, 'đã chuyển 25 câu');
+  const u = await undoMoveToTrash(qs);
+  ok(u.ok && u.restored === 25 && !u.strayInTrash, 'hoàn tác báo đã khôi phục 25 câu');
+  ok(getState().questions.length === before && trashCount() === 0, 'ngân hàng đủ lại, thùng rác trống');
+  const back = pick(e.uids);
+  ok(JSON.stringify(back.sort((a, b) => a.seq - b.seq)) === JSON.stringify(JSON.parse(snap).sort((a: { seq: number }, b: { seq: number }) => a.seq - b.seq)), 'uid, số thứ tự, LaTeX, mức độ… y như trước khi xoá');
+  const again = await undoMoveToTrash(qs);
+  ok(again.ok && again.restored === 0, 'bấm hoàn tác lần nữa: không nhân đôi câu');
+}
+{
+  const e = await setup(10);
+  const qs = pick(e.uids);
+  await moveManyToTrash(qs);
+  const before = getState().questions.length;
+  e.bank.fail = true;
+  const u = await undoMoveToTrash(qs);
+  e.bank.fail = false;
+  ok(!u.ok && getState().questions.length === before && trashCount() === 10, 'ngân hàng ghi lỗi khi hoàn tác: câu vẫn nằm trong thùng rác, không mất');
+}
+{
+  const e = await setup(10);
+  const qs = pick(e.uids);
+  await moveManyToTrash(qs);
+  let n = 0;
+  _reset({ async load() { return e.side.data; }, async save(j: string) { n++; if (n >= 1) throw new Error('đĩa đầy'); e.side.data = j; } });
+  await loadDecisions();
+  const u = await undoMoveToTrash(qs);
+  ok(u.ok && u.strayInTrash === 10, 'gỡ thùng rác lỗi: câu đã về ngân hàng và báo còn bản trong thùng rác (không mất)');
 }
 
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
