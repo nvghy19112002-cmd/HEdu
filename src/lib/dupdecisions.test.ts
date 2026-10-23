@@ -1,4 +1,4 @@
-import { _reset, TRASH_CAP, trashRoomFor, goldList, goldOf, goldSet, restoreSidecar, sidecarForBackup, trashAdd, trashList, trashRemove, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
+import { decisionCount, previewImport, recOf, restoreRec, _reset, TRASH_CAP, trashRoomFor, goldList, goldOf, goldSet, restoreSidecar, sidecarForBackup, trashAdd, trashList, trashRemove, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
 import type { Question } from './types';
 
 let failed = 0;
@@ -24,6 +24,33 @@ const mem = (init: string | null = null) => {
     ok(statusOf(B, A).status === 'valid' && statusOf(A, B).rec?.why === 'Khác số liệu', 'đảo thứ tự A/B vẫn nhận ra cùng một cặp');
     _reset(be); await loadDecisions();
     ok(statusOf(A, B).status === 'valid', 'tải lại từ tệp: quyết định còn nguyên');
+  }
+  console.log('Quyết định: xem trước khi nhập, hoàn tác, ghi tuần tự');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    await setDecision(A, B, 'legit_variant');
+    const file = exportDecisions();
+    _reset(mem()); await loadDecisions();
+    const pv = previewImport(file);
+    ok(pv.added === 1 && pv.updated === 0 && decisionCount() === 0, 'xem trước: báo thêm 1 và KHÔNG ghi gì');
+    const r = await importDecisions(file);
+    ok(r.added === 1 && decisionCount() === 1, 'áp dụng: đúng như bản xem trước');
+    ok(previewImport(file).added === 0 && previewImport(file).skipped === 1, 'nhập lại cùng file ⇒ bỏ qua, không đổi');
+    ok((() => { try { previewImport('{"v":2}'); return false; } catch { return true; } })(), 'file sai định dạng ⇒ báo lỗi, không ghi');
+    const be2 = mem(); _reset(be2); await loadDecisions();
+    await setDecision(A, B, 'not_duplicate');
+    const prev = recOf(A.uid, B.uid);
+    await setDecision(A, B, 'review_later');
+    await restoreRec(A.uid, B.uid, prev);
+    ok(statusOf(A, B).rec?.d === 'not_duplicate', 'hoàn tác: về đúng quyết định cũ');
+    await restoreRec(A.uid, B.uid, undefined);
+    ok(statusOf(A, B).status === 'none' && !JSON.parse(be2.data!).recs.length, 'hoàn tác cặp mới: xoá hẳn, cả trên đĩa');
+    const order: string[] = [];
+    const be3 = mem(); const orig = be3.save; be3.save = async (j: string) => { await new Promise((r2) => setTimeout(r2, order.length ? 1 : 15)); order.push(String(JSON.parse(j).recs.length)); await orig(j); };
+    _reset(be3); await loadDecisions();
+    const C = Q('uc', E('Khác hẳn $y=x^2$')), D = Q('ud', E('Khác nữa $y=x^4$'));
+    await Promise.all([setDecision(A, B, 'not_duplicate'), setDecision(C, D, 'not_duplicate')]);
+    ok(JSON.parse(be3.data!).recs.length === 2, 'hai quyết định bấm sát nhau: bản cuối trên đĩa có đủ cả hai');
   }
   console.log('Quyết định: sửa nội dung ⇒ hết hiệu lực');
   {
