@@ -1071,3 +1071,5 @@ a { color: var(--accent); }
 .aid-conf.c-thap { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
 .aid-conf.c-khong { background: var(--chip); color: var(--ink-3); border-color: var(--line); }
 .aid-lv { display: flex; align-items: flex-start; gap: 4px; margin-top: 6px; font-size: 12px; color: var(--ink-2); }
+.aid-draft { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.aid-scroll-sm { max-height: 320px; flex: none; }

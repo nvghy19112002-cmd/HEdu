@@ -36,7 +36,10 @@ export function parseCode(code: string): { loc: Location; level: Level } | null 
   const ch = b?.chapters.find((x) => up(x.code) === up(cc));
   const ls = ch?.lessons.find((x) => up(x.code) === up(lc));
   if (!g || !ch || !ls) return null;
-  const fm = (fc && ls.forms.find((f) => up(f.code) === up(fc))) || ls.forms[0];
+  // Có ghi mã Dạng mà Dạng đó không có trong cây ⇒ ID không hợp lệ (trước đây lặng lẽ xếp vào Dạng đầu tiên của Bài).
+  // Không ghi mã Dạng (vd 2D1H1) ⇒ vẫn hiểu là Dạng đầu tiên như cũ.
+  const fm = fc ? ls.forms.find((f) => up(f.code) === up(fc)) : ls.forms[0];
+  if (fc && !fm) return null;
   return { loc: { grade: g.grade, chapterId: ch.id, lessonId: ls.id, formId: fm?.id ?? '' }, level };
 }
 
