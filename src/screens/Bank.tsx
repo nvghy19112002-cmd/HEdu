@@ -19,6 +19,9 @@ import { duplicateQuestion, setReview, useBank } from '../lib/store';
 import { moveToTrash, trashBlockReason } from '../lib/trashflow';
 import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
+import { DEFAULT_SORT, sortedCopy } from '../lib/qsort';
 import { attrCount, chapterBranchMap, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
@@ -45,6 +48,9 @@ export function BankScreen() {
   const [wide, setWide] = useState(false); // tìm trong toàn bộ ngân hàng thay vì mục đang chọn (chỉ có hiệu lực khi đang có chữ tìm)
   const [showSol, setShowSol] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [onlySel, setOnlySel] = useState(false); // chỉ xem các câu đã chọn (không đổi bộ lọc)
+  const [ask, setAsk] = useState<null | { title: string; body: string; label: string; run: () => void }>(null);
+  const [dupSel, setDupSel] = useState(false); // mở Kiểm tra trùng với phạm vi "các câu đang chọn"
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [exact, setExact] = useState<Set<string>>(new Set()); // các câu đang ở chế độ “Xem chuẩn”
   const [openUid, setOpenUid] = useState<string | null>(nav.openUid ?? null); // câu đang sửa ở ngăn bên phải
@@ -73,13 +79,24 @@ export function BankScreen() {
   /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
   const facets = useMemo(() => {
     const words = fold(text.trim()).split(/\s+/).filter(Boolean);
-    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)), wideOn));
+    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)), wideOn, DEFAULT_SORT));
   }, [questions, f, text, wideOn, tax, index]);
-  const list = facets.list;
+  const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
+  // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
+  useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
+  useEffect(() => { if (onlySel && sel.size === 0) setOnlySel(false); }, [onlySel, sel]);
+  const selectedQs = useMemo(() => sortedCopy(questions.filter((q) => sel.has(q.uid)), DEFAULT_SORT), [questions, sel]);
+  const resultUids = useMemo(() => new Set(facets.list.map((q) => q.uid)), [facets.list]);
+  const list = onlySel ? selectedQs : facets.list;
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
   const shown = list.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
+  const shownUids = useMemo(() => shown.map((q) => q.uid), [shown]);
+  const counts = selCounts(sel, shownUids, onlySel ? null : resultUids);
+  const pState = pageState(sel, shownUids);
+  const masterRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (masterRef.current) masterRef.current.indeterminate = pState === 'some'; }, [pState]);
   // Câu đang xem: nếu không còn nằm trong trang hiện tại (đổi lọc/trang/xoá) thì lấy câu đầu tiên hợp lệ.
   const active = shown.find((q) => q.uid === activeUid) ?? shown[0] ?? null;
   useEffect(() => { if (!active) setDetailOpen(false); }, [active]);
@@ -129,12 +146,25 @@ export function BankScreen() {
   }, [drawerOpen]);
 
   const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); apply(n); };
-  const selected = questions.filter((q) => sel.has(q.uid));
-  const exportSelected = () => {
-    const body = selected.map((q) => buildExTest(parseExTest(q.latex), { id: questionCode(q, q.level) })).join('\n\n');
-    showFile({ title: `${selected.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: `% ${selected.length} câu xuất từ HEdu\n\n${body}\n`, mime: 'application/x-tex' });
+  const noFilter = f.gradeId == null && nAttr === 0 && !hasText;
+  const resultsName = noFilter ? 'toàn bộ ngân hàng' : 'kết quả đang lọc';
+  const selectPage = () => setSel(addMany(sel, shownUids));
+  const deselectPage = () => setSel(removeMany(sel, shownUids));
+  const doSelectAll = () => { setSel(addMany(sel, facets.list.map((q) => q.uid))); toast(`Đã chọn thêm ${nf.format(facets.list.length)} câu (${resultsName}). Tổng đang chọn sẽ hiện ở thanh phía trên.`); };
+  const selectAllResults = () => {
+    if (facets.list.length > SELECT_ALL_CONFIRM_OVER) setAsk({ title: `Chọn ${nf.format(facets.list.length)} câu?`, body: `Sẽ chọn tất cả ${nf.format(facets.list.length)} câu trong ${resultsName}, ở mọi trang. Các câu đã chọn trước đó vẫn giữ.`, label: `Chọn ${nf.format(facets.list.length)} câu`, run: doSelectAll });
+    else doSelectAll();
   };
-
+  const runExport = () => {
+    const body = selectedQs.map((q) => buildExTest(parseExTest(q.latex), { id: questionCode(q, q.level) })).join('\n\n');
+    showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: Mới cập nhật)\n\n${body}\n`, mime: 'application/x-tex' });
+  };
+  const exportSelected = () => {
+    const n = selectedQs.length, v = exportVerdict(n);
+    if (v === 'refuse') { toast(`Mỗi lần xuất .tex tối đa ${nf.format(EXPORT_MAX)} câu (đang chọn ${nf.format(n)}). Hãy bỏ bớt hoặc xuất theo từng chương.`); return; }
+    if (v === 'warn') { setAsk({ title: `Xuất ${nf.format(n)} câu ra .tex?`, body: `File sẽ khá lớn (khoảng ${Math.max(1, Math.round(n / 200))} MB) và hộp xem có thể chậm. Nên xuất theo từng chương nếu không cần tất cả một lần.`, label: 'Vẫn xuất', run: runExport }); return; }
+    runExport();
+  };
 
   const renderCard = (q: Question, mode: 'card' | 'detail') => {
     const p = parseExTest(q.latex);
@@ -142,7 +172,7 @@ export function BankScreen() {
     const at = place(q.lessonId) ?? place(q.chapterId);
     return (
       <article key={q.uid} className={`card${on ? ' is-selected' : ''}${mode === 'detail' ? ' card-detail' : ''}`}>
-        <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => toggle(sel, q.uid, setSel)} />
+        <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
         <div className="card-body">
           <div className="card-meta">
             <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
@@ -206,7 +236,7 @@ export function BankScreen() {
         const on = sel.has(q.uid);
         return (
           <li key={q.uid} className={`row${isActive ? ' is-active' : ''}${on ? ' is-checked' : ''}`}>
-            <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => toggle(sel, q.uid, setSel)} />
+            <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
             <button type="button" className="row-main" aria-current={isActive ? 'true' : undefined} title={plainSnippet(p.stem, 400)} onClick={() => { setActiveUid(q.uid); setDetailOpen(true); }}>
               <span className="row-top">
                 <span className="mono row-no">{seqLabel(q.seq)}</span>
@@ -266,23 +296,39 @@ export function BankScreen() {
           </div>
 
 
-          {sel.size > 0 ? (
-            <div className="selbar">
-              <span className="selbar-n"><b>Đã chọn {sel.size} câu</b></span>
-              <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
-              <div className="head-actions" style={{ gap: 8 }}>
-                <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn</button>
-                <button type="button" className="btn btn-sm" onClick={exportSelected}>Xuất .tex</button>
-                {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: [...sel] })}>Thêm vào đề</button>}
+          {sel.size > 0 && (
+            <div className="selbar" role="region" aria-label="Thao tác với các câu đã chọn">
+              <span className="selbar-n">
+                <b>Đã chọn {nf.format(counts.total)} câu</b>
+                <small>{nf.format(counts.inPage)} ở trang này · {nf.format(counts.outPage)} ngoài trang{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} ngoài bộ lọc` : ''}</small>
+              </span>
+              <div className="selbar-grp">
+                <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo thứ tự đang xem">Xuất .tex</button>
+                <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
+                {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
+                <span className="selbar-sep" aria-hidden="true" />
+                {counts.inPage > 0 && <button type="button" className="btn btn-sm" onClick={deselectPage} title="Chỉ bỏ các câu của trang này, giữ các trang khác">Bỏ chọn trang</button>}
+                <button type="button" className="btn btn-sm" aria-pressed={onlySel} onClick={() => { setOnlySel(!onlySel); setPage(0); }} title="Chỉ liệt kê các câu đã chọn, không đổi bộ lọc">{onlySel ? 'Xem tất cả kết quả' : 'Chỉ xem đã chọn'}</button>
+                <button type="button" className="btn btn-sm" onClick={() => { setSel(new Set()); setOnlySel(false); }}>Bỏ chọn tất cả</button>
               </div>
             </div>
-          ) : (
-            <div className="list-head">
-              <span><b className="lh-title">{heading}</b>{lesson ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
-              <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
-              {shown.length > 0 && <button type="button" className="linkbtn" onClick={() => setSel(new Set([...sel, ...shown.map((q) => q.uid)]))}>Chọn cả trang</button>}
-            </div>
           )}
+          {onlySel && <div className="selbar-view" role="status"><span>Đang chỉ xem <b>{nf.format(sel.size)}</b> câu đã chọn (bộ lọc và chữ tìm tạm không áp dụng).</span><button type="button" className="linkbtn" onClick={() => { setOnlySel(false); setPage(0); }}>Quay lại kết quả lọc</button></div>}
+          <div className="list-head">
+            <span className="lh-left">
+              {shown.length > 0 && (
+                <label className="lh-sel" title="Chọn hoặc bỏ chọn các câu đang hiện ở trang này">
+                  <input ref={masterRef} type="checkbox" checked={pState === 'all'} onChange={() => (pState === 'all' ? deselectPage() : selectPage())} />
+                  Chọn trang ({shown.length})
+                </label>
+              )}
+              {!onlySel && list.length > shown.length && counts.total - counts.outScope < facets.list.length && (
+                <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(facets.list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(facets.list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
+              )}
+              <span><b className="lh-title">{onlySel ? 'Các câu đã chọn' : heading}</b>{lesson && !onlySel ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
+            </span>
+            <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
+          </div>
 
           {view === 'cards' && shown.map((q) => renderCard(q, 'card'))}
 
@@ -317,7 +363,8 @@ export function BankScreen() {
           <BankSidebar variant="drawer" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
         </>
       )}
-      {dupOpen && <DupCheck questions={questions} selected={sel} onClose={() => setDupOpen(false)} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
+      {dupOpen && <DupCheck questions={questions} selected={sel} initialSelection={dupSel} onClose={() => { setDupOpen(false); setDupSel(false); }} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
+      {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
   );
