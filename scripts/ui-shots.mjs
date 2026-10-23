@@ -79,6 +79,13 @@ try {
     for (const [label, name] of [['Nhập liệu', 'nhap-lieu'], ['Chương trình', 'khung-ct'], ['Hệ thống', 'he-thong']]) {
       await page.locator('.rail .rb', { hasText: label }).first().click(); await snap(name);
     }
+    // Nhập liệu với 3 câu dán vào: kết quả rà soát phải thấy ngay, không phải cuộn
+    await page.locator('.rail .rb', { hasText: 'Nhập liệu' }).first().click();
+    const ex = (n) => `\\begin{ex}\n  Cho hàm số $y=x^2+${n}x$. Tìm giá trị nhỏ nhất của hàm số.\n  \\choice\n  {\\True $${n}$}{$1$}{$2$}{$3$}\n\\end{ex}\n`;
+    await page.locator('textarea[aria-label="Mã LaTeX cần nhập"]').fill(ex(1) + ex(2) + ex(3)).catch(() => {});
+    await page.waitForSelector('.chk-row', { timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    await snap('nhap-lieu-3cau', '.chk-row');
     await page.locator('.rail .rb', { hasText: 'Ngân hàng' }).first().click();
     const dup = page.getByRole('button', { name: 'Kiểm tra trùng' });
     if (await dup.count()) {
