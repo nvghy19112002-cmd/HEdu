@@ -1,3 +1,11 @@
+## Có gì mới trong beta.24 (chưa phát hành): thanh chọn nhiều gọn hơn, xuất .tex nguyên văn, "Lưu thành…"
+Không đổi schema (3), ID6, cây mục lục, thuật toán kiểm tra trùng. CÓ đổi Rust/cấu hình (đã được chủ dự án duyệt): thêm `tauri-plugin-dialog`, quyền `dialog:allow-save`, lệnh `save_text_file`.
+- **Xuất .tex NGUYÊN VĂN**: chép đúng mã LaTeX gốc, chỉ cập nhật dòng `%[ID]`. Trước đây file xuất bị dựng lại (mất ghi chú `%`, chữ trên hình bị dời vào `\immini`, `\newcommand` bị kéo ra ngoài). Ước lượng dung lượng tính theo độ dài thật.
+- **Lưu thành…**: hộp xem file xuất ra có nút "Lưu thành…" mở hộp lưu của Windows (đặt tên, chọn thư mục); trước đây chỉ có "Tải về" kiểu trình duyệt. Áp dụng cả cho file sao lưu. Chưa thử trên máy Windows thật.
+- **Thanh chọn nhiều còn 5 nút**: Xuất .tex · Kiểm tra trùng · Thao tác khác ▾ (Cần sửa / Về Chưa kiểm tra / Chuyển vào Thùng rác) · Bỏ chọn trang · Bỏ chọn tất cả. ĐÃ BỎ "Đổi mức độ" và "Chỉ xem đã chọn"; "Gắn nhãn" tạm ẩn (mã vẫn còn).
+- Đổi bộ lọc hoặc chữ tìm ⇒ tự bỏ chọn câu ngoài kết quả mới (có thông báo). Kiểm tra trùng từ thanh chọn mặc định đối chiếu với toàn ngân hàng. Sau khi chuyển vào Thùng rác có nút **Hoàn tác** 30 giây. Menu đóng khi bấm ra ngoài.
+- Chưa làm: màn "Xử lí TeX / xem trước khi xuất" (chủ dự án sẽ gửi danh sách chức năng cần; dự kiến beta.25).
+
 ## Có gì mới trong beta.23: Chọn nhiều & thao tác hàng loạt ở Ngân hàng
 Chỉ đổi giao diện và thao tác dữ liệu; KHÔNG đổi schema (3), ID6, cây mục lục, LaTeX gốc, thuật toán kiểm tra trùng, sao lưu, bộ nhãn chuẩn. (Gồm PR #55–#59 + sửa tốc độ chỉ mục tìm kiếm.)
 - **Chọn nhiều**: ô "Chọn trang (20)", "Chọn tất cả N câu trong kết quả lọc" (qua mọi trang; hỏi lại khi > 1.000 câu), "Bỏ chọn trang", "Bỏ chọn tất cả", "Chỉ xem đã chọn". Lựa chọn GIỮ khi đổi trang, bộ lọc, sắp xếp, Thẻ/Danh sách; thanh chọn cho biết "N câu · a ở trang này · b ngoài trang · c ngoài bộ lọc". Không có Ctrl+A toàn kho.
