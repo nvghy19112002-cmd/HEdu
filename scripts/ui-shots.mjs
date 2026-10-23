@@ -79,6 +79,17 @@ try {
     for (const [label, name] of [['Nhập liệu', 'nhap-lieu'], ['Chương trình', 'khung-ct'], ['Hệ thống', 'he-thong']]) {
       await page.locator('.rail .rb', { hasText: label }).first().click(); await snap(name);
     }
+    // Trình sửa: mở câu có TikZ/\\immini (câu thứ 8 trong dữ liệu giả lập) ở 3 chế độ xem
+    await page.locator('.rail .rb', { hasText: 'Ngân hàng' }).first().click();
+    await page.getByRole('button', { name: 'Sửa', exact: false }).first().click().catch(() => {});
+    await page.waitForSelector('.qe', { timeout: 8000 }).catch(() => {});
+    await snap('trinh-sua', '.qe-panes');
+    for (const [lab, nm] of [['Mã', 'trinh-sua-ma'], ['Xem trước', 'trinh-sua-xem']]) {
+      await page.locator('.qe-vmode button', { hasText: new RegExp('^' + lab + '$') }).click().catch(() => {});
+      await snap(nm, '.qe-panes');
+    }
+    await page.locator('.qe-vmode button', { hasText: 'Mã + Xem trước' }).click().catch(() => {});
+    await page.keyboard.press('Escape'); await page.waitForTimeout(300);
     // Nhập liệu với 3 câu dán vào: kết quả rà soát phải thấy ngay, không phải cuộn
     await page.locator('.rail .rb', { hasText: 'Nhập liệu' }).first().click();
     const ex = (n) => `\\begin{ex}\n  Cho hàm số $y=x^2+${n}x$. Tìm giá trị nhỏ nhất của hàm số.\n  \\choice\n  {\\True $${n}$}{$1$}{$2$}{$3$}\n\\end{ex}\n`;
