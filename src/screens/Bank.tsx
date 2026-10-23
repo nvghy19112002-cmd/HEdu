@@ -1,7 +1,7 @@
 // Màn hình Ngân hàng câu hỏi.
-// Bố cục: cột trái chọn Lớp → Chương → Bài; cột phải tìm kiếm, lọc theo Dạng/Mức độ/Loại và xem câu.
-// Mọi nút lọc đều hiện sẵn số câu để biết chỗ nào đang thiếu.
-import { useEffect, useMemo, useState } from 'react';
+// Bố cục: thanh trái "Mục lục & bộ lọc" (Lớp → Phân môn → Chương → Bài → Dạng; Mức độ, Loại, Hình, Kiểm duyệt); cột phải tìm kiếm và xem câu.
+// Mọi lựa chọn đều hiện sẵn số câu (đếm theo chiều) để biết chỗ nào đang thiếu.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
@@ -13,14 +13,15 @@ import { plainSnippet } from '../lib/snippet';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { buildExTest, parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
-import { branchShort, shortName } from '../lib/taxonomy';
+import { shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank } from '../lib/store';
 import { moveToTrash } from '../lib/trashflow';
-import { FilterMenu } from '../components/FilterMenu';
+import { BankSidebar } from '../components/BankSidebar';
+import { attrCount, chapterBranchMap, clearAttrs, computeFacets, emptyFilters, sanitize, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
-import { LEVEL_LABEL, LEVELS, REVIEW_LABEL, reviewOf, TYPE_LABEL, TYPES, type Level, type QType, type Question, type ReviewFilter, type ReviewStatus } from '../lib/types';
+import { LEVEL_LABEL, REVIEW_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 
 function fold(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
@@ -38,15 +39,9 @@ export function BankScreen() {
   const { questions } = useBank();
   const { tax } = useTaxonomy();
 
-  const [gradeNum, setGradeNum] = useState<number | null>(null);
-  const [chapterId, setChapterId] = useState<string | null>(null);
-  const [lessonId, setLessonId] = useState<string | null>(null);
-  const [formId, setFormId] = useState<string | null>(null);
-  const [types, setTypes] = useState<Set<QType>>(new Set());
-  const [levels, setLevels] = useState<Set<Level>>(new Set());
-  const [reviewF, setReviewF] = useState<ReviewFilter>('all');
+  const [f0, setF0] = useState<BankFilters>(emptyFilters); // vị trí + thuộc tính; luôn đi qua sanitize trước khi dùng
   const [text, setText] = useState('');
-  const [wide, setWide] = useState(false); // tìm trong toàn bộ ngân hàng thay vì mục đang chọn
+  const [wide, setWide] = useState(false); // tìm trong toàn bộ ngân hàng thay vì mục đang chọn (chỉ có hiệu lực khi đang có chữ tìm)
   const [showSol, setShowSol] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -66,45 +61,21 @@ export function BankScreen() {
 
   const index = useMemo(() => new Map(questions.map((q) => [q.uid, searchable(q)])), [questions]);
 
-  const grade = tax.grades.find((g) => g.grade === gradeNum) ?? null;
-  const chaptersOf = useMemo(
-    () => (grade ? grade.branches.flatMap((b) => b.chapters.map((c) => ({ ...c, mon: b.name, monCode: b.code }))) : []),
-    [grade],
-  );
-  const chapter = chaptersOf.find((c) => c.id === chapterId) ?? null;
-  const lesson = chapter?.lessons.find((l) => l.id === lessonId) ?? null;
+  const f = useMemo(() => sanitize(tax, f0), [tax, f0]);
+  const setF = (n: BankFilters) => { setPage(0); setF0(n); };
+  const hasText = text.trim().length > 0;
+  const wideOn = wide && hasText;
+  const gradeNum = f.gradeNum;
+  const gradeObj = tax.grades.find((g) => g.grade === gradeNum) ?? null;
+  const chapter = gradeObj?.branches.flatMap((b) => b.chapters).find((c) => c.id === f.chapterId) ?? null;
+  const lesson = chapter?.lessons.find((l) => l.id === f.lessonId) ?? null;
 
-  /** Câu nằm trong mục đang chọn (chưa tính tìm kiếm và các bộ lọc chip). */
-  const scoped = useMemo(() => questions.filter((q) =>
-    (gradeNum == null || q.grade === gradeNum) &&
-    (!chapterId || q.chapterId === chapterId) &&
-    (!lessonId || q.lessonId === lessonId)), [questions, gradeNum, chapterId, lessonId]);
-
-  const base = wide ? questions : scoped;
-
-  /** Đếm số câu nếu thêm một bộ lọc nữa — để hiện số ngay trên từng nút. */
-  const tally = (extra: (q: Question) => boolean) => base.filter((q) =>
-    extra(q) &&
-    (!formId || q.formId === formId) &&
-    (!types.size || types.has(q.type)) &&
-    (!levels.size || levels.has(q.level)) &&
-    (reviewF === 'all' || reviewOf(q) === reviewF)).length;
-
-  /** Đếm theo trạng thái kiểm duyệt (bỏ qua chính bộ lọc kiểm duyệt). */
-  const reviewTally = (r: ReviewFilter) => base.filter((q) =>
-    (!formId || q.formId === formId) && (!types.size || types.has(q.type)) && (!levels.size || levels.has(q.level)) &&
-    (r === 'all' || reviewOf(q) === r)).length;
-
-  const list = useMemo(() => {
-    const f = fold(text.trim());
-    return base
-      .filter((q) => !formId || q.formId === formId)
-      .filter((q) => !types.size || types.has(q.type))
-      .filter((q) => !levels.size || levels.has(q.level))
-      .filter((q) => reviewF === 'all' || reviewOf(q) === reviewF)
-      .filter((q) => !f || f.split(/\s+/).every((w) => index.get(q.uid)!.includes(w)))
-      .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [base, formId, types, levels, reviewF, text, index]);
+  /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
+  const facets = useMemo(() => {
+    const words = fold(text.trim()).split(/\s+/).filter(Boolean);
+    return computeFacets(questions, f, { chapterBranch: chapterBranchMap(tax), wide: wideOn, textOk: (uid) => words.every((w) => index.get(uid)!.includes(w)) });
+  }, [questions, f, text, wideOn, tax, index]);
+  const list = facets.list;
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
@@ -126,19 +97,37 @@ export function BankScreen() {
   const gotoQuestion = (uid: string) => {
     const q = questions.find((x) => x.uid === uid);
     if (!q) return;
-    setDupOpen(false); setWide(false); setText(''); setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setFormId(null);
-    setGradeNum(q.grade); setChapterId(q.chapterId || null); setLessonId(q.lessonId || null);
+    setDupOpen(false); setWide(false); setText('');
+    setF0({ ...emptyFilters(), gradeNum: q.grade, branchId: chapterBranchMap(tax).get(q.chapterId) ?? null, chapterId: q.chapterId || null, lessonId: q.lessonId || null });
     const sc = questions.filter((x) => x.grade === q.grade && (!q.chapterId || x.chapterId === q.chapterId) && (!q.lessonId || x.lessonId === q.lessonId)).sort((a, b) => b.updatedAt - a.updatedAt);
     setPage(Math.floor(Math.max(0, sc.findIndex((x) => x.uid === uid)) / PER_PAGE));
     setView('list'); setActiveUid(uid); setDetailOpen(true);
     toast(`Đã chuyển tới ${seqLabel(q.seq)}. Muốn xoá: nút ⋯ → Xoá câu (có hỏi lại).`);
   };
 
-  const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); apply(n); };
-  const pickGrade = (g: number | null) => { setPage(0); setGradeNum(g); setChapterId(null); setLessonId(null); setFormId(null); };
-  const pickChapter = (id: string) => { setPage(0); setChapterId(id === chapterId ? null : id); setLessonId(null); setFormId(null); };
-  const pickLesson = (id: string) => { setPage(0); setLessonId(id === lessonId ? null : id); setFormId(null); };
+  const clearFilters = () => setF(clearAttrs(f));
+  const resetEverything = () => { setF(emptyFilters()); setText(''); setWide(false); };
+  const nAttr = attrCount(f);
+  const canReset = f.gradeNum != null || nAttr > 0 || hasText || wide;
 
+  // Thanh trái: gắn cố định khi đủ rộng và đang mở; ngược lại là ngăn trượt (cùng một thành phần, cùng trạng thái).
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
+  useEffect(() => { const h = () => setNarrow(window.innerWidth < 1000); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  const docked = !narrow && treeOpen;
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (docked && drawerOpen) setDrawerOpen(false); }, [docked, drawerOpen]);
+  useEffect(() => {
+    if (!drawerOpen) return;
+    document.querySelector<HTMLElement>('.fside.is-drawer .fs-top button')?.focus();
+    const k = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('.fm-pop')) { e.preventDefault(); setDrawerOpen(false); openerRef.current?.focus(); }
+    };
+    document.addEventListener('keydown', k);
+    return () => document.removeEventListener('keydown', k);
+  }, [drawerOpen]);
+
+  const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); apply(n); };
   const selected = questions.filter((q) => sel.has(q.uid));
   const exportSelected = () => {
     const body = selected.map((q) => buildExTest(parseExTest(q.latex), { id: questionCode(q, q.level) })).join('\n\n');
@@ -191,7 +180,7 @@ export function BankScreen() {
   /** Đổi kiểm duyệt; nếu câu rời khỏi bộ lọc đang bật thì báo nhẹ (câu đang xem tự chuyển sang câu hợp lệ kế tiếp). */
   const changeReview = async (q: Question, s: ReviewStatus | undefined): Promise<boolean> => {
     const ok = await setReview(q.uid, s);
-    if (ok && reviewF !== 'all' && (s ?? 'unreviewed') !== reviewF) toast(`${seqLabel(q.seq)} chuyển sang “${REVIEW_LABEL[s ?? 'unreviewed']}” nên không còn trong bộ lọc này.`);
+    if (ok && f.review !== 'all' && (s ?? 'unreviewed') !== f.review) toast(`${seqLabel(q.seq)} chuyển sang “${REVIEW_LABEL[s ?? 'unreviewed']}” nên không còn trong bộ lọc này.`);
     return ok;
   };
 
@@ -231,8 +220,7 @@ export function BankScreen() {
     </ul>
   );
 
-  const activeFilters = (formId ? 1 : 0) + levels.size + types.size + (reviewF !== 'all' ? 1 : 0);
-  const heading = chapter ? `Lớp ${gradeNum} · ${chapter.name}` : gradeNum ? `Lớp ${gradeNum}` : 'Toàn bộ ngân hàng';
+  const heading = wideOn ? 'Kết quả tìm trong toàn kho' : chapter ? `Lớp ${gradeNum} · ${chapter.name}` : gradeNum ? `Lớp ${gradeNum}` : 'Toàn bộ ngân hàng';
 
   return (
     <>
@@ -244,56 +232,10 @@ export function BankScreen() {
         </div>
       </header>
 
-      <div className={`body-row${view === 'list' ? ' is-list' : ''}${!treeOpen ? ' tree-hidden' : ''}`}>
-        <aside className="tree" aria-label="Mục lục">
-          <h2>Chọn lớp</h2>
-          <div className="gseg">
-            <button type="button" className="gbtn" aria-pressed={gradeNum == null} onClick={() => pickGrade(null)}>
-              <b>Tất cả</b><small>{nf.format(questions.length)} câu</small>
-            </button>
-            {tax.grades.map((g) => (
-              <button key={g.id} type="button" className="gbtn" aria-pressed={gradeNum === g.grade} onClick={() => pickGrade(g.grade)}>
-                <b>Lớp {g.grade}</b><small>{nf.format(questions.filter((q) => q.grade === g.grade).length)} câu</small>
-              </button>
-            ))}
-          </div>
-
-          {grade && (
-            <>
-              <h2>Chọn chương, rồi chọn bài<span className="tree-sub">{tax.name}</span></h2>
-              <ul className="chlist">
-                {chaptersOf.map((c) => {
-                  const on = chapterId === c.id;
-                  return (
-                    <li key={c.id}>
-                      <button type="button" className="chrow" aria-current={on} aria-expanded={on} onClick={() => pickChapter(c.id)}>
-                        <span className="chno">{grade.code}{c.monCode}{c.code}</span>
-                        <span className="chmain">
-                          <span className="chname">{c.name}</span>
-                          <small>{branchShort(c.mon)}</small>
-                        </span>
-                        <span className="cnt">{questions.filter((q) => q.chapterId === c.id).length || ''}</span>
-                      </button>
-                      {on && (
-                        <ul className="lslist">
-                          {c.lessons.map((l) => (
-                            <li key={l.id}>
-                              <button type="button" className="lsrow" aria-current={lessonId === l.id} onClick={() => pickLesson(l.id)}>
-                                <span>{l.name}</span>
-                                <span className="cnt">{questions.filter((q) => q.lessonId === l.id).length || ''}</span>
-                              </button>
-                            </li>
-                          ))}
-                          {!c.lessons.length && <li><span className="lsrow empty-note">Chương này chưa có bài nào</span></li>}
-                        </ul>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </aside>
+      <div className={`body-row${view === 'list' ? ' is-list' : ''}${!docked ? ' tree-hidden' : ''}`}>
+        {docked && (
+          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => setTreeOpen(false)} />
+        )}
 
         <section className="qlist" aria-label="Danh sách câu hỏi">
           <div className="qbar">
@@ -307,56 +249,17 @@ export function BankScreen() {
               </select>
               <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
             </label>
-            <div className="fbar" role="group" aria-label="Bộ lọc">
-              {lesson && lesson.forms.length > 0 && (
-                <FilterMenu label="Dạng toán" active={!!formId} summary={formId ? shortName(lesson.forms.find((f) => f.id === formId)?.name ?? '') : 'Tất cả'}>
-                  <div className="chips">
-                    <button type="button" className="chip" aria-pressed={!formId} onClick={() => setFormId(null)}>Tất cả các dạng</button>
-                    {lesson.forms.map((f) => (
-                      <button key={f.id} type="button" className="chip" aria-pressed={formId === f.id} onClick={() => setFormId(formId === f.id ? null : f.id)}>
-                        {shortName(f.name)}<span className="chip-n">{base.filter((q) => q.formId === f.id).length}</span>
-                      </button>
-                    ))}
-                  </div>
-                </FilterMenu>
-              )}
-              <FilterMenu label="Mức độ" active={levels.size > 0} summary={levels.size ? [...levels].map((l) => LEVEL_LABEL[l]).join(', ') : 'Tất cả'}>
-                <div className="chips">
-                  <button type="button" className="chip" aria-pressed={!levels.size} onClick={() => setLevels(new Set())}>Tất cả</button>
-                  {LEVELS.map((l) => (
-                    <button key={l} type="button" className="chip" aria-pressed={levels.has(l)} onClick={() => toggle(levels, l, setLevels)}>
-                      {LEVEL_LABEL[l]}<span className="chip-n">{tally((q) => q.level === l)}</span>
-                    </button>
-                  ))}
-                </div>
-              </FilterMenu>
-              <FilterMenu label="Loại câu" active={types.size > 0} summary={types.size ? [...types].map((x) => TYPE_LABEL[x]).join(', ') : 'Tất cả'}>
-                <div className="chips">
-                  <button type="button" className="chip" aria-pressed={!types.size} onClick={() => setTypes(new Set())}>Tất cả</button>
-                  {TYPES.map((x) => (
-                    <button key={x} type="button" className="chip" aria-pressed={types.has(x)} onClick={() => toggle(types, x, setTypes)}>
-                      {TYPE_LABEL[x]}<span className="chip-n">{tally((q) => q.type === x)}</span>
-                    </button>
-                  ))}
-                </div>
-              </FilterMenu>
-              <FilterMenu label="Kiểm duyệt" active={reviewF !== 'all'} summary={reviewF === 'all' ? 'Tất cả' : REVIEW_LABEL[reviewF]}>
-                <div className="chips">
-                  {(['all', 'unreviewed', 'needs_fix', 'approved'] as const).map((r) => (
-                    <button key={r} type="button" className="chip" aria-pressed={reviewF === r} onClick={() => { setReviewF(r); setPage(0); }}>
-                      {r === 'all' ? 'Tất cả' : REVIEW_LABEL[r]}<span className="chip-n">{reviewTally(r)}</span>
-                    </button>
-                  ))}
-                </div>
-              </FilterMenu>
-              {activeFilters > 0 && <button type="button" className="linkbtn" onClick={() => { setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setFormId(null); setPage(0); }}>Xoá {activeFilters} bộ lọc</button>}
-            </div>
             <div className="vseg" role="group" aria-label="Kiểu hiển thị">
               <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Thẻ</button>
               <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             </div>
             <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
-            <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>Mục lục</button>
+            {!docked && (
+              <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
+                {narrow ? 'Mục lục & lọc' : 'Bộ lọc'}{nAttr > 0 && <i className="fs-badge">{nAttr}</i>}
+              </button>
+            )}
+            {!narrow && <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)} title="Gắn mục lục và bộ lọc cố định bên trái">Mục lục</button>}
           </div>
 
 
@@ -401,11 +304,17 @@ export function BankScreen() {
           {!list.length && (
             <div className="empty">
               <span>{questions.length ? 'Không có câu nào khớp bộ lọc.' : 'Ngân hàng đang trống. Bấm “+ Câu hỏi mới”, hoặc nhập cả file .tex ở mục Nhập liệu.'}</span>
-              {questions.length > 0 && <button type="button" className="btn btn-sm" onClick={() => { setTypes(new Set()); setLevels(new Set()); setReviewF('all'); setText(''); setFormId(null); }}>Xoá bộ lọc</button>}
+              {questions.length > 0 && canReset && <button type="button" className="btn btn-sm" onClick={resetEverything}>Đặt lại toàn bộ</button>}
             </div>
           )}
         </section>
       </div>
+      {drawerOpen && !docked && (
+        <>
+          <div className="fs-scrim" onClick={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
+          <BankSidebar variant="drawer" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
+        </>
+      )}
       {dupOpen && <DupCheck questions={questions} selected={sel} onClose={() => setDupOpen(false)} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
