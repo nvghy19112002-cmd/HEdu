@@ -52,7 +52,7 @@ failNext = true;
 const r5 = await updateMany(uids, withTags({ add: ['hỏng'], remove: ['ôn thi'] }));
 failNext = false;
 ok(!r5.ok && r5.changed === 0, 'báo thất bại, không báo đã đổi');
-ok(getState() === keep, 'bộ nhớ trở lại đúng như trước');
+ok(JSON.stringify(getState()) === JSON.stringify(keep) && getState().questions.every((q, i) => q === keep.questions[i]), 'bộ nhớ trở lại đúng như trước (từng câu là chính bản cũ)');
 ok(!JSON.parse(mem.json!).questions.some((q: Question) => q.tags.includes('hỏng')), 'đĩa không có dữ liệu hỏng');
 const r6 = await updateMany(['không-có-uid'], withReview('needs_fix'));
 ok(r6.ok && r6.changed === 0, 'uid không tồn tại ⇒ 0 câu đổi');

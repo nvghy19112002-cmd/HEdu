@@ -3,6 +3,7 @@
 // ID6 không lưu ở đâu cả: nó được tính lại từ vị trí + mức độ bằng questionCode(), nên "gán ID" = gán vị trí đúng trong cây.
 // uid, seq, latex, loại câu, nhãn, kiểm duyệt, ngày tạo, ngày sửa: KHÔNG đổi (giống các thao tác hàng loạt khác).
 import type { IdSuggester, Suggestion } from './idsuggest';
+import { getState, updateMany, type BatchResult } from './store';
 import type { TaxIndex } from './taxonomy';
 import { checkLocation, locationOfForm } from './taxpath';
 import type { Level, Location, Question } from './types';
@@ -117,3 +118,48 @@ export const withAutoId = (edits: ReadonlyMap<string, Edit>) => (q: Question): Q
   if (e.level) n.level = e.level;
   return n.grade === q.grade && n.chapterId === q.chapterId && n.lessonId === q.lessonId && n.formId === q.formId && n.level === q.level ? null : n;
 };
+
+// ---------- Hoàn tác TRONG PHIÊN (đóng app là mất; không lưu lịch sử vào dữ liệu) ----------
+
+type Placement = Pick<Question, 'grade' | 'chapterId' | 'lessonId' | 'formId' | 'level'>;
+export interface UndoItem { uid: string; before: Placement; after: RowSnap }
+export interface AutoIdUndo { at: number; items: UndoItem[] }
+
+const placementOf = (q: Question): Placement => ({ grade: q.grade, chapterId: q.chapterId, lessonId: q.lessonId, formId: q.formId, level: q.level });
+
+let lastUndo: AutoIdUndo | null = null;
+/** Lần Gán ID gần nhất còn hoàn tác được trong phiên này (mỗi lần áp dụng mới thay lần trước). */
+export const getAutoIdUndo = (): AutoIdUndo | null => lastUndo;
+export const clearAutoIdUndo = (): void => { lastUndo = null; };
+
+/** Áp dụng kế hoạch (ghi MỘT lần) và ghi nhớ đúng những câu thật sự đã đổi để Hoàn tác. */
+export async function applyAutoId(edits: ReadonlyMap<string, Edit>): Promise<BatchResult> {
+  const items: UndoItem[] = [];
+  const f = withAutoId(edits);
+  const r = await updateMany(edits.keys(), (q) => {
+    const n = f(q);
+    if (n) items.push({ uid: q.uid, before: placementOf(q), after: snapOf(n) });
+    return n;
+  });
+  if (r.ok && items.length) lastUndo = { at: Date.now(), items };
+  return r;
+}
+
+/** Câu KHÔNG hoàn tác được vì đã bị xoá hoặc sửa tiếp (vị trí, mức độ, nội dung) sau lần gán. */
+export function undoConflicts(u: AutoIdUndo, current: ReadonlyMap<string, Question>): string[] {
+  return u.items.filter((it) => { const q = current.get(it.uid); return !q || !sameSnap(q, it.after); }).map((it) => it.uid);
+}
+
+export interface UndoResult { ok: boolean; restored: number; conflicts: number }
+
+/** Trả vị trí + mức độ cũ cho các câu còn y như lúc gán; câu đã sửa tiếp thì giữ nguyên (không xoá chỉnh sửa mới). */
+export async function undoAutoId(u: AutoIdUndo): Promise<UndoResult> {
+  const byUid = new Map(u.items.map((it) => [it.uid, it]));
+  const conflicts = undoConflicts(u, new Map(getState().questions.map((q) => [q.uid, q]))).length;
+  const r = await updateMany(byUid.keys(), (q) => {
+    const it = byUid.get(q.uid);
+    return it && sameSnap(q, it.after) ? { ...q, ...it.before } : null;
+  });
+  if (r.ok && lastUndo === u) lastUndo = null;
+  return { ok: r.ok, restored: r.changed, conflicts };
+}

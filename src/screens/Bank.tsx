@@ -24,7 +24,7 @@ import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AutoIdDialog } from '../components/AutoIdDialog';
 import { BatchTrashDialog } from '../components/BatchDialogs';
-import { AUTO_ID_MAX } from '../lib/idapply';
+import { AUTO_ID_MAX, clearAutoIdUndo, getAutoIdUndo, undoAutoId, undoConflicts, type AutoIdUndo } from '../lib/idapply';
 import { withReview } from '../lib/batchops';
 import { exportSizeMB } from '../lib/texexport';
 import { verbatimTex } from '../lib/texproject';
@@ -71,6 +71,7 @@ export function BankScreen() {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [ask, setAsk] = useState<null | { title: string; body: string; label: string; run: () => void }>(null);
   const [batch, setBatch] = useState<null | 'trash' | 'autoid'>(null); // hộp thoại thao tác hàng loạt
+  const [autoUndo, setAutoUndo] = useState<AutoIdUndo | null>(() => getAutoIdUndo()); // Hoàn tác Gán ID (trong phiên)
   const [batchBusy, setBatchBusy] = useState(false);
   const [undo, setUndo] = useState<null | { qs: Question[]; n: number }>(null); // dải "Hoàn tác" sau khi chuyển vào Thùng rác
   const busyRef = useRef(false); // chống bấm liên tiếp trước khi giao diện kịp khoá nút
@@ -239,6 +240,23 @@ export function BankScreen() {
     if (!r.ok) toast(`Chưa lưu được ${what} — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi thử lại.`);
     else if (r.changed === 0) toast(`Không có gì thay đổi: các câu đã chọn đã đúng như vậy.`);
     else toast(`Đã lưu ${what}: ${nf.format(r.changed)}/${nf.format(r.total)} câu${r.changed < r.total ? ` (${nf.format(r.total - r.changed)} câu đã đúng sẵn)` : ''}.`);
+  };
+  /** Hoàn tác lần Gán ID gần nhất: câu đã bị sửa tiếp / xoá thì giữ nguyên (hỏi trước khi làm). */
+  const runAutoUndo = async (u: AutoIdUndo) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    const r = await undoAutoId(u);
+    busyRef.current = false;
+    if (!r.ok) { toast('Chưa hoàn tác được — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi thử lại.'); return; }
+    setAutoUndo(getAutoIdUndo());
+    toast(`Đã hoàn tác vị trí cho ${nf.format(r.restored)} câu${r.conflicts ? `; ${nf.format(r.conflicts)} câu đã bị sửa tiếp hoặc xoá nên giữ nguyên` : ''}.`);
+  };
+  const askAutoUndo = () => {
+    const u = autoUndo;
+    if (!u) return;
+    const n = undoConflicts(u, new Map(questions.map((q) => [q.uid, q]))).length;
+    if (n === 0) { void runAutoUndo(u); return; }
+    setAsk({ title: `Hoàn tác Gán ID cho ${nf.format(u.items.length - n)} câu?`, body: `${nf.format(n)} câu đã bị sửa tiếp (vị trí, mức độ hoặc nội dung) hoặc đã xoá sau lần gán — các câu đó GIỮ NGUYÊN, không bị ghi đè.`, label: 'Hoàn tác', run: () => { void runAutoUndo(u); } });
   };
   const openTrashBatch = async () => { if (!decisionsLoaded()) await loadDecisions(); setBatch('trash'); };
   /** Xoá hàng loạt vào Thùng rác: tất cả hoặc không câu nào; chỉ nói "Đã chuyển N câu" khi cả thùng rác và ngân hàng đã ghi xong. */
@@ -540,7 +558,14 @@ export function BankScreen() {
           <button type="button" className="ico" aria-label="Đóng" onClick={() => setUndo(null)}>×</button>
         </div>
       )}
-      {batch === 'autoid' && <AutoIdDialog qs={selectedQs} onClose={() => setBatch(null)} onDone={(m) => { setBatch(null); toast(m); }} />}
+      {batch === 'autoid' && <AutoIdDialog qs={selectedQs} onClose={() => setBatch(null)} onDone={(m) => { setBatch(null); setAutoUndo(getAutoIdUndo()); toast(m); }} />}
+      {autoUndo && !undo && (
+        <div className="undo-bar" role="status">
+          <span>Đã gán vị trí mới cho <b>{nf.format(autoUndo.items.length)}</b> câu. <small>Hoàn tác được trong phiên này.</small></span>
+          <button type="button" className="btn btn-sm btn-accent" onClick={askAutoUndo}>Hoàn tác</button>
+          <button type="button" className="ico" aria-label="Đóng (không hoàn tác nữa)" onClick={() => { clearAutoIdUndo(); setAutoUndo(null); }}>×</button>
+        </div>
+      )}
       {batch === 'trash' && <BatchTrashDialog qs={selectedQs} busy={batchBusy} onRun={() => { void runTrashBatch(); }} onCancel={() => setBatch(null)} />}
       {exportPick && <ExportChoiceDialog qs={selectedQs} onFileOnly={runFileOnly} onClose={() => setExportPick(false)} onToast={toast} />}
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}

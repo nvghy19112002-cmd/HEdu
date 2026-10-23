@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getTaxonomy } from '../lib/curriculum';
 import { questionCode, seqLabel } from '../lib/id';
-import { buildRows, defaultChoice, levelTarget, movesLocation, planApply, summarize, withAutoId, type AutoIdRow, type RowChoice } from '../lib/idapply';
+import { applyAutoId, buildRows, defaultChoice, levelTarget, movesLocation, planApply, summarize, type AutoIdRow, type RowChoice } from '../lib/idapply';
 import { CONFIDENCE_LABEL, IdSuggester, type SuggestConfidence } from '../lib/idsuggest';
 import { plainSnippet } from '../lib/snippet';
-import { getState, updateMany } from '../lib/store';
+import { getState } from '../lib/store';
 import { indexOf, shortName, type TaxIndex } from '../lib/taxonomy';
 import { taxRevision } from '../lib/taxpath';
 import { LEVEL_LABEL, type Location, type Question } from '../lib/types';
@@ -92,7 +92,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
     busyRef.current = true;
     setBusy(true);
     setErr(null);
-    const r = await updateMany(plan.edits.keys(), withAutoId(plan.edits));
+    const r = await applyAutoId(plan.edits);
     busyRef.current = false;
     setBusy(false);
     if (!r.ok) { setErr('Chưa lưu được — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi bấm Áp dụng lại.'); return; }
@@ -163,7 +163,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
               </table>
             </div>
             {sum && <p className="bd-sum" role="status">{nf.format(sum.chosen)} câu chọn · {nf.format(sum.moveLoc)} đổi vị trí · <b>{nf.format(sum.moveLevel)} đổi mức độ</b> · {nf.format(sum.needTeacher)} cần thầy/cô xử lý</p>}
-            <p className="aid-warn">Chưa có Hoàn tác cho thao tác này — hãy xem kỹ trước khi áp dụng. Nội dung câu, nhãn và trạng thái kiểm duyệt không bị đổi.</p>
+            <p className="aid-warn">Hoàn tác được trong phiên làm việc này (đóng app thì không hoàn tác được nữa). Nội dung câu, nhãn và trạng thái kiểm duyệt không bị đổi.</p>
           </>
         )}
         {err && <p className="bd-bad" role="alert">{err}</p>}
