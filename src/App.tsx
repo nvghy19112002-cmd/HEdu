@@ -112,7 +112,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         </button>
       </nav>
       <main className="main">
-        {screen === 'editor' && <EditorScreen key={nav.editUid ?? 'new'} editUid={nav.editUid} />}
+        {screen === 'editor' && <EditorScreen key={nav.editUid ?? `new:${nav.newAt ? JSON.stringify(nav.newAt) : ''}`} editUid={nav.editUid} newAt={nav.newAt} fromBank={nav.fromBank} />}
         {screen === 'bank' && <BankScreen />}
         {screen === 'exam' && featureOn('exam') && <ExamScreen pick={nav.examPick} />}
         {screen === 'import' && <ImportScreen />}
