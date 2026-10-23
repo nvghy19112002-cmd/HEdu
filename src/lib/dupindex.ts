@@ -17,10 +17,14 @@ export interface ScanOptions {
   minShared?: number;
   onProgress?: (done: number, total: number, phase: 'index' | 'scan') => void;
   signal?: { aborted: boolean };
+  /** Chỉ quét các câu này làm "phía A". Bỏ trống = cả ngân hàng. */
+  scope?: ReadonlySet<string>;
+  /** true: phía B là toàn ngân hàng (đối chiếu phạm vi với kho). false/bỏ trống: phía B cũng nằm trong phạm vi. */
+  vsAll?: boolean;
   /** mặc định: ẩn 'unrelated'; thêm 'insufficient' nếu muốn */
   keep?: (k: DupKind) => boolean;
 }
-export interface ScanStats { questions: number; comparisons: number; candidatesCapped: number; ms: number; aborted: boolean }
+export interface ScanStats { sideA: number; sideB: number; questions: number; comparisons: number; candidatesCapped: number; ms: number; aborted: boolean }
 export interface ScanResult { pairs: DupPairHit[]; stats: ScanStats }
 
 /** số ứng viên tối đa lấy từ nhóm cùng dữ kiện cho mỗi câu (bảo vệ khi nhiều câu trùng dữ kiện) */
@@ -121,7 +125,8 @@ export class DupIndex {
     const t0 = Date.now();
     const batch = opt.batch ?? 200;
     const keep = opt.keep ?? defaultKeep;
-    const stats: ScanStats = { questions: qs.length, comparisons: 0, candidatesCapped: 0, ms: 0, aborted: false };
+    const sideA = opt.scope ? qs.filter((q) => opt.scope!.has(q.uid)).length : qs.length;
+    const stats: ScanStats = { sideA, sideB: opt.scope && !opt.vsAll ? sideA : qs.length, questions: qs.length, comparisons: 0, candidatesCapped: 0, ms: 0, aborted: false };
     const seen = new Set(qs.map((q) => q.uid));
     for (const u of [...this.fps.keys()]) if (!seen.has(u)) this.remove(u);
     for (let i = 0; i < qs.length; i++) {
@@ -134,14 +139,19 @@ export class DupIndex {
     }
     const rank = new Map(qs.map((q, i) => [q.uid, i] as const));
     const pairs: DupPairHit[] = [];
+    const inA = (u: string) => !opt.scope || opt.scope.has(u);
     for (let i = 0; i < qs.length; i++) {
       const uid = qs[i].uid;
+      if (!inA(uid)) { if ((i + 1) % batch === 0) { opt.onProgress?.(i + 1, qs.length, 'scan'); await yieldUi(); if (opt.signal?.aborted) { stats.aborted = true; stats.ms = Date.now() - t0; return { pairs: sortPairs(pairs, rank), stats }; } } continue; }
       const f = this.fps.get(uid)!;
       const c = this.candidates(uid, f, opt.topK, opt.probe, opt.minShared);
       if (c.capped) stats.candidatesCapped++;
       for (const u of c.ids) {
         const j = rank.get(u);
-        if (j === undefined || j <= i) continue; // mỗi cặp chỉ xét một lần
+        if (j === undefined) continue;
+        const bothA = inA(u);
+        if (!bothA && !opt.vsAll) continue;           // “trong phạm vi”: phía B cũng phải thuộc phạm vi
+        if (bothA && j <= i) continue;                // mỗi cặp chỉ xét một lần khi cả hai cùng thuộc phạm vi
         stats.comparisons++;
         const r = comparePair(f, this.fps.get(u)!);
         if (keep(r.kind)) pairs.push({ a: uid, b: u, result: r });
