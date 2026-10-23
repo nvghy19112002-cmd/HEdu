@@ -28,6 +28,11 @@ export function gradeCode(grade: number): string {
   return grade >= 10 ? String(grade - 10) : String(grade);
 }
 
+/** Tên hiển thị của một cấp học: dùng tên trong khung chương trình (vd "Lớp 12", "Đại học năm 1"), thiếu thì ghép từ số. */
+export function gradeLabel(g: { name: string; grade: number }): string {
+  return g.name?.trim() || `Lớp ${g.grade}`;
+}
+
 /** Bỏ tiền tố "Chương 1. ", "Bài 2. ", "Dạng 3. " để hiện gọn trong bảng, ô chọn. */
 export function shortName(name: string): string {
   return name.replace(/^(Lớp|Chương|Chuyên đề|Bài|Dạng)\s*\d+\s*[.:-]?\s*/i, '').trim() || name;

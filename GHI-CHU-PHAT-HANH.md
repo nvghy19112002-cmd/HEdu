@@ -1,4 +1,4 @@
-## Chưa phát hành — Mục lục & Bộ lọc mới (V4)
+## Có gì mới trong beta.21 (Mục lục & Bộ lọc mới + đáp án gọn hơn)
 
 Chỉ đổi giao diện màn Ngân hàng; dữ liệu (schema 3), ID, LaTeX gốc, Kiểm tra trùng, thùng rác, sao lưu **không đổi**.
 
@@ -9,6 +9,9 @@ Chỉ đổi giao diện màn Ngân hàng; dữ liệu (schema 3), ID, LaTeX g�
 - **Số đếm đúng hơn**: số của mỗi lựa chọn tính theo các bộ lọc khác (trước đây chọn "Thông hiểu" thì "Vận dụng" hiện 0). Số ở lớp/chương/bài cũng theo bộ lọc.
 - **Xoá bộ lọc** (chỉ 4 thuộc tính) và **Đặt lại toàn bộ** (mục lục + bộ lọc + chữ tìm; giữ các câu đã tick). "Toàn kho" của ô tìm chỉ có hiệu lực khi đang gõ chữ.
 - **Cửa sổ hẹp / zoom 150% / đã ẩn thanh trái**: thanh thành ngăn trượt (nút "Bộ lọc" hoặc "Mục lục & lọc"), cùng một thành phần, giữ nguyên trạng thái; Esc đóng.
+- **Nhiều lớp, nhiều phân môn**: từ 4 lớp trở lên (hoặc >3 phân môn) ô Lớp/Phân môn tự chuyển thành ô chọn có số câu và ô tìm (khi >12 mục); ít hơn thì vẫn là nút bấm. Tên lớp lấy từ khung chương trình (không còn gắn cứng "Lớp N").
+- **Ô đáp án gọn và đẹp hơn**: trắc nghiệm bỏ khung to quanh từng đáp án — chữ cái trong vòng tròn nhỏ, đáp án đúng tô nền xanh nhạt + chữ cái đặc (cao ≈26px, trước ≈42px); Đúng/Sai: nhãn Đ/S nhỏ nằm ngay sau a) b) c) d); "Đáp án" trả lời ngắn là một nhãn gọn một dòng.
+- Giới hạn về nhiều cấp học: mã ID hiện chỉ 1 ký tự cho lớp (0,1,2 = lớp 10–12; 3–9 = lớp 3–9) nên **Lớp 1–2 và cấp ngoài phổ thông (đại học…) cần một quyết định riêng về cách đánh mã** — chưa làm (theo quy tắc không tự đổi công thức ID).
 - Giới hạn: chưa nghiệm thu máy Windows thật; "Không hình" mới kiểm chứng trên bộ thử tự soạn và 300 câu mẫu (gần như toàn câu có hình) — cần thầy/cô gắn nhãn ~40 câu thuần chữ để chứng minh; hiệu năng 60.000 câu chỉ đo giả lập (lọc+đếm ≈ 15 ms lần sau, ≈ 135 ms lần đầu trên máy làm việc).
 
 ## Có gì mới trong beta.20 (Kiểm tra trùng: sao lưu, thùng rác, nhãn chuẩn)

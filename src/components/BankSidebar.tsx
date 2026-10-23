@@ -3,11 +3,13 @@
 // Dùng cho cả kiểu gắn cố định bên trái và kiểu ngăn trượt khi cửa sổ hẹp/đã ẩn mục lục (cùng một thành phần, cùng một trạng thái).
 import { FIGURE_LABEL, type FigureFilter } from '../lib/figure';
 import { attrCount, attrGroups, pickBranch, pickChapter, pickForm, pickGrade, pickLesson, type BankFilters, type Facets } from '../lib/bankfilter';
-import { branchShort, shortName } from '../lib/taxonomy';
+import { branchShort, gradeLabel, shortName } from '../lib/taxonomy';
 import { LEVEL_LABEL, LEVELS, REVIEW_LABEL, TYPE_LABEL, TYPES, type Level, type QType, type ReviewFilter, type Taxonomy } from '../lib/types';
 import { FieldMenu, type FieldOption } from './FieldMenu';
 
 const nf = new Intl.NumberFormat('vi-VN');
+/** Tối đa bấy nhiêu lựa chọn thì hiện thành nút bấm; nhiều hơn thì chuyển thành ô chọn có tìm kiếm (để mở rộng nhiều lớp, nhiều phân môn). */
+const SEG_MAX = 3;
 const FIG_HINT = 'Phân tích mã LaTeX: có TikZ/ảnh ở đề, nhóm hình \\immini, phương án hoặc phần đuôi. Hình chỉ nằm trong lời giải không tính. “Chưa xác định” = có lệnh lạ chưa biết có phải hình không.';
 
 export interface BankSidebarProps {
@@ -28,6 +30,9 @@ export interface BankSidebarProps {
 export function BankSidebar({ tax, f, facets, wide, onF, onClearAttrs, onResetAll, canReset, onHide, variant }: BankSidebarProps) {
   const grade = tax.grades.find((g) => g.grade === f.gradeNum) ?? null;
   const branches = grade?.branches ?? [];
+  const branch = branches.find((b) => b.id === f.branchId) ?? null;
+  const gradeOpts: FieldOption[] = tax.grades.map((g) => ({ id: String(g.grade), label: gradeLabel(g), count: facets.grade.get(g.grade) ?? 0 }));
+  const branchOpts: FieldOption[] = branches.map((b) => ({ id: b.id, label: branchShort(b.name), count: facets.branch.get(b.id) ?? 0 }));
   const chapters = grade ? (f.branchId ? branches.filter((b) => b.id === f.branchId) : branches).flatMap((b) => b.chapters.map((c) => ({ c, b }))) : [];
   const chapter = chapters.find((x) => x.c.id === f.chapterId)?.c ?? null;
   const lesson = chapter?.lessons.find((l) => l.id === f.lessonId) ?? null;
@@ -61,24 +66,40 @@ export function BankSidebar({ tax, f, facets, wide, onF, onClearAttrs, onResetAl
         <div className={`fs-block${wide ? ' is-off' : ''}`}>
           <div className="fs-sec" title={tax.name}><span>Theo chương trình</span></div>
           {wide && <p className="fs-note" role="note">Đang tìm trong toàn kho nên mục lục tạm không áp dụng. Xoá chữ tìm để lọc theo mục lục.</p>}
-          <div className="fs-seg g4" role="group" aria-label="Lớp">
-            <button type="button" aria-pressed={f.gradeNum == null} onClick={() => onF(pickGrade(f, null))}><b>Tất cả</b><small>{nf.format(facets.gradeAll)}</small></button>
-            {tax.grades.map((g) => (
-              <button key={g.id} type="button" aria-pressed={f.gradeNum === g.grade} onClick={() => onF(pickGrade(f, g.grade))}>
-                <b>Lớp {g.grade}</b><small>{nf.format(facets.grade.get(g.grade) ?? 0)}</small>
-              </button>
-            ))}
-          </div>
-
-          {grade ? (
-            <div className="fs-seg g2" role="group" aria-label="Phân môn">
-              {branches.map((b) => (
-                <button key={b.id} type="button" aria-pressed={f.branchId === b.id} title={f.branchId === b.id ? 'Bấm lại để bỏ chọn' : b.name} onClick={() => onF(pickBranch(f, f.branchId === b.id ? null : b.id))}>
-                  <span>{branchShort(b.name)}</span><small>{nf.format(facets.branch.get(b.id) ?? 0)}</small>
+          {tax.grades.length <= SEG_MAX ? (
+            <div className="fs-seg grade" role="group" aria-label="Lớp" style={{ gridTemplateColumns: `repeat(${tax.grades.length + 1}, minmax(0, 1fr))` }}>
+              <button type="button" aria-pressed={f.gradeNum == null} onClick={() => onF(pickGrade(f, null))}><b>Tất cả</b><small>{nf.format(facets.gradeAll)}</small></button>
+              {tax.grades.map((g) => (
+                <button key={g.id} type="button" aria-pressed={f.gradeNum === g.grade} title={gradeLabel(g)} onClick={() => onF(pickGrade(f, g.grade))}>
+                  <b>{gradeLabel(g)}</b><small>{nf.format(facets.grade.get(g.grade) ?? 0)}</small>
                 </button>
               ))}
-              {!branches.length && <span className="fs-none">Lớp này chưa có phân môn</span>}
             </div>
+          ) : (
+            <FieldMenu
+              label="Lớp" summary={grade ? gradeLabel(grade) : 'Tất cả các lớp'} active={!!grade} searchable={tax.grades.length > 12}
+              options={gradeOpts} selected={f.gradeNum == null ? null : String(f.gradeNum)} onPick={(id) => onF(pickGrade(f, id == null ? null : Number(id)))}
+              allLabel="Tất cả các lớp" allCount={facets.gradeAll} count={grade ? facets.grade.get(grade.grade) ?? 0 : undefined}
+            />
+          )}
+
+          {grade ? (
+            branches.length <= SEG_MAX ? (
+              <div className="fs-seg branch" role="group" aria-label="Phân môn" style={{ gridTemplateColumns: `repeat(${Math.max(1, branches.length)}, minmax(0, 1fr))` }}>
+                {branches.map((b) => (
+                  <button key={b.id} type="button" aria-pressed={f.branchId === b.id} title={f.branchId === b.id ? 'Bấm lại để bỏ chọn' : b.name} onClick={() => onF(pickBranch(f, f.branchId === b.id ? null : b.id))}>
+                    <span>{branchShort(b.name)}</span><small>{nf.format(facets.branch.get(b.id) ?? 0)}</small>
+                  </button>
+                ))}
+                {!branches.length && <span className="fs-none">Lớp này chưa có phân môn</span>}
+              </div>
+            ) : (
+              <FieldMenu
+                label="Phân môn" summary={branch ? branchShort(branch.name) : 'Tất cả phân môn'} active={!!branch}
+                options={branchOpts} selected={f.branchId} onPick={(id) => onF(pickBranch(f, id))}
+                allLabel="Tất cả phân môn" allCount={sum(branchOpts)} count={branch ? facets.branch.get(branch.id) ?? 0 : undefined}
+              />
+            )
           ) : (
             <p className="fs-hint">Chọn một lớp để duyệt phân môn, chương, bài và dạng.</p>
           )}
