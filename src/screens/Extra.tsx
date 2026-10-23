@@ -5,8 +5,11 @@ import { compileBatch, CATEGORY_ORDER, type Category, type Failure } from '../li
 import { isTikzReady } from '../lib/tikz';
 import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
-import { chapters, firstLocation, grades } from '../lib/curriculum';
-import { shortName } from '../lib/taxonomy';
+import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
+import { indexOf, shortName } from '../lib/taxonomy';
+import { draftLocation, optionsOf, suggestDrafts, type DraftIdPick } from '../lib/iddraft';
+import { CONFIDENCE_LABEL, IdSuggester } from '../lib/idsuggest';
+import { taxRevision } from '../lib/taxpath';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
@@ -55,7 +58,11 @@ export function ImportScreen() {
   const [confirm, setConfirm] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [bulkAsk, setBulkAsk] = useState(false);
-  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); }, [text250]);
+  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); }, [text250]);
+  // Gán ID tự động cho câu không có %[ID] hợp lệ (chỉ metadata bản nháp; đổi lớp đích ⇒ gợi ý cũ bỏ)
+  const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
+  useEffect(() => { setIdPicks(null); }, [loc.grade]);
+  const pickIx = useMemo(() => (idPicks ? indexOf(getTaxonomy()) : null), [idPicks]);
   const latexOf = (i: number) => edits[i] ?? rows[i]?.latex ?? '';
   const drafts = useMemo(() => rows.map((r, i) => ({ id: `d${i}`, latex: edits[i] ?? r.latex })), [rows, edits]);
   const draftIds = useMemo(() => new Map(drafts.map((d, i) => [d.id, i] as const)), [drafts]);
@@ -160,11 +167,24 @@ export function ImportScreen() {
 
   const importCount = sum.importN;
   const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0;
-  const toDrafts = (): Draft[] => rows.flatMap((r, i) => {
+  const fromIdOf = (i: number) => {
+    if (edits[i] == null) return rows[i].fromId;
+    const id = parseExTest(latexOf(i)).idComment;
+    return id ? parseCode(id) : null;
+  };
+  const noIdRows = rows.map((_, i) => i).filter((i) => !fromIdOf(i));
+  const runIdSuggest = () => {
+    const tax = getTaxonomy();
+    setIdPicks(suggestDrafts(noIdRows.map((i) => ({ index: i, latex: latexOf(i) })), new IdSuggester(tax, getState().questions), loc.grade));
+  };
+  const setPick = (i: number, formId: string | null) => setIdPicks((m) => { if (!m?.has(i)) return m; const n = new Map(m); n.set(i, { ...m.get(i)!, formId }); return n; });
+  /** Vị trí của câu không có ID: gợi ý đã chọn (nếu còn hợp lệ) hoặc vị trí chung. */
+  const draftLocOf = (i: number) => { const tax = getTaxonomy(); return draftLocation(idPicks?.get(i), latexOf(i), indexOf(tax), taxRevision(tax), loc); };
+  const toDrafts = (): Draft[] => rows.flatMap((_r, i) => {
     if (decOf(i) !== 'import') return [];
     const text = latexOf(i).trim();
-    const fromId = edits[i] != null ? (parseExTest(text).idComment ? parseCode(parseExTest(text).idComment!) : null) : r.fromId;
-    return [{ latex: text, level: fromId?.level ?? level, tags: [], ...(fromId?.loc ?? loc) } as Draft];
+    const fromId = fromIdOf(i);
+    return [{ latex: text, level: fromId?.level ?? level, tags: [], ...(fromId?.loc ?? draftLocOf(i).loc) } as Draft];
   });
   /** Bước cuối: rà soát LẠI theo kho hiện hành (chống kho đổi sau lúc xem), rồi mới ghi. */
   const commit = async () => {
@@ -227,6 +247,42 @@ export function ImportScreen() {
               <label className="lbl">Bài<select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>{(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{shortName(l.name)}</option>)}</select></label>
               <label className="lbl">Mức độ<select className="sel" value={level} onChange={(e) => setLevel(e.target.value as Level)}>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select></label>
             </div>
+            {noIdRows.length > 0 && (
+              <div className="aid-draft">
+                <div className="head-actions">
+                  <button type="button" className="btn btn-sm" onClick={runIdSuggest}>{idPicks ? 'Gợi ý lại' : `Gán ID tự động cho ${noIdRows.length} câu không có ID`}</button>
+                  {idPicks && <button type="button" className="btn btn-sm" onClick={() => setIdPicks(null)}>Bỏ gợi ý, dùng vị trí chung</button>}
+                </div>
+                <span className="sys-hint">Tuỳ chọn. Gợi ý Chương/Bài/Dạng trong <b>Lớp {loc.grade}</b> theo các câu đã có trong ngân hàng — không gửi dữ liệu ra ngoài. Câu có %[ID] hợp lệ giữ nguyên ID; mức độ theo ô Mức độ. Mặc định chỉ dùng gợi ý tin cậy cao/vừa, câu còn lại dùng vị trí chung ở trên.</span>
+                {idPicks && (
+                  <div className="aid-scroll aid-scroll-sm">
+                    <table className="aid-table">
+                      <thead><tr><th>Câu</th><th>Vị trí sẽ dùng</th><th>Tin cậy</th></tr></thead>
+                      <tbody>
+                        {[...idPicks.entries()].map(([i, p]) => {
+                          const stale = p.latex !== latexOf(i);
+                          return (
+                            <tr key={i} className={p.formId ? 'is-on' : ''}>
+                              <td className="aid-q"><span className="mono">Câu {i + 1}</span><small>dòng {rows[i]?.line}</small></td>
+                              <td>
+                                {stale ? <span className="aid-none">Câu đã sửa sau khi gợi ý — bấm “Gợi ý lại”</span> : (
+                                  <select className="aid-sel" value={p.formId ?? ''} onChange={(e) => setPick(i, e.target.value || null)} aria-label={`Vị trí cho câu ${i + 1}`}>
+                                    {optionsOf(p).map((o, k) => { const pl = pickIx?.get(o.formId); return <option key={o.formId} value={o.formId}>{k === 0 ? '★ ' : ''}{pl && pl.chapter && pl.lesson && pl.form ? `${shortName(pl.chapter.name)} › ${shortName(pl.lesson.name)} › ${shortName(pl.form.name)}` : o.formId}</option>; })}
+                                    <option value="">— Vị trí chung ở trên —</option>
+                                  </select>
+                                )}
+                                {p.suggestion.notes.map((t) => <small key={t} className="aid-note">{t}</small>)}
+                              </td>
+                              <td><span className={`aid-conf c-${p.suggestion.confidence}`}>{CONFIDENCE_LABEL[p.suggestion.confidence]}</span></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
             <PackagePanel src={text250} blocks={blocks} activeFilter={pkgFilter?.key ?? null} onFilter={(r, key) => setPkgFilter(r ? { rows: r, key } : null)} />
             <h2 style={{ marginTop: 6 }}>Kiểm tra {rows.length} câu trước khi nhập</h2>
             {pkgFilter && <span className="sys-hint">Đang chỉ hiện {pkgFilter.rows.length} câu liên quan tới một gói. Bấm “Hiện lại mọi câu” ở thẻ gói để bỏ lọc.</span>}
@@ -306,7 +362,7 @@ export function ImportScreen() {
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
                     <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của file`}>{i + 1}</span>
                     <b>{TYPE_LABEL[r.p.type]}</b>
-                    <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : 'không ID'}</span>
+                    <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : r.p.idComment ? `%[${r.p.idComment}] không hợp lệ` : idPicks && draftLocOf(i).suggested ? `${questionCode(draftLocOf(i).loc, level)} (gợi ý)` : 'không ID'}</span>
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
                     {anaDone && statusOf(i).key !== 'new' && <span className={`chk-tag dup d-${statusOf(i).key}`}>{statusOf(i).label}{(ana!.rows[i]?.hits.length ?? 0) > 0 ? ` · ${ana!.rows[i]!.hits.length}` : ''}</span>}
                     {edits[i] != null && <span className="chk-tag tin">đã sửa tại chỗ</span>}
