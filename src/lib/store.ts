@@ -204,6 +204,25 @@ export async function updateMany(uids: Iterable<string>, fn: (q: Question) => Qu
   return { ok: false, changed: 0, total };
 }
 
+/**
+ * Xoá nhiều câu khỏi ngân hàng bằng MỘT lần cập nhật + MỘT lần ghi đĩa, rồi kiểm tra ghi có thành công không.
+ * Ghi lỗi (hoặc kho chỉ-đọc) ⇒ hoàn lại đủ mọi câu, ok = false. CHỈ gọi sau khi các câu đã nằm bền vững trong thùng rác.
+ */
+export async function deleteMany(uids: Iterable<string>): Promise<BatchResult> {
+  const want = new Set(uids);
+  const total = want.size;
+  if (!writable) return { ok: false, changed: 0, total };
+  const before = state;
+  const questions = state.questions.filter((q) => !want.has(q.uid));
+  const changed = state.questions.length - questions.length;
+  if (changed === 0) return { ok: true, changed: 0, total };
+  set({ ...state, questions });
+  await flushSave();
+  if (lastSaveOk) return { ok: true, changed, total };
+  set(before);
+  return { ok: false, changed: 0, total };
+}
+
 export function addMany(drafts: Draft[]): Question[] {
   const now = Date.now();
   let seq = state.nextSeq;

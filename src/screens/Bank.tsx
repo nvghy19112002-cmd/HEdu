@@ -17,11 +17,12 @@ import { place, useTaxonomy } from '../lib/curriculum';
 import { gradeLabel, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank, updateMany } from '../lib/store';
-import { moveToTrash, trashBlockReason } from '../lib/trashflow';
+import { moveManyToTrash, moveToTrash, trashBlockReason } from '../lib/trashflow';
+import { decisionsLoaded, loadDecisions } from '../lib/dupdecisions';
 import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { BatchLevelDialog, BatchTagDialog } from '../components/BatchDialogs';
+import { BatchLevelDialog, BatchTagDialog, BatchTrashDialog } from '../components/BatchDialogs';
 import { withReview } from '../lib/batchops';
 import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
@@ -54,7 +55,7 @@ export function BankScreen() {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [onlySel, setOnlySel] = useState(false); // chỉ xem các câu đã chọn (không đổi bộ lọc)
   const [ask, setAsk] = useState<null | { title: string; body: string; label: string; run: () => void }>(null);
-  const [batch, setBatch] = useState<null | 'tag' | 'level'>(null); // hộp thoại thao tác hàng loạt
+  const [batch, setBatch] = useState<null | 'tag' | 'level' | 'trash'>(null); // hộp thoại thao tác hàng loạt
   const [batchBusy, setBatchBusy] = useState(false);
   const [moreSel, setMoreSel] = useState(false); // menu "Thao tác khác" của thanh chọn
   const [dupSel, setDupSel] = useState(false); // mở Kiểm tra trùng với phạm vi "các câu đang chọn"
@@ -217,6 +218,17 @@ export function BankScreen() {
     else if (r.changed === 0) toast(`Không có gì thay đổi: các câu đã chọn đã đúng như vậy.`);
     else toast(`Đã lưu ${what}: ${nf.format(r.changed)}/${nf.format(r.total)} câu${r.changed < r.total ? ` (${nf.format(r.total - r.changed)} câu đã đúng sẵn)` : ''}.`);
   };
+  const openTrashBatch = async () => { if (!decisionsLoaded()) await loadDecisions(); setBatch('trash'); };
+  /** Xoá hàng loạt vào Thùng rác: tất cả hoặc không câu nào; chỉ nói "Đã chuyển N câu" khi cả thùng rác và ngân hàng đã ghi xong. */
+  const runTrashBatch = async () => {
+    if (batchBusy) return;
+    setBatchBusy(true);
+    const r = await moveManyToTrash(selectedQs);
+    setBatchBusy(false);
+    setBatch(null);
+    if (r.ok) { toast(`Đã chuyển ${nf.format(r.moved)} câu vào Thùng rác. Khôi phục ở Hệ thống → Thùng rác.`); return; }
+    toast(r.strayInTrash ? `${r.message} Lưu ý: ${nf.format(r.strayInTrash)} câu đang có bản trong Thùng rác (không mất gì); vào Hệ thống → Thùng rác nếu cần dọn.` : r.message);
+  };
   const runExport = () => {
     const body = selectedQs.map((q) => buildExTest(parseExTest(q.latex), { id: questionCode(q, q.level) })).join('\n\n');
     showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: ${SORT_LABEL[sort]})\n\n${body}\n`, mime: 'application/x-tex' });
@@ -376,6 +388,7 @@ export function BankScreen() {
                     <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMoreSel(false); } }} onMouseLeave={() => undefined}>
                       <button type="button" role="menuitem" autoFocus onClick={() => { setMoreSel(false); setAsk({ title: `Đánh dấu “Cần sửa” cho ${nf.format(sel.size)} câu?`, body: 'Chỉ đổi trạng thái kiểm duyệt. Nội dung câu không đổi. (HEdu không có “Đã duyệt hàng loạt”: việc duyệt do thầy/cô xác nhận từng câu.)', label: 'Đánh dấu Cần sửa', run: () => { void runBatch(withReview('needs_fix'), 'đánh dấu Cần sửa'); } }); }}>Đánh dấu “Cần sửa”</button>
                       <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đưa ${nf.format(sel.size)} câu về “Chưa kiểm tra”?`, body: 'Các câu đang “Đã duyệt” hoặc “Cần sửa” sẽ trở về “Chưa kiểm tra”. Nội dung không đổi.', label: 'Về Chưa kiểm tra', run: () => { void runBatch(withReview(undefined), 'đưa về Chưa kiểm tra'); } }); }}>Về “Chưa kiểm tra”</button>
+                      <button type="button" role="menuitem" className="danger" onClick={() => { setMoreSel(false); void openTrashBatch(); }}>Chuyển vào Thùng rác…</button>
                     </div>
                   )}
                 </span>
@@ -465,6 +478,7 @@ export function BankScreen() {
       {dupOpen && <DupCheck questions={questions} selected={sel} initialSelection={dupSel} onClose={() => { setDupOpen(false); setDupSel(false); }} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
       {batch === 'tag' && <BatchTagDialog qs={selectedQs} busy={batchBusy} onRun={(fn) => { void runBatch(fn, 'nhãn'); }} onCancel={() => setBatch(null)} />}
       {batch === 'level' && <BatchLevelDialog qs={selectedQs} busy={batchBusy} onRun={(fn) => { void runBatch(fn, 'mức độ'); }} onCancel={() => setBatch(null)} />}
+      {batch === 'trash' && <BatchTrashDialog qs={selectedQs} busy={batchBusy} onRun={() => { void runTrashBatch(); }} onCancel={() => setBatch(null)} />}
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>

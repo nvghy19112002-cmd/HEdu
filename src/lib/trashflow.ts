@@ -1,7 +1,7 @@
 // Xoá câu = chuyển vào thùng rác (tệp phụ). Chỉ xoá khỏi ngân hàng KHI thùng rác đã ghi bền vững,
 // nên không bao giờ có trạng thái "đã xoá mà không còn bản nào".
-import { decisionsLoaded, loadDecisions, TRASH_CAP, trashAdd, trashRoomFor } from './dupdecisions';
-import { deleteQuestion } from './store';
+import { decisionsLoaded, loadDecisions, TRASH_CAP, trashAdd, trashAddMany, trashCount, trashRemoveMany, trashRoomFor } from './dupdecisions';
+import { deleteMany, deleteQuestion } from './store';
 import type { Question } from './types';
 
 export async function moveToTrash(q: Question): Promise<boolean> {
@@ -16,4 +16,31 @@ export async function trashBlockReason(qs: readonly Question[]): Promise<string 
   if (!decisionsLoaded()) await loadDecisions();
   if (trashRoomFor(qs)) return null;
   return `Thùng rác đã đầy (tối đa ${TRASH_CAP} câu) nên CHƯA xoá câu nào. Vào Hệ thống → Thùng rác để khôi phục hoặc xoá hẳn bớt, rồi thử lại.`;
+}
+
+/** Số câu còn thêm được vào thùng rác. */
+export const trashFree = (): number => Math.max(0, TRASH_CAP - trashCount());
+
+export type MoveManyResult =
+  | { ok: true; moved: number }
+  | { ok: false; why: 'full' | 'trash-write' | 'bank-write'; moved: 0; message: string; /** câu vẫn nằm trong thùng rác dù chưa xoá khỏi ngân hàng (hoàn tác thùng rác cũng lỗi) — không mất dữ liệu */ strayInTrash?: number };
+
+/**
+ * Chuyển NHIỀU câu vào thùng rác, tất cả hoặc không câu nào:
+ *  1) kiểm tra sức chứa cho CẢ lô (đầy ⇒ từ chối, không cắt bớt);
+ *  2) thùng rác ghi bền vững bằng MỘT lần ghi (lỗi ⇒ chưa đụng ngân hàng);
+ *  3) xoá khỏi ngân hàng bằng MỘT lần ghi và kiểm tra ghi thành công;
+ *     lỗi ⇒ ngân hàng được hoàn lại đủ VÀ các bản vừa cất trong thùng rác được gỡ ra (nếu gỡ cũng lỗi: câu nằm ở cả hai nơi, không mất).
+ * Chỉ khi trả ok mới được nói "Đã xoá N câu".
+ */
+export async function moveManyToTrash(qs: readonly Question[]): Promise<MoveManyResult> {
+  if (qs.length === 0) return { ok: true, moved: 0 };
+  if (!decisionsLoaded()) await loadDecisions();
+  if (!trashRoomFor(qs)) return { ok: false, why: 'full', moved: 0, message: `Thùng rác chỉ còn chỗ cho ${trashFree()} câu (tối đa ${TRASH_CAP}) nên CHƯA xoá câu nào.` };
+  const ids = qs.map((q) => q.uid);
+  if (!(await trashAddMany(qs))) return { ok: false, why: 'trash-write', moved: 0, message: 'Không lưu được thùng rác nên CHƯA xoá câu nào.' };
+  const r = await deleteMany(ids);
+  if (r.ok) return { ok: true, moved: r.changed };
+  const undone = await trashRemoveMany(ids);
+  return { ok: false, why: 'bank-write', moved: 0, strayInTrash: undone ? undefined : ids.length, message: 'Không ghi được ngân hàng nên CHƯA xoá câu nào (mọi câu vẫn còn nguyên).' };
 }
