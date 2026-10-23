@@ -16,7 +16,7 @@ export const DUP_KIND_LABEL: Record<DupKind, string> = {
   conflict: 'Mâu thuẫn đáp án',
   near: 'Có khả năng gần trùng (cần xem)',
   template: 'Cùng mẫu, khác dữ kiện',
-  insufficient: 'Chưa đủ bằng chứng',
+  insufficient: 'Cần kiểm tra mã (chưa đủ bằng chứng)',
   unrelated: 'Không liên quan',
 };
 /** Thứ tự ưu tiên khi hiện danh sách (nhỏ = lên trước). */
@@ -27,6 +27,8 @@ export const FP_VERSION = 1;
 export interface Fingerprint {
   v: number;
   rawKey: string;
+  /** mã đã chuẩn hoá xuống dòng/khoảng trắng đầu cuối: nhãn “giống nguyên mã” so chuỗi thật, không tin riêng bản băm */
+  raw: string;
   type: QType;
   complete: boolean;
   issues: string[];
@@ -45,6 +47,8 @@ export interface Fingerprint {
   loose: Set<string>;    // mọi từ/số của nguồn thô — dùng khi câu đọc chưa đủ
   /** Khoá gom nhóm “cùng nội dung” (loại câu + đề + phương án + hình), không gồm đáp án đúng */
   contentKey: string;
+  /** Khoá “dữ kiện” (loại câu + phương án + số + dấu + hình), KHÔNG gồm lời dẫn: cặp gần trùng cùng dữ kiện nên tra chính xác được. Rỗng nếu quá ít dữ kiện để làm khoá. */
+  factsKey: string;
 }
 
 // ---------- tiện ích ----------
@@ -157,8 +161,16 @@ function mathTokens(src: string): string[] {
 // ---------- đoạn chữ ----------
 const LAYOUT_ARG = /\\(?:hspace|vspace|hskip|vskip)\*?\s*\{[^}]*\}/g;
 const LAYOUT_CMD = /\\(?:par|noindent|centering|newline|hfill|vfill|medskip|bigskip|smallskip|item|quad|qquad)(?![A-Za-z])/g;
+// Tên môi trường, khai báo cột bảng, màu, nhãn… chỉ là trình bày/cấu trúc, KHÔNG được thành "chữ" của đề
+// (lỗi cũ: \\begin{center} để lại từ "center", làm câu cùng nội dung bị xếp "gần trùng").
+const BRACED = '(?:[^{}]|\\{[^{}]*\\})*';
+const ENV_TABLE = new RegExp('\\\\begin\\s*\\{(?:tabular\\*?|tabularx|longtable|array)\\}(?:\\s*\\{' + BRACED + '\\})?', 'g');
+const ENV_LIST = /\\begin\s*\{(?:enumerate|itemize|description)\}(?:\s*\[[^\]]*\])?/g;
+const ENV_ANY = /\\(?:begin|end)\s*\{[^}]*\}/g;
+// Chỉ bỏ ĐỐI SỐ định dạng; chữ nằm trong \\textcolor{màu}{CHỮ} vẫn phải giữ lại.
+const FORMAT_ARG = /\\(?:textcolor|colorbox|color|label|ref|eqref|thispagestyle|pagestyle)\s*\{[^}]*\}|\\(?:setlength|fontsize)\s*\{[^}]*\}\s*\{[^}]*\}/g;
 function textWords(s: string): string[] {
-  const t = s.replace(LAYOUT_ARG, ' ').replace(LAYOUT_CMD, ' ').replace(/\\\\(\[[^\]]*\])?/g, ' ').replace(/\\[A-Za-z]+\*?/g, ' ').replace(/[{}~]/g, ' ').normalize('NFC').toLowerCase();
+  const t = s.replace(ENV_TABLE, ' ').replace(ENV_LIST, ' ').replace(ENV_ANY, ' ').replace(FORMAT_ARG, ' ').replace(LAYOUT_ARG, ' ').replace(LAYOUT_CMD, ' ').replace(/\\\\(\[[^\]]*\])?/g, ' ').replace(/\\[A-Za-z]+\*?/g, ' ').replace(/[{}~]/g, ' ').normalize('NFC').toLowerCase();
   return t.match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
@@ -248,6 +260,7 @@ function build(latex: string): Fingerprint {
   return {
     v: FP_VERSION,
     rawKey: hashKey(raw) + ':' + raw.length,
+    raw,
     type: p.type,
     complete: p.issues.length === 0,
     issues: p.issues,
@@ -256,6 +269,7 @@ function build(latex: string): Fingerprint {
     solKey: sol ? sol.key : null,
     nums, ops, keys, words, mathGrams, loose,
     contentKey: hashKey([p.type, stemFlow.key, optSet, figKey].join('\u0004')),
+    factsKey: optKeys.length > 0 || nums.length >= 2 ? hashKey([p.type, optSet, nums.join(','), ops.join(','), figKey].join('\u0004')) : '',
   };
 }
 
@@ -293,7 +307,7 @@ export function comparePair(a: Fingerprint, b: Fingerprint): PairResult {
   const { text, math, lex } = lexical(a, b);
   const res = (kind: DupKind, score: number, flags: string[], reasons: string[]): PairResult => ({ kind, score, text, math, flags, reasons });
 
-  if (a.rawKey === b.rawKey) return res('raw', 1, [], ['Mã nguồn LaTeX giống nhau.']);
+  if (a.rawKey === b.rawKey && a.raw === b.raw) return res('raw', 1, [], ['Mã nguồn LaTeX giống nhau.']);
 
   if (!a.complete || !b.complete) {
     const loose = jaccard(a.loose, b.loose);

@@ -23,6 +23,8 @@ export interface ScanOptions {
 export interface ScanStats { questions: number; comparisons: number; candidatesCapped: number; ms: number; aborted: boolean }
 export interface ScanResult { pairs: DupPairHit[]; stats: ScanStats }
 
+/** số ứng viên tối đa lấy từ nhóm cùng dữ kiện cho mỗi câu (bảo vệ khi nhiều câu trùng dữ kiện) */
+const FACTS_CAP = 40;
 const yieldUi = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 export class DupIndex {
@@ -32,8 +34,11 @@ export class DupIndex {
   private latexOf = new Map<string, string>();
   private raw = new Map<string, Set<string>>();
   private content = new Map<string, Set<string>>();
+  private facts = new Map<string, Set<string>>();
   private post = new Map<string, Set<string>>();
 
+  /** chỉ dùng trong kiểm thử: ép ngưỡng loại từ phổ biến thấp để tái hiện ngân hàng rất lớn trên bộ nhỏ */
+  dfCapOverride?: number;
   get size(): number { return this.fps.size; }
   get(uid: string): Fingerprint | undefined { return this.fps.get(uid); }
 
@@ -52,6 +57,7 @@ export class DupIndex {
   private attach(uid: string, f: Fingerprint, add: boolean) {
     this.link(this.raw, f.rawKey, uid, add);
     this.link(this.content, f.contentKey, uid, add);
+    if (f.factsKey) this.link(this.facts, f.factsKey, uid, add);
     for (const t of this.tokens(f)) this.link(this.post, t, uid, add);
   }
 
@@ -78,15 +84,21 @@ export class DupIndex {
     const out = new Set<string>();
     for (const u of this.raw.get(f.rawKey) ?? []) if (u !== uid) out.add(u);
     for (const u of this.content.get(f.contentKey) ?? []) if (u !== uid) out.add(u);
+    // cùng dữ kiện (phương án + số + dấu + hình) nhưng lời dẫn khác: tra chính xác, không phụ thuộc từ khoá phổ biến
+    let capped = false;
+    if (f.factsKey) {
+      let n = 0;
+      for (const u of this.facts.get(f.factsKey) ?? []) { if (u === uid) continue; if (++n > FACTS_CAP) { capped = true; break; } out.add(u); }
+    }
     // bỏ các mục quá phổ biến (xuất hiện ở rất nhiều câu): chúng không phân biệt được câu nào và làm quét chậm theo bình phương
-    const dfCap = Math.max(50, Math.ceil(2 * Math.sqrt(this.fps.size)));
+    const dfCap = this.dfCapOverride ?? Math.max(50, Math.ceil(2 * Math.sqrt(this.fps.size)));
     const toks = this.tokens(f).map((t) => [t, this.post.get(t)?.size ?? 0] as const).filter((x) => x[1] > 1 && x[1] <= dfCap).sort((x, y) => x[1] - y[1] || (x[0] < y[0] ? -1 : 1)).slice(0, probe);
     const cnt = new Map<string, number>();
     for (const [t] of toks) for (const u of this.post.get(t)!) if (u !== uid) cnt.set(u, (cnt.get(u) ?? 0) + 1);
     const need = Math.min(minShared, toks.length);
     const ranked = [...cnt].filter((x) => x[1] >= need).sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1));
     for (const [u] of ranked.slice(0, topK)) out.add(u);
-    return { ids: [...out], capped: ranked.length > topK };
+    return { ids: [...out], capped: capped || ranked.length > topK };
   }
 
   /** Các cặp nghi trùng liên quan tới MỘT câu (dùng cho Trình sửa / Nhập liệu). */

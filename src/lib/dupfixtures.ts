@@ -38,6 +38,12 @@ export const DUP_PAIRS: DupPair[] = [
   { id: 'same-solution', note: 'cùng đề và đáp án, lời giải viết khác', a: ex(`${S2}\n\\shortans{120}\n\\loigiai{Số cách là $\\mathrm{C}_{10}^3=120$.}`), b: ex(`${S2}\n\\shortans{120}\n\\loigiai{Chọn tổ hợp chập $3$ của $10$ phần tử nên có $120$ cách.}`), expect: 'same' },
   { id: 'same-lang', note: 'khác nhóm lớp/chương nhưng cùng nội dung (siêu dữ liệu không dùng)', a: '\\begin{ex}%[2D1H1-1]\n' + S2 + '\n\\shortans{120}\n\\end{ex}', b: '\\begin{ex}%[1D2N5-3]\n' + S2 + '\n\\shortans{120}\n\\end{ex}', expect: 'same' },
 
+  // Ca tái hiện lỗi thật (đề do Claude tự viết lại, KHÔNG phải câu của giáo viên): tên môi trường LaTeX không được thành "chữ"
+  { id: 'same-center', note: 'một bản dùng \\immini, bản kia đặt hình trong center', a: ex(`\\immini{Cho hai hàm số $y=2x+1$; $y=x^2$. Khi đó\n\\choiceTF\n{Đồ thị $y=2x+1$ là đường cong}\n{\\True Hai đồ thị cắt nhau tại hai điểm}\n{Hàm $y=x^2$ đồng biến trên $\\mathbb{R}$}\n{\\True Hàm $y=2x+1$ đồng biến trên $\\mathbb{R}$}}{\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture}}`), b: ex(`Cho hai hàm số $y=2x+1$; $y=x^2$. Khi đó\n\\begin{center}\n\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture}\n\\end{center}\n\\choiceTF\n{Đồ thị $y=2x+1$ là đường cong}\n{\\True Hai đồ thị cắt nhau tại hai điểm}\n{Hàm $y=x^2$ đồng biến trên $\\mathbb{R}$}\n{\\True Hàm $y=2x+1$ đồng biến trên $\\mathbb{R}$}`), expect: 'same' },
+  { id: 'same-env-name', note: 'bọc đề trong flushleft/center: tên môi trường không phải nội dung', a: tln('Tính $\\int_0^1 x\\,dx$.', '0,5'), b: ex('\\begin{flushleft}Tính $\\int_0^1 x\\,dx$.\\end{flushleft}\n\\shortans{0,5}'), expect: 'same' },
+  { id: 'same-color', note: 'chỉ khác màu chữ', a: tln('Giá trị của biểu thức \\textcolor{red}{đã cho} bằng $3+4$ là', '7'), b: tln('Giá trị của biểu thức \\textcolor{blue}{đã cho} bằng $3+4$ là', '7'), expect: 'same' },
+  { id: 'same-tabspec', note: 'chỉ khác khai báo cột bảng', a: ex('Cho bảng\n\\begin{tabular}{|c|c|}\\hline $x$ & $1$ \\\\ \\hline\\end{tabular}\nTìm $x$.\\shortans{1}'), b: ex('Cho bảng\n\\begin{tabular}{cc}\\hline $x$ & $1$ \\\\ \\hline\\end{tabular}\nTìm $x$.\\shortans{1}'), expect: 'same' },
+
   // ----- mâu thuẫn đáp án -----
   { id: 'conf-true', note: '\\True đặt ở A so với B', a: tn(S1, O1, 0), b: tn(S1, O1, 1), expect: 'conflict' },
   { id: 'conf-short', note: 'đáp án ngắn 120 so với 720', a: tln(S2, '120'), b: tln(S2, '720'), expect: 'conflict' },
