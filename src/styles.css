@@ -882,3 +882,11 @@ a { color: var(--accent); }
 .qe-page { padding-top: 8px; }
 .qe-title h1 { font-size: 20px; }
 @media (max-width: 1000px) { .qe-vmode { display: none; } }
+
+/* ---------- V3 PR-G: Hệ thống chia 4 nhóm ---------- */
+.sys-group { margin: 8px 0 -4px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.sys-group:first-child { margin-top: 0; }
+.ct-tools > summary { cursor: pointer; list-style: none; }
+.ct-tools > summary::-webkit-details-marker { display: none; }
+.ct-tools > summary h2 { display: inline; font-size: 14px; }
+.ct-tools[open] > summary { margin-bottom: 8px; }
