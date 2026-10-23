@@ -1,3 +1,16 @@
+## Chưa phát hành — Mục lục & Bộ lọc mới (V4)
+
+Chỉ đổi giao diện màn Ngân hàng; dữ liệu (schema 3), ID, LaTeX gốc, Kiểm tra trùng, thùng rác, sao lưu **không đổi**.
+
+- **Một thanh "Mục lục & bộ lọc"** bên trái, hai nhóm: *Theo chương trình* (Lớp → Phân môn → Chương → Bài → Dạng) và *Lọc câu hỏi* (Mức độ, Loại câu, Hình, Duyệt). Thanh ngang chỉ còn tìm kiếm, Thẻ/Danh sách, Kiểm tra trùng, Bộ lọc/Mục lục — không còn ô lọc nào bị nhân đôi.
+- **Lớp = 4 nút, Phân môn = nút phân đoạn; Chương/Bài/Dạng = ô chọn** có số câu từng mục (mục 0 câu hiện mờ nhưng vẫn chọn được). Đổi cấp trên thì cấp dưới tự đặt lại; chọn chương mà chưa chọn phân môn thì tự điền phân môn.
+- **Mức độ và Loại câu vẫn chọn nhiều giá trị.**
+- **Bộ lọc mới "Hình"**: Có hình / Không hình / Chưa xác định — suy ra từ mã LaTeX (TikZ, ảnh, bảng biến thiên; **không** tính hình chỉ nằm trong lời giải; bảng `tabular` không phải hình). Không biên dịch TikZ, không lưu vào dữ liệu. Câu có lệnh lạ chưa chắc là hình vào "Chưa xác định", không bị xếp vào "Không hình".
+- **Số đếm đúng hơn**: số của mỗi lựa chọn tính theo các bộ lọc khác (trước đây chọn "Thông hiểu" thì "Vận dụng" hiện 0). Số ở lớp/chương/bài cũng theo bộ lọc.
+- **Xoá bộ lọc** (chỉ 4 thuộc tính) và **Đặt lại toàn bộ** (mục lục + bộ lọc + chữ tìm; giữ các câu đã tick). "Toàn kho" của ô tìm chỉ có hiệu lực khi đang gõ chữ.
+- **Cửa sổ hẹp / zoom 150% / đã ẩn thanh trái**: thanh thành ngăn trượt (nút "Bộ lọc" hoặc "Mục lục & lọc"), cùng một thành phần, giữ nguyên trạng thái; Esc đóng.
+- Giới hạn: chưa nghiệm thu máy Windows thật; "Không hình" mới kiểm chứng trên bộ thử tự soạn và 300 câu mẫu (gần như toàn câu có hình) — cần thầy/cô gắn nhãn ~40 câu thuần chữ để chứng minh; hiệu năng 60.000 câu chỉ đo giả lập (lọc+đếm ≈ 15 ms lần sau, ≈ 135 ms lần đầu trên máy làm việc).
+
 ## Có gì mới trong beta.20 (Kiểm tra trùng: sao lưu, thùng rác, nhãn chuẩn)
 
 - **Sao lưu đầy đủ hơn**: file sao lưu thủ công nay kèm cả quyết định "trùng/giữ cả hai", thùng rác và bộ nhãn chuẩn; khôi phục là GỘP (bản mới hơn thắng, không xoá gì).
