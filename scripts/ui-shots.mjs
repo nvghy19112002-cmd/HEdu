@@ -76,7 +76,7 @@ try {
     await page.getByRole('button', { name: 'Danh sách', exact: true }).click().catch(() => {});
     await snap('ngan-hang-danh-sach', 'article.card-detail');
     await page.getByRole('button', { name: 'Thẻ', exact: true }).click().catch(() => {});
-    for (const [label, name] of [['Nhập liệu', 'nhap-lieu'], ['Khung CT', 'khung-ct'], ['Hệ thống', 'he-thong']]) {
+    for (const [label, name] of [['Nhập liệu', 'nhap-lieu'], ['Chương trình', 'khung-ct'], ['Hệ thống', 'he-thong']]) {
       await page.locator('.rail .rb', { hasText: label }).first().click(); await snap(name);
     }
     await page.locator('.rail .rb', { hasText: 'Ngân hàng' }).first().click();

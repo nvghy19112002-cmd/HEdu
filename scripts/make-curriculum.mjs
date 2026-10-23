@@ -28,7 +28,7 @@ for (const grade of src.nodes) {
 
 const text = `// TỰ SINH từ data/taxonomy.json bằng scripts/make-curriculum.mjs — đừng sửa tay.
 // Đây là cây mặc định đi kèm bản cài. Cây đang dùng nằm trong dữ liệu của bạn và
-// sửa được trong mục "Khung CT" (sửa tên, thêm/xoá, nạp từ file JSON, xuất ra JSON).
+// sửa được trong mục "Chương trình" (sửa tên, thêm/xoá, nạp từ file JSON, xuất ra JSON).
 export type RawForm = [code: string, name: string];
 export type RawLesson = [code: string, name: string, forms: RawForm[]];
 export type RawChapter = [code: string, name: string, lessons: RawLesson[]];
