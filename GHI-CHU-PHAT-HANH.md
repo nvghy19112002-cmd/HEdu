@@ -1,3 +1,12 @@
+## Có gì mới trong beta.26 (chờ phát hành): Gán ID tự động (chỉ đối chiếu ngân hàng, không AI)
+Không đổi schema (3), công thức ID6, LaTeX gốc, cây mục lục, thuật toán dò trùng. Không gửi dữ liệu ra ngoài. Gồm PR #72–#75 (chủ dự án duyệt phạm vi GĐ1 ngày 24/10/2026).
+- **Gán ID tự động ở Ngân hàng**: chọn câu (tối đa 200/lượt) → **Gán ID tự động** → bảng xem trước: ID hiện tại → dự kiến, vị trí gợi ý (★) hoặc 2 phương án khác hoặc giữ nguyên, nhãn tin cậy cao/vừa/thấp/không đủ căn cứ. Chỉ câu **tin cậy cao** được tick sẵn. **Mức độ không bao giờ tự đổi** (ô "Đổi mức độ" phải tick riêng, gợi ý chỉ tham khảo). Kiểm lại ngay trước khi ghi: câu đã sửa/xoá, cây đã đổi, vị trí sai đường dẫn/khác lớp ⇒ không ghi. Chỉ đổi vị trí; nội dung, nhãn, kiểm duyệt, ngày sửa giữ nguyên.
+- **Hoàn tác trong phiên**: thanh "Đã gán vị trí mới cho N câu — Hoàn tác"; câu đã bị sửa tiếp/xoá sau lần gán thì giữ nguyên (hỏi trước). Đóng app thì hết hoàn tác.
+- **Nhập liệu**: nút tuỳ chọn "Gán ID tự động cho N câu không có ID"; câu có `%[ID]` hợp lệ giữ nguyên; mặc định chỉ dùng gợi ý tin cậy cao/vừa, còn lại dùng vị trí chung.
+- **Sửa lỗi**: `%[ID]` ghi mã Dạng không có trong cây trước đây bị lặng lẽ xếp vào Dạng đầu tiên của Bài ⇒ nay báo "không hợp lệ". Ghi lỗi khi thao tác hàng loạt trước đây có thể hoàn lại nhầm cả sửa đổi khác xảy ra cùng lúc ⇒ nay chỉ hoàn lại câu của chính thao tác đó.
+- Độ chính xác đo trên bản sao 313 câu thật (nhãn chưa được giáo viên xác nhận; kiểm định chéo theo họ): Dạng đúng ở gợi ý đầu 74–76%, nằm trong 3 gợi ý 90–91%; nhãn "cao" đúng 92–96% (phủ 13–16%), "vừa" 79–84%. Mức độ gợi ý chỉ ~65% nên không tự áp.
+- Chưa thử trên Windows thật với ngân hàng thật, chưa thử zoom 125–150%. Gemini (AI) chưa có — chờ duyệt GĐ2.
+
 ## Có gì mới trong beta.25 (đã phát hành 23/10/2026, kênh beta): màn Kiểm tra trùng dễ dùng hơn
 Không đổi schema (3), ID6, LaTeX gốc, thuật toán dò trùng. Đã được chủ dự án duyệt phương án.
 - **Sửa lỗi**: khoá phạm vi quét (`scopeKey`) trước đây luôn là `"[]"` khi không chọn Khối ⇒ đổi Phân môn/Chương/Bài/Dạng/câu đã chọn/kiểu đối chiếu không hiện cảnh báo "danh sách quét đã cũ" (PR #66); đếm "câu đã thêm/sửa/xoá sau lần quét" không còn đếm đôi; các lần ghi quyết định chạy tuần tự.
