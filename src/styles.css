@@ -920,19 +920,18 @@ a { color: var(--accent); }
 .fs-sec small { font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .fs-badge { font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: 0; background: var(--pri-soft); color: var(--pri-ink); border-radius: 999px; min-width: 18px; padding: 0 6px; text-align: center; margin-left: 4px; }
 .fs-note { margin: 0; padding: 6px 8px; font-size: 12px; background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); border-radius: 4px; }
-.fs-hint, .fs-none { margin: 0; font-size: 12px; color: var(--ink-3); }
-.fs-seg { display: grid; gap: 4px; }
-.fs-seg button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 36px; padding: 3px 4px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--paper); font: inherit; color: var(--ink); cursor: pointer; line-height: 1.15; }
-.fs-seg button b, .fs-seg button span { font-size: 13px; font-weight: 600; }
-.fs-seg button small { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.fs-seg button:hover { background: var(--hover); }
-.fs-seg button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-dark); }
-.fs-seg button[aria-pressed="true"] small { color: var(--rail-ink); }
 .fm { position: relative; }
-.fm-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: 34px; padding: 0 8px; border: 1px solid var(--line-ctl); border-radius: 4px; background: var(--paper); font: inherit; font-size: 13px; color: var(--ink); text-align: left; cursor: pointer; }
+.fm { position: relative; }
+.fm-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: 36px; padding: 0 8px; border: 1px solid var(--line-ctl); border-radius: 4px; background: var(--paper); font: inherit; font-size: 13px; color: var(--ink); text-align: left; cursor: pointer; }
+.fm-btn:hover:not(:disabled) { border-color: var(--ink-2); }
+.fm-btn:focus-visible, .fm-x:focus-visible { outline: 2px solid var(--pri); outline-offset: 1px; }
 .fm-btn.on { border-color: var(--pri); background: var(--sel); }
+.fm-x { position: absolute; top: 50%; right: 27px; transform: translateY(-50%); width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: var(--hover); color: var(--ink-2); font-size: 11px; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+.fm-x:hover { background: var(--danger-soft); color: var(--danger-ink); }
+.fm.has-x .fm-c { margin-right: 30px; }
+.fm.has-x:not(:has(.fm-c)) .fm-v { margin-right: 28px; }
 .fm-btn:disabled { background: var(--paper-2); border-color: var(--line); color: var(--ink-3); cursor: default; }
-.fm-l { flex: none; width: 58px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+.fm-l { flex: none; width: 66px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
 .fm-v { flex: 1 1 auto; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fm-btn:disabled .fm-v { font-weight: 400; }
 .fm-c { flex: none; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
@@ -944,11 +943,18 @@ a { color: var(--accent); }
 .fm-opt:hover, .fm-opt:focus-visible { background: var(--hover); }
 .fm-opt.on { background: var(--pri-soft); color: var(--pri-ink); font-weight: 600; }
 .fm-opt.zero { color: var(--ink-3); }
-.fm-box { flex: none; width: 16px; text-align: center; font-size: 12px; color: var(--pri); }
+.fm-box { flex: none; position: relative; width: 16px; height: 16px; border: 1.5px solid var(--line-ctl); background: var(--paper); box-sizing: border-box; }
+.fm-box.chk { border-radius: 4px; }
+.fm-box.rad { border-radius: 50%; }
+.fm-box.on { background: var(--pri); border-color: var(--pri); }
+.fm-box.chk.on::after { content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid var(--on-dark); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.fm-box.rad.on { box-shadow: inset 0 0 0 3px var(--paper); }
+.fm-opt.zero .fm-box { border-color: var(--line-2); }
+.fm-note { margin: 6px 2px 0; padding-top: 6px; border-top: 1px solid var(--line-3); font-size: 12px; color: var(--ink-3); }
 .fm-oh { flex: none; font-family: var(--mono, ui-monospace, monospace); font-size: 12px; color: var(--ink-3); }
 .fm-ol { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fm-oc { flex: none; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.fm-empty { padding: 8px; font-size: 12px; color: var(--ink-3); }
+.fm-empty { padding: 10px 8px; font-size: 12px; color: var(--ink-3); }
 .fs-foot { border-top: 1px solid var(--line); background: var(--paper-2); border-radius: 0 0 12px 12px; padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
 .fs-count { margin: 0; font-size: 12px; color: var(--ink-2); }
 .fs-count b { color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -960,3 +966,15 @@ a { color: var(--accent); }
 .fside.is-drawer { position: fixed; z-index: 45; top: 0; bottom: 0; left: 64px; width: min(320px, calc(100vw - 64px)); max-height: none; border-radius: 0; border-width: 0 1px 0 0; box-shadow: 0 0 24px color-mix(in srgb, var(--ink) 25%, transparent); }
 .fside.is-drawer .fs-foot { border-radius: 0; }
 @media (max-width: 760px) { .fside.is-drawer { left: 0; width: min(320px, 100vw); } }
+
+/* Trạng thái rỗng của Ngân hàng (4 loại: kho trống / mục chưa có câu / bộ lọc loại hết / chữ tìm) */
+.bk-empty { padding: 20px 22px; background: var(--paper); border: 1px dashed var(--line-2); border-radius: 12px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.bk-empty h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--ink); text-wrap: balance; }
+.bk-empty p { margin: 0; font-size: 13px; color: var(--ink-2); max-width: 62ch; }
+.bk-empty .be-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.be-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.be-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 4px 2px 12px; border: 1px solid var(--pri-line); border-radius: 999px; background: var(--pri-soft); color: var(--pri-ink); font-size: 13px; }
+.be-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.be-chip em { flex: none; font-style: normal; font-weight: 700; font-size: 12px; background: var(--paper); color: var(--ok-ink); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+.be-chip button { flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--pri-ink); cursor: pointer; font-size: 11px; }
+.be-chip button:hover { background: var(--paper); }

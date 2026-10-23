@@ -5,7 +5,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 
-export interface FieldOption { id: string; label: string; count?: number; hint?: string }
+export interface FieldOption { id: string; label: string; count?: number; hint?: string; /** chữ chỉ dùng để tìm (vd mã) */ search?: string }
 
 interface Base {
   label: string;
@@ -23,6 +23,8 @@ interface Base {
   /** hiện ô tìm trong hộp (dùng khi danh sách dài) */
   searchable?: boolean;
   hint?: string;
+  /** có nút ✕ bỏ lọc ngay trên ô (khi đang lọc) */
+  onReset?: () => void;
 }
 type Single = Base & { multi?: false; selected: string | null; onPick: (id: string | null) => void };
 type Multi = Base & { multi: true; selected: ReadonlySet<string>; onToggle: (id: string) => void; onClear: () => void };
@@ -32,7 +34,7 @@ const nf = new Intl.NumberFormat('vi-VN');
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
 
 export function FieldMenu(props: FieldMenuProps) {
-  const { label, summary, options, active, disabled, disabledText, count, allLabel = 'Tất cả', allCount, searchable, hint } = props;
+  const { label, summary, options, active, disabled, disabledText, count, allLabel = 'Tất cả', allCount, searchable, hint, onReset } = props;
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [pos, setPos] = useState<CSSProperties>({});
@@ -83,7 +85,7 @@ export function FieldMenu(props: FieldMenuProps) {
 
   const shown = useMemo(() => {
     const f = fold(q.trim());
-    return f ? options.filter((o) => fold(o.label + ' ' + (o.hint ?? '')).includes(f)) : options;
+    return f ? options.filter((o) => fold(`${o.label} ${o.hint ?? ''} ${o.search ?? ''}`).includes(f)) : options;
   }, [options, q]);
 
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -100,44 +102,60 @@ export function FieldMenu(props: FieldMenuProps) {
   };
 
   const isOn = (id: string) => (props.multi ? props.selected.has(id) : props.selected === id);
-  const allOn = props.multi ? props.selected.size === 0 : props.selected == null;
+  const allOn = props.multi ? props.selected.size === 0 || props.selected.size >= options.length : props.selected == null;
   const pickAll = () => { if (props.multi) props.onClear(); else { props.onPick(null); close(true); } };
   const pickOne = (id: string) => { if (props.multi) props.onToggle(id); else { props.onPick(id === props.selected ? null : id); close(true); } };
 
+  const pickFirst = () => { if (shown.length) { if (props.multi) props.onToggle(shown[0].id); else pickOne(shown[0].id); } };
+
   return (
-    <div className="fm">
+    <div className={`fm${onReset && active && !disabled ? ' has-x' : ''}`}>
       <button
         ref={btn} type="button" className={`fm-btn${active ? ' on' : ''}`} disabled={disabled}
         aria-haspopup="listbox" aria-expanded={open} title={hint ?? `${label}: ${disabled && disabledText ? disabledText : summary}`}
         onClick={() => setOpen(!open)}
-        onKeyDown={(e) => { if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setOpen(true); } }}
+        onKeyDown={(e) => {
+          const printable = searchable && !disabled && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && e.key !== ' ';
+          if (open) {
+            if (printable) { e.preventDefault(); setQ((x) => x + e.key); }
+            else if (e.key === 'Enter' && q.trim() && shown.length) { e.preventDefault(); pickFirst(); }
+            return;
+          }
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setOpen(true); return; }
+          // gõ chữ ngay trên ô: mở hộp và đưa chữ vào ô tìm (Tab tới ô, gõ 12, Enter)
+          if (printable) { e.preventDefault(); setQ(e.key); setOpen(true); }
+        }}
       >
         <span className="fm-l">{label}</span>
         <span className="fm-v">{disabled && disabledText ? disabledText : summary}</span>
         {count != null && !disabled && <span className="fm-c">{nf.format(count)}</span>}
         <span className="fm-car" aria-hidden="true">▾</span>
       </button>
+      {onReset && active && !disabled && (
+        <button type="button" className="fm-x" aria-label={`Bỏ lọc ${label}`} title={`Bỏ lọc ${label}`} onClick={onReset}>✕</button>
+      )}
       {open && createPortal(
         <div ref={pop} className="fm-pop" style={pos} role="listbox" aria-label={label} aria-multiselectable={props.multi ? true : undefined} onKeyDown={onKey}>
-          {searchable && <input className="fm-search" type="search" value={q} placeholder="Tìm tên hoặc mã…" aria-label={`Tìm trong ${label}`} onChange={(e) => setQ(e.target.value)} />}
+          {searchable && <input className="fm-search" type="search" value={q} placeholder="Tìm tên hoặc mã…" aria-label={`Tìm trong ${label}`} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && shown.length) { e.preventDefault(); pickFirst(); } }} />}
           <div className="fm-list">
             {!q && (
               <button type="button" role="option" aria-selected={allOn} className={`fm-opt${allOn ? ' on' : ''}`} onClick={pickAll}>
-                <span className="fm-box" aria-hidden="true">{props.multi ? (allOn ? '✓' : '') : (allOn ? '●' : '')}</span>
+                <span className={`fm-box ${props.multi ? 'chk' : 'rad'}${allOn ? ' on' : ''}`} aria-hidden="true" />
                 <span className="fm-ol">{allLabel}</span>
                 {allCount != null && <span className="fm-oc">{nf.format(allCount)}</span>}
               </button>
             )}
             {shown.map((o) => (
               <button key={o.id} type="button" role="option" aria-selected={isOn(o.id)} title={o.label} className={`fm-opt${isOn(o.id) ? ' on' : ''}${o.count === 0 ? ' zero' : ''}`} onClick={() => pickOne(o.id)}>
-                <span className="fm-box" aria-hidden="true">{isOn(o.id) ? (props.multi ? '✓' : '●') : ''}</span>
+                <span className={`fm-box ${props.multi ? 'chk' : 'rad'}${isOn(o.id) ? ' on' : ''}`} aria-hidden="true" />
                 {o.hint && <span className="fm-oh">{o.hint}</span>}
                 <span className="fm-ol">{o.label}</span>
                 {o.count != null && <span className="fm-oc">{nf.format(o.count)}</span>}
               </button>
             ))}
-            {!shown.length && <div className="fm-empty">Không có mục nào khớp.</div>}
+            {!shown.length && <div className="fm-empty">Không có mục nào khớp “{q.trim()}”.</div>}
           </div>
+          {props.multi && <p className="fm-note">Chọn đủ cả {options.length} = {allLabel} (không tính là đang lọc).</p>}
         </div>,
         document.body,
       )}
