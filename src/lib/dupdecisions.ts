@@ -132,18 +132,39 @@ export const isDecisionsWritable = (): boolean => writable;
 export const decisionsLoaded = (): boolean => loaded;
 
 export function exportDecisions(): string { return JSON.stringify({ v: 1, recs: [...recs.values()].sort((p, q) => p.at - q.at) }, null, 1); }
-/** Gộp từ file xuất; trùng khoá thì giữ bản MỚI hơn. */
-export async function importDecisions(json: string): Promise<{ added: number; updated: number; skipped: number; saved: boolean }> {
+/** Xem trước (KHÔNG ghi gì): file nhập sẽ thêm / cập nhật / bỏ qua bao nhiêu bản ghi. */
+export function previewImport(json: string): { added: number; updated: number; skipped: number } {
   const f = JSON.parse(json) as Partial<DecisionFile>;
   if (f.v !== 1 || !Array.isArray(f.recs)) throw new Error('Đây không phải file quyết định của HEdu.');
   let added = 0, updated = 0, skipped = 0;
   for (const r of f.recs) {
     if (!isRec(r)) { skipped++; continue; }
+    const cur = recs.get(pairKey(r.a, r.b));
+    if (!cur) added++; else if (r.at > cur.at) updated++; else skipped++;
+  }
+  return { added, updated, skipped };
+}
+/** Gộp từ file xuất; trùng khoá thì giữ bản MỚI hơn. */
+export async function importDecisions(json: string): Promise<{ added: number; updated: number; skipped: number; saved: boolean }> {
+  const plan = previewImport(json);
+  const f = JSON.parse(json) as DecisionFile;
+  for (const r of f.recs) {
+    if (!isRec(r)) continue;
     const k = pairKey(r.a, r.b), cur = recs.get(k);
-    if (!cur) { recs.set(k, r); added++; } else if (r.at > cur.at) { recs.set(k, r); updated++; } else skipped++;
+    if (!cur || r.at > cur.at) recs.set(k, r);
   }
   emit();
-  return { added, updated, skipped, saved: await persist() };
+  return { ...plan, saved: await persist() };
+}
+/** Ghi lại ngay trạng thái hiện tại (nút "Thử lưu lại"). */
+export const saveNow = (): Promise<boolean> => persist();
+/** Quyết định hiện đang lưu cho một cặp (để hoàn tác). */
+export const recOf = (a: string, b: string): DecisionRec | undefined => recs.get(pairKey(a, b));
+/** Khôi phục đúng bản ghi cũ của một cặp (hoặc xoá nếu trước đó chưa có). */
+export async function restoreRec(a: string, b: string, prev: DecisionRec | undefined): Promise<boolean> {
+  if (prev) recs.set(pairKey(a, b), prev); else recs.delete(pairKey(a, b));
+  emit();
+  return persist();
 }
 
 export function useDecisions(): number {

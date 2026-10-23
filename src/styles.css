@@ -1036,3 +1036,12 @@ a { color: var(--accent); }
 /* PR-3: dải Hoàn tác sau khi chuyển vào Thùng rác */
 .undo-bar { position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 91; display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 18px; border-radius: 12px; background: var(--ink); color: var(--on-dark); font-size: 14px; box-shadow: 0 12px 32px color-mix(in srgb, var(--ink) 25%, transparent); max-width: calc(100vw - 32px); }
 .undo-bar .ico { color: var(--on-dark); background: transparent; border: 0; font-size: 18px; cursor: pointer; }
+/* Kiểm tra trùng: Công cụ ▾, điều hướng cặp, trạng thái lưu */
+.dc-tools { position: relative; }
+.dc-tools-pop { position: absolute; right: 0; top: 100%; z-index: 20; display: flex; flex-direction: column; gap: 4px; min-width: 180px; padding: 8px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--paper); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.dc-tools-pop .btn { justify-content: flex-start; }
+.dc-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 13px; }
+.dc-save { margin-left: auto; font-size: 13px; }
+.dc-save.s-saved { color: var(--ok-ink, inherit); }
+.dc-save.s-error { color: var(--warn-ink, var(--ink)); font-weight: 600; }
+.dc-why input { min-width: 200px; }

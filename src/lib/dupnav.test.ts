@@ -1,0 +1,17 @@
+import { keepHint, navInfo, nextKeyAfter } from './dupnav';
+let fail = 0;
+const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
+const k = ['a', 'b', 'c'];
+ok(nextKeyAfter(k, 'a') === 'b' && nextKeyAfter(k, 'b') === 'c', 'cặp liền sau');
+ok(nextKeyAfter(k, 'c') === 'b', 'cặp cuối ⇒ lùi về cặp liền trước');
+ok(nextKeyAfter(['a'], 'a') === null && nextKeyAfter([], null) === null, 'hết danh sách ⇒ null');
+ok(nextKeyAfter(k, 'zz') === 'a' && nextKeyAfter(k, null) === 'a', 'không có cặp hiện tại ⇒ cặp đầu');
+const n = navInfo(k, 'b');
+ok(n.index === 1 && n.total === 3 && n.prev === 'a' && n.next === 'c', 'navInfo giữa danh sách');
+ok(navInfo(k, 'a').prev === null && navInfo(k, 'c').next === null, 'đầu/cuối không có prev/next');
+ok(keepHint('raw', { review: 'approved' }, {})?.includes('câu A') === true, 'giống nguyên mã, A đã duyệt ⇒ gợi ý A');
+ok(keepHint('same', {}, { review: 'approved' })?.includes('giữ câu B') === true, 'B đã duyệt ⇒ gợi ý B');
+ok(keepHint('raw', { review: 'approved' }, { review: 'approved' }) === null && keepHint('raw', {}, {}) === null, 'cả hai cùng trạng thái ⇒ không gợi ý');
+ok(keepHint('near', { review: 'approved' }, {}) === null && keepHint('conflict', { review: 'approved' }, {}) === null, 'chỉ gợi ý với loại raw/same (không gợi ý khi đáp án khác)');
+if (fail) process.exit(1);
+console.log('dupnav: đạt hết.');

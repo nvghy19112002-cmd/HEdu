@@ -4,13 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSharedIndex, type DupPairHit, type ScanStats } from '../lib/dupindex';
 import { compareLatex, DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { PairCompare } from './PairCompare';
-import { clearDecision, DECISION_LABEL, decisionsLoaded, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, useDecisions, WHY_CHOICES, type PairDecision } from '../lib/dupdecisions';
+import { clearDecision, DECISION_LABEL, decisionsLoaded, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, previewImport, recOf, restoreRec, saveNow, setDecision, statusOf, useDecisions, WHY_CHOICES, type DecisionRec, type PairDecision } from '../lib/dupdecisions';
 import { ReviewBadge } from './ReviewControl';
 import { GoldPanel } from './GoldPanel';
 import { questionCode, seqLabel } from '../lib/id';
 import { useTaxonomy } from '../lib/curriculum';
 import { shortName } from '../lib/taxonomy';
 import { trashBlockReason } from '../lib/trashflow';
+import { keepHint, navInfo, nextKeyAfter } from '../lib/dupnav';
 import { ALL_SCOPE, changedCount, isAll, scopeKey, scopeLabel, scopeOptions, scopeUids, setLevel, type ScanMode, type Scope } from '../lib/dupscope';
 import { LEVEL_LABEL, TYPE_LABEL, type Question } from '../lib/types';
 
@@ -50,6 +51,11 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
   const [goldOpen, setGoldOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(true); // sau khi quét thì thu gọn để dành chỗ cho phần so sánh
   const [cur, setCur] = useState<string | null>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [plan, setPlan] = useState<null | { json: string; added: number; updated: number; skipped: number }>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [undoBar, setUndoBar] = useState<null | { a: string; b: string; prev: DecisionRec | undefined; text: string; back: string | null }>(null);
+  useEffect(() => { if (!undoBar) return; const t = setTimeout(() => setUndoBar(null), 10000); return () => clearTimeout(t); }, [undoBar]);
   const pk = (p: DupPairHit) => p.a + '|' + p.b;
 
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.drw') && !document.querySelector('.gold')) onClose(); }; document.addEventListener('keydown', h); return () => document.removeEventListener('keydown', h); }, [onClose]);
@@ -91,6 +97,7 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
   const active = list.find((p) => pk(p) === cur) ?? list[0];
   const changed = pairs !== null ? changedCount(snap.current, questions) : 0;
   const scopeChanged = pairs !== null && scannedKey !== scopeKey(scope, mode);
+  const nav = navInfo(list.map(pk), active ? pk(active) : null);
   const pages = Math.max(1, Math.ceil(list.length / PAGE));
   const pageNo = Math.min(page, pages - 1);
   const shown = list.slice(pageNo * PAGE, pageNo * PAGE + PAGE);
@@ -105,19 +112,25 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
           {busy
             ? <button type="button" className="btn btn-sm" onClick={() => { abort.current.aborted = true; }}>Dừng quét</button>
             : <button type="button" className="btn btn-primary btn-sm" onClick={run}>{pairs ? 'Quét lại' : `Quét ${sideA} câu`}</button>}
-        <span className="dc-io">
-            <button type="button" className="btn btn-sm" onClick={() => {
-              const blob = new Blob([exportDecisions()], { type: 'application/json' });
-              const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hedu-quyet-dinh-trung.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-            }}>Xuất quyết định</button>
-            <button type="button" className="btn btn-sm" onClick={() => fileIn.current?.click()}>Nhập quyết định</button>
+        <span className="dc-io dc-tools">
+            <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>Công cụ ▾</button>
+            {toolsOpen && (
+              <span className="dc-tools-pop" role="menu" onMouseLeave={() => setToolsOpen(false)}>
+                <button type="button" role="menuitem" className="btn btn-sm" onClick={() => {
+                  setToolsOpen(false);
+                  const blob = new Blob([exportDecisions()], { type: 'application/json' });
+                  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hedu-quyet-dinh-trung.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+                }}>Xuất quyết định</button>
+                <button type="button" role="menuitem" className="btn btn-sm" onClick={() => { setToolsOpen(false); fileIn.current?.click(); }}>Nhập quyết định…</button>
+                <button type="button" role="menuitem" className="btn btn-sm" onClick={() => { setToolsOpen(false); setGoldOpen(true); }} title="Gắn nhãn khoảng 150 cặp để đo độ chính xác của bộ dò trên ngân hàng thật">Nhãn chuẩn</button>
+              </span>
+            )}
             <input ref={fileIn} type="file" accept="application/json,.json" hidden onChange={async (e) => {
               const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
-              try { const r = await importDecisions(await f.text()); setMsg({ ok: r.saved, text: `Đã nhập: thêm ${r.added}, cập nhật ${r.updated}, bỏ qua ${r.skipped}.${r.saved ? '' : ' Nhưng CHƯA lưu được vào tệp — hãy thử lại.'}` }); }
+              try { const json = await f.text(); setPlan({ json, ...previewImport(json) }); }
               catch (err) { setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) }); }
             }} />
           </span>
-          <button type="button" className="btn btn-sm" onClick={() => setGoldOpen(true)} title="Gắn nhãn khoảng 150 cặp để đo độ chính xác của bộ dò trên ngân hàng thật">Nhãn chuẩn</button>
           <button type="button" className="btn btn-sm" onClick={onClose}>Đóng</button>
         </div>
       </header>
@@ -178,6 +191,12 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
       {changed > 0 && !busy && <p className="dc-stale" role="status">Có {changed} câu đã thêm/sửa/xoá sau lần quét này — danh sách bên dưới có thể đã lỗi thời. Bấm “Quét lại” để cập nhật.</p>}
       {scopeChanged && !busy && <p className="dc-stale" role="status">Phạm vi hoặc kiểu đối chiếu đã đổi so với lần quét ({scannedLabel}). Danh sách bên dưới thuộc lần quét cũ — bấm “Quét” để quét theo phạm vi mới.</p>}
 
+      {plan && (
+        <p className="dc-stale" role="status">Nhập quyết định: sẽ <b>thêm {plan.added}</b>, <b>cập nhật {plan.updated}</b> (bản trong file mới hơn), bỏ qua {plan.skipped}. Quyết định hiện có không bị xoá.{' '}
+          <button type="button" className="btn btn-sm btn-primary" onClick={async () => { const j = plan.json; setPlan(null); try { const r = await importDecisions(j); setMsg({ ok: r.saved, text: `Đã nhập: thêm ${r.added}, cập nhật ${r.updated}, bỏ qua ${r.skipped}.${r.saved ? '' : ' Nhưng CHƯA lưu được vào tệp (đang giữ tạm).'}` }); } catch (err) { setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) }); } }}>Áp dụng</button>{' '}
+          <button type="button" className="btn btn-sm" onClick={() => setPlan(null)}>Huỷ</button></p>
+      )}
+      {stats && stats.candidatesCapped > 0 && pairs !== null && <p className="dc-stale" role="status">Lưu ý: với {stats.candidatesCapped} câu, HEdu chỉ so với một số ứng viên gần nhất (giới hạn để quét kịp). Đây là bộ dò gợi ý, không phải bảo đảm đã kiểm tra mọi cặp.</p>}
       {msg && <p className={msg.ok ? 'dc-ok' : 'dc-stale'} role="status">{msg.text} <button type="button" className="btn btn-sm" onClick={() => setMsg(null)}>Đóng</button></p>}
       {!isDecisionsWritable() && decisionsLoaded() && !msg && <p className="dc-stale" role="status">Tệp quyết định không ghi được — quyết định chỉ giữ tạm trong phiên này.</p>}
 
@@ -222,10 +241,26 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
           </div>}
 
           <div className="dc-right">
+            <div className="dc-nav" role="group" aria-label="Điều hướng cặp">
+              <button type="button" className="btn btn-sm" disabled={!nav.prev} onClick={() => nav.prev && setCur(nav.prev)}>‹ Cặp trước</button>
+              <span aria-live="polite">{nav.index >= 0 ? `Cặp ${nav.index + 1}/${nav.total}` : '—'} · còn <b>{tabCounts.open}</b> chưa xử lý</span>
+              <button type="button" className="btn btn-sm" disabled={!nav.next} onClick={() => nav.next && setCur(nav.next)}>Cặp tiếp ›</button>
+              <span className={`dc-save s-${saveState}`} role="status">
+                {saveState === 'saving' && 'Đang lưu…'}{saveState === 'saved' && 'Đã lưu'}
+                {saveState === 'error' && <>Chưa lưu được <button type="button" className="btn btn-sm" onClick={async () => { setSaveState('saving'); setSaveState((await saveNow()) ? 'saved' : 'error'); }}>Thử lưu lại</button></>}
+              </span>
+            </div>
+            {undoBar && (
+              <p className="dc-ok dc-undo" role="status">{undoBar.text}{' '}
+                <button type="button" className="btn btn-sm" onClick={async () => { const u = undoBar; setUndoBar(null); setSaveState('saving'); const ok = await restoreRec(u.a, u.b, u.prev); setSaveState(ok ? 'saved' : 'error'); if (u.back) setCur(u.back); }}>Hoàn tác</button></p>
+            )}
             <button type="button" className="btn btn-sm dc-lt" aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>{listOpen ? '◀ Ẩn danh sách' : '▶ Hiện danh sách cặp'}</button>
             {active ? (
               <PairView key={pk(active)} hit={active} A={byUid.get(active.a)!} B={byUid.get(active.b)!} snap={snap.current}
-                onOpen={onOpen} onGoto={onGoto} onTrash={onTrash} onMsg={setMsg} />
+                onOpen={onOpen} onGoto={onGoto} onTrash={onTrash} onMsg={setMsg}
+                beforeDecide={() => { const n = nextKeyAfter(list.map(pk), pk(active)); setCur(n); return pk(active); }}
+                onSave={setSaveState}
+                onDecided={(u) => setUndoBar({ ...u, back: pk(active) })} />
             ) : <p className="dc-empty">Chọn một cặp ở bên trái.</p>}
           </div>
         </div>
@@ -234,7 +269,7 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
   );
 }
 
-function PairView({ hit, A, B, snap, onOpen, onGoto, onTrash, onMsg }: { onTrash: (q: Question) => Promise<boolean>; hit: DupPairHit; A: Question; B: Question; snap: Map<string, string>; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onMsg: (m: { ok: boolean; text: string } | null) => void }) {
+function PairView({ hit, A, B, snap, onOpen, onGoto, onTrash, onMsg, beforeDecide, onSave, onDecided }: { beforeDecide: () => string; onSave: (s: 'saving' | 'saved' | 'error') => void; onDecided: (u: { a: string; b: string; prev: DecisionRec | undefined; text: string }) => void; onTrash: (q: Question) => Promise<boolean>; hit: DupPairHit; A: Question; B: Question; snap: Map<string, string>; onOpen: (uid: string) => void; onGoto: (uid: string) => void; onMsg: (m: { ok: boolean; text: string } | null) => void }) {
   // Luôn so lại trên nội dung HIỆN TẠI: nếu giáo viên vừa sửa câu thì kết quả quét cũ không còn đúng.
   const live = useMemo(() => compareLatex(A.latex, B.latex), [A.latex, B.latex]);
   const edited = snap.get(A.uid) !== A.latex || snap.get(B.uid) !== B.latex;
@@ -244,10 +279,23 @@ function PairView({ hit, A, B, snap, onOpen, onGoto, onTrash, onMsg }: { onTrash
   const st = statusOf(A, B);
   const [why, setWhy] = useState(st.rec?.why ?? '');
   const decide = async (d: PairDecision) => {
-    const saved = await setDecision(A, B, d, why || undefined);
-    onMsg(saved ? null : { ok: false, text: 'Chưa lưu được quyết định vào tệp (đang giữ tạm trong phiên). Bạn có thể bấm lại hoặc dùng “Xuất quyết định” để lưu ra file.' });
+    const prev = recOf(A.uid, B.uid);
+    beforeDecide();
+    onSave('saving');
+    const saved = await setDecision(A, B, d, why.trim() || undefined);
+    onSave(saved ? 'saved' : 'error');
+    onDecided({ a: A.uid, b: B.uid, prev, text: `Đã ghi “${DECISION_LABEL[d]}” cho cặp ${seqLabel(A.seq)} ↔ ${seqLabel(B.seq)}.` });
+    onMsg(saved ? null : { ok: false, text: 'Chưa lưu được quyết định vào tệp (đang giữ tạm trong phiên). Bấm “Thử lưu lại” hoặc dùng Công cụ → Xuất quyết định để lưu ra file.' });
   };
-  const undo = async () => { const saved = await clearDecision(A, B); onMsg(saved ? null : { ok: false, text: 'Chưa ghi được việc bỏ quyết định vào tệp.' }); };
+  const undo = async () => {
+    const prev = recOf(A.uid, B.uid);
+    beforeDecide();
+    onSave('saving');
+    const saved = await clearDecision(A, B);
+    onSave(saved ? 'saved' : 'error');
+    onDecided({ a: A.uid, b: B.uid, prev, text: `Đã bỏ quyết định của cặp ${seqLabel(A.seq)} ↔ ${seqLabel(B.seq)}.` });
+    onMsg(saved ? null : { ok: false, text: 'Chưa ghi được việc bỏ quyết định vào tệp.' });
+  };
   const side = (q: Question, title: string) => ({
     title,
     latex: q.latex,
@@ -265,16 +313,14 @@ function PairView({ hit, A, B, snap, onOpen, onGoto, onTrash, onMsg }: { onTrash
   return (
     <PairCompare
       A={side(A, 'Câu A')} B={side(B, 'Câu B')} result={live}
-      note={edited ? <p className="dc-flags" role="status">Một trong hai câu đã được sửa sau lần quét — kết quả bên dưới đã so sánh lại trên nội dung hiện tại{hit.result.kind !== live.kind ? ` (trước: ${DUP_KIND_LABEL[hit.result.kind]})` : ''}.</p> : null}
+      note={keepHint(live.kind, A, B) && !edited ? <p className="dc-flags" role="status">{keepHint(live.kind, A, B)}</p> : edited ? <p className="dc-flags" role="status">Một trong hai câu đã được sửa sau lần quét — kết quả bên dưới đã so sánh lại trên nội dung hiện tại{hit.result.kind !== live.kind ? ` (trước: ${DUP_KIND_LABEL[hit.result.kind]})` : ''}.</p> : null}
       footer={
         <>
           {st.status === 'stale' && <p className="dc-flags" role="status">Trước đây bạn đã quyết định “{DECISION_LABEL[st.rec!.d]}” cho cặp này, nhưng nội dung một câu đã đổi — cần xem lại.</p>}
           {st.status === 'valid' && <p className="dc-ok" role="status">Đã quyết định: <b>{DECISION_LABEL[st.rec!.d]}</b>{st.rec!.why ? ` (${st.rec!.why})` : ''} <button type="button" className="btn btn-sm" onClick={undo}>Bỏ quyết định</button></p>}
           <label className="dc-why">Lý do (tuỳ chọn)
-            <select value={why} onChange={(e) => setWhy(e.target.value)}>
-              <option value="">—</option>
-              {WHY_CHOICES.map((w) => <option key={w} value={w}>{w}</option>)}
-            </select>
+            <input type="text" list="dc-why-list" value={why} maxLength={120} placeholder="chọn hoặc tự gõ" onChange={(e) => setWhy(e.target.value)} />
+            <datalist id="dc-why-list">{WHY_CHOICES.map((w) => <option key={w} value={w} />)}</datalist>
           </label>
           {(['not_duplicate', 'legit_variant', 'review_later'] as const).map((d) => <button key={d} type="button" className="btn btn-sm" disabled={st.status === 'valid' && st.rec!.d === d} onClick={() => decide(d)}>{DECISION_LABEL[d]}</button>)}
           <span className="dc-del">

@@ -1,3 +1,13 @@
+## Có gì mới trong beta.25 (chưa phát hành): màn Kiểm tra trùng dễ dùng hơn
+Không đổi schema (3), ID6, LaTeX gốc, thuật toán dò trùng. Đã được chủ dự án duyệt phương án.
+- **Sửa lỗi**: khoá phạm vi quét (`scopeKey`) trước đây luôn là `"[]"` khi không chọn Khối ⇒ đổi Phân môn/Chương/Bài/Dạng/câu đã chọn/kiểu đối chiếu không hiện cảnh báo "danh sách quét đã cũ" (PR #66); đếm "câu đã thêm/sửa/xoá sau lần quét" không còn đếm đôi; các lần ghi quyết định chạy tuần tự.
+- **Sau mỗi quyết định tự chuyển sang cặp kế**, có banner **Hoàn tác** 10 giây (khôi phục đúng quyết định cũ hoặc xoá nếu là cặp mới); nút **‹ Cặp trước / Cặp tiếp ›**, "Cặp x/N · còn M chưa xử lý".
+- **Trạng thái lưu**: Đang lưu / Đã lưu / Chưa lưu được + nút "Thử lưu lại".
+- **Công cụ ▾** gom Xuất quyết định, Nhập quyết định, Nhãn chuẩn. **Nhập quyết định có bước xem trước** (thêm N, cập nhật M, bỏ qua K) rồi mới Áp dụng.
+- **Lý do** có thể tự gõ (vẫn có gợi ý chọn sẵn). **Gợi ý giữ câu đã duyệt** khi hai câu giống nguyên mã/chỉ khác trình bày mà đúng một câu đã duyệt (chỉ là chữ gợi ý, không tự xoá).
+- Hiện ghi chú khi bộ dò phải giới hạn ứng viên (`candidatesCapped`) — không tuyên bố đã kiểm tra tuyệt đối mọi cặp.
+- Chưa thử trên Windows thật, chưa thử zoom 125–150%.
+
 ## Có gì mới trong beta.24 (chưa phát hành): thanh chọn nhiều gọn hơn, xuất .tex nguyên văn, "Lưu thành…"
 Không đổi schema (3), ID6, cây mục lục, thuật toán kiểm tra trùng. CÓ đổi Rust/cấu hình (đã được chủ dự án duyệt): thêm `tauri-plugin-dialog`, quyền `dialog:allow-save`, lệnh `save_text_file`.
 - **Xuất .tex NGUYÊN VĂN**: chép đúng mã LaTeX gốc, chỉ cập nhật dòng `%[ID]`. Trước đây file xuất bị dựng lại (mất ghi chú `%`, chữ trên hình bị dời vào `\immini`, `\newcommand` bị kéo ra ngoài). Ước lượng dung lượng tính theo độ dài thật.
