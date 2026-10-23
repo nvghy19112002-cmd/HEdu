@@ -1,4 +1,4 @@
-import { AUTO_ID_MAX, buildRows, defaultChoice, levelTarget, planApply, summarize, withAutoId, type RowChoice } from './idapply';
+import { applyAutoId, AUTO_ID_MAX, buildRows, defaultChoice, getAutoIdUndo, levelTarget, planApply, summarize, undoAutoId, undoConflicts, withAutoId, type RowChoice } from './idapply';
 import { IdSuggester } from './idsuggest';
 import { addMany, getState, initStore, updateMany } from './store';
 import { buildDefault, indexOf } from './taxonomy';
@@ -20,8 +20,8 @@ const TA = ['Tìm tập xác định của hàm số $y=\\sqrt{x-#}$.', 'Hàm s�
 const TB = ['Gieo một con xúc xắc cân đối, tính xác suất xuất hiện mặt # chấm.', 'Rút ngẫu nhiên một thẻ trong hộp có # thẻ đánh số, tính xác suất rút được thẻ số chẵn.', 'Chọn ngẫu nhiên # học sinh trong lớp, xác suất để chọn được hai bạn nữ là'];
 
 // kho giả trong bộ nhớ, có thể ép ghi lỗi
-const disk = { json: null as string | null, fail: false };
-await initStore({ async load() { return { json: disk.json, recovered: false }; }, async save(j: string) { if (disk.fail) throw new Error('đĩa đầy'); disk.json = j; } });
+const disk = { json: null as string | null, fail: false, gate: null as Promise<void> | null };
+await initStore({ async load() { return { json: disk.json, recovered: false }; }, async save(j: string) { if (disk.gate) await disk.gate; if (disk.fail) throw new Error('đĩa đầy'); disk.json = j; } });
 const drafts = [...TA.flatMap((t) => [3, 4, 7].map((k) => ({ ...A, latex: ex(t.replace('#', String(k))), level: 'NB' as const, tags: ['x'] }))),
   ...TB.flatMap((t) => [3, 4, 7].map((k) => ({ ...B, latex: ex(t.replace('#', String(k))), level: 'TH' as const, tags: [] })))];
 addMany(drafts);
@@ -88,6 +88,58 @@ ok(JSON.parse(disk.json!).questions.find((q: Question) => q.uid === rw.uid).form
 const r2 = await updateMany(plan.edits.keys(), withAutoId(plan.edits));
 ok(r2.ok && r2.changed === 0, 'bấm Áp dụng lần hai ⇒ không đổi gì thêm');
 ok(AUTO_ID_MAX === 200, 'giới hạn 200 câu mỗi lượt');
+
+// ---------- PR-C: Hoàn tác trong phiên ----------
+console.log('Hoàn tác trong phiên');
+const fresh = () => all();
+// đưa 2 câu về chỗ cũ (B, đường hỏng) để làm lại từ đầu bằng applyAutoId
+await updateMany([rw.uid, rb.uid], (x) => (x.uid === rw.uid ? { ...x, ...rw.snap } : { ...x, ...rb.snap }));
+const rows2 = buildRows([fresh().get(rw.uid)!, fresh().get(rb.uid)!], s, ix);
+const lvlChoice = new Map<string, RowChoice>([[rw.uid, { apply: true, formId: A.formId, changeLevel: !!levelTarget(rows2[0]) }], [rb.uid, { apply: true, formId: A.formId, changeLevel: false }]]);
+const plan2 = planApply(rows2, lvlChoice, fresh(), ix, false);
+const beforeW = fresh().get(rw.uid)!, beforeB = fresh().get(rb.uid)!;
+const ra = await applyAutoId(plan2.edits);
+const u = getAutoIdUndo();
+ok(ra.ok && ra.changed === 2 && !!u && u.items.length === 2, 'áp dụng xong ⇒ có bản ghi Hoàn tác đúng 2 câu');
+ok(undoConflicts(u!, fresh()).length === 0, 'chưa ai sửa tiếp ⇒ không có xung đột');
+// câu rb bị giáo viên sửa tiếp nội dung ⇒ không được hoàn tác câu đó
+await updateMany([rb.uid], (x) => ({ ...x, latex: x.latex + '\n% sửa tiếp', updatedAt: x.updatedAt + 1 }));
+ok(undoConflicts(u!, fresh()).includes(rb.uid), 'câu đã sửa tiếp ⇒ báo xung đột');
+const uz = await undoAutoId(u!);
+const w2 = fresh().get(rw.uid)!, b2 = fresh().get(rb.uid)!;
+ok(uz.ok && uz.restored === 1 && uz.conflicts === 1, 'hoàn tác 1 câu, giữ 1 câu đã sửa tiếp');
+ok(w2.formId === beforeW.formId && w2.lessonId === beforeW.lessonId && w2.chapterId === beforeW.chapterId && w2.level === beforeW.level && w2.latex === beforeW.latex && w2.review === beforeW.review, 'câu hoàn tác về đúng vị trí + mức độ cũ, giữ nội dung và kiểm duyệt');
+ok(b2.lessonId === A.lessonId && b2.latex.endsWith('% sửa tiếp') && b2.lessonId !== beforeB.lessonId,'câu đã sửa tiếp giữ nguyên chỉnh sửa mới (không bị ghi đè)');
+ok(getAutoIdUndo() === null, 'hoàn tác xong ⇒ không còn nút Hoàn tác');
+const again2 = await undoAutoId(u!);
+ok(again2.ok && again2.restored === 0, 'bấm Hoàn tác lần hai ⇒ không đổi gì');
+// hoàn tác khi câu đã bị xoá: không lỗi, tính là xung đột
+const rows3 = buildRows([fresh().get(rw.uid)!], s, ix);
+await applyAutoId(planApply(rows3, new Map([[rw.uid, { apply: true, formId: A.formId, changeLevel: false }]]), fresh(), ix, false).edits);
+const u3 = getAutoIdUndo()!;
+const gone3 = new Map(fresh()); gone3.delete(rw.uid);
+ok(undoConflicts(u3, gone3).includes(rw.uid), 'câu đã bị xoá ⇒ không hoàn tác được, báo rõ');
+disk.fail = true;
+const uf = await undoAutoId(u3);
+disk.fail = false;
+ok(!uf.ok && fresh().get(rw.uid)!.formId === A.formId && getAutoIdUndo() === u3, 'hoàn tác ghi lỗi ⇒ không đổi gì, vẫn giữ nút Hoàn tác để thử lại');
+
+// ---------- PR-C: updateMany ghi lỗi KHÔNG cuốn theo sửa đổi khác ----------
+console.log('updateMany: ghi lỗi chỉ hoàn lại câu của chính nó');
+const [p1, p2] = getState().questions.slice(0, 2).map((x) => x.uid);
+let release: () => void = () => undefined;
+disk.gate = new Promise<void>((r) => { release = r; });
+disk.fail = true;
+const t1 = fresh().get(p1)!.tags.join();
+const pending = updateMany([p1], (x) => ({ ...x, tags: [...x.tags, 'lo-1'] }));
+await new Promise((r) => setTimeout(r, 0));
+// trong lúc lô 1 đang chờ ghi: một sửa đổi khác vào câu p2
+void updateMany([p2], (x) => ({ ...x, tags: [...x.tags, 'giu-lai'] }));
+release();
+const rf = await pending;
+disk.fail = false; disk.gate = null;
+ok(!rf.ok && fresh().get(p1)!.tags.join() === t1, 'lô ghi lỗi ⇒ câu của lô trở về như cũ');
+ok(fresh().get(p2)!.tags.includes('giu-lai'), 'sửa đổi khác xảy ra lúc chờ ghi được GIỮ, không bị hoàn lại nhầm');
 
 if (fail) process.exit(1);
 console.log('idapply: đạt hết.');
