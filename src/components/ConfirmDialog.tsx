@@ -10,11 +10,13 @@ export interface ConfirmProps {
   danger?: boolean;
   /** tắt nút xác nhận (đang chạy, hoặc chưa đủ điều kiện) */
   busy?: boolean;
+  /** khoá nút xác nhận vì chưa đủ điều kiện (nút giữ nguyên nhãn, không hiện "Đang xử lý…") */
+  disabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export function ConfirmDialog({ title, children, confirmLabel, cancelLabel = 'Huỷ', danger, busy, onConfirm, onCancel }: ConfirmProps) {
+export function ConfirmDialog({ title, children, confirmLabel, cancelLabel = 'Huỷ', danger, busy, disabled, onConfirm, onCancel }: ConfirmProps) {
   const ok = useRef<HTMLButtonElement>(null);
   const no = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -31,7 +33,7 @@ export function ConfirmDialog({ title, children, confirmLabel, cancelLabel = 'Hu
         {children && <div className="cfm-body">{children}</div>}
         <div className="cfm-acts">
           <button ref={no} type="button" className="btn btn-outline" disabled={busy} onClick={onCancel}>{cancelLabel}</button>
-          <button ref={ok} type="button" className={`btn ${danger ? 'btn-danger' : 'btn-accent'}`} disabled={busy} onClick={onConfirm}>{busy ? 'Đang xử lý…' : confirmLabel}</button>
+          <button ref={ok} type="button" className={`btn ${danger ? 'btn-danger' : 'btn-accent'}`} disabled={busy || disabled} onClick={onConfirm}>{busy ? 'Đang xử lý…' : confirmLabel}</button>
         </div>
       </div>
     </>

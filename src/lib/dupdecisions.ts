@@ -164,6 +164,33 @@ export async function trashAdd(q: Question): Promise<boolean> {
   if (!ok) { trash = prev; emit(); }
   return ok;
 }
+/**
+ * Cất NHIỀU câu vào thùng rác bằng MỘT lần ghi. Hoặc cất đủ tất cả, hoặc không cất câu nào:
+ * thiếu chỗ (> TRASH_CAP) ⇒ từ chối cả lô, không cắt bớt, không bỏ câu cũ; ghi lỗi ⇒ trả lại như cũ.
+ */
+export async function trashAddMany(qs: readonly Question[]): Promise<boolean> {
+  if (!writable || !backend) return false;
+  if (!trashRoomFor(qs)) return false;
+  if (qs.length === 0) return true;
+  const prev = trash;
+  const at = Date.now();
+  const ids = new Set(qs.map((q) => q.uid));
+  trash = [...qs.map((q) => ({ q: JSON.parse(JSON.stringify(q)) as Question, at })), ...trash.filter((t) => !ids.has(t.q.uid))];
+  emit();
+  const ok = await persist();
+  if (!ok) { trash = prev; emit(); }
+  return ok;
+}
+/** Bỏ nhiều bản ghi khỏi thùng rác bằng MỘT lần ghi (dùng để hoàn tác khi xoá khỏi ngân hàng thất bại). */
+export async function trashRemoveMany(uids: readonly string[]): Promise<boolean> {
+  const rm = new Set(uids);
+  const prev = trash;
+  trash = trash.filter((t) => !rm.has(t.q.uid));
+  emit();
+  const ok = await persist();
+  if (!ok) { trash = prev; emit(); }
+  return ok;
+}
 export async function trashRemove(uid: string): Promise<boolean> {
   const prev = trash;
   trash = trash.filter((t) => t.q.uid !== uid);

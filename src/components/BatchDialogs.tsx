@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import { levelChangeCount, parseTagInput, tagChangeCount, tagCounts, withLevel, withTags } from '../lib/batchops';
 import { LEVEL_LABEL, LEVELS, type Level, type Question } from '../lib/types';
+import { TRASH_CAP, trashCount } from '../lib/dupdecisions';
 import { ConfirmDialog } from './ConfirmDialog';
 
 const nf = new Intl.NumberFormat('vi-VN');
@@ -19,7 +20,8 @@ export function BatchTagDialog({ qs, busy, onRun, onCancel }: { qs: Question[]; 
     <ConfirmDialog
       title={`Gắn nhãn cho ${nf.format(qs.length)} câu`}
       confirmLabel={n > 0 ? `Áp dụng cho ${nf.format(n)} câu` : 'Chưa có gì để đổi'}
-      busy={busy || n === 0}
+      busy={busy}
+      disabled={n === 0}
       onConfirm={() => onRun(withTags(ops))}
       onCancel={onCancel}
     >
@@ -52,7 +54,8 @@ export function BatchLevelDialog({ qs, busy, onRun, onCancel }: { qs: Question[]
     <ConfirmDialog
       title={`Đổi mức độ cho ${nf.format(qs.length)} câu`}
       confirmLabel={lv && n > 0 ? `Đổi ${nf.format(n)} câu sang ${LEVEL_LABEL[lv]}` : 'Chọn mức độ mới'}
-      busy={busy || !lv || n === 0}
+      busy={busy}
+      disabled={!lv || n === 0}
       onConfirm={() => lv && onRun(withLevel(lv))}
       onCancel={onCancel}
     >
@@ -66,6 +69,34 @@ export function BatchLevelDialog({ qs, busy, onRun, onCancel }: { qs: Question[]
       </div>
       <p className="bd-sum" role="status">{!lv ? 'Chọn mức độ muốn gán cho tất cả các câu đã chọn.' : n === 0 ? 'Các câu đã chọn đều đang ở mức này.' : `${nf.format(n)} / ${nf.format(qs.length)} câu sẽ đổi mức độ.`}</p>
       <p className="bd-note">Lưu ý: mã ID hiển thị (chữ N/H/V/C) đổi theo mức độ. Nội dung LaTeX, số thứ tự, trạng thái kiểm duyệt và nhãn không đổi.</p>
+    </ConfirmDialog>
+  );
+}
+
+/** Xoá hàng loạt = chuyển vào Thùng rác (khôi phục được). Có cổng sức chứa; việc lớn (≥ 50 câu) phải tick xác nhận. */
+export const BIG_TRASH = 50;
+export function BatchTrashDialog({ qs, busy, onRun, onCancel }: { qs: Question[]; busy: boolean; onRun: () => void; onCancel: () => void }) {
+  const [sure, setSure] = useState(false);
+  const have = trashCount();
+  const room = Math.max(0, TRASH_CAP - have);
+  const full = qs.length > room;
+  const big = qs.length >= BIG_TRASH;
+  return (
+    <ConfirmDialog
+      danger
+      title={`Chuyển ${nf.format(qs.length)} câu vào Thùng rác?`}
+      confirmLabel={`Chuyển ${nf.format(qs.length)} câu vào Thùng rác`}
+      busy={busy}
+      disabled={full || (big && !sure)}
+      onConfirm={onRun}
+      onCancel={onCancel}
+    >
+      <p>Các câu sẽ rời khỏi Ngân hàng nhưng được giữ trong Thùng rác, có thể khôi phục ở <b>Hệ thống → Thùng rác</b> (giữ nguyên số thứ tự và nội dung).</p>
+      <p className="bd-sum" role="status">Thùng rác hiện có {nf.format(have)} / {nf.format(TRASH_CAP)} câu{full ? '.' : ` · sau khi chuyển: ${nf.format(have + qs.length)} / ${nf.format(TRASH_CAP)}.`}</p>
+      {full && <p className="bd-bad" role="alert">Thùng rác chỉ còn chỗ cho {nf.format(room)} câu nên CHƯA thể chuyển {nf.format(qs.length)} câu. Hãy bỏ bớt câu đã chọn, hoặc vào Hệ thống → Thùng rác khôi phục/xoá hẳn bớt rồi thử lại. Không câu nào bị xoá.</p>}
+      {big && !full && (
+        <label className="bd-sure"><input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} /> Tôi đã xem lại: đúng {nf.format(qs.length)} câu này cần chuyển vào Thùng rác</label>
+      )}
     </ConfirmDialog>
   );
 }
