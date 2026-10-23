@@ -62,6 +62,12 @@ const s3 = new IdSuggester(tax, [...bank, lone]);
 const r6 = s3.suggest({ key: lone.uid, latex: lone.latex, grade: g.grade, excludeUid: lone.uid });
 ok(r6.best?.formId !== lone.formId && !r6.alternatives.some((a) => a.formId === lone.formId), 'Dạng chỉ có chính câu đó ⇒ không tự gợi ý lại');
 
+// Dạng chỉ có MỘT câu mẫu: dù hai nguồn cùng chỉ về đó, tối đa là "thấp"
+const single = q(at(4), ex('Tính thể tích khối chóp tứ giác đều có cạnh đáy bằng $a$ và chiều cao $2a$.'));
+const s6 = new IdSuggester(tax, [...bank, single]);
+const r8 = s6.suggest({ key: 'k8', latex: ex('Tính thể tích khối chóp tứ giác đều có cạnh đáy bằng $3a$ và chiều cao $a$.'), grade: g.grade });
+ok(r8.best?.formId !== single.formId || r8.confidence === 'thap', 'Dạng chỉ có 1 câu mẫu ⇒ không quá "thấp"');
+
 // câu mẫu sai đường dẫn cây không được dùng
 const broken = q({ ...B, lessonId: A.lessonId }, ex('Gieo một con xúc xắc cân đối, tính xác suất xuất hiện mặt 9 chấm.'));
 const s4 = new IdSuggester(tax, [...bank, broken]);
