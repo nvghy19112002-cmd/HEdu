@@ -6,16 +6,33 @@ Chủ dự án là giáo viên Toán, không rành code: viết cho họ bằng 
 ## 1. Sản phẩm
 App Windows (Tauri 2 / Rust + React / TypeScript) cho giáo viên Toán: ngân hàng câu hỏi LaTeX (ex_test), hình TikZ qua TeX Live có sẵn trên máy, tạo/trộn/xuất đề, ID tự động theo CT 2018, kiểm tra trùng. Dữ liệu lưu cục bộ.
 Kho: `nvghy19112002-cmd/HEdu` (công khai), nhánh `main`.
+Định hướng dài hạn (KHÔNG phải lệnh triển khai): ngân hàng câu hỏi, kiểm tra trùng, soạn thảo + quản lý dự án LaTeX, TikZ và công cụ Toán, biên dịch TeX Live + xem PDF, tạo/trộn/xuất đề, kiểm tra chất lượng nội dung, nhiều người dùng/không gian làm việc/nguồn dữ liệu riêng.
 
-## 2. Vai trò
-| Ai | Làm gì |
-|---|---|
-| Chủ dự án | Nêu yêu cầu, xác nhận đúng sai về Toán, duyệt thay đổi lớn, nghiệm thu trên app thật, bấm phát hành |
-| ChatGPT | Phân tích yêu cầu, viết phiếu việc, review PR có chọn lọc. KHÔNG sửa code trừ khi chủ dự án giao riêng và chỉ định khu vực |
-| Claude | Xác minh code mới nhất, chọn cách làm, viết code + test, tạo nhánh/commit/PR. Gộp PR chỉ khi chủ dự án đồng ý; phát hành chỉ khi chủ dự án yêu cầu rõ (mục 5) |
+## 2. Vai trò và phối hợp
+| Ai | Làm gì | Không làm |
+|---|---|---|
+| Chủ dự án (giáo viên Toán) | Định hướng, ưu tiên; quyết định nghiệp vụ Toán, cách ra đề/kiểm duyệt; chọn phương án giao diện; nghiệm thu trên app thật; duyệt kiến trúc/dữ liệu, gộp PR, phát hành | Không cần viết code hay thao tác kỹ thuật |
+| ChatGPT (GPT) | Phân tích nhu cầu, nghiên cứu phần mềm tương tự/nguồn mở, đánh giá giao diện, đề xuất UI/UX + kiến trúc, phân tích rủi ro, viết đặc tả/checklist/phiếu việc, rà PR khi được nhờ | Không sửa repo, gộp PR, phát hành (trừ khi chủ dự án giao riêng) |
+| Claude Code | Kiểm tra code + Git mới nhất; phản biện đề xuất; viết code + test; chạy app thử trên Windows; kiểm Rust/TS/Tauri/LaTeX/TikZ; tạo nhánh/commit/PR; báo kết quả + bằng chứng + giới hạn | Không gộp PR khi chưa được duyệt cho đúng PR đó; không phát hành khi chưa được yêu cầu rõ (mục 5) |
 
-Một việc chỉ có MỘT người triển khai. Hai AI không sửa cùng file / cùng nhánh.
-Khi mâu thuẫn, thứ tự ưu tiên: (1) quyết định mới nhất của chủ dự án → (2) code, test, config trên nhánh làm việc → (3) Issue/PR → (4) README/tài liệu → (5) bộ nhớ AI và PDF bàn giao (chỉ là nền, phải kiểm chứng).
+Nguyên tắc:
+1. Chủ dự án quyết định cuối cùng về nghiệp vụ và sản phẩm. Không suy đoán nghiệp vụ Toán: nhiều cách hiểu hợp lý → hỏi.
+2. GPT đề xuất → Claude kiểm chứng với code thật → triển khai sau khi phạm vi được duyệt. Đề xuất của GPT không mặc nhiên đúng; Claude không làm theo nếu sai/lỗi thời. Bất đồng → Claude trình bằng chứng ngắn + phương án, chủ dự án chọn.
+3. Một việc một người triển khai; hai AI không sửa cùng file/nhánh cùng lúc.
+4. Ý tưởng nghiên cứu chưa được chọn thì không phải việc cần làm.
+5. Không hỏi lại điều đã rõ hoặc đã được duyệt.
+
+Thứ tự ưu tiên khi mâu thuẫn: (1) quyết định rõ ràng mới nhất của chủ dự án → (2) quy tắc bảo vệ dữ liệu + quy trình trong file này → (3) code, test, cấu hình đã xác minh → (4) đặc tả/Issue/PR đã duyệt → (5) tài liệu tham khảo của GPT/Claude → (6) bộ nhớ AI, lịch sử trò chuyện, bản bàn giao (phải kiểm chứng).
+Nếu (1) đụng (2) (ví dụ có nguy cơ mất dữ liệu): Claude cảnh báo rủi ro, chờ chủ dự án xác nhận lại rồi mới làm.
+
+Khi nào hỏi chủ dự án:
+- HỎI: nghiệp vụ có nhiều cách hiểu; đổi dữ liệu/ID/schema/cách lưu; nguy cơ mất dữ liệu hoặc mất tương thích; quyết định giao diện/luồng dùng quan trọng; thao tác nhạy cảm (gộp, phát hành, quyền).
+- KHÔNG HỎI: đặt tên, chia hàm, tổ chức test; sửa lỗi lập trình đã rõ hành vi đúng; chọn thư viện trong phạm vi đã duyệt; chạy thử bằng dữ liệu mẫu; tối ưu không đổi nghiệp vụ.
+- Khi hỏi: gom thành một nhóm ngắn, mỗi câu có phương án + đề xuất tốt nhất.
+
+Bàn giao (hai AI không đọc chung lịch sử; mọi bàn giao nằm trong tin nhắn chủ dự án gửi, file repo hoặc GitHub):
+- GPT → Claude: vấn đề · hành vi cần có · phương án đề xuất · rủi ro · tiêu chí nghiệm thu · điều chủ dự án đã duyệt.
+- Claude → GPT/chủ dự án: báo cáo theo mẫu mục 6 + link PR + điểm cần GPT rà hoặc chủ dự án quyết.
 
 ## 3. Quy mô việc (giữ ngắn để tiết kiệm token)
 - **S** (sửa nhỏ, giao diện, chữ): chủ dự án nói thẳng với Claude, không cần Issue. Claude làm trên nhánh, chạy test, mở PR, báo 2–3 dòng (vẫn theo quy trình PR ở mục 5).
@@ -24,6 +41,8 @@ Khi mâu thuẫn, thứ tự ưu tiên: (1) quyết định mới nhất của c
 
 Mẫu phiếu M/L: `[M/L] Tên` · Hiện trạng · Kết quả mong muốn (góc nhìn giáo viên) · Phạm vi / phần không được đụng · Rủi ro · Tiêu chí nghiệm thu (checklist).
 Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách tốt hơn thì chọn và ghi lý do một dòng.
+- Mỗi PR một chức năng nhỏ hoặc một nhóm thay đổi liên quan, làm xong và kiểm được trong một phiên khi khả thi. Sửa tối thiểu đủ giải quyết vấn đề; không tự tái cấu trúc phần không liên quan.
+- SQLite, migration, sao lưu/khôi phục, tài khoản, đồng bộ: luôn là L — cần đặc tả + phương án kiểm thử riêng.
 
 ## 4. Bất khả xâm phạm (không tự ý thay đổi)
 1. **Cấu trúc dữ liệu (schema)**: `CURRENT_SCHEMA` trong `src/lib/migrate.ts` phải bằng `SUPPORTED_SCHEMA` trong `src-tauri/src/lib.rs`. Đổi schema = viết migration + test dữ liệu cũ + chủ dự án duyệt.
@@ -33,6 +52,7 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 5. **ID CT 2018**: `[Lớp][Phân môn][Chương][Mức độ N/H/V/C][Bài]-[Dạng]` (vd `2D1H1-1`). Không tự sửa công thức mã. Mã trong cây khung là 1 ký tự, id nội bộ (`c2D1`, `l2D11`, `f2D111`) không đổi khi đổi tên/mã.
 6. **LaTeX/TikZ**: bảo toàn nội dung gốc, không biến đổi âm thầm. Phải test ca khó (`\immini`, `\def` trong tikz, `\newcommand` có tham số, tkz-tab, tikz-3dplot) và ca máy thiếu TeX Live. TikZ dùng TeX Live đã cài trên máy người dùng, không đóng gói vào app.
 7. **Toán học**: không tự đổi nghiệp vụ Toán; nghi ngờ thì hỏi chủ dự án.
+8. **Không tự**: duyệt hàng loạt câu hỏi; xoá/ghi đè ngân hàng thật; đổi cấu trúc cây chương trình khi chưa đánh giá ảnh hưởng; đổi thuật toán dò trùng khi thiếu kiểm chứng; reset/force Git làm mất thay đổi.
 
 ## 5. Kiểm tra trước khi nói "xong"
 - `npm test` phải qua (gồm `lib.test`, `bank.test` trên dữ liệu thật nếu có, `release-scripts.test`). `npm run build` phải qua.
@@ -40,6 +60,8 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 - **Chạy thử app Tauri KHÔNG được chạm dữ liệu thật.** `npx tauri dev` mặc định dùng `identifier` `vn.hedu.app` = cùng thư mục `%APPDATA%\vn.hedu.app` với bản đã cài (ngân hàng câu hỏi thật). Luôn chạy với mã nhận diện riêng:
   `npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu)"}'`
   Dữ liệu thử nằm ở `%APPDATA%\vn.hedu.app.thu` (ban đầu trống). Cổng 1420 phải trống (tắt `npm run dev` cũ trước). Bản chạy thử không tự cập nhật được (chưa gắn kho GitHub). Không sửa `identifier` trong `tauri.conf.json`. Xem giao diện bằng trình duyệt (`npm run dev`, http://localhost:1420) chỉ dùng dữ liệu mẫu, an toàn.
+- Lỗi đã xác định phải có test hồi quy. Build đạt ≠ chức năng đúng: kiểm hành vi người dùng (nút, luồng dữ liệu) khi đụng giao diện.
+- Chỉ chủ dự án nghiệm thu: Claude không viết "đã nghiệm thu"; ghi rõ "chưa thử trên máy thật / zoom / dữ liệu lớn" nếu chưa kiểm.
 - Trước phát hành: test, build Windows xanh, dữ liệu người dùng an toàn, có phương án quay lại.
 
 **Quy trình mọi thay đổi (kể cả việc S, kể cả chỉ sửa tài liệu):**
@@ -51,11 +73,13 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 6. Sau khi gộp: cập nhật `main` tại máy, xoá nhánh.
 7. Phát hành (`release.yml`) chỉ khi chủ dự án yêu cầu rõ; đồng ý gộp KHÔNG phải là đồng ý phát hành.
 
-## 6. Tiết kiệm token
-- Đọc đúng file cần thiết, không đọc lại toàn repo. Mở rộng khi có bằng chứng.
-- Báo cáo ngắn: thay đổi chính · test đã chạy và kết quả · link PR/commit · việc còn tồn. Không kể nhật ký.
-- Cập nhật `GHI-CHU-PHAT-HANH.md` (mỗi bản phát hành) và mục "Trạng thái" dưới đây để phiên sau không phải dò lại.
+## 6. Tiết kiệm token và báo cáo
+- Đọc đúng file cần; không dán lại file dài; không kể lại lịch sử; không kiểm lại điều chưa thay đổi; không chạy lại test nặng khi không có lý do; không tạo tài liệu trùng; không mở agent/công cụ không liên quan. KHÔNG được tiết kiệm bằng cách bỏ test cần thiết hay kiểm tra an toàn dữ liệu.
+- Việc khó (kiến trúc, lỗi khó, dữ liệu quan trọng): Claude đề nghị chủ dự án chọn model mạnh hơn trong app.
+- Phiên quá dài: cập nhật `claude/ban-giao-desktop.md` (ghi đè, không tạo file mới): việc đang làm · file đã đổi · test · bước tiếp.
+- Mỗi bản phát hành: cập nhật `GHI-CHU-PHAT-HANH.md` và mục "Trạng thái" dưới đây.
 - Trao đổi giữa hai AI qua Issue/PR hoặc file Markdown ngắn, không dán cả hội thoại.
+- Mẫu báo cáo mặc định: (1) Đã làm · (2) Kiểm thử: số test, kết quả, giới hạn · (3) Git: nhánh, commit, PR · (4) Còn tồn · (5) Cần chủ dự án quyết định (chỉ khi thật cần). Không kể nhật ký dài trừ khi được yêu cầu điều tra.
 
 ## 7. Trạng thái (Claude cập nhật sau mỗi đợt)
 Mới nhất đã phát hành: `v0.1.0-beta.25` trên kênh beta (23/10/2026, tag trỏ commit `7878d57`), gồm toàn bộ thay đổi beta.23–beta.25 (xem GHI-CHU-PHAT-HANH.md). Trên GitHub Releases hiện chỉ còn bản `v0.1.0-beta.25`; `channel-stable` và `channel-previous` chưa có `latest.json`. Chưa có bản chính thức (stable); beta trước stable. Tổng kết chi tiết từng bản: `TONG-KET-BETA20.md`. Bàn giao sang Claude Desktop Code: `claude/ban-giao-desktop.md`.
