@@ -12,7 +12,7 @@ import { loadBankView, loadPerPage, loadSort, loadTreeOpen, PER_PAGE_CHOICES, sa
 import { loadSession, saveSession } from '../lib/banksession';
 import { plainSnippet } from '../lib/snippet';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
-import { buildExTest, parseExTest } from '../lib/extest';
+import { parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
 import { gradeLabel, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
@@ -24,6 +24,7 @@ import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BatchLevelDialog, BatchTagDialog, BatchTrashDialog } from '../components/BatchDialogs';
 import { withReview } from '../lib/batchops';
+import { buildTexFile, exportSizeMB } from '../lib/texexport';
 import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
@@ -244,13 +245,13 @@ export function BankScreen() {
     toast(r.strayInTrash ? `${r.message} Lưu ý: ${nf.format(r.strayInTrash)} câu đang có bản trong Thùng rác (không mất gì); vào Hệ thống → Thùng rác nếu cần dọn.` : r.message);
   };
   const runExport = () => {
-    const body = selectedQs.map((q) => buildExTest(parseExTest(q.latex), { id: questionCode(q, q.level) })).join('\n\n');
-    showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text: `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: ${SORT_LABEL[sort]})\n\n${body}\n`, mime: 'application/x-tex' });
+    const text = buildTexFile(selectedQs, (q) => questionCode(q, q.level), `% ${selectedQs.length} câu xuất từ HEdu (thứ tự: ${SORT_LABEL[sort]}) — mã LaTeX gốc, chỉ cập nhật dòng %[ID]`);
+    showFile({ title: `${selectedQs.length} câu đã chọn`, name: 'cau-hoi-da-chon.tex', text, mime: 'application/x-tex' });
   };
   const exportSelected = () => {
     const n = selectedQs.length, v = exportVerdict(n);
     if (v === 'refuse') { toast(`Mỗi lần xuất .tex tối đa ${nf.format(EXPORT_MAX)} câu (đang chọn ${nf.format(n)}). Hãy bỏ bớt hoặc xuất theo từng chương.`); return; }
-    if (v === 'warn') { setAsk({ title: `Xuất ${nf.format(n)} câu ra .tex?`, body: `File sẽ khá lớn (khoảng ${Math.max(1, Math.round(n / 200))} MB) và hộp xem có thể chậm. Nên xuất theo từng chương nếu không cần tất cả một lần.`, label: 'Vẫn xuất', run: runExport }); return; }
+    if (v === 'warn') { setAsk({ title: `Xuất ${nf.format(n)} câu ra .tex?`, body: `File khoảng ${exportSizeMB(selectedQs).toFixed(1)} MB và hộp xem có thể chậm. Nên xuất theo từng chương nếu không cần tất cả một lần.`, label: 'Vẫn xuất', run: runExport }); return; }
     runExport();
   };
 
