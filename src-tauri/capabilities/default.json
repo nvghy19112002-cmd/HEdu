@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Quyền của cửa sổ chính: gọi các lệnh của app và nhận sự kiện tiến trình cập nhật, mở hộp "Lưu thành…".",
+  "description": "Quyền của cửa sổ chính: gọi các lệnh của app và nhận sự kiện tiến trình cập nhật, mở hộp Lưu thành.",
   "windows": ["main"],
   "permissions": ["core:default", "core:webview:allow-set-webview-zoom", "dialog:allow-save"]
 }
