@@ -146,11 +146,19 @@ export function useDecisions(): number {
 // ---------- Thùng rác ----------
 export const trashList = (): TrashRec[] => [...trash].sort((x, y) => y.at - x.at);
 export const trashCount = (): number => trash.length;
+/** Thùng rác còn đủ chỗ cho các câu này không? Câu đã nằm sẵn trong thùng rác chỉ bị thay bản ghi nên không tốn thêm chỗ. */
+export function trashRoomFor(qs: readonly { uid: string }[]): boolean {
+  const have = new Set(trash.map((t) => t.q.uid));
+  let add = 0;
+  for (const q of qs) if (!have.has(q.uid)) { have.add(q.uid); add++; }
+  return trash.length + add <= TRASH_CAP;
+}
 /** Cất một câu vào thùng rác. true = đã ghi bền vững (chỉ khi đó mới nên xoá câu khỏi ngân hàng). */
 export async function trashAdd(q: Question): Promise<boolean> {
   if (!writable || !backend) return false;
+  if (!trashRoomFor([q])) return false; // đầy: TỪ CHỐI, không bao giờ âm thầm bỏ câu cũ nhất
   const prev = trash;
-  trash = [{ q: JSON.parse(JSON.stringify(q)) as Question, at: Date.now() }, ...trash.filter((t) => t.q.uid !== q.uid)].slice(0, TRASH_CAP);
+  trash = [{ q: JSON.parse(JSON.stringify(q)) as Question, at: Date.now() }, ...trash.filter((t) => t.q.uid !== q.uid)];
   emit();
   const ok = await persist();
   if (!ok) { trash = prev; emit(); }
@@ -185,15 +193,23 @@ export async function goldClear(): Promise<boolean> { gold = new Map(); emit(); 
 /** Phần tệp phụ đưa vào file sao lưu ngân hàng (quyết định, thùng rác, nhãn chuẩn). */
 export function sidecarForBackup(): DecisionFile { return { v: 1, recs: [...recs.values()], trash, gold: [...gold.values()] }; }
 /** Khôi phục phần tệp phụ từ file sao lưu: GỘP (không xoá thứ đang có); trùng khoá thì giữ bản mới hơn. */
-export async function restoreSidecar(f: unknown): Promise<{ added: number; saved: boolean }> {
+export async function restoreSidecar(f: unknown): Promise<{ added: number; saved: boolean; skippedTrash: number }> {
   const x = f as Partial<DecisionFile> | undefined;
-  if (!x || x.v !== 1 || !Array.isArray(x.recs)) return { added: 0, saved: true };
+  if (!x || x.v !== 1 || !Array.isArray(x.recs)) return { added: 0, saved: true, skippedTrash: 0 };
   if (!loaded) await loadDecisions();
-  let added = 0;
+  let added = 0, skippedTrash = 0;
   for (const r of x.recs) { if (!isRec(r)) continue; const k = pairKey(r.a, r.b), cur = recs.get(k); if (!cur || r.at > cur.at) { recs.set(k, r); if (!cur) added++; } }
-  if (Array.isArray(x.trash)) for (const t of x.trash) if (isTrash(t) && !trash.some((u) => u.q.uid === t.q.uid)) { trash.push(t); added++; }
-  trash = trash.slice(0, TRASH_CAP);
+  if (Array.isArray(x.trash)) {
+    // Thùng rác đầy thì KHÔNG cắt thứ đang có: câu nào không còn chỗ được bỏ qua và đếm lại để báo.
+    const have = new Set(trash.map((u) => u.q.uid));
+    for (const t of x.trash) {
+      if (!isTrash(t) || have.has(t.q.uid)) continue;
+      if (trash.length >= TRASH_CAP) { skippedTrash++; continue; }
+      trash = [...trash, t]; have.add(t.q.uid); added++;
+    }
+    if (skippedTrash) console.warn(`Thùng rác đầy (${TRASH_CAP}): bỏ qua ${skippedTrash} câu trong file sao lưu.`);
+  }
   if (Array.isArray(x.gold)) for (const g of x.gold) { if (!isGold(g)) continue; const k = pairKey(g.a, g.b), cur = gold.get(k); if (!cur || g.at > cur.at) { gold.set(k, g); if (!cur) added++; } }
   emit();
-  return { added, saved: await persist() };
+  return { added, saved: await persist(), skippedTrash };
 }
