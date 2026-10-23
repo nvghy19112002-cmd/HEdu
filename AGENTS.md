@@ -46,7 +46,7 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 - Trao đổi giữa hai AI qua Issue/PR hoặc file Markdown ngắn, không dán cả hội thoại.
 
 ## 7. Trạng thái (Claude cập nhật sau mỗi đợt)
-Mới nhất đã phát hành: `v0.1.0-beta.22` trên kênh beta (23/10/2026). Tổng kết chi tiết từng bản: `TONG-KET-BETA20.md`. Chưa có bản chính thức (stable) từ các đợt này; beta trước stable.
+Mới nhất đã phát hành: `v0.1.0-beta.22` trên kênh beta (23/10/2026). Đã gộp vào `main`, CHƯA phát hành: beta.23 (chọn nhiều + thao tác hàng loạt, xem GHI-CHU-PHAT-HANH.md) — chờ chủ dự án nghiệm thu và cho phép phát hành. Tổng kết chi tiết từng bản: `TONG-KET-BETA20.md`. Chưa có bản chính thức (stable) từ các đợt này; beta trước stable.
 Đã phát hành, theo bản:
 - beta.7: bảng “Gói LaTeX” (đọc khai báo gói, `kpsewhich`, `tlmgr search` có hỏi trước khi dùng mạng, không tự cài), phân loại lỗi log TeX, dịch hình an toàn hơn (Issue #1 P1–P4, PR #4).
 - beta.8: dịch hình qua DVI, không cần Ghostscript (PR #5).
@@ -68,3 +68,4 @@ beta.20 (PR #48, không đổi schema/Rust): file sao lưu thủ công có khoá
 Đợt V4 (phát hành beta.21, UI-only, không đổi schema/Rust): thanh `BankSidebar.tsx` + `FieldMenu.tsx` (một nơi duy nhất cho mọi bộ lọc; ngăn trượt khi hẹp/ẩn), logic thuần `src/lib/bankfilter.ts` (cascade, đếm theo chiều, `sanitize`) và `src/lib/figure.ts` (`figureState`: yes/no/unknown, chỉ xét phần trước `\loigiai`, có đệm theo uid). Bộ lọc thuộc tính ĐÃ chuyển khỏi `.qbar`; `FilterMenu.tsx` đã xoá. "Toàn kho" chỉ có hiệu lực khi có chữ tìm.
 beta.21 thêm: ô Lớp/Phân môn tự thành ô chọn khi >3 mục (`SEG_MAX`, ĐÃ BỎ ở V5; tên lớp qua `gradeLabel` ở `taxonomy.ts`); ô đáp án gọn (`.opt`, `.tf .mark`, `.ans-box` trong `styles.css`; `Choices` đo bề rộng với `PAD=14`). LƯU Ý ID: `gradeNumber()` chỉ phân biệt Lớp 3–12; Lớp 1–2 và cấp khác chưa có mã — cần quyết định của chủ dự án trước khi mở rộng.
 V5 (phát hành beta.22, UI-only): Lớp/Phân môn/Chương/Bài/Dạng luôn là ô chọn có ô tìm; lọc Lớp theo `gradeId` (không theo số lớp); chọn đủ mọi giá trị = Tất cả; trạng thái rỗng 4 loại (`BankEmpty.tsx`). Chi tiết trong `GHI-CHU-PHAT-HANH.md`.
+beta.23 (chưa phát hành, UI + thao tác dữ liệu, không đổi schema/Rust): `src/lib/selection.ts` (chọn trang/kết quả lọc, giữ lựa chọn), `qsort.ts` (sắp xếp), `batchops.ts` + `store.updateMany` (gắn nhãn/mức độ/Cần sửa, ghi một lần, hoàn lại khi lỗi), `trashflow.moveManyToTrash` + `dupdecisions.trashAddMany/trashRemoveMany` + `store.deleteMany` (xoá hàng loạt tất cả-hoặc-không, cổng TRASH_CAP=1000), `BatchDialogs.tsx`, `banksession.ts`. Cố ý KHÔNG làm: duyệt hàng loạt, đổi loại câu/sửa LaTeX hàng loạt.
