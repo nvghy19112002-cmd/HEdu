@@ -293,6 +293,16 @@ fn tikz_default_preamble() -> String {
     tikz::expanded_default()
 }
 
+/// Ghi một file văn bản vào đường dẫn người dùng vừa chọn trong hộp "Lưu thành…" (xuất .tex, sao lưu).
+/// Không ghi đè dữ liệu của app; chỉ ghi đúng file được chọn.
+#[tauri::command]
+fn save_text_file(path: String, text: String) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("Chưa chọn nơi lưu.".into());
+    }
+    std::fs::write(&path, text.as_bytes()).map_err(|e| format!("Không ghi được file: {e}"))
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -302,6 +312,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Gate(Mutex::new(())))
         .invoke_handler(tauri::generate_handler![
             load_data,
@@ -319,7 +330,8 @@ pub fn run() {
             tikz_default_preamble,
             tikz_find,
             tex_check_files,
-            tex_find_package
+            tex_find_package,
+            save_text_file
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
