@@ -35,7 +35,18 @@ function fold(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
 }
 
+// Chữ tìm kiếm của từng câu được nhớ theo ĐỐI TƯỢNG câu: sửa/gắn nhãn hàng loạt chỉ tạo đối tượng mới cho câu bị đổi,
+// nên không phải dựng lại chỉ mục của cả 60.000 câu (~1 giây) sau mỗi thao tác.
+let searchCache = new WeakMap<Question, string>();
+let searchCacheTax: unknown = null; // mã ID hiển thị phụ thuộc cây chương trình ⇒ đổi cây thì bỏ nhớ
 function searchable(q: Question): string {
+  const hit = searchCache.get(q);
+  if (hit !== undefined) return hit;
+  const v = searchableRaw(q);
+  searchCache.set(q, v);
+  return v;
+}
+function searchableRaw(q: Question): string {
   const p = parseExTest(q.latex);
   return fold([p.stem, ...p.options.map((o) => o.text), p.solution ?? '', questionCode(q, q.level), q.tags.join(' ')].join(' ').replace(/\\[a-zA-Z]+/g, ' '));
 }
@@ -81,7 +92,10 @@ export function BankScreen() {
   const [dupOpen, setDupOpen] = useState(false); // màn Kiểm tra trùng
   const [menuUid, setMenuUid] = useState<string | null>(null); // menu ba chấm của thẻ
 
-  const index = useMemo(() => new Map(questions.map((q) => [q.uid, searchable(q)])), [questions]);
+  const index = useMemo(() => {
+    if (searchCacheTax !== tax) { searchCache = new WeakMap(); searchCacheTax = tax; }
+    return new Map(questions.map((q) => [q.uid, searchable(q)]));
+  }, [questions, tax]);
 
   const f = useMemo(() => sanitize(tax, f0), [tax, f0]);
   const setF = (n: BankFilters) => { setPage(0); setF0(n); };
