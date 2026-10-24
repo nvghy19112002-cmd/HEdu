@@ -1,3 +1,9 @@
+## Có gì mới trong beta.28 (đã phát hành 24/10/2026, kênh beta): sửa lỗi AI "trả lời quá lâu"
+Không đổi schema (3), ID6, LaTeX gốc, cây mục lục. Gồm PR #81.
+- **Sửa lỗi**: ở beta.27, nút "Thử kết nối"/"Hỏi AI" có thể báo "AI trả lời quá lâu". Nguyên nhân: Gemini 3.8 Flash mặc định "suy nghĩ" rất lâu trước khi trả lời (> 120 giây cho câu thử 1 + 1) và dùng hết giới hạn chữ cho phần suy nghĩ. Nay HEdu luôn đặt mức suy nghĩ thấp nhất model cho phép, nới giới hạn chữ và thời gian chờ (300 giây/lượt). Đo thật với câu thử: 3.8 Flash ~27 giây, 3.6 Flash ~1,5 giây.
+- Thêm lựa chọn model **Gemini 3.6 Flash (nhanh)** trong Hệ thống → AI; mặc định vẫn là 3.8 Flash cho tới khi có số liệu so sánh độ chính xác.
+- Số liệu đo AI trên 100 câu thật của chủ dự án (3.8 Flash, 10 câu/lượt; nhãn chưa được giáo viên xác minh): đúng Dạng — chỉ ngân hàng 65,5%, chỉ AI 76,2%, AI + ngân hàng 79,8%; đúng Chương — 98,8% khi kết hợp. Khi AI và ngân hàng cùng chọn: đúng 88,7%.
+
 ## Có gì mới trong beta.27 (đã phát hành 24/10/2026, kênh beta): AI Gemini cho Gán ID tự động
 Không đổi schema (3), công thức ID6, LaTeX gốc, cây mục lục, thuật toán dò trùng. CÓ thêm phần Rust (thư viện reqwest, rustls, keyring, tokio — chủ dự án duyệt). Gồm PR #77–#79.
 - **Hệ thống → AI (Gemini)**: dán khoá API miễn phí (tạo ở aistudio.google.com) — khoá cất trong kho mật khẩu của Windows, không hiện lại, không nằm trong dữ liệu hay file sao lưu. Chọn model (mặc định Gemini 3.8 Flash; 2.5 Pro cho câu khó nếu gói miễn phí cho phép). Công tắc **"Cho phép gửi nội dung câu hỏi tới Google" mặc định TẮT**. Nút **Thử kết nối** gửi câu "1 + 1" (không có dữ liệu ngân hàng).
