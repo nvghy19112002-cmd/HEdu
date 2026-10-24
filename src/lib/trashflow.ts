@@ -7,7 +7,8 @@ import { getTaxonomy } from './curriculum';
 import { decisionsLoaded, isDecisionsWritable, loadDecisions, TRASH_CAP, trashAddMany, trashCount, trashList, trashRemoveMany, trashRoomFor } from './dupdecisions';
 import { deleteMany, getState, restoreMany, restoreManyEx } from './store';
 import { indexOf } from './taxonomy';
-import type { Question } from './types';
+import { relocated, validNewLocation } from './trashrelocate';
+import type { Level, Location, Question } from './types';
 
 // ---------- Khoá chống đua lệnh ----------
 // Hai lệnh cùng chạm một câu (bấm đúp, vừa xoá vừa khôi phục…) không được chạy chồng nhau: lệnh sau bị từ chối với why = 'busy'.
@@ -129,10 +130,13 @@ const same = (a: Question, b: Question): boolean => a.latex === b.latex && a.lev
  * và báo từng câu + lý do; không bao giờ âm thầm bỏ câu nào.
  * Thứ tự an toàn: ghi Ngân hàng (kiểm tra bền vững) → mới gỡ khỏi Thùng rác. Ngân hàng lỗi ⇒ giữ nguyên cả hai.
  */
-export async function restoreFromTrash(uids: readonly string[]): Promise<RestoreFromTrashResult> {
+export async function restoreFromTrash(uids: readonly string[], opts: { relocate?: { loc: Location; level?: Level } } = {}): Promise<RestoreFromTrashResult> {
   const empty = (over: Partial<RestoreFromTrashResult>): RestoreFromTrashResult => ({ ok: false, message: '', restored: [], blocked: [], strayInTrash: [], ...over });
   const ids = [...new Set(uids)];
   if (ids.length === 0) return empty({ ok: true, message: 'Không có câu nào để khôi phục.' });
+  const rel = opts.relocate;
+  // chọn vị trí mới chỉ dành cho MỘT câu, và vị trí phải đủ đường dẫn trong cây hiện hành
+  if (rel && (ids.length !== 1 || !validNewLocation(indexOf(getTaxonomy()), rel.loc))) return empty({ message: 'Vị trí mới không hợp lệ (cần chọn đủ Lớp, Phân môn, Chương, Bài, Dạng). Chưa khôi phục gì.' });
   return withLock<RestoreFromTrashResult>(ids, () => empty({ why: 'busy', message: BUSY_MSG }), async () => {
     if (!decisionsLoaded()) await loadDecisions();
     if (!isDecisionsWritable()) return empty({ why: 'trash-readonly', message: 'Không đọc được tệp Thùng rác nên CHƯA khôi phục (để không làm mất bản cứu hộ). Hãy tạo file sao lưu và kiểm tra tệp dữ liệu.' });
@@ -143,7 +147,7 @@ export async function restoreFromTrash(uids: readonly string[]): Promise<Restore
     for (const id of ids) {
       const rec = inTrash.get(id);
       if (!rec) continue;
-      const q = rec.q;
+      const q = rel ? relocated(rec.q, rel.loc, rel.level) : rec.q;
       const cur = bank.get(id);
       const why = restoreBlockOf(q, cur);
       if (why) blocked.push({ uid: id, seq: q.seq, reason: why });
