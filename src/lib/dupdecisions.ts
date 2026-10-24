@@ -7,6 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import { fingerprint } from './dup2';
 import { invoke, isDesktop } from './platform';
+import { getStorageMode, sqliteSidecar } from './storage';
 import type { Question } from './types';
 
 /** Tăng khi ý nghĩa của nhãn/so sánh đổi hẳn; quyết định ghi bởi phiên bản khác bị coi là cũ. */
@@ -71,7 +72,7 @@ const isGold = (r: unknown): r is GoldRec => { const x = r as GoldRec; return !!
 export function _reset(b: Backend | null) { backend = b; recs = new Map(); trash = []; gold = new Map(); loaded = false; writable = true; version = 0; }
 
 export async function loadDecisions(): Promise<{ ok: boolean; error?: string }> {
-  const be = backend ?? (isDesktop() ? desktop : web);
+  const be = backend ?? (isDesktop() ? (getStorageMode() === 'sqlite' ? sqliteSidecar : desktop) : web);
   backend = be;
   try {
     const json = await be.load();

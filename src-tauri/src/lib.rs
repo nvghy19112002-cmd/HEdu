@@ -2,6 +2,7 @@
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod ai;
 mod db;
+mod dbcmd;
 mod jsonmig;
 mod proc;
 mod storage;
@@ -69,6 +70,9 @@ fn load_data(app: AppHandle) -> Result<LoadOut, String> {
 
 #[tauri::command]
 fn save_data(app: AppHandle, gate: State<Gate>, json: String) -> Result<(), String> {
+    if dbcmd::sqlite_active(&app) {
+        return Err("Đang dùng lưu trữ SQLite — không ghi tệp JSON cũ để tránh hai nơi lệch nhau.".into());
+    }
     if !looks_valid(json.as_bytes()) {
         return Err("Dữ liệu không hợp lệ, không ghi để tránh làm hỏng file.".into());
     }
@@ -94,6 +98,9 @@ fn load_dup_decisions(app: AppHandle) -> Result<Option<String>, String> {
 
 #[tauri::command]
 fn save_dup_decisions(app: AppHandle, gate: State<Gate>, json: String) -> Result<(), String> {
+    if dbcmd::sqlite_active(&app) {
+        return Err("Đang dùng lưu trữ SQLite — không ghi tệp JSON cũ để tránh hai nơi lệch nhau.".into());
+    }
     if !sidecar_valid(json.as_bytes()) {
         return Err("Dữ liệu quyết định không hợp lệ, không ghi.".into());
     }
@@ -173,6 +180,10 @@ struct Progress {
 /// Nếu tải lỗi thì chưa đụng gì tới bản sao lưu đang có.
 #[tauri::command]
 async fn install_update(app: AppHandle, gate: State<'_, Gate>, channel: String) -> Result<(), String> {
+    // Sao lưu trước cập nhật cho nguồn SQLite làm ở PR S4; tới lúc đó KHÔNG cài (an toàn hơn là sao lưu nhầm tệp JSON đã cũ).
+    if dbcmd::sqlite_active(&app) {
+        return Err("Cập nhật tự động tạm dừng cho nguồn SQLite cho tới khi có sao lưu trước cập nhật (đang hoàn thiện). Dữ liệu không bị ảnh hưởng.".into());
+    }
     let update = find_update(&app, &channel)
         .await?
         .ok_or_else(|| "Không có bản nào để cài.".to_string())?;
@@ -213,6 +224,9 @@ fn backup_info(app: AppHandle) -> Result<Option<Value>, String> {
 /// Đổi chỗ dữ liệu hiện tại với bản sao lưu trước cập nhật (làm lại lần nữa là đổi ngược lại).
 #[tauri::command]
 fn restore_backup(app: AppHandle, gate: State<Gate>) -> Result<String, String> {
+    if dbcmd::sqlite_active(&app) {
+        return Err("Khôi phục sau cập nhật cho nguồn SQLite đang hoàn thiện (PR S4); chưa dùng được.".into());
+    }
     let _g = gate.0.lock().map_err(|_| "khóa ghi bị lỗi".to_string())?;
     let bytes = storage::swap_with_backup(&paths(&app)?).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
@@ -382,6 +396,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(Gate(Mutex::new(())))
+        .manage(dbcmd::DbState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             load_data,
             save_data,
@@ -406,7 +421,15 @@ pub fn run() {
             ai_key_status,
             ai_profiles_load,
             ai_profiles_save,
-            ai_run
+            ai_run,
+            dbcmd::storage_status,
+            dbcmd::storage_preflight,
+            dbcmd::storage_migrate,
+            dbcmd::db_load_meta,
+            dbcmd::db_load_page,
+            dbcmd::db_apply,
+            dbcmd::db_sidecar_get,
+            dbcmd::db_integrity
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
