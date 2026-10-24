@@ -1,3 +1,12 @@
+## Có gì mới trong beta.27 (đã phát hành 24/10/2026, kênh beta): AI Gemini cho Gán ID tự động
+Không đổi schema (3), công thức ID6, LaTeX gốc, cây mục lục, thuật toán dò trùng. CÓ thêm phần Rust (thư viện reqwest, rustls, keyring, tokio — chủ dự án duyệt). Gồm PR #77–#79.
+- **Hệ thống → AI (Gemini)**: dán khoá API miễn phí (tạo ở aistudio.google.com) — khoá cất trong kho mật khẩu của Windows, không hiện lại, không nằm trong dữ liệu hay file sao lưu. Chọn model (mặc định Gemini 3.8 Flash; 2.5 Pro cho câu khó nếu gói miễn phí cho phép). Công tắc **"Cho phép gửi nội dung câu hỏi tới Google" mặc định TẮT**. Nút **Thử kết nối** gửi câu "1 + 1" (không có dữ liệu ngân hàng).
+- **Nút "Hỏi AI"** trong bảng Gán ID (Ngân hàng) và ô gợi ý ở Nhập liệu: trước mỗi lượt HEdu hỏi lại số câu và đúng nội dung sẽ gửi (đề + lời giải, ≤5 câu mẫu, cây Chương › Bài › Dạng của lớp đó). Mỗi lượt ≤10 câu; có tiến độ, nút Dừng; hết lượt miễn phí trong ngày thì dừng và giữ kết quả đã có.
+- **AI dẫn đầu, ngân hàng làm bằng chứng**: AI và ngân hàng cùng chọn ⇒ "Tin cậy cao" (tự tick); ngân hàng chưa chắc mà AI chắc ⇒ theo AI; khác nhau ⇒ hiện cả hai, nhãn thấp, không tự tick. AI chỉ được chọn Dạng có thật trong lớp đó (sai/bịa ⇒ bỏ). Mức độ AI gợi ý vẫn chỉ tham khảo.
+- Lớp AI dùng chung cho các tính năng sau này (mỗi tính năng một "nhiệm vụ AI" có prompt + khuôn kết quả riêng); chỉ gọi đúng địa chỉ chính thức của Google.
+- Gói miễn phí: Google có thể dùng nội dung gửi lên để cải thiện sản phẩm và người duyệt có thể đọc. HEdu không gửi thông tin cá nhân.
+- CHƯA đo độ chính xác của AI trên câu thật (cần chủ dự án duyệt lượt gửi); chưa nghiệm thu trên máy thật.
+
 ## Có gì mới trong beta.26 (đã phát hành 24/10/2026, kênh beta): Gán ID tự động (chỉ đối chiếu ngân hàng, không AI)
 Không đổi schema (3), công thức ID6, LaTeX gốc, cây mục lục, thuật toán dò trùng. Không gửi dữ liệu ra ngoài. Gồm PR #72–#75 (chủ dự án duyệt phạm vi GĐ1 ngày 24/10/2026).
 - **Gán ID tự động ở Ngân hàng**: chọn câu (tối đa 200/lượt) → **Gán ID tự động** → bảng xem trước: ID hiện tại → dự kiến, vị trí gợi ý (★) hoặc 2 phương án khác hoặc giữ nguyên, nhãn tin cậy cao/vừa/thấp/không đủ căn cứ. Chỉ câu **tin cậy cao** được tick sẵn. **Mức độ không bao giờ tự đổi** (ô "Đổi mức độ" phải tick riêng, gợi ý chỉ tham khảo). Kiểm lại ngay trước khi ghi: câu đã sửa/xoá, cây đã đổi, vị trí sai đường dẫn/khác lớp ⇒ không ghi. Chỉ đổi vị trí; nội dung, nhãn, kiểm duyệt, ngày sửa giữ nguyên.
