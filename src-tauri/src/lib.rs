@@ -1,5 +1,6 @@
 // Lõi desktop của HEdu: lưu dữ liệu an toàn + cập nhật hai kênh + quay lại bản trước.
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
+mod ai;
 mod proc;
 mod storage;
 mod support;
@@ -310,6 +311,40 @@ fn export_tex_folder(parent: String, name: String, files: Vec<texfolder::OutFile
     texfolder::write_project(&parent, &name, &files)
 }
 
+// ---------- AI dùng chung (ai.rs) ----------
+// Tên dịch vụ trong kho mật khẩu = identifier của app ⇒ bản chạy thử (vn.hedu.app.thu) có khoá riêng.
+fn ai_service(app: &AppHandle) -> String {
+    format!("{}.ai", app.config().identifier)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiKeyStatus {
+    has_key: bool,
+}
+
+/// Lưu khoá Gemini vào Windows Credential Manager. Không bao giờ trả khoá ngược lại giao diện.
+#[tauri::command]
+fn ai_key_set(app: AppHandle, key: String) -> Result<(), ai::AiError> {
+    ai::key_set(&ai_service(&app), &key)
+}
+
+#[tauri::command]
+fn ai_key_clear(app: AppHandle) -> Result<(), ai::AiError> {
+    ai::key_clear(&ai_service(&app))
+}
+
+#[tauri::command]
+fn ai_key_status(app: AppHandle) -> Result<AiKeyStatus, ai::AiError> {
+    Ok(AiKeyStatus { has_key: ai::key_get(&ai_service(&app))?.is_some() })
+}
+
+/// Chạy MỘT lượt nhiệm vụ AI (prompt + khuôn JSON do giao diện gửi). Giao diện phải hỏi người dùng trước khi gọi.
+#[tauri::command]
+async fn ai_run(app: AppHandle, req: ai::AiRequest) -> Result<ai::AiReply, ai::AiError> {
+    ai::run(&ai_service(&app), req).await
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -339,7 +374,11 @@ pub fn run() {
             tex_check_files,
             tex_find_package,
             save_text_file,
-            export_tex_folder
+            export_tex_folder,
+            ai_key_set,
+            ai_key_clear,
+            ai_key_status,
+            ai_run
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
