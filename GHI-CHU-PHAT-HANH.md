@@ -1,3 +1,11 @@
+## Có gì mới trong beta.31 (đã phát hành 24/10/2026, kênh beta; commit 5303e3f): sửa lỗi rà soát SQLite
+Chỉ gồm PR #101 (so với beta.30). Không đổi schema (3), ID6, UID, LaTeX gốc, Rust.
+- **Cập nhật / khôi phục sau cập nhật** không chạy khi còn thay đổi CHƯA ghi xuống đĩa (trước đây chỉ ghi nốt mà không kiểm tra kết quả).
+- **Lô lớn** (nhập/xoá/khôi phục hàng chục nghìn câu) đi trong MỘT giao dịch SQLite (đo thật: 60.000 câu ~4 giây); lỗi ⇒ không ghi gì, thử lại ghi đủ.
+- Cài đặt → Nguồn dữ liệu / Tổng quan / thông tin chẩn đoán hiện đúng chế độ lưu trữ (SQLite hay JSON cũ) và đường dẫn tệp.
+- Kiểm tra kiểu (typecheck) sạch lỗi; thêm @types/node.
+- Chưa nghiệm thu máy Windows thật. Giao dịch chung Thùng rác + Ngân hàng (S6), hồ sơ người dùng, nhiều nguồn: tạm hoãn.
+
 ## Có gì mới trong beta.30 (đã phát hành 24/10/2026, kênh beta): lưu trữ SQLite + các cải tiến dữ liệu
 Không đổi schema logic (3), ID6, UID, LaTeX gốc, cây mục lục, thuật toán dò trùng. Gồm PR #91–#99.
 - **SQLite làm nơi lưu chính** (PR #96–#99): lưu nhanh (sửa một câu ~1 ms thay vì ghi lại cả tệp), mất điện/tắt đột ngột không hỏng dữ liệu, nạp theo trang cho ngân hàng lớn. Lần mở đầu có `hedu.json` cũ, HEdu hiện màn **"Nâng cấp lưu trữ"**; chỉ chuyển khi bạn bấm xác nhận, chụp nguyên trạng vào `backups/migration-…`, đối chiếu từng câu, tệp cũ không bị xoá. "Để sau" vẫn dùng cách cũ.
