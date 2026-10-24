@@ -6,6 +6,7 @@ import { useApp } from '../app-context';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ExportChoiceDialog } from '../components/ExportChoiceDialog';
 import { RelocateDialog } from '../components/RelocateDialog';
+import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { TrashViewer } from '../components/TrashViewer';
 import { decisionsLoaded, isDecisionsWritable, loadDecisions, TRASH_CAP, trashList, useDecisions } from '../lib/dupdecisions';
 import { parseExTest } from '../lib/extest';
@@ -116,6 +117,8 @@ export function TrashScreen() {
   const purge = (uids: string[]) => run(async () => {
     setAsk(null);
     if (activeUid && uids.includes(activeUid)) nextRef.current = afterRemoval(results, activeUid);
+    const rp = await ensureRestorePoint('don-sach-thung-rac', uids.length >= BIG_OP);
+    if (!rp.ok) { setMsg({ ok: false, text: rp.message }); return; }
     const r = await purgeFromTrash(uids);
     if (r.ok) { setMsg({ ok: true, text: `Đã xoá vĩnh viễn ${nf.format(r.purged)} câu khỏi Thùng rác.` }); toast(`Đã xoá hẳn ${nf.format(r.purged)} câu khỏi Thùng rác.`); }
     else setMsg({ ok: false, text: r.message });
@@ -123,6 +126,8 @@ export function TrashScreen() {
 
   const purgeAll = () => run(async () => {
     setAsk(null);
+    const rp = await ensureRestorePoint('don-sach-thung-rac');
+    if (!rp.ok) { setMsg({ ok: false, text: rp.message }); return; }
     const r = await purgeAllTrash();
     if (r.ok) { setActiveUid(null); setSel(new Set()); setMsg({ ok: true, text: `Đã dọn sạch Thùng rác: xoá vĩnh viễn ${nf.format(r.purged)} câu. Ngân hàng không bị ảnh hưởng.` }); toast(`Đã dọn sạch Thùng rác (${nf.format(r.purged)} câu).`); }
     else setMsg({ ok: false, text: r.message });

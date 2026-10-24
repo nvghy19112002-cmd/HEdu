@@ -312,6 +312,12 @@ impl Db {
         Ok(IntegrityReport { ok: messages.is_empty(), messages, questions, duplicate_seq, damaged })
     }
 
+    /// Chụp một bản nhất quán (gọn, không kèm WAL) ra `dest` bằng `VACUUM INTO` — dùng được khi nguồn đang mở. `dest` phải chưa tồn tại.
+    pub fn snapshot_to(&self, dest: &Path) -> R<()> {
+        self.conn.execute("VACUUM INTO ?1", params![dest.to_string_lossy().to_string()])?;
+        Ok(())
+    }
+
     /// Đóng sạch: gộp nhật ký WAL vào tệp chính (không bắt buộc, chỉ để tệp gọn khi sao chép).
     pub fn close(self) -> R<()> {
         let _ = self.conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));

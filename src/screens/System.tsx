@@ -14,6 +14,8 @@ import {
 } from '../lib/updates';
 import { FigScalePanel, ZoomPanel } from '../components/ZoomControl';
 import { AiSettingsPanel } from '../components/AiSettingsPanel';
+import { SqlitePanel } from '../components/SqlitePanel';
+import { ensureRestorePoint, isSqlite } from '../lib/dbbackup';
 import { aiKeyStatus } from '../lib/ai/client';
 import { initProfiles } from '../lib/ai/profiles';
 import { loadAiPrefs } from '../lib/ai/prefs';
@@ -329,6 +331,7 @@ export function SystemScreen() {
         </>)}
 
         {is('backup') && (<>
+        {isSqlite() && <SqlitePanel />}
         <section className="panel" aria-label="Sao lưu trước cập nhật">
           <h2>Sao lưu trước cập nhật</h2>
           <span className="sys-hint">Trước mỗi lần cập nhật, app tự chép dữ liệu sang một bản sao lưu. Chỉ giữ đúng một bản gần nhất; bản cũ hơn bị xoá để không chiếm chỗ.</span>
@@ -379,8 +382,11 @@ export function SystemScreen() {
                 <span>Ngân hàng hiện có {questions.length} câu sẽ bị thay bằng nội dung file. Phần quyết định “giữ cả hai”, Thùng rác và nhãn chuẩn trong file sẽ được GỘP vào dữ liệu đang có, không xoá gì. Nên bấm “Tạo file sao lưu” trước nếu chưa có bản sao lưu gần đây.</span>
                 <div className="head-actions">
                   <button type="button" className="btn btn-sm" autoFocus onClick={() => setPendingFile(null)}>Giữ ngân hàng hiện tại</button>
-                  <button type="button" className="btn btn-accent btn-sm" onClick={() => {
-                    try { const n = importBackup(pendingFile.text); setFileErr(null); toast(`Đã khôi phục ${n} câu từ file.`); } catch (x) { setFileErr((x as Error).message); }
+                  <button type="button" className="btn btn-accent btn-sm" onClick={async () => {
+                    const f = pendingFile;
+                    const rp = await ensureRestorePoint('khoi-phuc-tu-tep'); // SQLite: tự chụp điểm khôi phục trước khi thay cả ngân hàng
+                    if (!rp.ok) { setFileErr(rp.message); setPendingFile(null); return; }
+                    try { const n = importBackup(f.text); setFileErr(null); toast(`Đã khôi phục ${n} câu từ file.`); } catch (x) { setFileErr((x as Error).message); }
                     setPendingFile(null);
                   }}>Thay bằng file này</button>
                 </div>

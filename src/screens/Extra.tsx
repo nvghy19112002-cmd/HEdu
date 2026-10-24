@@ -8,6 +8,7 @@ import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idStateOf, summarizeImportIds } from '../lib/importid';
+import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { draftLocation, optionsOf, suggestDrafts, useByDefault, type DraftIdPick } from '../lib/iddraft';
 import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
 import { AiAskBar } from '../components/AiAskBar';
@@ -223,6 +224,9 @@ export function ImportScreen() {
       toast('Ngân hàng vừa có thay đổi nên HEdu đã rà soát lại. Xem lại các câu nghi trùng rồi bấm Nhập một lần nữa.');
       return;
     }
+    // SQLite: nhập hàng loạt (từ 20 câu) tự chụp điểm khôi phục trước; không chụp được thì KHÔNG nhập
+    const rp = await ensureRestorePoint('nhap-hang-loat', sum.importN >= BIG_OP);
+    if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
     const added = addMany(toDrafts());
     await flushSave();
     if (!isLastSaveOk()) {
