@@ -63,6 +63,10 @@ export function ImportScreen() {
   useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); }, [text250]);
   // Gán ID tự động cho câu không có %[ID] hợp lệ (chỉ metadata bản nháp; đổi lớp đích ⇒ gợi ý cũ bỏ)
   const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
+  /** câu mà AI không đủ căn cứ chọn Dạng: cần giáo viên chọn, nếu không sẽ vào vị trí chung (phải xác nhận trước khi nhập) */
+  const [refused, setRefused] = useState<ReadonlySet<number>>(new Set());
+  const [ackRefused, setAckRefused] = useState(false);
+  useEffect(() => { if (!idPicks) setRefused(new Set()); }, [idPicks]);
   useEffect(() => { setIdPicks(null); }, [loc.grade]);
   const pickIx = useMemo(() => (idPicks ? indexOf(getTaxonomy()) : null), [idPicks]);
   /** Hỏi AI cho các câu đang có gợi ý (câu không có ID): AI dẫn đầu, gợi ý ngân hàng làm bằng chứng. */
@@ -76,8 +80,10 @@ export function ImportScreen() {
     for (const [i, p] of m) {
       const ai = run.results.get(String(i));
       if (!ai) continue;
-      const merged = mergeAi(p.suggestion, ai).suggestion;
+      const mg = mergeAi(p.suggestion, ai);
+      const merged = mg.suggestion;
       n.set(i, { ...p, suggestion: merged, formId: useByDefault(merged.confidence) ? merged.best?.formId ?? null : null });
+      setRefused((r) => { const x = new Set(r); if (mg.verdict === 'ai-khong-chac') x.add(i); else x.delete(i); return x; });
     }
     return n;
   });
@@ -195,7 +201,7 @@ export function ImportScreen() {
     const tax = getTaxonomy();
     setIdPicks(suggestDrafts(noIdRows.map((i) => ({ index: i, latex: latexOf(i) })), new IdSuggester(tax, getState().questions), loc.grade));
   };
-  const setPick = (i: number, formId: string | null) => setIdPicks((m) => { if (!m?.has(i)) return m; const n = new Map(m); n.set(i, { ...m.get(i)!, formId }); return n; });
+  const setPick = (i: number, formId: string | null) => { if (formId) setRefused((r) => { if (!r.has(i)) return r; const x = new Set(r); x.delete(i); return x; }); setIdPicks((m) => { if (!m?.has(i)) return m; const n = new Map(m); n.set(i, { ...m.get(i)!, formId }); return n; }); };
   /** Vị trí của câu không có ID: gợi ý đã chọn (nếu còn hợp lệ) hoặc vị trí chung. */
   const draftLocOf = (i: number) => { const tax = getTaxonomy(); return draftLocation(idPicks?.get(i), latexOf(i), indexOf(tax), taxRevision(tax), loc); };
   const toDrafts = (): Draft[] => rows.flatMap((_r, i) => {
@@ -204,6 +210,8 @@ export function ImportScreen() {
     const fromId = fromIdOf(i);
     return [{ latex: text, level: fromId?.level ?? level, tags: [], ...(fromId?.loc ?? draftLocOf(i).loc) } as Draft];
   });
+  /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
+  const pendingRefused = rows.flatMap((_r, i) => (decOf(i) === 'import' && refused.has(i) && !fromIdOf(i) && !draftLocOf(i).suggested ? [i] : [])).length;
   /** Bước cuối: rà soát LẠI theo kho hiện hành (chống kho đổi sau lúc xem), rồi mới ghi. */
   const commit = async () => {
     setConfirm(false);
@@ -291,6 +299,7 @@ export function ImportScreen() {
                                   </select>
                                 )}
                                 {p.suggestion.notes.map((t) => <small key={t} className="aid-note">{t}</small>)}
+                                {refused.has(i) && !p.formId && <small className="aid-note aid-bad">Chưa chọn Dạng — nếu nhập, câu này vào vị trí chung ở trên.</small>}
                               </td>
                               <td><span className={`aid-conf c-${p.suggestion.confidence}`}>{CONFIDENCE_LABEL[p.suggestion.confidence]}</span></td>
                             </tr>
@@ -472,7 +481,7 @@ export function ImportScreen() {
               </div>
             )}
             <div className="head-actions imp-bar">
-              <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => setConfirm(true)}>
+              <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => { setAckRefused(false); setConfirm(true); }}>
                 {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : `Nhập ${importCount} câu vào ngân hàng`}
               </button>
               {anaDone && sum.holdN > 0 && <button type="button" className="btn btn-sm" onClick={() => setStatusF('hold')}>Xem các câu chưa quyết định</button>}
@@ -481,9 +490,12 @@ export function ImportScreen() {
               <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Xác nhận nhập">
                 <b>Sẽ nhập {sum.importN} câu, bỏ qua {sum.skipN} câu.</b>
                 {sum.keptSuspect > 0 && <p>Trong số nhập có {sum.keptSuspect} câu HEdu đánh dấu nghi trùng mà bạn đã chọn giữ{sum.keptPairs > 0 ? `, trong đó ${sum.keptPairs} cặp trùng nhau ngay trong file sẽ được nhập cả hai` : ''}.</p>}
+                {pendingRefused > 0 && (
+                  <label className="bd-sure"><input type="checkbox" checked={ackRefused} onChange={(e) => setAckRefused(e.target.checked)} /> {pendingRefused} câu AI chưa đủ căn cứ chọn Dạng và thầy/cô chưa chọn: tôi xác nhận cho vào vị trí chung đang chọn ở trên.</label>
+                )}
                 <p>HEdu sẽ rà soát lại với ngân hàng ngay trước khi ghi. Không câu nào trong ngân hàng bị sửa hay xoá.</p>
                 <div className="head-actions">
-                  <button type="button" className="btn btn-accent" autoFocus onClick={commit}>Nhập {sum.importN} câu</button>
+                  <button type="button" className="btn btn-accent" autoFocus disabled={pendingRefused > 0 && !ackRefused} onClick={commit}>Nhập {sum.importN} câu</button>
                   <button type="button" className="btn" onClick={() => setConfirm(false)}>Quay lại</button>
                 </div>
               </div>

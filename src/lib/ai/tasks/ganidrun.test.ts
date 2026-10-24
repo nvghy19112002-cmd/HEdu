@@ -2,6 +2,7 @@ import type { Suggestion } from '../../idsuggest';
 import { buildDefault, indexOf } from '../../taxonomy';
 import { locationOfForm, taxRevision } from '../../taxpath';
 import { formsOfGrade } from './ganid';
+import { draftLocation, useByDefault, type DraftIdPick } from '../../iddraft';
 import { batchesOf, examplesFor, mergeAi, runGanId, type GanIdJob } from './ganidrun';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
@@ -61,13 +62,33 @@ ok(m2.verdict === 'ai-moi' && m2.suggestion.best?.formId === F[0] && m2.suggesti
 const m3 = mergeAi(local(F[5], 'cao'), ai(F[0], 'high'));
 ok(m3.verdict === 'khac-nhau' && m3.suggestion.best?.formId === F[0] && m3.suggestion.confidence === 'thap' && m3.suggestion.alternatives[0]?.formId === F[5], 'AI khác ngân hàng ⇒ nhãn thấp, hiện cả hai để giáo viên chọn');
 const m4 = mergeAi(local(F[5], 'vua'), ai(null, 'low'));
-ok(m4.verdict === 'ai-khong-chac' && m4.suggestion.best?.formId === F[5] && m4.suggestion.confidence === 'vua' && m4.suggestion.notes.some((x) => x.startsWith('AI')), 'AI không đủ căn cứ ⇒ giữ gợi ý ngân hàng, ghi chú lý do');
+ok(m4.verdict === 'ai-khong-chac' && m4.suggestion.best === null && m4.suggestion.confidence === 'khong' && !useByDefault(m4.suggestion.confidence), 'AI không đủ căn cứ ⇒ KHÔNG còn gợi ý chính, nhãn "không", không được dùng mặc định (dù ngân hàng từng tin cậy vừa)');
+ok(m4.suggestion.alternatives[0]?.formId === F[5] && m4.suggestion.notes.some((x) => /cần giáo viên chọn Dạng/.test(x)) && m4.suggestion.notes.includes('ghi chú cũ'), 'gợi ý ngân hàng còn nguyên làm phương án tham khảo; có ghi chú "cần giáo viên chọn Dạng"');
+const m4c = mergeAi(local(F[5], 'cao'), { ...ai(null, 'low'), theory: true });
+ok(m4c.suggestion.best === null && m4c.suggestion.notes[0] === 'Câu lý thuyết — cần giáo viên chọn Dạng.' && !useByDefault(m4c.suggestion.confidence), 'ngân hàng tin cậy CAO nhưng AI từ chối câu lý thuyết ⇒ vẫn không tự chọn; hiện đúng thông báo');
+const m4d = mergeAi(local(F[5], 'vua', [F[6]]), ai(null, 'low', [F[7], F[6]]));
+ok(m4d.suggestion.alternatives.length <= 2 && m4d.suggestion.alternatives[0].formId === F[7] && !m4d.suggestion.alternatives.some((a) => a.formId === m4d.suggestion.best?.formId), 'phương án phụ của AI đứng trước; không tự thăng phương án phụ lên làm chính; tối đa 2');
 const m5 = mergeAi(local(null, 'khong'), ai(F[0], 'medium'));
 ok(m5.verdict === 'ai-moi' && m5.suggestion.confidence === 'thap', 'AI không chắc lắm ⇒ chỉ "thấp"');
 ok(m1.suggestion.taxRev === taxRevision(tax), 'giữ dấu phiên bản cây để kiểm lại trước khi ghi');
 
 const bank = new Map([['a', { uid: 'a', seq: 1, latex: 'L', type: 'tn' as const, level: 'TH' as const, tags: [], createdAt: 1, updatedAt: 1, ...o(F[0]).location }]]);
 ok(examplesFor({ ...local(F[0], 'vua'), evidence: [{ uid: 'a', formId: F[0], score: 0.5, kind: 'near' }, { uid: 'mat', formId: F[0], score: 0.4, kind: 'near' }] }, bank).length === 1, 'câu mẫu lấy từ dẫn chứng còn trong ngân hàng');
+
+console.log('Luồng Nhập liệu khi AI từ chối chọn Dạng');
+{
+  const loc = { grade: 12, chapterId: ix.get(F[0])!.chapter!.id, lessonId: ix.get(F[0])!.lesson!.id, formId: '' };
+  const latex = '\begin{ex}Công thức nào đúng?\end{ex}';
+  const base = local(F[5], 'cao');
+  const mg = mergeAi(base, ai(null, 'low'));
+  const pick: DraftIdPick = { latex, suggestion: mg.suggestion, formId: useByDefault(mg.suggestion.confidence) ? mg.suggestion.best?.formId ?? null : null };
+  const r = draftLocation(pick, latex, ix, taxRevision(tax), loc);
+  ok(pick.formId === null && !r.suggested && r.loc.formId === '', 'AI từ chối ⇒ không tự dùng Dạng của ngân hàng: câu ở vị trí chung, đánh dấu chưa gợi ý');
+  const chosen = draftLocation({ ...pick, formId: F[5] }, latex, ix, taxRevision(tax), loc);
+  ok(chosen.suggested && chosen.loc.formId === F[5], 'giáo viên chủ động chọn gợi ý ngân hàng (còn trong phương án) ⇒ áp dụng đúng lựa chọn đó');
+  const lv = mergeAi(local(F[5], 'cao'), { ...ai(F[5], 'high'), levelHint: 'VDC' as const });
+  ok(lv.suggestion.levelHint === 'VDC' && lv.suggestion.best?.formId === F[5], 'mức độ gợi ý đi riêng với Dạng (mức độ chỉ tham khảo, không ghi đè)');
+}
 
 if (fail) process.exit(1);
 console.log('ai/tasks/ganidrun: đạt hết.');

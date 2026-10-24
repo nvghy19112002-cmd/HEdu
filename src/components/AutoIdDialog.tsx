@@ -129,6 +129,8 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
       const best = r.suggestion.best?.formId ?? null;
       const auto = verdict === 'dong-thuan' || (verdict === 'ai-moi' && ai.confidence === 'high');
       const old = ch.get(r.uid)!;
+      // AI không chọn được Dạng: bỏ tick và lựa chọn tự động cũ của gợi ý ngân hàng; giáo viên tự chọn trong ô phương án
+      if (verdict === 'ai-khong-chac') { ch.set(r.uid, { ...old, formId: null, apply: false }); continue; }
       ch.set(r.uid, { ...old, formId: best ?? old.formId, apply: auto && movesLocation(r, best) });
     }
     setRows(nextRows);

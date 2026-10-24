@@ -80,7 +80,13 @@ const uniq = (xs: (SuggestOption | null | undefined)[], skip: string | undefined
 export function mergeAi(local: Suggestion, ai: GanIdResult): { suggestion: Suggestion; verdict: AiVerdict } {
   const note = ai.reason ? [`AI: ${ai.reason}`] : [];
   if (!ai.best) {
-    return { verdict: 'ai-khong-chac', suggestion: { ...local, notes: [...local.notes, ...(note.length ? note : ['AI không đủ căn cứ để chọn Dạng.'])] } };
+    // AI không đủ căn cứ ⇒ KHÔNG giữ gợi ý ngân hàng làm lựa chọn chính (tránh tự tick/tự áp dụng ngoài ý giáo viên).
+    // Gợi ý ngân hàng vẫn còn, chỉ là phương án tham khảo để giáo viên tự chọn nếu thấy đúng.
+    const tag = ai.theory ? 'Câu lý thuyết — cần giáo viên chọn Dạng.' : 'AI chưa đủ căn cứ — cần giáo viên chọn Dạng.';
+    return {
+      verdict: 'ai-khong-chac',
+      suggestion: { ...local, best: null, confidence: 'khong', alternatives: uniq([...ai.alternatives, local.best, ...local.alternatives], undefined), notes: [tag, ...note, ...local.notes] },
+    };
   }
   const levelHint = ai.levelHint ?? local.levelHint;
   if (local.best?.formId === ai.best.formId) {
