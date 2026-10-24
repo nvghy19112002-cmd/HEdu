@@ -1079,3 +1079,7 @@ a { color: var(--accent); }
 .ai-model { max-width: 240px; }
 .ai-consent { align-items: flex-start; margin-top: 10px; font-size: 13px; line-height: 1.5; }
 .ai-sends { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+.ai-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ai-v { font-weight: 600; }
+.ai-v.v-dong-thuan { color: var(--ok-ink); }
+.ai-v.v-khac-nhau { color: var(--warn-ink); }
