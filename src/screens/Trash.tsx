@@ -13,7 +13,7 @@ import { addMany, pageState, removeMany, selCounts, toggleOne } from '../lib/sel
 import { plainSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
 import { verbatimTex } from '../lib/texproject';
-import { isTrashBusy, locationProblem, purgeFromTrash, restoreFromTrash, RESTORE_BLOCK_TEXT } from '../lib/trashflow';
+import { isTrashBusy, locationProblem, purgeAllTrash, purgeFromTrash, restoreBlockOf, restoreFromTrash, RESTORE_BLOCK_TEXT, type RestoreBlock } from '../lib/trashflow';
 import { afterRemoval, buildRows, capacityNote, dateText, DATE_LABEL, DEFAULT_FILTER, filterRows, isDefaultFilter, pageOf, PAGE_SIZES, SORT_LABEL, STATUS_LABEL, type DateFilter, type SortMode, type StatusFilter, type TrashFilter, type TrashRow } from '../lib/trashview';
 import { TYPE_LABEL, TYPES, type QType, type Question } from '../lib/types';
 
@@ -34,7 +34,10 @@ export function TrashScreen() {
   const [page, setPage] = useState(0);
   const [sel, setSel] = useState<ReadonlySet<string>>(new Set());
   const [activeUid, setActiveUid] = useState<string | null>(null);
-  const [ask, setAsk] = useState<null | { kind: 'purge'; uids: string[] }>(null);
+  const [ask, setAsk] = useState<null | { kind: 'purge'; uids: string[] } | { kind: 'restore'; uids: string[] } | { kind: 'purgeAll'; step: 1 | 2 }>(null);
+  const [cmp, setCmp] = useState<TrashRow | null>(null);
+  const [menu, setMenu] = useState(false);
+  const menuBtn = useRef<HTMLButtonElement>(null);
   const [exportQs, setExportQs] = useState<Question[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -71,6 +74,8 @@ export function TrashScreen() {
   const ps = pageState(sel, pageUids);
   const note = capacityNote(total, TRASH_CAP);
   const readOnly = load === 'error';
+  const bankByUid = useMemo(() => new Map(questions.map((q) => [q.uid, q] as const)), [questions]);
+  const blockOf = (r: TrashRow): RestoreBlock | null => restoreBlockOf(r.q, bankByUid.get(r.q.uid));
   const active = useMemo(() => (activeUid ? rows.find((r) => r.q.uid === activeUid) ?? null : null), [rows, activeUid]);
 
   // bỏ khỏi ô chọn những câu không còn trong Thùng rác (đã khôi phục / xoá hẳn)
@@ -114,6 +119,19 @@ export function TrashScreen() {
     else setMsg({ ok: false, text: r.message });
   });
 
+  const purgeAll = () => run(async () => {
+    setAsk(null);
+    const r = await purgeAllTrash();
+    if (r.ok) { setActiveUid(null); setSel(new Set()); setMsg({ ok: true, text: `Đã dọn sạch Thùng rác: xoá vĩnh viễn ${nf.format(r.purged)} câu. Ngân hàng không bị ảnh hưởng.` }); toast(`Đã dọn sạch Thùng rác (${nf.format(r.purged)} câu).`); }
+    else setMsg({ ok: false, text: r.message });
+  });
+  /** Khôi phục nhiều câu: hỏi trước, nói rõ bao nhiêu câu làm được / bao nhiêu câu cần xử lý (giữ nguyên trong Thùng rác). */
+  const restorePlan = (uids: readonly string[]) => {
+    const set = new Set(uids);
+    const rs = rows.filter((r) => set.has(r.q.uid));
+    const blocked = rs.filter((r) => blockOf(r) !== null).length;
+    return { total: rs.length, ready: rs.length - blocked, blocked };
+  };
   const anyBusy = (uids: readonly string[]) => busy || uids.some((u) => isTrashBusy(u));
   const selectedQs = (): Question[] => rows.filter((r) => sel.has(r.q.uid)).map((r) => r.q).sort((a, b) => a.seq - b.seq);
   const runFileOnly = () => {
@@ -122,9 +140,28 @@ export function TrashScreen() {
     showFile({ title: qs.length === 1 ? `Câu ${seqLabel(qs[0].seq)} (từ Thùng rác)` : `${qs.length} câu từ Thùng rác`, name: qs.length === 1 ? `thung-rac-${seqLabel(qs[0].seq).slice(1)}.tex` : 'thung-rac-cau-hoi.tex', text: verbatimTex(qs), mime: 'application/x-tex' });
   };
 
+  const conflictPanel = (r: TrashRow) => {
+    const why = blockOf(r);
+    if (!why) return r.seqTaken ? <p className="sys-hint tr-conf-note">Số {seqLabel(r.q.seq)} đã có câu khác dùng: khi khôi phục, câu này sẽ được cấp số mới (nội dung và mã nội bộ giữ nguyên).</p> : null;
+    return (
+      <div className="note warn tr-conflict" role="status">
+        <div className="note-body">
+          <b>Cần xử lý trước khi khôi phục</b>
+          <span>{RESTORE_BLOCK_TEXT[why]}</span>
+          <span className="tr-conf-acts">
+            {why !== 'bad-location' && <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'bank', openUid: r.q.uid })}>Đến câu trong Ngân hàng</button>}
+            {why === 'exists-different' && <button type="button" className="btn btn-sm" onClick={() => setCmp(r)}>So sánh hai bản</button>}
+            {why === 'exists-same' && <button type="button" className="btn btn-sm btn-outline tr-danger" disabled={readOnly || busy} onClick={() => setAsk({ kind: 'purge', uids: [r.q.uid] })}>Xoá bản sao trong Thùng rác…</button>}
+            {why === 'bad-location' && <span className="sys-hint">Bạn vẫn có thể Xuất .tex để giữ nội dung. Việc chọn vị trí mới cho câu sẽ được bổ sung sau khi bạn duyệt cách làm.</span>}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   const viewer = active && (
     <TrashViewer
-      row={active} list={results} busy={anyBusy([active.q.uid])} readOnly={readOnly}
+      row={active} list={results} extra={conflictPanel(active)} busy={anyBusy([active.q.uid])} readOnly={readOnly}
       onNav={setActiveUid} onClose={() => setActiveUid(null)} onToast={toast}
       onRestore={() => { void restore([active.q.uid]); }}
       onPurge={() => setAsk({ kind: 'purge', uids: [active.q.uid] })}
@@ -139,7 +176,20 @@ export function TrashScreen() {
           <h1>Thùng rác</h1>
           <span className="sys-hint">Câu đã xoá vẫn được giữ cho tới khi bạn chủ động xoá hẳn. HEdu không tự xoá vĩnh viễn.</span>
         </div>
-        <b className="tr-count" aria-live="polite">{nf.format(total)} / {nf.format(TRASH_CAP)} câu</b>
+        <div className="tr-head-r">
+          <b className="tr-count" aria-live="polite">{nf.format(total)} / {nf.format(TRASH_CAP)} câu</b>
+          {total > 0 && (
+            <span className="tr-menu-wrap">
+              <button ref={menuBtn} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={menu} aria-label="Thêm thao tác cho cả Thùng rác" onClick={() => setMenu((v) => !v)}>⋯</button>
+              {menu && (
+                <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); menuBtn.current?.focus(); } }}>
+                  <button type="button" role="menuitem" disabled={readOnly || busy} onClick={() => { setMenu(false); setAsk({ kind: 'restore', uids: items.map((t) => t.q.uid) }); }}>Khôi phục tất cả…</button>
+                  <button type="button" role="menuitem" className="tr-danger" disabled={readOnly || busy} onClick={() => { setMenu(false); setAsk({ kind: 'purgeAll', step: 1 }); }}>Dọn sạch Thùng rác…</button>
+                </div>
+              )}
+            </span>
+          )}
+        </div>
       </header>
       <div className={`simple tr-wrap${active && !narrow ? ' is-split' : ''}`}>
         {narrow && viewer ? viewer : (
@@ -202,7 +252,7 @@ export function TrashScreen() {
                     <button type="button" className="btn btn-sm" disabled={results.length === 0 || allResultsSelected} onClick={() => setSel(addMany(sel, resultUids))}>Chọn tất cả {nf.format(results.length)} câu khớp lọc</button>
                     <button type="button" className="btn btn-sm" disabled={sel.size === 0} onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
                     <span className="selbar-sep" aria-hidden="true" />
-                    <button type="button" className="btn btn-sm btn-accent" disabled={readOnly || sel.size === 0 || anyBusy([...sel])} onClick={() => { void restore([...sel]); }}>Khôi phục đã chọn</button>
+                    <button type="button" className="btn btn-sm btn-accent" disabled={readOnly || sel.size === 0 || anyBusy([...sel])} onClick={() => setAsk({ kind: 'restore', uids: [...sel] })}>Khôi phục đã chọn</button>
                     <button type="button" className="btn btn-sm" disabled={sel.size === 0} onClick={() => setExportQs(selectedQs())}>Xuất .tex</button>
                     <button type="button" className="btn btn-sm btn-outline tr-danger" disabled={readOnly || sel.size === 0 || anyBusy([...sel])} onClick={() => setAsk({ kind: 'purge', uids: [...sel] })}>Xoá hẳn đã chọn…</button>
                   </div>
@@ -243,7 +293,55 @@ export function TrashScreen() {
         )}
       </div>
 
-      {ask && (
+      {ask?.kind === 'restore' && (() => {
+        const pl = restorePlan(ask.uids);
+        return (
+          <ConfirmDialog
+            title={`Khôi phục ${nf.format(pl.total)} câu về Ngân hàng?`}
+            confirmLabel={pl.ready > 0 ? `Khôi phục ${nf.format(pl.ready)} câu` : 'Đóng'}
+            cancelLabel="Chưa khôi phục"
+            busy={busy}
+            onConfirm={() => { const uids = ask.uids; setAsk(null); if (pl.ready > 0) void restore(uids); }}
+            onCancel={() => setAsk(null)}
+          >
+            <p><b>{nf.format(pl.ready)}</b> câu khôi phục được{pl.blocked > 0 ? <>, <b>{nf.format(pl.blocked)}</b> câu cần xử lý (đã có trong Ngân hàng hoặc vị trí cũ không còn) — những câu này được giữ nguyên trong Thùng rác, không câu nào bị bỏ lặng lẽ.</> : '.'}</p>
+            <p className="sys-hint">Câu nào trùng số thứ tự với câu khác sẽ được cấp số mới.</p>
+          </ConfirmDialog>
+        );
+      })()}
+      {ask?.kind === 'purgeAll' && (
+        <ConfirmDialog
+          danger
+          title={ask.step === 1 ? 'Dọn sạch cả Thùng rác?' : `Chắc chắn xoá vĩnh viễn ${nf.format(total)} câu?`}
+          confirmLabel={ask.step === 1 ? 'Tiếp tục…' : `Xoá hẳn ${nf.format(total)} câu`}
+          cancelLabel={`Giữ lại ${nf.format(total)} câu`}
+          busy={busy}
+          onConfirm={() => { if (ask.step === 1) setAsk({ kind: 'purgeAll', step: 2 }); else void purgeAll(); }}
+          onCancel={() => setAsk(null)}
+        >
+          {ask.step === 1 ? (
+            <>
+              <p>Thao tác này bỏ toàn bộ {nf.format(total)} câu trong Thùng rác. Câu trong Ngân hàng không bị ảnh hưởng.</p>
+              <p>Nên làm trước: chọn tất cả rồi <b>Xuất .tex</b>, hoặc tạo file sao lưu ở mục Cài đặt.</p>
+            </>
+          ) : (
+            <>
+              <p>{nf.format(total)} câu này sẽ không thể khôi phục bằng HEdu sau thao tác.</p>
+              <p className="sys-hint">Nếu bạn đã tạo file sao lưu trước đây, bản này có thể vẫn nằm trong file sao lưu đó (không chắc chắn).</p>
+            </>
+          )}
+        </ConfirmDialog>
+      )}
+      {cmp && (
+        <ConfirmDialog title={`So sánh câu ${seqLabel(cmp.q.seq)}: Thùng rác và Ngân hàng`} confirmLabel="Đóng" cancelLabel="Đóng" onConfirm={() => setCmp(null)} onCancel={() => setCmp(null)}>
+          <div className="tr-cmp">
+            <div><b>Bản trong Thùng rác</b><pre className="tr-pre" tabIndex={0}>{cmp.q.latex}</pre></div>
+            <div><b>Bản đang trong Ngân hàng</b><pre className="tr-pre" tabIndex={0}>{bankByUid.get(cmp.q.uid)?.latex ?? '(câu này không còn trong Ngân hàng)'}</pre></div>
+          </div>
+          <p className="sys-hint">Chỉ xem, HEdu chưa ghi đè bản nào. Muốn giữ bản Thùng rác, hãy Xuất .tex rồi sửa trong Ngân hàng.</p>
+        </ConfirmDialog>
+      )}
+      {ask?.kind === 'purge' && (
         <ConfirmDialog
           danger
           title={ask.uids.length === 1 ? 'Xoá vĩnh viễn câu này khỏi Thùng rác?' : `Xoá vĩnh viễn ${nf.format(ask.uids.length)} câu đã chọn khỏi Thùng rác?`}

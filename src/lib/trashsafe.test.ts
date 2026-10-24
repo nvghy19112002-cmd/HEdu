@@ -1,7 +1,7 @@
 // PR-1 (Thùng rác an toàn): chèn lỗi ghi ở từng bước của Xoá đơn / Khôi phục / Xoá hẳn và chứng minh KHÔNG MẤT CÂU.
 // "Khởi động lại" được mô phỏng bằng cách nạp lại kho + tệp phụ từ đúng nội dung đã ghi xuống "đĩa" giả.
 import { _reset, loadDecisions, TRASH_CAP, trashAddMany, trashCount, trashList, type Backend } from './dupdecisions';
-import { isTrashBusy, moveManyToTrash, moveToTrash, purgeAllTrash, purgeFromTrash, restoreFromTrash } from './trashflow';
+import { isTrashBusy, moveManyToTrash, moveToTrash, purgeAllTrash, purgeFromTrash, restoreBlockOf, restoreFromTrash } from './trashflow';
 import { addMany, getState, initStore, updateMany } from './store';
 import type { Question } from './types';
 let fail = 0;
@@ -208,6 +208,24 @@ console.log('Sức chứa & tệp phụ hỏng');
   ok(disk.side === '{không phải json', 'tệp hỏng KHÔNG bị ghi đè bằng dữ liệu trống');
   const g = await restoreFromTrash([q.uid]);
   ok(!g.ok && g.why === 'trash-readonly', 'khôi phục/xoá hẳn cũng từ chối khi tệp phụ không đọc được');
+}
+
+console.log('Lý do chưa khôi phục (restoreBlockOf) + lô nhiều tình huống');
+{
+  reset(); await boot();
+  const [a, b, c, d] = addMany([0, 1, 2, 3].map((i) => ({ ...loc, latex: ex(i), level: 'NB' as const, tags: [] })));
+  const edited = { ...b, latex: ex(99) };
+  const bad = { ...d, uid: 'bad-uid', chapterId: 'c-khong-co' };
+  ok(restoreBlockOf(a, a) === 'exists-same' && restoreBlockOf(edited, b) === 'exists-different', 'cùng uid: giống hệt ⇒ exists-same, khác nội dung ⇒ exists-different');
+  ok(restoreBlockOf(bad, undefined) === 'bad-location' && restoreBlockOf(c, undefined) === null, 'vị trí hỏng ⇒ bad-location; câu ổn không có trong ngân hàng ⇒ khôi phục được');
+  // lô: 1 khôi phục được + 3 cần xử lý ⇒ báo đúng từng nhóm, không bỏ câu nào
+  await trashAddMany([edited, bad, { ...c, uid: 'ok-uid', seq: 777 }, a]);
+  const r = await restoreFromTrash(['ok-uid', a.uid, b.uid, bad.uid]);
+  const why = Object.fromEntries(r.blocked.map((x) => [x.uid, x.reason]));
+  ok(r.ok && r.restored.length === 1 && r.blocked.length === 3 && why[a.uid] === 'exists-same' && why[b.uid] === 'exists-different' && why[bad.uid] === 'bad-location', 'lô hỗn hợp: 1 khôi phục, 3 bị giữ lại kèm đúng lý do');
+  ok(trashList().length === 3 && trashList().every((t) => t.q.uid !== 'ok-uid'), 'chỉ câu đã khôi phục rời Thùng rác; 3 câu còn nguyên');
+  const all = await purgeAllTrash();
+  ok(all.ok && all.purged === 3 && trashList().length === 0 && getState().questions.some((x) => x.uid === a.uid), 'dọn sạch: bỏ đúng 3 bản trong Thùng rác, KHÔNG đụng Ngân hàng');
 }
 
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
