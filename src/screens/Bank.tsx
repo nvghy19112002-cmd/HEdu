@@ -270,7 +270,7 @@ export function BankScreen() {
     setBatchBusy(false);
     setBatch(null);
     if (r.ok) { setUndo({ qs: moved, n: r.moved }); return; }
-    toast(r.strayInTrash ? `${r.message} Lưu ý: ${nf.format(r.strayInTrash)} câu đang có bản trong Thùng rác (không mất gì); vào Hệ thống → Thùng rác nếu cần dọn.` : r.message);
+    toast(r.strayInTrash ? `${r.message} Lưu ý: ${nf.format(r.strayInTrash)} câu đang có bản trong Thùng rác (không mất gì); mở màn Thùng rác nếu cần dọn.` : r.message);
   };
   const runUndo = async () => {
     if (!undo || busyRef.current) return;
@@ -280,7 +280,7 @@ export function BankScreen() {
     busyRef.current = false;
     setUndo(null);
     if (!r.ok) { toast(r.message); return; }
-    toast(r.strayInTrash ? `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng. Lưu ý: còn bản trong Thùng rác (không mất gì), có thể dọn ở Hệ thống → Thùng rác.` : `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng.`);
+    toast(r.strayInTrash ? `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng. Lưu ý: còn bản trong Thùng rác (không mất gì), có thể dọn ở màn Thùng rác.` : `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng.`);
   };
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 30000); return () => clearTimeout(t); }, [undo]);
   // Đổi bộ lọc hoặc chữ tìm ⇒ bỏ chọn các câu ngoài kết quả mới (mọi câu đang chọn luôn nhìn thấy được). Đổi trang/sắp xếp/kiểu xem thì giữ.
@@ -378,7 +378,7 @@ export function BankScreen() {
     if (!mv.ok) { toast(mv.why === 'trash-write' ? 'Không lưu được thùng rác nên CHƯA xoá câu. Hãy thử lại hoặc tạo file sao lưu trước.' : mv.message); return; }
     setSel((s) => { const n = new Set(s); n.delete(q.uid); return n; });
     if (active?.uid === q.uid) setActiveUid(next ? next.uid : null);
-    toast(`Đã chuyển ${seqLabel(q.seq)} vào thùng rác (khôi phục ở Hệ thống → Thùng rác).`);
+    toast(`Đã chuyển ${seqLabel(q.seq)} vào thùng rác (khôi phục ở màn Thùng rác).`);
   };
 
   const renderRows = () => (
@@ -556,6 +556,7 @@ export function BankScreen() {
         <div className="undo-bar" role="status">
           <span>Đã chuyển <b>{nf.format(undo.n)}</b> câu vào Thùng rác.</span>
           <button type="button" className="btn btn-sm btn-accent" onClick={() => { void runUndo(); }}>Hoàn tác</button>
+          <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'trash' })}>Mở Thùng rác</button>
           <button type="button" className="ico" aria-label="Đóng" onClick={() => setUndo(null)}>×</button>
         </div>
       )}

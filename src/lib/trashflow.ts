@@ -32,7 +32,7 @@ export async function moveToTrash(q: Question): Promise<boolean> {
 export async function trashBlockReason(qs: readonly Question[]): Promise<string | null> {
   if (!decisionsLoaded()) await loadDecisions();
   if (trashRoomFor(qs)) return null;
-  return `Thùng rác đã đầy (tối đa ${TRASH_CAP} câu) nên CHƯA xoá câu nào. Vào Hệ thống → Thùng rác để khôi phục hoặc xoá hẳn bớt, rồi thử lại.`;
+  return `Thùng rác đã đầy (tối đa ${TRASH_CAP} câu) nên CHƯA xoá câu nào. Mở màn Thùng rác để khôi phục hoặc xoá hẳn bớt, rồi thử lại.`;
 }
 
 /** Số câu còn thêm được vào thùng rác. */

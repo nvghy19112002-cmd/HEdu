@@ -161,7 +161,7 @@ function PkgCard({ it, filtered, onFilter, onRecheck, toast, goSystem }: {
       )}
       {ask === 'them' && (
         <div className="pkg-confirm">
-          HEdu sẽ thêm dòng <span className="mono">\usepackage{'{' + r.name + '}'}</span> vào đầu file dùng để vẽ hình (mục Hệ thống). File .tex và các câu của bạn không bị sửa.
+          HEdu sẽ thêm dòng <span className="mono">\usepackage{'{' + r.name + '}'}</span> vào đầu file dùng để vẽ hình (mục Cài đặt). File .tex và các câu của bạn không bị sửa.
           <button type="button" className="btn btn-sm btn-accent" onClick={() => void add()}>Xác nhận thêm</button>
           <button type="button" className="btn btn-sm" onClick={() => setAsk(null)}>Thôi</button>
         </div>

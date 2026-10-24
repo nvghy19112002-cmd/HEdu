@@ -64,9 +64,9 @@ export function BatchTrashDialog({ qs, busy, onRun, onCancel }: { qs: Question[]
       onConfirm={onRun}
       onCancel={onCancel}
     >
-      <p>Các câu sẽ rời khỏi Ngân hàng nhưng được giữ trong Thùng rác, có thể khôi phục ở <b>Hệ thống → Thùng rác</b> (giữ nguyên số thứ tự và nội dung).</p>
+      <p>Các câu sẽ rời khỏi Ngân hàng nhưng được giữ trong Thùng rác, có thể khôi phục ở màn <b>Thùng rác</b> (thanh bên trái) (giữ nguyên số thứ tự và nội dung).</p>
       <p className="bd-sum" role="status">Thùng rác hiện có {nf.format(have)} / {nf.format(TRASH_CAP)} câu{full ? '.' : ` · sau khi chuyển: ${nf.format(have + qs.length)} / ${nf.format(TRASH_CAP)}.`}</p>
-      {full && <p className="bd-bad" role="alert">Thùng rác chỉ còn chỗ cho {nf.format(room)} câu nên CHƯA thể chuyển {nf.format(qs.length)} câu. Hãy bỏ bớt câu đã chọn, hoặc vào Hệ thống → Thùng rác khôi phục/xoá hẳn bớt rồi thử lại. Không câu nào bị xoá.</p>}
+      {full && <p className="bd-bad" role="alert">Thùng rác chỉ còn chỗ cho {nf.format(room)} câu nên CHƯA thể chuyển {nf.format(qs.length)} câu. Hãy bỏ bớt câu đã chọn, hoặc mở màn Thùng rác để khôi phục/xoá hẳn bớt rồi thử lại. Không câu nào bị xoá.</p>}
       {big && !full && (
         <label className="bd-sure"><input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} /> Tôi đã xem lại: đúng {nf.format(qs.length)} câu này cần chuyển vào Thùng rác</label>
       )}
