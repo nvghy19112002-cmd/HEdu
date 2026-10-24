@@ -1,24 +1,29 @@
-// Màn Thùng rác (độc lập): danh sách tìm/lọc/chọn nhiều, khôi phục và xoá hẳn qua các hàm an toàn của trashflow.
+// Màn Thùng rác (độc lập): danh sách tìm/lọc/chọn nhiều + khung xem câu, khôi phục / xoá hẳn / xuất .tex qua các hàm an toàn.
 // Câu trong Thùng rác là BẢN SNAPSHOT tại lúc bị xoá — màn hình chỉ đọc, không sửa nội dung, không tự gán vị trí khác.
-// Xem trước / biên dịch / xuất .tex / xử lý xung đột chi tiết / dọn sạch: các PR tiếp theo.
+// Xử lý xung đột chi tiết, chọn lại vị trí, dọn sạch: PR-4.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ExportChoiceDialog } from '../components/ExportChoiceDialog';
+import { TrashViewer } from '../components/TrashViewer';
 import { decisionsLoaded, isDecisionsWritable, loadDecisions, TRASH_CAP, trashList, useDecisions } from '../lib/dupdecisions';
 import { parseExTest } from '../lib/extest';
 import { seqLabel } from '../lib/id';
 import { addMany, pageState, removeMany, selCounts, toggleOne } from '../lib/selection';
 import { plainSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
+import { verbatimTex } from '../lib/texproject';
 import { isTrashBusy, locationProblem, purgeFromTrash, restoreFromTrash, RESTORE_BLOCK_TEXT } from '../lib/trashflow';
-import { buildRows, capacityNote, dateText, DATE_LABEL, DEFAULT_FILTER, filterRows, isDefaultFilter, pageOf, PAGE_SIZES, SORT_LABEL, STATUS_LABEL, type DateFilter, type SortMode, type StatusFilter, type TrashFilter, type TrashRow } from '../lib/trashview';
-import { TYPE_LABEL, TYPES, type QType } from '../lib/types';
+import { afterRemoval, buildRows, capacityNote, dateText, DATE_LABEL, DEFAULT_FILTER, filterRows, isDefaultFilter, pageOf, PAGE_SIZES, SORT_LABEL, STATUS_LABEL, type DateFilter, type SortMode, type StatusFilter, type TrashFilter, type TrashRow } from '../lib/trashview';
+import { TYPE_LABEL, TYPES, type QType, type Question } from '../lib/types';
 
 const nf = new Intl.NumberFormat('vi-VN');
 type Load = 'loading' | 'ok' | 'error';
+/** Dưới độ rộng này khung xem thay hẳn danh sách (ngăn toàn màn hình, có nút "← Về Thùng rác"). */
+const WIDE = 1100;
 
 export function TrashScreen() {
-  const { toast, go } = useApp();
+  const { toast, go, showFile } = useApp();
   const { questions } = useBank();
   const ver = useDecisions();
   const [load, setLoad] = useState<Load>(decisionsLoaded() ? 'ok' : 'loading');
@@ -28,11 +33,21 @@ export function TrashScreen() {
   const [size, setSize] = useState<number>(PAGE_SIZES[0]);
   const [page, setPage] = useState(0);
   const [sel, setSel] = useState<ReadonlySet<string>>(new Set());
+  const [activeUid, setActiveUid] = useState<string | null>(null);
   const [ask, setAsk] = useState<null | { kind: 'purge'; uids: string[] }>(null);
+  const [exportQs, setExportQs] = useState<Question[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < WIDE);
   const busyRef = useRef(false);
   const topRef = useRef<HTMLDivElement>(null);
+  const nextRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const on = () => setNarrow(window.innerWidth < WIDE);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
 
   useEffect(() => {
     if (decisionsLoaded()) { setLoad(isDecisionsWritable() ? 'ok' : 'error'); if (!isDecisionsWritable()) setLoadErr('Tệp Thùng rác không đọc được nên HEdu chỉ cho xem, không ghi để tránh làm mất dữ liệu.'); return; }
@@ -56,12 +71,21 @@ export function TrashScreen() {
   const ps = pageState(sel, pageUids);
   const note = capacityNote(total, TRASH_CAP);
   const readOnly = load === 'error';
+  const active = useMemo(() => (activeUid ? rows.find((r) => r.q.uid === activeUid) ?? null : null), [rows, activeUid]);
 
   // bỏ khỏi ô chọn những câu không còn trong Thùng rác (đã khôi phục / xoá hẳn)
   useEffect(() => {
     const have = new Set(items.map((t) => t.q.uid));
     setSel((s) => { const keep = [...s].filter((u) => have.has(u)); return keep.length === s.size ? s : new Set(keep); });
   }, [items]);
+  // câu đang xem rời Thùng rác ⇒ chuyển sang câu liền sau (hoặc liền trước), hết thì đóng khung xem
+  useEffect(() => {
+    if (activeUid && !items.some((t) => t.q.uid === activeUid)) {
+      const n = nextRef.current;
+      setActiveUid(n && items.some((t) => t.q.uid === n) ? n : null);
+      nextRef.current = null;
+    }
+  }, [items, activeUid]);
 
   const setF = (p: Partial<TrashFilter>) => { setFilter((f) => ({ ...f, ...p })); setPage(0); };
   const clearFilter = () => { setTyped(''); setFilter(DEFAULT_FILTER); setPage(0); };
@@ -74,6 +98,7 @@ export function TrashScreen() {
   };
 
   const restore = (uids: string[]) => run(async () => {
+    if (activeUid && uids.includes(activeUid)) nextRef.current = afterRemoval(results, activeUid);
     const r = await restoreFromTrash(uids);
     const lines = [r.message];
     for (const b of r.blocked.slice(0, 3)) lines.push(`${seqLabel(b.seq)}: ${RESTORE_BLOCK_TEXT[b.reason]}`);
@@ -83,12 +108,29 @@ export function TrashScreen() {
   });
   const purge = (uids: string[]) => run(async () => {
     setAsk(null);
+    if (activeUid && uids.includes(activeUid)) nextRef.current = afterRemoval(results, activeUid);
     const r = await purgeFromTrash(uids);
     if (r.ok) { setMsg({ ok: true, text: `Đã xoá vĩnh viễn ${nf.format(r.purged)} câu khỏi Thùng rác.` }); toast(`Đã xoá hẳn ${nf.format(r.purged)} câu khỏi Thùng rác.`); }
     else setMsg({ ok: false, text: r.message });
   });
 
   const anyBusy = (uids: readonly string[]) => busy || uids.some((u) => isTrashBusy(u));
+  const selectedQs = (): Question[] => rows.filter((r) => sel.has(r.q.uid)).map((r) => r.q).sort((a, b) => a.seq - b.seq);
+  const runFileOnly = () => {
+    const qs = exportQs ?? [];
+    setExportQs(null);
+    showFile({ title: qs.length === 1 ? `Câu ${seqLabel(qs[0].seq)} (từ Thùng rác)` : `${qs.length} câu từ Thùng rác`, name: qs.length === 1 ? `thung-rac-${seqLabel(qs[0].seq).slice(1)}.tex` : 'thung-rac-cau-hoi.tex', text: verbatimTex(qs), mime: 'application/x-tex' });
+  };
+
+  const viewer = active && (
+    <TrashViewer
+      row={active} list={results} busy={anyBusy([active.q.uid])} readOnly={readOnly}
+      onNav={setActiveUid} onClose={() => setActiveUid(null)} onToast={toast}
+      onRestore={() => { void restore([active.q.uid]); }}
+      onPurge={() => setAsk({ kind: 'purge', uids: [active.q.uid] })}
+      onExport={() => setExportQs([active.q])}
+    />
+  );
 
   return (
     <>
@@ -99,92 +141,102 @@ export function TrashScreen() {
         </div>
         <b className="tr-count" aria-live="polite">{nf.format(total)} / {nf.format(TRASH_CAP)} câu</b>
       </header>
-      <div className="simple tr-wrap">
-        {note && <div className={`note ${note.level === 'full' ? 'bad' : 'warn'}`} role="status"><div className="note-body"><span>{note.text}</span></div></div>}
-        {load === 'loading' && <p className="aid-wait" role="status">Đang đọc Thùng rác…</p>}
-        {load === 'error' && <div className="note bad" role="alert"><div className="note-body"><b>Chưa đọc được Thùng rác</b><span>{loadErr} Các nút khôi phục và xoá hẳn đang tắt. Hãy tạo file sao lưu rồi kiểm tra tệp dữ liệu.</span></div></div>}
-
-        {load !== 'loading' && total === 0 && !readOnly && (
-          <div className="tr-empty" role="status">
-            <b>Thùng rác chưa có câu nào.</b>
-            <span>Câu bạn xoá khỏi Ngân hàng hoặc Kiểm tra trùng sẽ xuất hiện tại đây.</span>
-            <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'bank' })}>Đi đến Ngân hàng</button>
-          </div>
-        )}
-
-        {load !== 'loading' && total > 0 && (
+      <div className={`simple tr-wrap${active && !narrow ? ' is-split' : ''}`}>
+        {narrow && viewer ? viewer : (
           <>
-            <div className="qbar tr-bar" role="search">
-              <label className="search sm" style={{ flex: '1 1 260px' }}>
-                <input type="search" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Tìm đề, số #, ID, LaTeX…" aria-label="Tìm trong Thùng rác" />
-              </label>
-              <label className="qsel">Lớp
-                <select value={String(filter.grade)} onChange={(e) => setF({ grade: e.target.value === 'all' ? 'all' : Number(e.target.value) })}>
-                  <option value="all">Tất cả</option>
-                  {[...new Set(items.map((t) => t.q.grade))].sort((a, b) => a - b).map((g) => <option key={g} value={g}>Lớp {g}</option>)}
-                </select>
-              </label>
-              <label className="qsel">Loại
-                <select value={filter.type} onChange={(e) => setF({ type: e.target.value as QType | 'all' })}>
-                  <option value="all">Tất cả</option>
-                  {TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
-                </select>
-              </label>
-              <label className="qsel">Ngày xoá
-                <select value={filter.date} onChange={(e) => setF({ date: e.target.value as DateFilter })}>
-                  {(Object.keys(DATE_LABEL) as DateFilter[]).map((d) => <option key={d} value={d}>{DATE_LABEL[d]}</option>)}
-                </select>
-              </label>
-              <label className="qsel">Trạng thái
-                <select value={filter.status} onChange={(e) => setF({ status: e.target.value as StatusFilter })}>
-                  {(Object.keys(STATUS_LABEL) as StatusFilter[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                </select>
-              </label>
-              <label className="qsel">Sắp xếp
-                <select value={filter.sort} onChange={(e) => setF({ sort: e.target.value as SortMode })}>
-                  {(Object.keys(SORT_LABEL) as SortMode[]).map((s) => <option key={s} value={s}>{SORT_LABEL[s]}</option>)}
-                </select>
-              </label>
-              <button type="button" className="btn btn-sm" disabled={isDefaultFilter(filter) && typed === ''} onClick={clearFilter}>Xoá bộ lọc</button>
-            </div>
+            {note && <div className={`note ${note.level === 'full' ? 'bad' : 'warn'}`} role="status"><div className="note-body"><span>{note.text}</span></div></div>}
+            {load === 'loading' && <p className="aid-wait" role="status">Đang đọc Thùng rác…</p>}
+            {load === 'error' && <div className="note bad" role="alert"><div className="note-body"><b>Chưa đọc được Thùng rác</b><span>{loadErr} Các nút khôi phục và xoá hẳn đang tắt. Hãy tạo file sao lưu rồi kiểm tra tệp dữ liệu.</span></div></div>}
 
-            <div className="selbar tr-sel" role="region" aria-label="Chọn nhiều câu trong Thùng rác">
-              <span className="selbar-n">
-                <b>Đã chọn {nf.format(counts.total)} / {nf.format(total)} câu</b>
-                <small>{nf.format(results.length)} câu khớp bộ lọc{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} câu đã chọn nằm ngoài kết quả lọc` : ''}</small>
-              </span>
-              <div className="selbar-grp">
-                <button type="button" className="btn btn-sm" disabled={pageUids.length === 0} onClick={() => setSel(ps === 'all' ? removeMany(sel, pageUids) : addMany(sel, pageUids))}>{ps === 'all' ? 'Bỏ chọn trang' : `Chọn trang (${pageUids.length})`}</button>
-                <button type="button" className="btn btn-sm" disabled={results.length === 0 || allResultsSelected} onClick={() => setSel(addMany(sel, resultUids))}>Chọn tất cả {nf.format(results.length)} câu khớp lọc</button>
-                <button type="button" className="btn btn-sm" disabled={sel.size === 0} onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
-                <span className="selbar-sep" aria-hidden="true" />
-                <button type="button" className="btn btn-sm btn-accent" disabled={readOnly || sel.size === 0 || anyBusy([...sel])} onClick={() => { void restore([...sel]); }}>Khôi phục đã chọn</button>
-                <button type="button" className="btn btn-sm btn-outline tr-danger" disabled={readOnly || sel.size === 0 || anyBusy([...sel])} onClick={() => setAsk({ kind: 'purge', uids: [...sel] })}>Xoá hẳn đã chọn…</button>
-              </div>
-            </div>
-
-            {msg && <div className={`note ${msg.ok ? 'ok' : 'warn'}`} role="status"><div className="note-body"><span>{msg.text}</span></div></div>}
-
-            {results.length === 0 ? (
+            {load !== 'loading' && total === 0 && !readOnly && (
               <div className="tr-empty" role="status">
-                <b>Không có câu nào khớp bộ lọc.</b>
-                <button type="button" className="btn btn-sm" onClick={clearFilter}>Xoá bộ lọc</button>
+                <b>Thùng rác chưa có câu nào.</b>
+                <span>Câu bạn xoá khỏi Ngân hàng hoặc Kiểm tra trùng sẽ xuất hiện tại đây.</span>
+                <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'bank' })}>Đi đến Ngân hàng</button>
               </div>
-            ) : (
+            )}
+
+            {load !== 'loading' && total > 0 && (
               <>
-                <div className="list-head"><span><b className="lh-title">{nf.format(results.length)} câu</b> · đang xem {nf.format(pg.from)}–{nf.format(pg.to)}</span>
-                  <label className="qsel">Mỗi trang
-                    <select value={size} onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}>{PAGE_SIZES.map((n) => <option key={n} value={n}>{n} câu</option>)}</select>
+                <div className="qbar tr-bar" role="search">
+                  <label className="search sm" style={{ flex: '1 1 260px' }}>
+                    <input type="search" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Tìm đề, số #, ID, LaTeX…" aria-label="Tìm trong Thùng rác" />
                   </label>
+                  <label className="qsel">Lớp
+                    <select value={String(filter.grade)} onChange={(e) => setF({ grade: e.target.value === 'all' ? 'all' : Number(e.target.value) })}>
+                      <option value="all">Tất cả</option>
+                      {[...new Set(items.map((t) => t.q.grade))].sort((a, b) => a - b).map((g) => <option key={g} value={g}>Lớp {g}</option>)}
+                    </select>
+                  </label>
+                  <label className="qsel">Loại
+                    <select value={filter.type} onChange={(e) => setF({ type: e.target.value as QType | 'all' })}>
+                      <option value="all">Tất cả</option>
+                      {TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                    </select>
+                  </label>
+                  <label className="qsel">Ngày xoá
+                    <select value={filter.date} onChange={(e) => setF({ date: e.target.value as DateFilter })}>
+                      {(Object.keys(DATE_LABEL) as DateFilter[]).map((d) => <option key={d} value={d}>{DATE_LABEL[d]}</option>)}
+                    </select>
+                  </label>
+                  <label className="qsel">Trạng thái
+                    <select value={filter.status} onChange={(e) => setF({ status: e.target.value as StatusFilter })}>
+                      {(Object.keys(STATUS_LABEL) as StatusFilter[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                    </select>
+                  </label>
+                  <label className="qsel">Sắp xếp
+                    <select value={filter.sort} onChange={(e) => setF({ sort: e.target.value as SortMode })}>
+                      {(Object.keys(SORT_LABEL) as SortMode[]).map((s) => <option key={s} value={s}>{SORT_LABEL[s]}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" className="btn btn-sm" disabled={isDefaultFilter(filter) && typed === ''} onClick={clearFilter}>Xoá bộ lọc</button>
                 </div>
-                <ul className="trash-list tr-list" aria-label="Các câu trong Thùng rác">
-                  {pg.items.map((r) => <Row key={r.q.uid} r={r} on={sel.has(r.q.uid)} busy={readOnly || anyBusy([r.q.uid])} onToggle={() => setSel(toggleOne(sel, r.q.uid))} onRestore={() => { void restore([r.q.uid]); }} onPurge={() => setAsk({ kind: 'purge', uids: [r.q.uid] })} />)}
-                </ul>
-                <nav className="pager" aria-label="Phân trang">
-                  <button type="button" className="btn btn-sm" disabled={pg.page === 0} onClick={() => goPage(pg.page - 1)}>‹ Trước</button>
-                  <span>Trang <b>{pg.page + 1}</b> / {nf.format(pg.pages)}</span>
-                  <button type="button" className="btn btn-sm" disabled={pg.page >= pg.pages - 1} onClick={() => goPage(pg.page + 1)}>Sau ›</button>
-                </nav>
+
+                <div className="selbar tr-sel" role="region" aria-label="Chọn nhiều câu trong Thùng rác">
+                  <span className="selbar-n">
+                    <b>Đã chọn {nf.format(counts.total)} / {nf.format(total)} câu</b>
+                    <small>{nf.format(results.length)} câu khớp bộ lọc{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} câu đã chọn nằm ngoài kết quả lọc` : ''}</small>
+                  </span>
+                  <div className="selbar-grp">
+                    <button type="button" className="btn btn-sm" disabled={pageUids.length === 0} onClick={() => setSel(ps === 'all' ? removeMany(sel, pageUids) : addMany(sel, pageUids))}>{ps === 'all' ? 'Bỏ chọn trang' : `Chọn trang (${pageUids.length})`}</button>
+                    <button type="button" className="btn btn-sm" disabled={results.length === 0 || allResultsSelected} onClick={() => setSel(addMany(sel, resultUids))}>Chọn tất cả {nf.format(results.length)} câu khớp lọc</button>
+                    <button type="button" className="btn btn-sm" disabled={sel.size === 0} onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
+                    <span className="selbar-sep" aria-hidden="true" />
+                    <button type="button" className="btn btn-sm btn-accent" disabled={readOnly || sel.size === 0 || anyBusy([...sel])} onClick={() => { void restore([...sel]); }}>Khôi phục đã chọn</button>
+                    <button type="button" className="btn btn-sm" disabled={sel.size === 0} onClick={() => setExportQs(selectedQs())}>Xuất .tex</button>
+                    <button type="button" className="btn btn-sm btn-outline tr-danger" disabled={readOnly || sel.size === 0 || anyBusy([...sel])} onClick={() => setAsk({ kind: 'purge', uids: [...sel] })}>Xoá hẳn đã chọn…</button>
+                  </div>
+                </div>
+
+                {msg && <div className={`note ${msg.ok ? 'ok' : 'warn'}`} role="status"><div className="note-body"><span>{msg.text}</span></div></div>}
+
+                <div className={active && !narrow ? 'tr-split' : undefined}>
+                  <div className="tr-left">
+                    {results.length === 0 ? (
+                      <div className="tr-empty" role="status">
+                        <b>Không có câu nào khớp bộ lọc.</b>
+                        <button type="button" className="btn btn-sm" onClick={clearFilter}>Xoá bộ lọc</button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="list-head"><span><b className="lh-title">{nf.format(results.length)} câu</b> · đang xem {nf.format(pg.from)}–{nf.format(pg.to)}</span>
+                          <label className="qsel">Mỗi trang
+                            <select value={size} onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}>{PAGE_SIZES.map((n) => <option key={n} value={n}>{n} câu</option>)}</select>
+                          </label>
+                        </div>
+                        <ul className="trash-list tr-list" aria-label="Các câu trong Thùng rác">
+                          {pg.items.map((r) => <Row key={r.q.uid} r={r} on={sel.has(r.q.uid)} isActive={r.q.uid === activeUid} busy={readOnly || anyBusy([r.q.uid])} onToggle={() => setSel(toggleOne(sel, r.q.uid))} onOpen={() => setActiveUid(r.q.uid)} onRestore={() => { void restore([r.q.uid]); }} onPurge={() => setAsk({ kind: 'purge', uids: [r.q.uid] })} />)}
+                        </ul>
+                        <nav className="pager" aria-label="Phân trang">
+                          <button type="button" className="btn btn-sm" disabled={pg.page === 0} onClick={() => goPage(pg.page - 1)}>‹ Trước</button>
+                          <span>Trang <b>{pg.page + 1}</b> / {nf.format(pg.pages)}</span>
+                          <button type="button" className="btn btn-sm" disabled={pg.page >= pg.pages - 1} onClick={() => goPage(pg.page + 1)}>Sau ›</button>
+                        </nav>
+                      </>
+                    )}
+                  </div>
+                  {active && !narrow && <aside className="tr-right">{viewer}</aside>}
+                </div>
               </>
             )}
           </>
@@ -205,19 +257,20 @@ export function TrashScreen() {
           <p className="sys-hint">Nếu bạn đã tạo file sao lưu trước đây, bản này có thể vẫn nằm trong file sao lưu đó (không chắc chắn).</p>
         </ConfirmDialog>
       )}
+      {exportQs && <ExportChoiceDialog qs={exportQs} onFileOnly={runFileOnly} onClose={() => setExportQs(null)} onToast={toast} />}
     </>
   );
 }
 
-function Row({ r, on, busy, onToggle, onRestore, onPurge }: { r: TrashRow; on: boolean; busy: boolean; onToggle(): void; onRestore(): void; onPurge(): void }) {
+function Row({ r, on, isActive, busy, onToggle, onOpen, onRestore, onPurge }: { r: TrashRow; on: boolean; isActive: boolean; busy: boolean; onToggle(): void; onOpen(): void; onRestore(): void; onPurge(): void }) {
   const stem = plainSnippet(parseExTest(r.q.latex).stem, 160) || '(câu chưa có đề bài)';
   return (
-    <li className={on ? 'is-checked' : ''}>
+    <li className={`${on ? 'is-checked' : ''}${isActive ? ' is-active' : ''}`}>
       <input type="checkbox" checked={on} onChange={onToggle} aria-label={`Chọn câu ${seqLabel(r.q.seq)}`} />
       <span className="mono tr-seq">{seqLabel(r.q.seq)}</span>
       <span className="code-tag">{r.id6}</span>
       <span className={`pill t-${r.q.type}`}>{TYPE_LABEL[r.q.type]}</span>
-      <span className="trash-t" title={stem}>{stem}</span>
+      <button type="button" className="trash-t tr-open" title={stem} aria-current={isActive ? 'true' : undefined} onClick={onOpen}>{stem}</button>
       <span className="tr-flags">
         {r.inBank && <span className="chk-tag loi">Đã có trong Ngân hàng</span>}
         {r.seqTaken && <span className="chk-tag canh">Số đã được dùng</span>}

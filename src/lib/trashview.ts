@@ -119,3 +119,37 @@ export function dateText(at: number, now = Date.now()): string {
   if (at >= t0 - DAY) return 'Hôm qua';
   return d.toLocaleDateString('vi-VN');
 }
+
+/** Câu trước / sau trong danh sách đang lọc (để duyệt từng câu trong khung xem). `uid` không còn trong danh sách ⇒ không có trước/sau. */
+export function neighbours(list: readonly { q: { uid: string } }[], uid: string | null): { index: number; total: number; prev: string | null; next: string | null } {
+  const i = uid ? list.findIndex((r) => r.q.uid === uid) : -1;
+  return { index: i, total: list.length, prev: i > 0 ? list[i - 1].q.uid : null, next: i >= 0 && i < list.length - 1 ? list[i + 1].q.uid : null };
+}
+
+/** Sau khi câu `uid` rời khỏi Thùng rác (khôi phục / xoá hẳn) thì xem câu nào tiếp: câu liền sau, không có thì câu liền trước, hết thì null. */
+export function afterRemoval(list: readonly { q: { uid: string } }[], uid: string): string | null {
+  const i = list.findIndex((r) => r.q.uid === uid);
+  if (i < 0) return null;
+  return (list[i + 1] ?? list[i - 1])?.q.uid ?? null;
+}
+
+/** Các dòng thông tin kèm theo của một câu (cho khung xem): không suy đoán dữ kiện mà bản snapshot không lưu. */
+export function infoLines(r: Pick<TrashRow, 'q' | 'at' | 'id6' | 'inBank' | 'seqTaken' | 'locationGone'>): { label: string; value: string }[] {
+  const q = r.q;
+  const out = [
+    { label: 'Số thứ tự', value: seqLabel(q.seq) },
+    { label: 'ID', value: r.id6 },
+    { label: 'Mã nội bộ (uid)', value: q.uid },
+    { label: 'Lớp', value: `Lớp ${q.grade}` },
+    { label: 'Loại câu', value: q.type },
+    { label: 'Mức độ', value: q.level },
+    { label: 'Kiểm duyệt (lúc xoá)', value: q.review === 'approved' ? 'Đã duyệt' : q.review === 'needs_fix' ? 'Cần sửa' : 'Chưa kiểm tra' },
+    { label: 'Nhãn', value: q.tags.length ? q.tags.join(', ') : '—' },
+    { label: 'Ngày xoá', value: new Date(r.at).toLocaleString('vi-VN') },
+    { label: 'Nguồn xoá', value: 'Không rõ' },
+  ];
+  if (r.inBank) out.push({ label: 'Trạng thái', value: 'Đã có câu cùng mã trong Ngân hàng' });
+  if (r.seqTaken) out.push({ label: 'Trạng thái', value: 'Số thứ tự cũ đã được dùng — khôi phục sẽ cấp số mới' });
+  if (r.locationGone) out.push({ label: 'Trạng thái', value: 'Vị trí cũ không còn trong cây chương trình' });
+  return out;
+}
