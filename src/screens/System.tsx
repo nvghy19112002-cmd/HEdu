@@ -14,6 +14,9 @@ import {
 } from '../lib/updates';
 import { FigScalePanel, ZoomPanel } from '../components/ZoomControl';
 import { AiSettingsPanel } from '../components/AiSettingsPanel';
+import { aiKeyStatus } from '../lib/ai/client';
+import { loadAiPrefs } from '../lib/ai/prefs';
+import { PANES, paneLabel, searchSettings, type PaneId } from '../lib/settingsnav';
 import { useUpdates } from '../update-context';
 
 function readFile(file: File): Promise<string> {
@@ -113,16 +116,62 @@ export function SystemScreen() {
 
   const busy = phase !== 'idle';
 
+  // ---- khung danh mục (PR-5): chỉ đổi cách SẮP XẾP; mọi trạng thái/giá trị cài đặt ở trên giữ nguyên khi chuyển mục
+  const [pane, setPane] = useState<PaneId>('overview');
+  const [q, setQ] = useState('');
+  const [hasKey, setHasKey] = useState<boolean | null>(null);
+  const found = searchSettings(q);
+  const jump = useRef<string | null>(null);
+  useEffect(() => { if (desktop) void aiKeyStatus().then((r) => setHasKey(r.hasKey)).catch(() => setHasKey(null)); }, [desktop]);
+  useEffect(() => {
+    const t = jump.current;
+    if (!t) return;
+    jump.current = null;
+    const el = [...document.querySelectorAll<HTMLElement>('section[aria-label]')].find((e) => e.getAttribute('aria-label') === t);
+    if (el) { el.scrollIntoView({ block: 'start' }); const f = el.querySelector<HTMLElement>('button, input, select, textarea, summary'); f?.focus({ preventScroll: true }); }
+  }, [pane]);
+  const open = (id: PaneId, target = '') => { jump.current = target || null; setPane(id); setQ(''); };
+  const aiPrefs = loadAiPrefs();
+  const diag = () => [
+    `HEdu ${up.info ? `v${up.info.version}` : 'bản xem thử trên trình duyệt'} (kênh ${up.channel})`,
+    `Hệ điều hành: ${typeof navigator !== 'undefined' ? navigator.platform || 'không rõ' : 'không rõ'}`,
+    `Chạy trong: ${desktop ? 'app Windows' : 'trình duyệt'}`,
+    `TeX Live: ${tikz.texBin.trim() ? 'đã đặt đường dẫn' : 'chưa đặt đường dẫn'}; kiểm tra trong phiên này: ${texMsg === null ? 'chưa' : texOk ? 'đạt' : 'không đạt'}`,
+    `AI Gemini: ${hasKey === null ? 'không rõ' : hasKey ? 'đã lưu khoá' : 'chưa có khoá'}; đồng ý gửi: ${aiPrefs.consent ? 'bật' : 'tắt'}`,
+    `Số câu trong ngân hàng: ${questions.length}; trong Thùng rác: ${trashN}`,
+  ].join('\n');
+  const copyDiag = async () => {
+    try { await navigator.clipboard.writeText(diag()); toast('Đã sao chép thông tin chẩn đoán (không có khoá API, câu hỏi hay đường dẫn riêng).'); }
+    catch { toast('Không sao chép được tự động.'); }
+  };
+  const is = (id: PaneId) => pane === id;
+
   return (
     <>
       <header className="page-head">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <h1>Cài đặt</h1>
-          <span className="crumbs">Cập nhật app, sao lưu và khôi phục dữ liệu</span>
+          <span className="crumbs">{paneLabel(pane)} — mọi lựa chọn được giữ khi bạn chuyển mục</span>
         </div>
       </header>
 
-      <div className="simple">
+      <div className="set-shell">
+        <nav className="set-nav" aria-label="Các mục Cài đặt">
+          <label className="search sm set-search">
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cài đặt: TeX Live, API, sao lưu…" aria-label="Tìm cài đặt" />
+          </label>
+          {q.trim() ? (
+            <ul className="set-results" aria-label="Kết quả tìm cài đặt">
+              {found.length === 0 && <li className="sys-hint">Không có cài đặt nào khớp.</li>}
+              {found.map((e, i) => <li key={i}><button type="button" onClick={() => open(e.pane, e.target)}><b>{e.label}</b><small>{paneLabel(e.pane)}</small></button></li>)}
+            </ul>
+          ) : (
+            <ul className="set-list">
+              {PANES.map((p) => <li key={p.id}><button type="button" className={is(p.id) ? 'is-on' : undefined} aria-current={is(p.id) ? 'page' : undefined} onClick={() => open(p.id)}>{p.label}</button></li>)}
+            </ul>
+          )}
+        </nav>
+      <div className="simple set-body">
         {!desktop && (
           <div className="note warn">
             <IcAlert />
@@ -130,7 +179,56 @@ export function SystemScreen() {
           </div>
         )}
 
-        <h2 className="sys-group">Cập nhật</h2>
+        {is('overview') && (
+          <div className="set-cards">
+            <section className="panel" aria-label="Phiên bản HEdu">
+              <h2>Phiên bản HEdu</h2>
+              <span className="sys-hint"><b className="mono">{up.info ? `v${up.info.version}` : 'bản xem thử'}</b> · kênh {up.channel === 'beta' ? 'beta' : up.channel === 'stable' ? 'chính thức' : up.channel}{up.checkedAt ? ` · kiểm tra lúc ${when(up.checkedAt)}` : ' · chưa kiểm tra bản mới trong phiên này'}</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('updates', 'Phiên bản và cập nhật')}>Đi tới Cập nhật</button></div>
+            </section>
+            <section className="panel" aria-label="Ngân hàng đang dùng">
+              <h2>Ngân hàng đang dùng</h2>
+              <span className="sys-hint"><b>{questions.length.toLocaleString('vi-VN')}</b> câu · {up.info?.dataDir ? <span className="mono" style={{ wordBreak: 'break-all' }}>{up.info.dataDir}</span> : 'lưu trong trình duyệt (bản xem thử)'}</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('source', 'Nguồn dữ liệu')}>Xem nguồn dữ liệu</button></div>
+            </section>
+            <section className="panel" aria-label="TeX Live">
+              <h2>TeX Live</h2>
+              <span className="sys-hint">{tikz.texBin.trim() ? <>Đường dẫn: <span className="mono" style={{ wordBreak: 'break-all' }}>{tikz.texBin}</span></> : 'Chưa đặt đường dẫn (dùng TeX Live trong PATH nếu có).'} · {texMsg === null ? 'Chưa kiểm tra trong phiên này' : texOk ? 'Đã thử: sẵn sàng' : 'Lần thử gần nhất: chưa đạt'}</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('latex', 'Vẽ hình TikZ')}>Mở LaTeX & TikZ</button></div>
+            </section>
+            <section className="panel" aria-label="AI Gemini (tóm tắt)">
+              <h2>AI Gemini</h2>
+              <span className="sys-hint">{!desktop ? 'Chỉ dùng được trong bản cài trên Windows.' : hasKey === null ? 'Chưa rõ trạng thái khoá.' : hasKey ? 'Đã lưu khoá API' : 'Chưa có khoá API'} · gửi câu hỏi lên AI: {aiPrefs.consent ? 'đã đồng ý (mỗi lượt vẫn hỏi lại)' : 'đang tắt'}</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('ai', 'AI (Gemini)')}>Mở AI Gemini</button></div>
+            </section>
+            <section className="panel" aria-label="Sao lưu (tóm tắt)">
+              <h2>Sao lưu</h2>
+              <span className="sys-hint">{!desktop ? 'Sao lưu trước cập nhật chỉ có trong bản cài trên Windows.' : backup ? `Bản trước cập nhật: ${backup.kind === 'swapped' ? 'dữ liệu trước lần khôi phục gần nhất' : `trước khi lên v${backup.toVersion}`} · ${when(backup.at * 1000)}` : 'Chưa có bản sao lưu trước cập nhật.'}</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('backup', 'Sao lưu thủ công')}>Tạo / khôi phục file sao lưu</button></div>
+            </section>
+            <section className="panel" aria-label="Thùng rác (tóm tắt)">
+              <h2>Thùng rác</h2>
+              <span className="sys-hint">{trashN.toLocaleString('vi-VN')} câu đang được giữ lại.</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'trash' })}>Mở Thùng rác ({trashN} câu)</button></div>
+            </section>
+          </div>
+        )}
+
+        {is('source') && (
+          <section className="panel" aria-label="Nguồn dữ liệu">
+            <h2>Nguồn dữ liệu</h2>
+            <span className="sys-hint"><b>Đang dùng:</b> ngân hàng HEdu cục bộ (tệp JSON + tệp phụ cho quyết định trùng, Thùng rác, bộ nhãn). {questions.length.toLocaleString('vi-VN')} câu.</span>
+            <span className="sys-hint"><b>Nơi lưu:</b> {up.info?.dataDir ? <span className="mono" style={{ wordBreak: 'break-all' }}>{up.info.dataDir}</span> : 'trình duyệt này (bản xem thử, không phải dữ liệu thật)'}</span>
+            <span className="sys-hint">Sao lưu và khôi phục từ file nằm ở mục Dữ liệu & sao lưu.</span>
+            <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('backup')}>Đi tới Dữ liệu & sao lưu</button></div>
+            <details>
+              <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--ink-2)' }}>Nhiều nguồn dữ liệu (dự kiến)</summary>
+              <span className="sys-hint">HEdu hiện chỉ làm việc với một ngân hàng cục bộ. Quản lý nhiều nguồn là tính năng khác, chưa có trong bản này nên không có nút thao tác.</span>
+            </details>
+          </section>
+        )}
+
+        {is('updates') && (<>
         <section className="panel" aria-label="Phiên bản và cập nhật">
           <div className="sys-row">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -218,7 +316,9 @@ export function SystemScreen() {
           )}
         </section>
 
-        <h2 className="sys-group">Dữ liệu và sao lưu</h2>
+        </>)}
+
+        {is('backup') && (<>
         <section className="panel" aria-label="Sao lưu trước cập nhật">
           <h2>Sao lưu trước cập nhật</h2>
           <span className="sys-hint">Trước mỗi lần cập nhật, app tự chép dữ liệu sang một bản sao lưu. Chỉ giữ đúng một bản gần nhất; bản cũ hơn bị xoá để không chiếm chỗ.</span>
@@ -289,6 +389,9 @@ export function SystemScreen() {
           </div>
         </section>
 
+        </>)}
+
+        {is('source') && (
         <section className="panel" aria-label="Dữ liệu">
           <h2>Dữ liệu</h2>
           {desktop ? (
@@ -315,14 +418,16 @@ export function SystemScreen() {
           )}
         </section>
 
-        <h2 className="sys-group">AI</h2>
-        <AiSettingsPanel toast={toast} />
+        )}
 
-        <h2 className="sys-group">Hiển thị</h2>
-        <ZoomPanel />
-        <FigScalePanel />
+        {is('ai') && <AiSettingsPanel toast={toast} />}
 
-        <h2 className="sys-group">Vẽ hình TikZ</h2>
+        {is('display') && (<>
+          <ZoomPanel />
+          <FigScalePanel />
+        </>)}
+
+        {is('latex') && (
         <section className="panel" aria-label="Vẽ hình TikZ">
           <h2>Vẽ hình TikZ bằng TeX Live</h2>
           <span className="sys-hint">
@@ -362,6 +467,34 @@ export function SystemScreen() {
             </div>
           </details>
         </section>
+        )}
+
+        {is('help') && (
+          <>
+            <section className="panel" aria-label="Giới thiệu">
+              <h2>Giới thiệu</h2>
+              <span className="sys-hint">HEdu {up.info ? <b className="mono">v{up.info.version}</b> : '(bản xem thử)'} — ngân hàng câu hỏi LaTeX cho giáo viên Toán. Dữ liệu lưu trên máy bạn.</span>
+              <span className="sys-hint">Trang chính thức và ghi chú phát hành: <span className="mono">github.com/nvghy19112002-cmd/HEdu</span> (mục Releases).</span>
+            </section>
+            <section className="panel" aria-label="Hướng dẫn ngắn">
+              <h2>Hướng dẫn ngắn</h2>
+              <ul className="set-help">
+                <li><b>Tìm câu đã xoá:</b> mở Thùng rác ở thanh bên; gõ chữ, số # hoặc ID vào ô tìm.</li>
+                <li><b>Khôi phục:</b> bấm Khôi phục ở câu cần lấy lại; câu nào đã có trong Ngân hàng hoặc mất vị trí sẽ được giữ lại và báo lý do.</li>
+                <li><b>Xem chuẩn bằng TeX Live:</b> trong khung xem câu chọn tab Xem chuẩn rồi bấm Biên dịch (cần cài TeX Live, xem mục LaTeX & TikZ).</li>
+                <li><b>Thiết lập Gemini:</b> mục AI Gemini; dán khoá API của bạn, mỗi lượt gửi câu lên AI đều hỏi lại.</li>
+                <li><b>Sao lưu:</b> mục Dữ liệu & sao lưu; nên tạo file sao lưu trước khi xoá hẳn hoặc cập nhật.</li>
+              </ul>
+            </section>
+            <section className="panel" aria-label="Thông tin chẩn đoán">
+              <h2>Thông tin chẩn đoán</h2>
+              <span className="sys-hint">Khi cần hỗ trợ, sao chép đoạn này gửi đi. Chỉ gồm phiên bản, hệ điều hành, trạng thái cấu hình và số lượng — không có khoá API, nội dung câu hỏi hay đường dẫn riêng.</span>
+              <pre className="tr-pre" tabIndex={0} aria-label="Thông tin chẩn đoán">{diag()}</pre>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => { void copyDiag(); }}>Sao chép thông tin chẩn đoán</button></div>
+            </section>
+          </>
+        )}
+      </div>
       </div>
     </>
   );
