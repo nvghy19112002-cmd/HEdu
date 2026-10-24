@@ -21,6 +21,7 @@ const req = buildGanIdRequest(tax, g12, items, 'gemini-3.8-flash');
 const schema = req.schema as { properties: { results: { items: { properties: { form_id: { enum: string[]; nullable: boolean } } } } } };
 const en = schema.properties.results.items.properties.form_id;
 ok(req.provider === 'gemini' && req.model === 'gemini-3.8-flash' && req.system === GAN_ID_SYSTEM, 'dùng lớp AI chung với prompt của nhiệm vụ');
+ok(req.thinkingLevel === 'low' && (req.timeoutSecs ?? 0) >= 300 && (req.maxOutputTokens ?? 0) >= 2048, 'suy nghĩ mức thấp + đủ token/thời gian (tránh quá giờ, tránh hết token trước khi trả lời)');
 ok(en.nullable === true && en.enum.length === f12.length && en.enum.every((id) => f12.some((f) => f.formId === id)), 'khuôn JSON: form_id chỉ trong Dạng của lớp đích, cho phép null');
 ok(!f10.some((f) => req.user.includes(`${f.formId} |`)), 'chỉ gửi cây của lớp đích (không gửi lớp khác)');
 ok(req.user.includes('<cau_hoi id="q1">') && req.user.includes('<cau_hoi id="q2">') && req.user.includes(`<cau_mau form_id="${f12[0].formId}">`), 'gửi câu hỏi kèm câu mẫu đã phân loại');

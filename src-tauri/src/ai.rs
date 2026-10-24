@@ -31,6 +31,10 @@ pub struct AiRequest {
     pub schema: Option<Value>,
     pub max_output_tokens: Option<u32>,
     pub timeout_secs: Option<u64>,
+    /// mức "suy nghĩ" trước khi trả lời: minimal | low | medium | high (None ⇒ mặc định của model).
+    /// Suy nghĩ ăn vào maxOutputTokens và làm chậm hẳn (đo 24/10/2026: 3.8 Flash mặc định > 120 s cho câu "1+1").
+    #[serde(default)]
+    pub thinking_level: Option<String>,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -80,6 +84,10 @@ pub fn build_body(req: &AiRequest) -> Result<Value, AiError> {
     let size = req.system.len() + req.user.len() + req.schema.as_ref().map_or(0, |s| s.to_string().len());
     if size > MAX_PROMPT_BYTES { return Err(err("too_large", "Dữ liệu gửi quá lớn — hãy chia nhỏ lượt.")); }
     let mut gen = json!({ "maxOutputTokens": req.max_output_tokens.unwrap_or(4096).min(MAX_OUTPUT_TOKENS) });
+    if let Some(t) = &req.thinking_level {
+        if !matches!(t.as_str(), "minimal" | "low" | "medium" | "high") { return Err(err("bad_request", "Mức suy nghĩ không hợp lệ.")); }
+        gen["thinkingConfig"] = json!({ "thinkingLevel": t });
+    }
     if let Some(s) = &req.schema {
         gen["responseMimeType"] = json!("application/json");
         gen["responseSchema"] = s.clone();
@@ -229,7 +237,7 @@ mod tests {
     use super::*;
 
     fn req() -> AiRequest {
-        AiRequest { provider: "gemini".into(), model: "gemini-3.8-flash".into(), system: "S".into(), user: "U".into(), schema: Some(json!({"type":"object"})), max_output_tokens: None, timeout_secs: None }
+        AiRequest { provider: "gemini".into(), model: "gemini-3.8-flash".into(), system: "S".into(), user: "U".into(), schema: Some(json!({"type":"object"})), max_output_tokens: None, timeout_secs: None, thinking_level: None }
     }
 
     #[test]
@@ -263,6 +271,9 @@ mod tests {
         let mut r = req(); r.provider = "khac".into(); assert_eq!(build_body(&r).unwrap_err().kind, "unsupported");
         let mut r = req(); r.model = "../../x".into(); assert_eq!(build_body(&r).unwrap_err().kind, "bad_request");
         let mut r = req(); r.user = "x".repeat(MAX_PROMPT_BYTES + 1); assert_eq!(build_body(&r).unwrap_err().kind, "too_large");
+        let mut r = req(); r.thinking_level = Some("vo-han".into()); assert_eq!(build_body(&r).unwrap_err().kind, "bad_request");
+        let mut r = req(); r.thinking_level = Some("low".into()); assert_eq!(build_body(&r).unwrap()["generationConfig"]["thinkingConfig"]["thinkingLevel"], "low");
+        assert!(build_body(&req()).unwrap()["generationConfig"].get("thinkingConfig").is_none(), "không chọn ⇒ để mặc định của model");
     }
 
     #[test]

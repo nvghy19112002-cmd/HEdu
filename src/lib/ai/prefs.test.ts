@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL, DEFAULT_PRO_MODEL, loadAiPrefs, saveAiPrefs, validModelId } from './prefs';
+import { DEFAULT_MODEL, DEFAULT_PRO_MODEL, loadAiPrefs, saveAiPrefs, thinkingFor, validModelId } from './prefs';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 const store = new Map<string, string>();
@@ -18,6 +18,8 @@ ok(loadAiPrefs().model === DEFAULT_MODEL, 'mã model không hợp lệ trong má
 ok(validModelId('gemini-2.5-pro') && !validModelId('a/b') && !validModelId('X') && !validModelId('m:run'), 'kiểm mã model giống phía Rust');
 saveAiPrefs({ consent: false, model: DEFAULT_MODEL, proModel: DEFAULT_PRO_MODEL });
 ok(store.size === 0, 'tắt đồng ý + model mặc định ⇒ không để lại gì trong máy');
+
+ok(thinkingFor('gemini-3.8-flash') === 'low' && thinkingFor('gemini-3.6-flash') === 'minimal' && thinkingFor('gemini-3.5-flash-lite') === 'minimal' && thinkingFor('gemini-2.5-pro') === 'low' && thinkingFor('gemini-2.5-flash') === undefined, 'mức suy nghĩ thấp nhất model cho phép (3.8 Flash không có minimal)');
 
 if (fail) process.exit(1);
 console.log('ai/prefs: đạt hết.');
