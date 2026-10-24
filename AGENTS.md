@@ -82,6 +82,7 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 - Mẫu báo cáo mặc định: (1) Đã làm · (2) Kiểm thử: số test, kết quả, giới hạn · (3) Git: nhánh, commit, PR · (4) Còn tồn · (5) Cần chủ dự án quyết định (chỉ khi thật cần). Không kể nhật ký dài trừ khi được yêu cầu điều tra.
 
 ## 7. Trạng thái (Claude cập nhật sau mỗi đợt)
+Đang gom cho MỘT bản phát hành kế tiếp (chưa phát hành, chờ chủ dự án nghiệm thu + ra lệnh): PR #83–#88 + PR-7 — Thùng rác độc lập (an toàn dữ liệu, tìm/lọc, khung xem, xung đột, dọn sạch), Cài đặt 8 mục, Gemini tối đa 5 cấu hình khoá (`src/lib/ai/profiles.ts`, Rust `ai.rs` hồ sơ `legacy|p1..p5`, tệp `ai_profiles.json`). Chi tiết: `GHI-CHU-PHAT-HANH.md`.
 Mới nhất đã phát hành: `v0.1.0-beta.28` trên kênh beta (24/10/2026): sửa lỗi AI quá giờ chờ (mức suy nghĩ thấp). Trước đó `v0.1.0-beta.27` (24/10/2026): AI Gemini cho Gán ID. Trước đó `v0.1.0-beta.26` (24/10/2026): Gán ID tự động. Trước đó `v0.1.0-beta.25` (23/10/2026, tag trỏ commit `7878d57`) gồm toàn bộ thay đổi beta.23–beta.25 (xem GHI-CHU-PHAT-HANH.md). Trên GitHub Releases hiện chỉ còn bản `v0.1.0-beta.25`; `channel-stable` và `channel-previous` chưa có `latest.json`. Chưa có bản chính thức (stable); beta trước stable. Tổng kết chi tiết từng bản: `TONG-KET-BETA20.md`. Bàn giao sang Claude Desktop Code: `claude/ban-giao-desktop.md`.
 Đã phát hành, theo bản:
 - beta.7: bảng “Gói LaTeX” (đọc khai báo gói, `kpsewhich`, `tlmgr search` có hỏi trước khi dùng mạng, không tự cài), phân loại lỗi log TeX, dịch hình an toàn hơn (Issue #1 P1–P4, PR #4).

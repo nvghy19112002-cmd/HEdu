@@ -1,3 +1,14 @@
+## Bản kế tiếp (CHƯA phát hành, đang gom các PR #83–#88 + PR-7): Thùng rác độc lập, Cài đặt mới, Gemini nhiều khoá
+Không đổi schema (3), ID6, UID, LaTeX gốc, cây mục lục, thuật toán dò trùng. Chỉ phát hành MỘT bản gộp sau khi chủ dự án nghiệm thu trên máy Windows thật và ra lệnh.
+- **An toàn dữ liệu Thùng rác (PR #83)**: khôi phục ghi Ngân hàng trước rồi mới gỡ khỏi Thùng rác; xoá hẳn không đụng Ngân hàng; khoá chống bấm đôi; lỗi ghi ở giữa chừng chỉ hoàn lại đúng phần của thao tác đó. Không thể làm mất câu khi một trong hai tệp ghi lỗi (xấu nhất = câu nằm ở cả hai nơi).
+- **Màn Thùng rác riêng (PR #84)** trên thanh bên, có số câu: tìm (chữ/số #/ID/LaTeX), lọc Lớp/Loại/Ngày/Trạng thái, sắp xếp, phân trang, chọn nhiều, nhắc khi gần đầy (1.000 câu, không tự xoá). Gỡ khỏi Cài đặt.
+- **Khung xem câu (PR #85)**: Xem nhanh / Xem chuẩn bằng TeX Live (chỉ khi bấm) / LaTeX gốc; Xuất .tex.
+- **Xung đột và dọn dẹp (PR #86)**: lý do từng câu chưa khôi phục được, So sánh hai bản, Đến câu trong Ngân hàng, Khôi phục tất cả…, Dọn sạch Thùng rác… (2 bước).
+- **Cài đặt 8 mục + tìm cài đặt (PR #87)**: Tổng quan, Nguồn dữ liệu, Giao diện, LaTeX & TikZ, AI Gemini, Dữ liệu & sao lưu, Cập nhật, Giới thiệu & trợ giúp (có sao chép thông tin chẩn đoán, không lộ khoá).
+- **Gemini tối đa 5 cấu hình khoá (PR #88)**: mỗi khoá một mục riêng trong kho mật khẩu Windows; khoá cũ của beta.27 giữ nguyên (tự thành "Cấu hình hiện tại"); chọn bằng tay, không tự chuyển khi lỗi/hết lượt; hộp xin phép nêu cấu hình đích.
+- **PR-7**: toast xoá một câu có nút "Mở Thùng rác"; hộp xác nhận khôi phục từ file nói rõ "thay ngân hàng" và "gộp tệp phụ"; thông báo hết hạn mức ngày nêu rõ HEdu không tự chuyển tài khoản.
+- Lưu ý quay lui: tệp `ai_profiles.json` là tệp mới (bản cũ bỏ qua); khoá cũ không bị đổi nên quay về beta.27 vẫn dùng được khoá cũ. Giới hạn đã biết: chưa chọn được vị trí mới cho câu "Vị trí không còn" (chờ chủ dự án duyệt cách làm); chưa thử Gemini thật với nhiều cấu hình.
+
 ## Có gì mới trong beta.28 (đã phát hành 24/10/2026, kênh beta): sửa lỗi AI "trả lời quá lâu"
 Không đổi schema (3), ID6, LaTeX gốc, cây mục lục. Gồm PR #81.
 - **Sửa lỗi**: ở beta.27, nút "Thử kết nối"/"Hỏi AI" có thể báo "AI trả lời quá lâu". Nguyên nhân: Gemini 3.8 Flash mặc định "suy nghĩ" rất lâu trước khi trả lời (> 120 giây cho câu thử 1 + 1) và dùng hết giới hạn chữ cho phần suy nghĩ. Nay HEdu luôn đặt mức suy nghĩ thấp nhất model cho phép, nới giới hạn chữ và thời gian chờ (300 giây/lượt). Đo thật với câu thử: 3.8 Flash ~27 giây, 3.6 Flash ~1,5 giây.

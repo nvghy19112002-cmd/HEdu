@@ -376,7 +376,7 @@ export function SystemScreen() {
               <IcAlert />
               <div className="note-body">
                 <b>Thay toàn bộ ngân hàng bằng file “{pendingFile.name}”?</b>
-                <span>Ngân hàng hiện có {questions.length} câu sẽ bị thay bằng nội dung file. Nên bấm “Tạo file sao lưu” trước nếu chưa có bản sao lưu gần đây.</span>
+                <span>Ngân hàng hiện có {questions.length} câu sẽ bị thay bằng nội dung file. Phần quyết định “giữ cả hai”, Thùng rác và nhãn chuẩn trong file sẽ được GỘP vào dữ liệu đang có, không xoá gì. Nên bấm “Tạo file sao lưu” trước nếu chưa có bản sao lưu gần đây.</span>
                 <div className="head-actions">
                   <button type="button" className="btn btn-sm" autoFocus onClick={() => setPendingFile(null)}>Giữ ngân hàng hiện tại</button>
                   <button type="button" className="btn btn-accent btn-sm" onClick={() => {

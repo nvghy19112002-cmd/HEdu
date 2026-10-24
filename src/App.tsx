@@ -34,15 +34,15 @@ export function App({ boot }: { boot: BootResult }) {
 
 function Shell({ recovered }: { recovered: boolean }) {
   const [nav, setNav] = useState<Nav>({ screen: 'bank' });
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; action?: { label: string; run(): void } } | null>(null);
   const [palette, setPalette] = useState(false);
   const [file, setFile] = useState<FileOut | null>(null);
   const timer = useRef<number>();
 
-  const toast = useCallback((m: string) => {
-    setMsg(m);
+  const toast = useCallback((m: string, action?: { label: string; run(): void }) => {
+    setMsg({ text: m, action });
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setMsg(null), 4200);
+    timer.current = window.setTimeout(() => setMsg(null), action ? 8000 : 4200);
   }, []);
   const guard = useRef<NavGuard | null>(null);
   const setGuard = useCallback((g: NavGuard | null) => { guard.current = g; }, []);
@@ -87,7 +87,7 @@ function Shell({ recovered }: { recovered: boolean }) {
         <Frame screen={nav.screen} nav={nav} />
         {palette && <CommandPalette onClose={() => setPalette(false)} />}
         {file && <FileDialog file={file} onClose={() => setFile(null)} onToast={toast} />}
-        {msg && <div className="toast" role="status">{msg}</div>}
+        {msg && <div className="toast" role="status">{msg.text}{msg.action && <button type="button" className="toast-act" onClick={() => { const a = msg.action; setMsg(null); a?.run(); }}>{msg.action.label}</button>}</div>}
         <ZoomIndicator />
       </UpdateProvider>
     </AppCtx.Provider>
