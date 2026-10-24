@@ -18,7 +18,7 @@ g.window = { __TAURI__: {
 } };
 ok((await aiKeyStatus()).hasKey === true && calls[0][0] === 'ai_key_status', 'hỏi trạng thái khoá (không lấy khoá)');
 await aiKeySet('KHOA-0123456789');
-ok(calls[1][0] === 'ai_key_set' && (calls[1][1] as { key: string }).key === 'KHOA-0123456789', 'lưu khoá: gửi xuống Rust một lần');
+ok(calls[1][0] === 'ai_key_set' && (calls[1][1] as { key: string; profileId: string }).key === 'KHOA-0123456789', 'lưu khoá: gửi xuống Rust một lần');
 const r = await aiRun({ provider: 'gemini', model: 'gemini-3.8-flash', system: 'S', user: 'U', schema: { type: 'object' } });
 const sent = calls[2][1] as { req: { model: string; schema: unknown } };
 ok(calls[2][0] === 'ai_run' && sent.req.model === 'gemini-3.8-flash' && !!sent.req.schema && r.text === '{}', 'chạy một lượt: gửi đủ model/prompt/khuôn, nhận câu trả lời');

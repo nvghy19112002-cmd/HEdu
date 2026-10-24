@@ -15,6 +15,7 @@ import {
 import { FigScalePanel, ZoomPanel } from '../components/ZoomControl';
 import { AiSettingsPanel } from '../components/AiSettingsPanel';
 import { aiKeyStatus } from '../lib/ai/client';
+import { initProfiles } from '../lib/ai/profiles';
 import { loadAiPrefs } from '../lib/ai/prefs';
 import { PANES, paneLabel, searchSettings, type PaneId } from '../lib/settingsnav';
 import { useUpdates } from '../update-context';
@@ -119,10 +120,19 @@ export function SystemScreen() {
   // ---- khung danh mục (PR-5): chỉ đổi cách SẮP XẾP; mọi trạng thái/giá trị cài đặt ở trên giữ nguyên khi chuyển mục
   const [pane, setPane] = useState<PaneId>('overview');
   const [q, setQ] = useState('');
-  const [hasKey, setHasKey] = useState<boolean | null>(null);
+  /** số cấu hình AI đã có khoá / đang dùng (null = chưa rõ) */
+  const [aiInfo, setAiInfo] = useState<{ saved: number; total: number; active: string | null } | null>(null);
   const found = searchSettings(q);
   const jump = useRef<string | null>(null);
-  useEffect(() => { if (desktop) void aiKeyStatus().then((r) => setHasKey(r.hasKey)).catch(() => setHasKey(null)); }, [desktop]);
+  useEffect(() => {
+    if (!desktop) return;
+    void initProfiles().then(async (st) => {
+      let saved = 0;
+      for (const p of st.profiles) if ((await aiKeyStatus(p.id).catch(() => ({ hasKey: false }))).hasKey) saved++;
+      setAiInfo({ saved, total: st.profiles.length, active: st.profiles.find((p) => p.id === st.active)?.name ?? null });
+    }).catch(() => setAiInfo(null));
+  }, [desktop, pane]);
+  const aiText = aiInfo === null ? 'Chưa rõ trạng thái khoá.' : aiInfo.total === 0 ? 'Chưa có cấu hình khoá API.' : `Đã lưu ${aiInfo.saved}/${aiInfo.total} khoá · ${aiInfo.active ? `đang dùng “${aiInfo.active}”` : 'chưa chọn cấu hình đang dùng'}`;
   useEffect(() => {
     const t = jump.current;
     if (!t) return;
@@ -137,7 +147,7 @@ export function SystemScreen() {
     `Hệ điều hành: ${typeof navigator !== 'undefined' ? navigator.platform || 'không rõ' : 'không rõ'}`,
     `Chạy trong: ${desktop ? 'app Windows' : 'trình duyệt'}`,
     `TeX Live: ${tikz.texBin.trim() ? 'đã đặt đường dẫn' : 'chưa đặt đường dẫn'}; kiểm tra trong phiên này: ${texMsg === null ? 'chưa' : texOk ? 'đạt' : 'không đạt'}`,
-    `AI Gemini: ${hasKey === null ? 'không rõ' : hasKey ? 'đã lưu khoá' : 'chưa có khoá'}; đồng ý gửi: ${aiPrefs.consent ? 'bật' : 'tắt'}`,
+    `AI Gemini: ${aiText}; đồng ý gửi: ${aiPrefs.consent ? 'bật' : 'tắt'}`,
     `Số câu trong ngân hàng: ${questions.length}; trong Thùng rác: ${trashN}`,
   ].join('\n');
   const copyDiag = async () => {
@@ -198,7 +208,7 @@ export function SystemScreen() {
             </section>
             <section className="panel" aria-label="AI Gemini (tóm tắt)">
               <h2>AI Gemini</h2>
-              <span className="sys-hint">{!desktop ? 'Chỉ dùng được trong bản cài trên Windows.' : hasKey === null ? 'Chưa rõ trạng thái khoá.' : hasKey ? 'Đã lưu khoá API' : 'Chưa có khoá API'} · gửi câu hỏi lên AI: {aiPrefs.consent ? 'đã đồng ý (mỗi lượt vẫn hỏi lại)' : 'đang tắt'}</span>
+              <span className="sys-hint">{!desktop ? 'Chỉ dùng được trong bản cài trên Windows.' : aiText} · gửi câu hỏi lên AI: {aiPrefs.consent ? 'đã đồng ý (mỗi lượt vẫn hỏi lại)' : 'đang tắt'}</span>
               <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('ai', 'AI (Gemini)')}>Mở AI Gemini</button></div>
             </section>
             <section className="panel" aria-label="Sao lưu (tóm tắt)">

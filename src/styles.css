@@ -1160,3 +1160,12 @@ a { color: var(--accent); }
   .set-list button { width: auto; border: 1px solid var(--line-2); }
   .set-body { padding-left: 16px; padding-right: 16px; }
 }
+
+/* PR-6: hồ sơ khoá AI */
+.ai-prof { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ai-prof li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); }
+.ai-prof li.is-active { border-color: var(--accent); }
+.ai-prof-pick { display: inline-flex; align-items: center; gap: 8px; min-width: 180px; }
+.ai-prof-pick small { color: var(--ink-3); }
+.ai-prof-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.ai-add { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
