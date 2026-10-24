@@ -6,8 +6,9 @@ import { IcAlert, IcCheckCircle } from '../components/Icons';
 import { isDesktop } from '../lib/platform';
 import { clearTikzCache, defaultPreamble, findTeX, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
 import { asTikzErr } from '../lib/tikz';
-import { addSamples, exportBackup, importBackup, resetToSample, restoreQuestion, useBank } from '../lib/store';
-import { decisionsLoaded, loadDecisions, trashList, trashRemove, useDecisions } from '../lib/dupdecisions';
+import { addSamples, exportBackup, importBackup, resetToSample, useBank } from '../lib/store';
+import { isTrashBusy, purgeFromTrash, restoreFromTrash, RESTORE_BLOCK_TEXT } from '../lib/trashflow';
+import { decisionsLoaded, loadDecisions, trashList, useDecisions } from '../lib/dupdecisions';
 import { plainSnippet } from '../lib/snippet';
 import { parseExTest } from '../lib/extest';
 import { seqLabel } from '../lib/id';
@@ -380,13 +381,16 @@ function TrashPanel() {
             <span className="mono">{seqLabel(q.seq)}</span>
             <span className="trash-t">{plainSnippet(parseExTest(q.latex).stem) || '(câu chưa có đề bài)'}</span>
             <span className="muted sm">{new Date(at).toLocaleDateString('vi-VN')}</span>
-            <button type="button" className="btn btn-sm" onClick={async () => {
-              if (!restoreQuestion(q)) { toast('Câu này đã có trong ngân hàng, không khôi phục thêm.'); }
-              else toast(`Đã khôi phục câu ${seqLabel(q.seq)}.`);
-              if (!(await trashRemove(q.uid))) toast('Đã khôi phục nhưng chưa xoá được khỏi thùng rác (không ghi được tệp).');
+            <button type="button" className="btn btn-sm" disabled={isTrashBusy(q.uid)} onClick={async () => {
+              // ghi NGÂN HÀNG bền vững trước, chỉ khi đó mới gỡ bản trong Thùng rác (không còn "khôi phục rồi xoá ngay")
+              const r = await restoreFromTrash([q.uid]);
+              const b = r.blocked[0];
+              if (b) toast(`Câu ${seqLabel(b.seq)}: ${RESTORE_BLOCK_TEXT[b.reason]}`);
+              else if (r.restored[0] && r.restored[0].fromSeq !== r.restored[0].toSeq) toast(`Câu ${seqLabel(r.restored[0].fromSeq)} đã được khôi phục với số mới ${seqLabel(r.restored[0].toSeq)} vì số cũ đã được dùng.${r.strayInTrash.length ? ' Chưa dọn được bản sao trong Thùng rác.' : ''}`);
+              else toast(r.message);
             }}>Khôi phục</button>
             {ask === q.uid
-              ? <><button type="button" className="btn btn-sm btn-accent" onClick={async () => { setAsk(null); if (!(await trashRemove(q.uid))) toast('Chưa ghi được tệp, câu vẫn nằm trong thùng rác.'); }}>Xoá hẳn</button><button type="button" className="btn btn-sm" autoFocus onClick={() => setAsk(null)}>Giữ lại</button></>
+              ? <><button type="button" className="btn btn-sm btn-accent" onClick={async () => { setAsk(null); const r = await purgeFromTrash([q.uid]); if (!r.ok) toast(r.message); }}>Xoá hẳn</button><button type="button" className="btn btn-sm" autoFocus onClick={() => setAsk(null)}>Giữ lại</button></>
               : <button type="button" className="btn btn-sm btn-outline" onClick={() => setAsk(q.uid)}>Xoá hẳn…</button>}
           </li>
         ))}

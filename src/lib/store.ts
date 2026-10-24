@@ -163,7 +163,6 @@ export function saveQuestion(draft: Draft, existingUid?: string): Question {
  */
 export async function setReview(id: string, status: ReviewStatus | undefined): Promise<boolean> {
   if (!writable) return false;
-  const before = state;
   const old = state.questions.find((q) => q.uid === id);
   if (!old) return false;
   if (old.review === status) return true;
@@ -172,7 +171,8 @@ export async function setReview(id: string, status: ReviewStatus | undefined): P
   set({ ...state, questions: state.questions.map((x) => (x.uid === id ? q : x)) });
   await flushSave();
   if (lastSaveOk) return true;
-  set(before);
+  // ghi lỗi: chỉ trả lại ĐÚNG câu này (nếu chưa bị sửa tiếp); sửa đổi khác xảy ra lúc chờ ghi được giữ
+  set({ ...state, questions: state.questions.map((x) => (x === q ? old : x)) });
   return false;
 }
 
@@ -213,14 +213,16 @@ export async function deleteMany(uids: Iterable<string>): Promise<BatchResult> {
   const want = new Set(uids);
   const total = want.size;
   if (!writable) return { ok: false, changed: 0, total };
-  const before = state;
+  const removed = state.questions.filter((q) => want.has(q.uid));
   const questions = state.questions.filter((q) => !want.has(q.uid));
-  const changed = state.questions.length - questions.length;
+  const changed = removed.length;
   if (changed === 0) return { ok: true, changed: 0, total };
   set({ ...state, questions });
   await flushSave();
   if (lastSaveOk) return { ok: true, changed, total };
-  set(before);
+  // ghi lỗi: đặt lại ĐÚNG các câu lô này đã gỡ (nếu chưa có câu cùng uid), giữ nguyên sửa đổi khác xảy ra lúc chờ ghi
+  const have = new Set(state.questions.map((q) => q.uid));
+  set({ ...state, questions: [...state.questions, ...removed.filter((q) => !have.has(q.uid))] });
   return { ok: false, changed: 0, total };
 }
 
@@ -230,27 +232,49 @@ export async function deleteMany(uids: Iterable<string>): Promise<BatchResult> {
  * Ghi lỗi ⇒ hoàn lại, ok = false.
  */
 export async function restoreMany(qs: readonly Question[]): Promise<BatchResult> {
+  const r = await restoreManyEx(qs);
+  return { ok: r.ok, changed: r.restored.length, total: r.total };
+}
+
+export interface RestoreManyResult {
+  /** ghi ngân hàng xuống đĩa có thành công không (false ⇒ KHÔNG câu nào được đưa về) */
+  ok: boolean;
+  total: number;
+  /** các câu đã đưa về, kèm số thứ tự cũ → mới (khác nhau khi số cũ đã có câu khác dùng) */
+  restored: { uid: string; fromSeq: number; toSeq: number }[];
+  /** uid đã có sẵn trong ngân hàng: KHÔNG ghi đè, KHÔNG tính là đã khôi phục */
+  existing: string[];
+}
+
+/**
+ * Như restoreMany nhưng trả chi tiết từng câu (để báo "#0142 → #0291" và biết câu nào bỏ qua vì đã có).
+ * Ghi lỗi ⇒ chỉ gỡ ĐÚNG các câu lô này vừa thêm, ok = false, restored = [].
+ */
+export async function restoreManyEx(qs: readonly Question[]): Promise<RestoreManyResult> {
   const total = qs.length;
-  if (!writable) return { ok: false, changed: 0, total };
+  if (!writable) return { ok: false, total, restored: [], existing: [] };
   const have = new Set(state.questions.map((x) => x.uid));
   const seqs = new Set(state.questions.map((x) => x.seq));
   let next = state.nextSeq;
   const add: Question[] = [];
+  const restored: RestoreManyResult['restored'] = [];
+  const existing: string[] = [];
   for (const q of qs) {
-    if (have.has(q.uid)) continue;
+    if (have.has(q.uid)) { existing.push(q.uid); continue; }
     have.add(q.uid);
     const b: Question = seqs.has(q.seq) ? { ...q, seq: next } : q;
     seqs.add(b.seq);
     next = Math.max(next, b.seq + 1);
     add.push(b);
+    restored.push({ uid: q.uid, fromSeq: q.seq, toSeq: b.seq });
   }
-  if (add.length === 0) return { ok: true, changed: 0, total };
-  const before = state;
-  set({ ...state, questions: [...state.questions, ...add], nextSeq: next });
+  if (add.length === 0) return { ok: true, total, restored: [], existing };
+  set({ ...state, questions: [...state.questions, ...add], nextSeq: Math.max(state.nextSeq, next) });
   await flushSave();
-  if (lastSaveOk) return { ok: true, changed: add.length, total };
-  set(before);
-  return { ok: false, changed: 0, total };
+  if (lastSaveOk) return { ok: true, total, restored, existing };
+  const mine = new Set(add);
+  set({ ...state, questions: state.questions.filter((q) => !mine.has(q)) }); // nextSeq chỉ lớn hơn một chút: vô hại
+  return { ok: false, total, restored: [], existing };
 }
 
 export function addMany(drafts: Draft[]): Question[] {
