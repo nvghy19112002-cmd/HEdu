@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false,
-    "types": []
+    "types": ["node"]
   },
   "include": ["src"]
 }

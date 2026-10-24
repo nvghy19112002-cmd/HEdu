@@ -64,7 +64,7 @@ export function TikzFigure({ code, defs = '', label, size }: { code: string; def
     return () => { ro?.disconnect(); window.removeEventListener('resize', go); un(); };
   }, [st, colW]);
 
-  useEffect(() => onSettingsChange(() => setSt({ s: 'cho' })), []);
+  useEffect(() => { const off = onSettingsChange(() => setSt({ s: 'cho' })); return () => { off(); }; }, []);
 
   if (st.s === 'xong') {
     return (
