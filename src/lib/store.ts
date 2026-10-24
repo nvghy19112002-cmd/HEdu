@@ -11,6 +11,7 @@ import { seedQuestions } from './seed';
 import type { Level, ReviewStatus, Location, Question, Taxonomy } from './types';
 import { resetTaxonomy, setTaxonomy } from './curriculum';
 import { restoreSidecar, sidecarForBackup } from './dupdecisions';
+import { getStorageMode, sqlitePersistence, storageBootError } from './storage';
 
 export interface AppState {
   schema: number;
@@ -20,9 +21,18 @@ export interface AppState {
   taxonomy: Taxonomy | null;
 }
 
+/** Các thay đổi cần ghi (chế độ SQLite ghi gia tăng: chỉ câu đã đổi/xoá + thông tin chung đã đổi). */
+export interface Delta { upserts: string[]; deletes: string[]; meta: [string, string][] }
+/** Dữ liệu đọc từ SQLite: thông tin chung ở dạng chữ như đã lưu + danh sách câu đã phân tích. */
+export interface LoadedRaw { schema: string | null; nextSeq: string | null; taxonomy: string | null; questions: Question[] }
+
 export interface Persistence {
   load(): Promise<{ json: string | null; recovered?: boolean }>;
   save(json: string): Promise<void>;
+  /** chỉ chế độ SQLite: nạp theo trang; null = nguồn mới tinh */
+  loadParsed?(): Promise<LoadedRaw | null>;
+  /** chỉ chế độ SQLite: ghi các thay đổi (idempotent, gửi lại được) */
+  saveDelta?(d: Delta): Promise<void>;
 }
 
 const KEY = 'hedu.bank.v1';
@@ -58,10 +68,30 @@ const listeners = new Set<() => void>();
 
 /** Chạy một lần trước khi vẽ giao diện: đọc dữ liệu đã lưu. */
 export async function initStore(p?: Persistence): Promise<BootResult> {
-  persistence = p ?? (isDesktop() ? desktopPersistence : webPersistence);
+  persistence = p ?? (isDesktop() ? (getStorageMode() === 'sqlite' ? sqlitePersistence : desktopPersistence) : webPersistence);
+  savedRefs = new Map();
+  savedMeta = null;
+  const openErr = p ? null : storageBootError();
+  if (openErr) {
+    writable = false; // không ghi gì vào nguồn không mở được
+    return { ok: false, kind: 'unreadable', message: openErr };
+  }
   try {
-    const { json, recovered } = await persistence.load();
-    if (json == null) {
+    let raw: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let recovered = false;
+    if (persistence.loadParsed) {
+      const r = await persistence.loadParsed();
+      if (r) {
+        raw = { schema: r.schema != null ? Number(r.schema) : undefined, questions: r.questions, nextSeq: r.nextSeq != null ? Number(r.nextSeq) : undefined, taxonomy: r.taxonomy != null ? JSON.parse(r.taxonomy) : null };
+        savedRefs = new Map(r.questions.map((q) => [q.uid, q] as const));
+        savedMeta = { schema: r.schema, nextSeq: r.nextSeq, taxonomy: r.taxonomy };
+      }
+    } else {
+      const l = await persistence.load();
+      recovered = !!l.recovered;
+      if (l.json != null) raw = JSON.parse(l.json);
+    }
+    if (raw == null) {
       // Lần chạy đầu: bản web nạp câu mẫu để xem thử; bản cài bắt đầu với ngân hàng trống.
       if (!isDesktop()) {
         const qs = seedQuestions();
@@ -69,8 +99,8 @@ export async function initStore(p?: Persistence): Promise<BootResult> {
       }
       return { ok: true, recovered: false, firstRun: true };
     }
-    const m = migrate(JSON.parse(json));
-    const migrated = m.schema !== (JSON.parse(json).schema ?? 1);
+    const m = migrate(raw);
+    const migrated = m.schema !== (raw.schema ?? 1);
     state = {
       schema: m.schema,
       questions: m.questions,
@@ -100,6 +130,21 @@ function schedule() {
 export function flushSave(): Promise<void> {
   clearTimeout(timer);
   if (!writable) return pending;
+  const p = persistence;
+  if (p.saveDelta) {
+    const snap = state;
+    pending = pending.then(async () => {
+      const d = diffSince(snap);
+      if (d) await p.saveDelta!(d);
+      commitSaved(snap);
+      lastSaveOk = true;
+    }).catch((e) => {
+      lastSaveOk = false; // savedRefs giữ nguyên ⇒ lần lưu sau gửi lại đúng phần chưa xong
+      console.error('Không ghi được dữ liệu', e);
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('hedu-save-error', { detail: String(e) }));
+    });
+    return pending;
+  }
   const json = JSON.stringify(state);
   pending = pending.then(() => persistence.save(json).then(() => { lastSaveOk = true; })).catch((e) => {
     lastSaveOk = false;
@@ -109,6 +154,31 @@ export function flushSave(): Promise<void> {
   return pending;
 }
 let lastSaveOk = true;
+
+// ---- Ghi gia tăng (SQLite): so với lần ghi thành công gần nhất theo THAM CHIẾU từng câu (mọi thao tác sửa đều tạo đối tượng mới) ----
+let savedRefs = new Map<string, Question>();
+let savedMeta: { schema: string | null; nextSeq: string | null; taxonomy: string | null } | null = null;
+const metaOf = (s: AppState) => ({ schema: String(s.schema), nextSeq: String(s.nextSeq), taxonomy: JSON.stringify(s.taxonomy) });
+
+function diffSince(s: AppState): Delta | null {
+  const upserts: string[] = [];
+  const seen = new Set<string>();
+  for (const q of s.questions) {
+    seen.add(q.uid);
+    if (savedRefs.get(q.uid) !== q) upserts.push(JSON.stringify(q));
+  }
+  const deletes: string[] = [];
+  for (const u of savedRefs.keys()) if (!seen.has(u)) deletes.push(u);
+  const cur = metaOf(s);
+  const meta: [string, string][] = [];
+  for (const k of ['schema', 'nextSeq', 'taxonomy'] as const) if (savedMeta?.[k] !== cur[k]) meta.push([k, cur[k]]);
+  return upserts.length || deletes.length || meta.length ? { upserts, deletes, meta } : null;
+}
+
+function commitSaved(s: AppState): void {
+  savedRefs = new Map(s.questions.map((q) => [q.uid, q] as const));
+  savedMeta = metaOf(s);
+}
 /** Lần ghi gần nhất xuống đĩa có thành công không (dùng để báo trung thực sau khi nhập hàng loạt). */
 export const isLastSaveOk = (): boolean => lastSaveOk;
 
