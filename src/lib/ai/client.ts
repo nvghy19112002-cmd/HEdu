@@ -16,7 +16,11 @@ export interface AiRequest {
   schema?: unknown;
   maxOutputTokens?: number;
   timeoutSecs?: number;
+  /** mức "suy nghĩ" của model; bỏ trống ⇒ mặc định của model (thường chậm) */
+  thinkingLevel?: ThinkingLevel;
 }
+
+export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 export interface AiReply { text: string; finish: string; promptTokens: number; outputTokens: number; model: string }
 

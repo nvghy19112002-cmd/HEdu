@@ -3,6 +3,7 @@
 // Kết quả AI KHÔNG bao giờ được tin thẳng: mọi form_id (kể cả phương án khác) phải đúng đủ đường dẫn trong lớp đích,
 // sai ⇒ bỏ và đánh dấu "cần giáo viên chọn". AI không đổi mức độ; mức độ chỉ là gợi ý tham khảo.
 import type { AiRequest } from '../client';
+import { thinkingFor } from '../prefs';
 import { indexOf, type TaxIndex } from '../../taxonomy';
 import { checkLocation, locationOfForm } from '../../taxpath';
 import { LEVELS, type Level, type Location, type Taxonomy } from '../../types';
@@ -98,7 +99,8 @@ export function buildGanIdRequest(tax: Taxonomy, grade: number, items: readonly 
     return `<cau_hoi id="${it.id}">\n${compactLatex(it.latex)}\n${ex ? `<cac_cau_mau_da_phan_loai>\n${ex}\n</cac_cau_mau_da_phan_loai>\n` : ''}</cau_hoi>`;
   }).join('\n\n');
   const user = `<cay_chuong_trinh lop="${gradeName}">\n${tree}\n</cay_chuong_trinh>\n\nPhân loại ${items.length} câu hỏi sau (mỗi id một kết quả):\n\n${qs}`;
-  return { provider: 'gemini', model, system: GAN_ID_SYSTEM, user, schema: ganIdSchema(forms.map((f) => f.formId)), maxOutputTokens: 600 + 250 * items.length, timeoutSecs: 120 };
+  // token ra gồm cả phần "suy nghĩ" ⇒ để dư; 10 câu đo được ~15–300 s với 3.8 Flash ⇒ chờ tối đa 300 s
+  return { provider: 'gemini', model, system: GAN_ID_SYSTEM, user, schema: ganIdSchema(forms.map((f) => f.formId)), maxOutputTokens: 2048 + 300 * items.length, timeoutSecs: 300, thinkingLevel: thinkingFor(model) };
 }
 
 export type AiConfidence = 'high' | 'medium' | 'low';

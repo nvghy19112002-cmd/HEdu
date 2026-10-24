@@ -1,7 +1,7 @@
 // Mục "AI (Gemini)" ở màn Hệ thống: khoá API (lưu trong kho mật khẩu Windows), model, đồng ý gửi dữ liệu, thử kết nối.
 import { useEffect, useState } from 'react';
 import { aiKeyClear, aiKeySet, aiKeyStatus, aiRun, AiError } from '../lib/ai/client';
-import { AI_MODELS, loadAiPrefs, saveAiPrefs, validModelId, type AiPrefs } from '../lib/ai/prefs';
+import { AI_MODELS, loadAiPrefs, saveAiPrefs, thinkingFor, validModelId, type AiPrefs } from '../lib/ai/prefs';
 import { isDesktop } from '../lib/platform';
 import { AiConsentDialog } from './AiConsentDialog';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -44,7 +44,7 @@ export function AiSettingsPanel({ toast }: { toast(m: string): void }) {
     setBusy(true);
     setProbe(null);
     try {
-      const r = await aiRun({ provider: 'gemini', model: prefs.model, ...PROBE, maxOutputTokens: 64, timeoutSecs: 30 });
+      const r = await aiRun({ provider: 'gemini', model: prefs.model, ...PROBE, maxOutputTokens: 1024, timeoutSecs: 90, thinkingLevel: thinkingFor(prefs.model) });
       const v = JSON.parse(r.text) as { answer?: unknown };
       setProbe(v.answer === 2 ? { ok: true, msg: `Kết nối được (${r.model}). AI trả đúng khuôn JSON.` } : { ok: false, msg: 'Kết nối được nhưng AI trả lời không đúng khuôn — báo cho người phát triển.' });
     } catch (e) {

@@ -1,13 +1,25 @@
 // Cài đặt AI trên MÁY NÀY (không nằm trong dữ liệu ngân hàng, không vào file sao lưu). Khoá API KHÔNG ở đây:
 // khoá nằm trong Windows Credential Manager (src-tauri/src/ai.rs).
+import type { ThinkingLevel } from './client';
 
 export interface AiModelChoice { id: string; label: string; note: string }
 
 /** Danh sách gợi ý; mã model sửa được (Google hay đổi tên model) nhưng KHÔNG sửa được địa chỉ máy chủ. */
 export const AI_MODELS: readonly AiModelChoice[] = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Mặc định — có gói miễn phí' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Mặc định — có gói miễn phí (chậm: ~1–2 phút/10 câu)' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', note: 'Nhanh — có gói miễn phí (chưa đo độ chính xác)' },
   { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Cho câu khó — chỉ khi gói miễn phí của tài khoản cho phép' },
 ];
+
+/**
+ * Mức "suy nghĩ" dùng cho nhiệm vụ phân loại: thấp nhất model cho phép (theo tài liệu Google 24/10/2026).
+ * Để mặc định, 3.8 Flash "suy nghĩ" quá lâu (> 120 s cho câu 1+1) và hết giới hạn token trước khi trả lời.
+ */
+export function thinkingFor(model: string): ThinkingLevel | undefined {
+  if (/^gemini-3\.8-flash/.test(model) || /pro/.test(model)) return 'low';
+  if (/^gemini-3(\.\d+)?-flash/.test(model)) return 'minimal';
+  return undefined;
+}
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_PRO_MODEL = 'gemini-2.5-pro';
 
