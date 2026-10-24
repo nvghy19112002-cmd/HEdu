@@ -1,5 +1,5 @@
-## Bản kế tiếp (CHƯA phát hành, đang gom các PR #83–#88 + PR-7): Thùng rác độc lập, Cài đặt mới, Gemini nhiều khoá
-Không đổi schema (3), ID6, UID, LaTeX gốc, cây mục lục, thuật toán dò trùng. Chỉ phát hành MỘT bản gộp sau khi chủ dự án nghiệm thu trên máy Windows thật và ra lệnh.
+## Có gì mới trong beta.29 (đã phát hành 24/10/2026, kênh beta; gồm PR #83–#89): Thùng rác độc lập, Cài đặt mới, Gemini nhiều khoá
+Không đổi schema (3), ID6, UID, LaTeX gốc, cây mục lục, thuật toán dò trùng. Chờ chủ dự án nghiệm thu trên máy Windows thật.
 - **An toàn dữ liệu Thùng rác (PR #83)**: khôi phục ghi Ngân hàng trước rồi mới gỡ khỏi Thùng rác; xoá hẳn không đụng Ngân hàng; khoá chống bấm đôi; lỗi ghi ở giữa chừng chỉ hoàn lại đúng phần của thao tác đó. Không thể làm mất câu khi một trong hai tệp ghi lỗi (xấu nhất = câu nằm ở cả hai nơi).
 - **Màn Thùng rác riêng (PR #84)** trên thanh bên, có số câu: tìm (chữ/số #/ID/LaTeX), lọc Lớp/Loại/Ngày/Trạng thái, sắp xếp, phân trang, chọn nhiều, nhắc khi gần đầy (1.000 câu, không tự xoá). Gỡ khỏi Cài đặt.
 - **Khung xem câu (PR #85)**: Xem nhanh / Xem chuẩn bằng TeX Live (chỉ khi bấm) / LaTeX gốc; Xuất .tex.
