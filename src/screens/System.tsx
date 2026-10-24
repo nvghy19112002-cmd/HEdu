@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { IcAlert, IcCheckCircle } from '../components/Icons';
 import { isDesktop } from '../lib/platform';
+import { getStorageMode, storageSummary } from '../lib/storage';
 import { clearTikzCache, defaultPreamble, findTeX, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
 import { asTikzErr } from '../lib/tikz';
 import { addSamples, exportBackup, importBackup, resetToSample, useBank } from '../lib/store';
@@ -147,7 +148,7 @@ export function SystemScreen() {
   const diag = () => [
     `HEdu ${up.info ? `v${up.info.version}` : 'bản xem thử trên trình duyệt'} (kênh ${up.channel})`,
     `Hệ điều hành: ${typeof navigator !== 'undefined' ? navigator.platform || 'không rõ' : 'không rõ'}`,
-    `Chạy trong: ${desktop ? 'app Windows' : 'trình duyệt'}`,
+    `Chạy trong: ${desktop ? 'app Windows' : 'trình duyệt'}; lưu trữ: ${store.label}`,
     `TeX Live: ${tikz.texBin.trim() ? 'đã đặt đường dẫn' : 'chưa đặt đường dẫn'}; kiểm tra trong phiên này: ${texMsg === null ? 'chưa' : texOk ? 'đạt' : 'không đạt'}`,
     `AI Gemini: ${aiText}; đồng ý gửi: ${aiPrefs.consent ? 'bật' : 'tắt'}`,
     `Số câu trong ngân hàng: ${questions.length}; trong Thùng rác: ${trashN}`,
@@ -157,6 +158,7 @@ export function SystemScreen() {
     catch { toast('Không sao chép được tự động.'); }
   };
   const is = (id: PaneId) => pane === id;
+  const store = storageSummary(getStorageMode(), up.info?.dataDir);
 
   return (
     <>
@@ -200,7 +202,7 @@ export function SystemScreen() {
             </section>
             <section className="panel" aria-label="Ngân hàng đang dùng">
               <h2>Ngân hàng đang dùng</h2>
-              <span className="sys-hint"><b>{questions.length.toLocaleString('vi-VN')}</b> câu · {up.info?.dataDir ? <span className="mono" style={{ wordBreak: 'break-all' }}>{up.info.dataDir}</span> : 'lưu trong trình duyệt (bản xem thử)'}</span>
+              <span className="sys-hint"><b>{questions.length.toLocaleString('vi-VN')}</b> câu · lưu bằng <b>{store.label}</b>{store.path ? <> · <span className="mono" style={{ wordBreak: 'break-all' }}>{store.path}</span></> : null}</span>
               <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('source', 'Nguồn dữ liệu')}>Xem nguồn dữ liệu</button></div>
             </section>
             <section className="panel" aria-label="TeX Live">
@@ -229,8 +231,9 @@ export function SystemScreen() {
         {is('source') && (
           <section className="panel" aria-label="Nguồn dữ liệu">
             <h2>Nguồn dữ liệu</h2>
-            <span className="sys-hint"><b>Đang dùng:</b> ngân hàng HEdu cục bộ (tệp JSON + tệp phụ cho quyết định trùng, Thùng rác, bộ nhãn). {questions.length.toLocaleString('vi-VN')} câu.</span>
-            <span className="sys-hint"><b>Nơi lưu:</b> {up.info?.dataDir ? <span className="mono" style={{ wordBreak: 'break-all' }}>{up.info.dataDir}</span> : 'trình duyệt này (bản xem thử, không phải dữ liệu thật)'}</span>
+            <span className="sys-hint"><b>Đang dùng:</b> ngân hàng HEdu cục bộ, lưu bằng <b>{store.label}</b>. {questions.length.toLocaleString('vi-VN')} câu.</span>
+            <span className="sys-hint">{store.detail}</span>
+            <span className="sys-hint"><b>Nơi lưu:</b> {store.path ? <span className="mono" style={{ wordBreak: 'break-all' }}>{store.path}</span> : 'trình duyệt này (không phải dữ liệu thật)'}</span>
             <span className="sys-hint">Sao lưu và khôi phục từ file nằm ở mục Dữ liệu & sao lưu.</span>
             <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('backup')}>Đi tới Dữ liệu & sao lưu</button></div>
             <details>

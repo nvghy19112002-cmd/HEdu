@@ -37,7 +37,7 @@ function Shell({ recovered }: { recovered: boolean }) {
   const [msg, setMsg] = useState<{ text: string; action?: { label: string; run(): void } } | null>(null);
   const [palette, setPalette] = useState(false);
   const [file, setFile] = useState<FileOut | null>(null);
-  const timer = useRef<number>();
+  const timer = useRef<number | undefined>(undefined);
 
   const toast = useCallback((m: string, action?: { label: string; run(): void }) => {
     setMsg({ text: m, action });

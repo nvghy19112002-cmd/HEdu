@@ -55,7 +55,11 @@ export const sqliteSidecar: Backend = {
 };
 
 const PAGE = 2000;
-const ONE_CALL_MAX = 5000;
+/**
+ * Một lô thay đổi đi trong MỘT lệnh = MỘT giao dịch SQLite (hoặc ghi hết, hoặc không ghi gì). Đã đo thật trong app Tauri:
+ * 60.000 câu (77 MB) trong một lệnh mất ~4 giây. Chỉ khi vượt mức này (không có trong thực tế) mới chia nhiều giao dịch.
+ */
+export const ATOMIC_MAX = 150_000;
 
 export const sqlitePersistence: Persistence = {
   async load() { throw new Error('Chế độ SQLite nạp theo trang (loadParsed).'); },
@@ -78,17 +82,32 @@ export const sqlitePersistence: Persistence = {
   },
 
   /**
-   * Gửi các thay đổi. Một lô nhỏ (≤ 5.000 mục) đi trong MỘT giao dịch; lô rất lớn (nhập/khôi phục cả ngân hàng) chia nhiều giao dịch,
-   * mỗi giao dịch trọn vẹn và an toàn khi thử lại (ghi chồng cùng nội dung): lỗi giữa chừng ⇒ lần lưu sau gửi lại đúng phần chưa xong.
+   * Gửi các thay đổi trong MỘT giao dịch (xem ATOMIC_MAX). Lỗi ⇒ không câu nào của lô được ghi; lần lưu sau gửi lại cả lô (ghi chồng an toàn).
+   * Lô khổng lồ (> ATOMIC_MAX) chia nhiều giao dịch, mỗi giao dịch trọn vẹn; lỗi giữa chừng ⇒ báo lỗi, giữ thay đổi trong bộ nhớ, gửi lại đúng như trên.
    */
-  async saveDelta(d: Delta): Promise<void> {
-    if (d.upserts.length + d.deletes.length <= ONE_CALL_MAX) {
-      await invoke<void>('db_apply', { upserts: d.upserts, deletes: d.deletes, meta: d.meta, sidecar: [] });
-      return;
-    }
-    for (let i = 0; i < d.upserts.length; i += PAGE) {
-      await invoke<void>('db_apply', { upserts: d.upserts.slice(i, i + PAGE), deletes: i === 0 ? d.deletes : [], meta: [], sidecar: [] });
-    }
-    await invoke<void>('db_apply', { upserts: [], deletes: d.upserts.length ? [] : d.deletes, meta: d.meta, sidecar: [] });
-  },
+  saveDelta(d: Delta): Promise<void> { return saveDeltaWith(d, ATOMIC_MAX); },
 };
+
+/** Tách riêng để kiểm thử đường chia lô mà không cần lô thật lớn. */
+export async function saveDeltaWith(d: Delta, atomicMax: number): Promise<void> {
+  if (d.upserts.length <= atomicMax && d.deletes.length <= atomicMax) {
+    await invoke<void>('db_apply', { upserts: d.upserts, deletes: d.deletes, meta: d.meta, sidecar: [] });
+    return;
+  }
+  // chia lô: xoá trước (cùng lô đầu), rồi thêm/sửa theo khúc, thông tin chung ghi CUỐI CÙNG (nextSeq chỉ tăng khi mọi câu đã nằm trong đĩa)
+  const step = Math.max(1, Math.min(atomicMax, PAGE * 5));
+  for (let i = 0; i < Math.max(d.upserts.length, 1); i += step) {
+    await invoke<void>('db_apply', { upserts: d.upserts.slice(i, i + step), deletes: i === 0 ? d.deletes : [], meta: [], sidecar: [] });
+  }
+  if (d.meta.length) await invoke<void>('db_apply', { upserts: [], deletes: [], meta: d.meta, sidecar: [] });
+}
+
+export interface StorageSummary { label: string; detail: string; path: string | null }
+
+/** Mô tả đúng chế độ lưu trữ đang dùng (không mô tả cố định). `dataDir` = thư mục dữ liệu của app (Rust app_info). */
+export function storageSummary(m: StorageMode, dataDir: string | null | undefined): StorageSummary {
+  const join = (rel: string) => (dataDir ? `${dataDir.replace(/[\\/]+$/, '')}\\${rel}` : null);
+  if (m === 'sqlite') return { label: 'SQLite', detail: 'Cơ sở dữ liệu SQLite (hedu.db): câu hỏi, cây chương trình, Thùng rác, quyết định trùng và nhãn chuẩn nằm trong cùng một tệp; mỗi lần lưu chỉ ghi phần thay đổi.', path: join('profiles\\default\\sources\\main\\hedu.db') };
+  if (m === 'json') return { label: 'JSON (cách cũ)', detail: 'Tệp JSON cũ (hedu.json) + tệp phụ (dup-decisions.json). Bản này đang dùng cách cũ vì thầy/cô chọn "Để sau" lúc nâng cấp; lần mở sau HEdu sẽ hỏi lại.', path: join('data\\hedu.json') };
+  return { label: 'Trình duyệt', detail: 'Bản xem thử trên trình duyệt: dữ liệu mẫu lưu trong trình duyệt này, không phải ngân hàng thật.', path: null };
+}
