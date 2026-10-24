@@ -25,6 +25,7 @@ export const ENTRIES: SettingEntry[] = [
   { pane: 'display', label: 'Cỡ hình trong xem trước', target: 'Cỡ hình trong xem trước', words: 'hình tỉ lệ cân bằng giữ nguyên figscale' },
   { pane: 'latex', label: 'Vẽ hình TikZ bằng TeX Live', target: 'Vẽ hình TikZ', words: 'tex live texlive pdflatex xelatex lualatex engine bộ dịch đường dẫn kiểm tra tikz hình cache đầu file preamble gói' },
   { pane: 'ai', label: 'AI Gemini', target: 'AI (Gemini)', words: 'ai gemini khoá khóa api key mô hình model đồng ý gửi google' },
+  { pane: 'backup', label: 'Lưu trữ SQLite: bản chụp, điểm khôi phục, xuất JSON, kiểm tra toàn vẹn', target: 'Lưu trữ SQLite', words: 'sqlite chụp điểm khôi phục toàn vẹn xuất json khôi phục .db' },
   { pane: 'backup', label: 'Sao lưu trước cập nhật', target: 'Sao lưu trước cập nhật', words: 'sao lưu backup trước cập nhật khôi phục bản trước' },
   { pane: 'backup', label: 'Sao lưu thủ công / khôi phục từ file', target: 'Sao lưu thủ công', words: 'sao lưu file tải về khôi phục từ file json nhập xuất' },
   { pane: 'backup', label: 'Thùng rác', target: 'Thùng rác', words: 'thùng rác câu đã xoá khôi phục xoá hẳn' },

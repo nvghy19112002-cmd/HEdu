@@ -18,6 +18,7 @@ import { gradeLabel, shortName } from '../lib/taxonomy';
 import { questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank, updateMany } from '../lib/store';
 import { moveManyToTrash, moveToTrash, trashBlockReason, undoMoveToTrash } from '../lib/trashflow';
+import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { decisionsLoaded, loadDecisions } from '../lib/dupdecisions';
 import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
@@ -265,6 +266,8 @@ export function BankScreen() {
     busyRef.current = true;
     setBatchBusy(true);
     const moved = selectedQs;
+    const rp = await ensureRestorePoint('xoa-hang-loat', moved.length >= BIG_OP); // SQLite: điểm khôi phục trước khi xoá hàng loạt
+    if (!rp.ok) { busyRef.current = false; setBatchBusy(false); setBatch(null); toast(rp.message); return; }
     const r = await moveManyToTrash(moved);
     busyRef.current = false;
     setBatchBusy(false);

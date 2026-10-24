@@ -5,6 +5,7 @@
 //! Dữ liệu cũ `data\hedu.json` KHÔNG bị đổi hay xoá; chỉ chuyển khi người dùng bấm xác nhận.
 
 use crate::db::{Batch, Db, DbError};
+use crate::dbbackup;
 use crate::jsonmig::{self, SourceFiles};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -223,6 +224,210 @@ pub async fn db_integrity(app: AppHandle) -> Result<IntegrityOut, String> {
         Ok(IntegrityOut { ok: r.ok, damaged: r.damaged, messages: r.messages, questions: r.questions, duplicate_seq: r.duplicate_seq })
     })
     .await
+}
+
+
+// ---------------- sao lưu / khôi phục (PR S4) ----------------
+
+fn backups_dir(root: &Path) -> PathBuf {
+    root.join("backups")
+}
+fn points_dir(root: &Path) -> PathBuf {
+    backups_dir(root).join("restore-points").join("default").join("main")
+}
+fn before_update_dir(root: &Path) -> PathBuf {
+    backups_dir(root).join("before-update")
+}
+fn scratch_path(root: &Path) -> PathBuf {
+    backups_dir(root).join(".scratch").join("inspect.db")
+}
+fn app_version(app: &AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+/// Đóng nguồn đang mở → chạy `f(đường dẫn tệp)` → MỞ LẠI (kể cả khi `f` lỗi). Không ai khác dùng nguồn trong lúc đó (giữ khoá trạng thái).
+fn with_closed<T>(app: &AppHandle, f: impl FnOnce(&Path) -> Result<T, DbError>) -> Result<T, String> {
+    let root = root_of(app)?;
+    let path = db_path_in(&root);
+    let st = app.state::<DbState>();
+    let mut g = st.0.lock().map_err(|_| "khóa dữ liệu bị lỗi".to_string())?;
+    let db = g.take().ok_or_else(|| "Chưa mở nguồn dữ liệu SQLite.".to_string())?;
+    let r = match db.close() {
+        Ok(()) => f(&path),
+        Err(e) => Err(e),
+    };
+    match Db::open(&path) {
+        Ok(d) => *g = Some(d),
+        Err(e) => return Err(format!("Không mở lại được nguồn dữ liệu sau thao tác: {e}")),
+    }
+    r.map_err(|e| e.to_string())
+}
+
+/// Sao lưu trước cập nhật (đúng MỘT bản) cho nguồn SQLite — gọi từ `install_update`.
+pub fn before_update(app: &AppHandle, from: &str, to: &str) -> Result<(), String> {
+    let root = root_of(app)?;
+    let st = app.state::<DbState>();
+    let g = st.0.lock().map_err(|_| "khóa dữ liệu bị lỗi".to_string())?;
+    let db = g.as_ref().ok_or_else(|| "Chưa mở nguồn dữ liệu SQLite.".to_string())?;
+    dbbackup::snapshot_before_update(db, &before_update_dir(&root), from, to).map(|_| ()).map_err(|e| format!("Không tạo được bản sao lưu nên chưa cài: {e}"))
+}
+
+/// Meta của bản sao lưu trước cập nhật dạng SQLite (nếu có).
+pub fn before_update_info(app: &AppHandle) -> Option<serde_json::Value> {
+    let root = root_of(app).ok()?;
+    dbbackup::before_update_meta(&before_update_dir(&root)).and_then(|t| serde_json::from_str(&t).ok())
+}
+
+/// "Khôi phục sau cập nhật" cho SQLite: đổi chỗ nguồn hiện tại với bản sao lưu (làm lại là đổi ngược); giao diện phải tải lại.
+pub fn restore_after_update(app: &AppHandle) -> Result<String, String> {
+    let root = root_of(app)?;
+    let (b, scratch) = (before_update_dir(&root), scratch_path(&root));
+    with_closed(app, |cur| dbbackup::swap_with_before_update(cur, &b, &scratch))?;
+    Ok("Đã khôi phục dữ liệu trước cập nhật.".into())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotOut {
+    questions: i64,
+    bytes: u64,
+    sha256: String,
+}
+
+/// Lưu một bản chụp .db (đã kiểm tra) vào đường dẫn người dùng chọn.
+#[tauri::command]
+pub async fn backup_snapshot(app: AppHandle, path: String) -> Result<SnapshotOut, String> {
+    if path.trim().is_empty() {
+        return Err("Chưa chọn nơi lưu.".into());
+    }
+    let ver = app_version(&app);
+    blocking(app, move |db| {
+        let m = dbbackup::snapshot_verified(db, Path::new(&path), "manual", "thu-cong", &ver)?;
+        Ok(SnapshotOut { questions: m.questions, bytes: m.bytes, sha256: m.sha256 })
+    })
+    .await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointOut {
+    file: String,
+    reason: String,
+    at: i64,
+    questions: i64,
+    bytes: u64,
+    app_version: String,
+}
+
+fn point_out(p: dbbackup::PointInfo) -> PointOut {
+    PointOut { file: p.file, reason: p.manifest.reason, at: p.manifest.at, questions: p.manifest.questions, bytes: p.manifest.bytes, app_version: p.manifest.app_version }
+}
+
+/// Tạo điểm khôi phục (≤ 5 bản mới nhất) trước thao tác dễ mất dữ liệu. Giao diện phải ghi nốt dữ liệu chờ ghi TRƯỚC khi gọi.
+#[tauri::command]
+pub async fn backup_point(app: AppHandle, reason: String) -> Result<PointOut, String> {
+    let root = root_of(&app)?;
+    let ver = app_version(&app);
+    blocking(app, move |db| dbbackup::create_restore_point(db, &points_dir(&root), &reason, &ver).map(point_out)).await
+}
+
+#[tauri::command]
+pub fn backup_points(app: AppHandle) -> Result<Vec<PointOut>, String> {
+    let root = root_of(&app)?;
+    Ok(dbbackup::list_points(&points_dir(&root)).into_iter().map(point_out).collect())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InspectOut {
+    questions: i64,
+    damaged: bool,
+    messages: Vec<String>,
+}
+
+/// Nguồn khôi phục: tệp .db do người dùng chọn (`path`) HOẶC một điểm khôi phục (`point` = tên tệp trong danh sách).
+fn resolve_source(root: &Path, path: Option<String>, point: Option<String>) -> Result<PathBuf, String> {
+    match (path, point) {
+        (Some(p), None) if !p.trim().is_empty() => Ok(PathBuf::from(p)),
+        (None, Some(f)) => {
+            let dir = points_dir(root);
+            if dbbackup::list_points(&dir).iter().any(|x| x.file == f) {
+                Ok(dir.join(f))
+            } else {
+                Err("Không có điểm khôi phục này.".into())
+            }
+        }
+        _ => Err("Chưa chọn nguồn khôi phục.".into()),
+    }
+}
+
+/// Xem trước một tệp .db / điểm khôi phục (kiểm nhận diện, toàn vẹn, số câu) mà KHÔNG đụng tới tệp đó.
+#[tauri::command]
+pub async fn backup_inspect(app: AppHandle, path: Option<String>, point: Option<String>) -> Result<InspectOut, String> {
+    let root = root_of(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let src = resolve_source(&root, path, point)?;
+        dbbackup::inspect_copy(&src, &scratch_path(&root)).map(|i| InspectOut { questions: i.questions, damaged: i.damaged, messages: i.messages }).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreOut {
+    questions: i64,
+}
+
+/// Khôi phục: kiểm tra nguồn → chụp "điểm trước khi khôi phục" của dữ liệu hiện tại → đóng nguồn, thay tệp, mở lại. Giao diện phải tải lại sau đó.
+#[tauri::command]
+pub async fn backup_restore(app: AppHandle, path: Option<String>, point: Option<String>) -> Result<RestoreOut, String> {
+    let root = root_of(&app)?;
+    let ver = app_version(&app);
+    let a = app.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<RestoreOut, String> {
+        let src = resolve_source(&root, path, point)?;
+        let insp = dbbackup::inspect_copy(&src, &scratch_path(&root)).map_err(|e| e.to_string())?;
+        if insp.damaged {
+            return Err(format!("Tệp này bị hỏng nên không khôi phục: {}", insp.messages.join("; ")));
+        }
+        {
+            let st = a.state::<DbState>();
+            let g = st.0.lock().map_err(|_| "khóa dữ liệu bị lỗi".to_string())?;
+            let db = g.as_ref().ok_or_else(|| "Chưa mở nguồn dữ liệu SQLite.".to_string())?;
+            dbbackup::create_restore_point(db, &points_dir(&root), "truoc-khoi-phuc", &ver).map_err(|e| format!("Chưa khôi phục vì không tạo được điểm trước khi khôi phục: {e}"))?;
+        }
+        with_closed(&a, |cur| dbbackup::replace_current(cur, &src))?;
+        Ok(RestoreOut { questions: insp.questions })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportOut {
+    questions: usize,
+    json_path: String,
+    sidecar_path: Option<String>,
+}
+
+/// Xuất ra `hedu.json` (cấu trúc 3) + tệp phụ vào thư mục người dùng chọn (không ghi đè, đã đối chiếu): đường quay về bản HEdu cũ.
+#[tauri::command]
+pub async fn db_export_json(app: AppHandle, dir: String) -> Result<ExportOut, String> {
+    if dir.trim().is_empty() {
+        return Err("Chưa chọn thư mục.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let st = app.state::<DbState>();
+        let g = st.0.lock().map_err(|_| "khóa dữ liệu bị lỗi".to_string())?;
+        let db = g.as_ref().ok_or_else(|| "Chưa mở nguồn dữ liệu SQLite.".to_string())?;
+        jsonmig::export_json(db, Path::new(&dir))
+            .map(|r| ExportOut { questions: r.questions, json_path: r.json_path.display().to_string(), sidecar_path: r.sidecar_path.map(|p| p.display().to_string()) })
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

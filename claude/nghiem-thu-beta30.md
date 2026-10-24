@@ -31,3 +31,10 @@ Chỉ chủ dự án nghiệm thu. Dùng bản chạy thử `npx tauri dev --con
 - [ ] CI Windows xanh trên `main`; `cargo test --lib` đạt.
 - [ ] Nếu beta.30 có SQLite / hồ sơ người dùng / nhiều nguồn dữ liệu: cần thiết kế migration + sao lưu + quay lui được chủ dự án duyệt riêng (chưa có trong main).
 - [ ] Phương án quay lại: bản trước còn trong mục Cập nhật → "Quay lại phiên bản trước"; bản sao lưu trước cập nhật còn.
+
+## F. Lưu trữ SQLite (thêm ở S4) — thử trên bản chạy thử `vn.hedu.app.thu`, sau đó mới tới ngân hàng thật
+- [ ] Mở HEdu có sẵn `hedu.json` cũ: hiện màn "Nâng cấp lưu trữ"; "Để sau" vẫn vào được bằng cách cũ; "Nâng cấp ngay" chuyển đủ câu (so số câu), tệp cũ còn nguyên, có thư mục `backups\migration-…`.
+- [ ] Cài đặt → Dữ liệu & sao lưu → "Lưu trữ SQLite": Kiểm tra toàn vẹn báo tốt; Lưu bản chụp .db; Xuất ra JSON (thư mục mới) rồi thử mở `hedu.json` đó bằng HEdu cũ (beta.29) trên thư mục thử.
+- [ ] Nhập từ 20 câu trở lên / xoá hàng loạt từ 20 câu / xoá hẳn khỏi Thùng rác / khôi phục từ file JSON: xuất hiện điểm khôi phục mới (tối đa 5, cũ nhất tự bị xoá); thử "Khôi phục điểm này…" ⇒ số câu quay về, có điểm "trước khi khôi phục" để quay lại.
+- [ ] Đóng app bằng cách tắt đột ngột (Task Manager → End task) giữa lúc đang nhập: mở lại thấy dữ liệu trước lô đang ghi, không hỏng.
+- [ ] Cập nhật beta → beta (bản thử có kho GitHub): có bản sao lưu trước cập nhật dạng .db; "Khôi phục sau cập nhật" đổi chỗ được hai bản.
