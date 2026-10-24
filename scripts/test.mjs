@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const dir = mkdtempSync(join(tmpdir(), 'hedu-test-'));
-for (const name of ['lib.test', 'bank.test', 'packages.test', 'preview.test', 'xemchuan.test', 'zoom.test', 'figscale.test', 'snippet.test', 'review.test', 'crisp.test', 'dup.baseline.test', 'dup2.test', 'dupindex.test', 'dupscope.test', 'dupdiff.test', 'dupimport.test', 'dupdecisions.test', 'goldset.test', 'figure.test', 'bankfilter.test', 'selection.test', 'batchops.test', 'trashbatch.test', 'texexport.test', 'savefile.test', 'texproject.test', 'dupnav.test', 'taxpath.test', 'idsuggest.test', 'idapply.test', 'iddraft.test', 'ai/client.test', 'ai/prefs.test', 'ai/tasks/ganid.test', 'ai/tasks/ganidrun.test', 'trashsafe.test', 'trashview.test']) {
+for (const name of ['lib.test', 'bank.test', 'packages.test', 'preview.test', 'xemchuan.test', 'zoom.test', 'figscale.test', 'snippet.test', 'review.test', 'crisp.test', 'dup.baseline.test', 'dup2.test', 'dupindex.test', 'dupscope.test', 'dupdiff.test', 'dupimport.test', 'dupdecisions.test', 'goldset.test', 'figure.test', 'bankfilter.test', 'selection.test', 'batchops.test', 'trashbatch.test', 'texexport.test', 'savefile.test', 'texproject.test', 'dupnav.test', 'taxpath.test', 'idsuggest.test', 'idapply.test', 'iddraft.test', 'ai/client.test', 'ai/prefs.test', 'ai/tasks/ganid.test', 'ai/tasks/ganidrun.test', 'trashsafe.test', 'trashview.test', 'xemchuancache.test']) {
   const out = join(dir, `${name}.mjs`);
   await build({ entryPoints: [`src/lib/${name}.ts`], bundle: true, platform: 'node', format: 'esm', outfile: out, logLevel: 'error' });
   execFileSync(process.execPath, [out], { stdio: 'inherit' });

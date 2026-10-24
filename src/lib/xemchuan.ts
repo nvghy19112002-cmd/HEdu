@@ -48,6 +48,12 @@ export const CATEGORY_ORDER: Category[] = ['thieu-goi', 'thieu-lenh', 'loi-ma', 
 const memo = new Map<string, Promise<Result>>();
 export const forgetCompiled = () => memo.clear();
 
+/** Dấu cấu hình TeX: đổi bộ dịch / đầu file / đường dẫn TeX Live / giới hạn giây thì kết quả nhớ trong phiên không còn đúng. */
+export function settingsSignature(): string {
+  const s = getSettings();
+  return [s.engine, s.texBin.trim(), String(s.timeoutSecs), s.preamble].join('');
+}
+
 async function opts(solution: boolean) {
   const s = getSettings();
   let pre: string | null = s.preamble.trim() || null;
@@ -66,7 +72,7 @@ export function compileQuestion(latex: string, solution: boolean, keep = true): 
   if (!isTikzReady()) {
     return Promise.resolve({ ok: false, fail: { category: 'thieu-texlive', label: 'Chỉ có ở bản cài Windows', detail: 'Biên dịch bằng TeX Live chỉ chạy trong bản cài trên máy.', message: '', log: '' } });
   }
-  const k = `${solution ? 1 : 0}|${latex}`;
+  const k = `${settingsSignature()}${solution ? 1 : 0}|${latex}`;
   if (keep) {
     const hit = memo.get(k);
     if (hit) return hit;

@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import type { TrashRec } from './dupdecisions';
-import { buildRows, capacityNote, dateText, DEFAULT_FILTER, filterRows, fold, isDefaultFilter, pageOf, type TrashFilter } from './trashview';
+import { afterRemoval, buildRows, capacityNote, dateText, DEFAULT_FILTER, filterRows, fold, infoLines, isDefaultFilter, neighbours, pageOf, type TrashFilter } from './trashview';
 import type { Question } from './types';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
@@ -89,6 +89,20 @@ console.log('Sức chứa + ngày');
   ok(capacityNote(900, 1000)?.level === 'warn' && /Sắp đầy/.test(capacityNote(950, 1000)!.text) && /không tự xoá/.test(capacityNote(950, 1000)!.text), '≥ 900: cảnh báo nhẹ, nói rõ không tự xoá');
   ok(capacityNote(1000, 1000)?.level === 'full' && /không thể chuyển thêm/i.test(capacityNote(1000, 1000)!.text), 'đầy: nói không thể chuyển thêm, không hứa tự dọn');
   ok(/^Hôm nay \d\d:\d\d$/.test(dateText(NOW - H, NOW)) && dateText(NOW - 20 * H, NOW) === 'Hôm qua' && dateText(NOW - 5 * D, NOW).includes('/'), 'ngày xoá hiển thị Hôm nay / Hôm qua / ngày đầy đủ');
+}
+
+console.log('Điều hướng trong khung xem + thông tin câu');
+{
+  const rows = buildRows(Array.from({ length: 4 }, (_, i) => rec(mk(i + 1, { review: i === 0 ? 'approved' : undefined, tags: i === 1 ? ['ôn thi', 'HK1'] : [] }), NOW - i * D)), [mk(3)], (q) => q.uid === 'u4');
+  const n1 = neighbours(rows, 'u2');
+  ok(n1.index === 1 && n1.total === 4 && n1.prev === 'u1' && n1.next === 'u3', 'câu giữa: có trước và sau');
+  ok(neighbours(rows, 'u1').prev === null && neighbours(rows, 'u4').next === null, 'đầu/cuối: không có trước/sau');
+  ok(neighbours(rows, 'u9').index === -1 && neighbours(rows, null).next === null && neighbours([], 'u1').total === 0, 'câu không còn trong danh sách ⇒ không có trước/sau');
+  ok(afterRemoval(rows, 'u2') === 'u3' && afterRemoval(rows, 'u4') === 'u3' && afterRemoval([rows[0]], 'u1') === null && afterRemoval(rows, 'zz') === null, 'sau khi câu rời Thùng rác: xem câu liền sau, không có thì liền trước, hết thì không chọn');
+  const val = (i: number, label: string) => infoLines(rows[i]).find((l) => l.label === label)?.value;
+  ok(val(0, 'Kiểm duyệt (lúc xoá)') === 'Đã duyệt' && val(1, 'Kiểm duyệt (lúc xoá)') === 'Chưa kiểm tra' && val(1, 'Nhãn') === 'ôn thi, HK1' && val(0, 'Nhãn') === '—', 'hiện trạng thái kiểm duyệt và nhãn đúng như snapshot');
+  ok(val(0, 'Nguồn xoá') === 'Không rõ', 'nguồn xoá: "Không rõ" (bản snapshot không lưu, không suy đoán)');
+  ok(infoLines(rows[2]).some((l) => /đã có câu cùng mã/i.test(l.value)) && infoLines(rows[3]).some((l) => /Vị trí cũ không còn/.test(l.value)), 'ghi rõ khi đã có trong Ngân hàng / vị trí không còn');
 }
 
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
