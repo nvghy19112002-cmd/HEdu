@@ -31,5 +31,12 @@ console.log('Ngưỡng 95%');
   ok(scoreRun([]).total === 0 && scoreRun([]).accuracyAll === 0, 'rỗng không lỗi');
 }
 
+console.log('Bao phủ thấp không được tính là đạt')
+{
+  const items: BenchItem[] = Array.from({ length: 200 }, (_, i) => it(`z${i}`, 'F1', i < 40 ? 'F1' : null, i < 40));
+  const s = scoreRun(items);
+  ok(s.precision === 1 && s.coverage === 0.2 && /bao phủ chỉ 20\.0%/.test(describeScore(s, true)) && !/Đạt mục tiêu/.test(describeScore(s, true)), 'đúng 100% nhưng chỉ phủ 20% ⇒ KHÔNG kết luận đạt');
+}
+
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
 console.log('\nbenchmark: đạt hết.');

@@ -6,6 +6,7 @@ import { addProfile, initProfiles, MAX_PROFILES, removeProfile, renameProfile, s
 import { AI_MODELS, loadAiPrefs, saveAiPrefs, thinkingFor, validModelId, type AiPrefs } from '../lib/ai/prefs';
 import { isDesktop } from '../lib/platform';
 import { AiConsentDialog } from './AiConsentDialog';
+import { BenchPanel } from './BenchPanel';
 import { ConfirmDialog } from './ConfirmDialog';
 
 /** Lượt thử kết nối: câu hỏi giả, không có dữ liệu ngân hàng; kiểm cả khoá lẫn khuôn JSON. */
@@ -170,6 +171,8 @@ export function AiSettingsPanel({ toast }: { toast(m: string): void }) {
         <input type="checkbox" checked={prefs.consent} onChange={(e) => update({ consent: e.target.checked })} />
         <span>Cho phép gửi nội dung câu hỏi tới Google (Gemini) khi tôi bấm “Hỏi AI”. Gói miễn phí: Google có thể dùng nội dung để cải thiện sản phẩm và người duyệt có thể đọc. Mỗi lượt gửi HEdu vẫn hỏi lại số câu, nội dung và cấu hình đích.</span>
       </label>
+
+      <BenchPanel />
 
       {replace && (
         <ConfirmDialog title="Thay khoá API của cấu hình này?" confirmLabel="Lưu khoá mới" busy={busy} disabled={!replace.key.trim()} onConfirm={() => { void replaceKey(); }} onCancel={() => setReplace(null)}>
