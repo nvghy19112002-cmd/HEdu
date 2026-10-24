@@ -2,7 +2,7 @@
 //   Xem nhanh  — HEdu tự dựng (QuestionView), chạy offline, có công tắc Đáp án / Lời giải (mặc định ẨN);
 //   Xem chuẩn  — TeX Live biên dịch, CHỈ khi bấm; đổi câu thì bỏ kết quả cũ; lỗi TeX không chặn khôi phục / xuất;
 //   LaTeX gốc  — nguyên văn, chỉ đọc, sao chép được.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { infoLines, neighbours, type TrashRow } from '../lib/trashview';
 import { parseExTest } from '../lib/extest';
 import { seqLabel } from '../lib/id';
@@ -18,12 +18,14 @@ let rememberMode: ViewMode = 'quick';
 let rememberAnswer = false;
 let rememberSolution = false;
 
-export function TrashViewer({ row, list, busy, readOnly, onNav, onRestore, onExport, onPurge, onClose, onToast }: {
+export function TrashViewer({ row, list, busy, readOnly, extra, onNav, onRestore, onExport, onPurge, onClose, onToast }: {
   row: TrashRow;
   /** danh sách đang lọc (để duyệt câu trước / sau) */
   list: readonly TrashRow[];
   busy: boolean;
   readOnly: boolean;
+  /** khung xử lý xung đột (nếu câu chưa khôi phục được) */
+  extra?: ReactNode;
   onNav(uid: string): void;
   onRestore(): void;
   onExport(): void;
@@ -108,6 +110,8 @@ export function TrashViewer({ row, list, busy, readOnly, onNav, onRestore, onExp
         <summary>Thông tin câu</summary>
         <dl>{infoLines(row).map((l, i) => <div key={i}><dt>{l.label}</dt><dd className={l.label === 'Mã nội bộ (uid)' ? 'mono' : undefined}>{l.value}</dd></div>)}</dl>
       </details>
+
+      {extra}
 
       <div className="tr-view-acts">
         <button type="button" className="btn btn-sm btn-accent" disabled={busy || readOnly} onClick={onRestore}>Khôi phục</button>

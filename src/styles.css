@@ -1130,3 +1130,13 @@ a { color: var(--accent); }
 .tr-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tr-list li.is-active { box-shadow: inset 3px 0 0 var(--accent); background: var(--sel); }
 @media (max-width: 1099px) { .tr-back { display: inline-flex; } }
+
+/* PR-4: xung đột khôi phục, menu toàn Thùng rác, so sánh hai bản */
+.tr-head-r { display: flex; align-items: center; gap: 10px; }
+.tr-menu-wrap { position: relative; }
+.tr-menu-wrap .more-menu { right: 0; left: auto; top: 100%; }
+.tr-conflict .tr-conf-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.tr-conf-note { margin: 0; }
+.tr-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tr-cmp .tr-pre { max-height: 300px; }
+@media (max-width: 700px) { .tr-cmp { grid-template-columns: 1fr; } }

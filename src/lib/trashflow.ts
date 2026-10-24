@@ -115,6 +115,12 @@ export interface RestoreFromTrashResult {
   strayInTrash: string[];
 }
 
+/** Vì sao câu trong Thùng rác CHƯA khôi phục được (null = khôi phục được). `cur` = câu cùng uid đang có trong Ngân hàng (nếu có). */
+export function restoreBlockOf(q: Question, cur: Question | undefined): RestoreBlock | null {
+  if (cur) return same(cur, q) ? 'exists-same' : 'exists-different';
+  return locationProblem(q) ? 'bad-location' : null;
+}
+
 const same = (a: Question, b: Question): boolean => a.latex === b.latex && a.level === b.level && a.type === b.type && a.formId === b.formId && a.lessonId === b.lessonId;
 
 /**
@@ -139,8 +145,8 @@ export async function restoreFromTrash(uids: readonly string[]): Promise<Restore
       if (!rec) continue;
       const q = rec.q;
       const cur = bank.get(id);
-      if (cur) blocked.push({ uid: id, seq: q.seq, reason: same(cur, q) ? 'exists-same' : 'exists-different' });
-      else if (locationProblem(q)) blocked.push({ uid: id, seq: q.seq, reason: 'bad-location' });
+      const why = restoreBlockOf(q, cur);
+      if (why) blocked.push({ uid: id, seq: q.seq, reason: why });
       else go.push(q);
     }
     if (go.length === 0) return empty({ ok: true, blocked, message: blocked.length ? `Chưa khôi phục câu nào: ${blocked.length} câu cần xử lý (xem lý do từng câu).` : 'Không có câu nào trong Thùng rác khớp.' });
