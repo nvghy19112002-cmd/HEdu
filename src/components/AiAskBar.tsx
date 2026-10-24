@@ -53,7 +53,7 @@ export function AiAskBar({ count, buildJobs, onResults, disabled }: { count: num
       ) : (
         <button type="button" className="btn btn-sm" disabled={disabled || !ready || count === 0} onClick={open} title={ready ? `Gửi tới ${prefs.model}, mỗi lượt tối đa ${GAN_ID_BATCH} câu` : undefined}>Hỏi AI cho {count} câu</button>
       )}
-      {!ready && hasKey !== null && <span className="sys-hint">Muốn dùng AI: vào Hệ thống → AI, nhập khoá và bật “Cho phép gửi nội dung câu hỏi”.</span>}
+      {!ready && hasKey !== null && <span className="sys-hint">Muốn dùng AI: vào Cài đặt → AI, nhập khoá và bật “Cho phép gửi nội dung câu hỏi”.</span>}
       {msg && <span className={`chk-pill ${msg.ok ? 'ok' : 'warn'}`} role="status">{msg.text}</span>}
       {ask && (
         <AiConsentDialog

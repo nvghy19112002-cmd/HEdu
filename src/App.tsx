@@ -4,9 +4,8 @@ import { BootGate } from './components/BootGate';
 import { CommandPalette } from './components/CommandPalette';
 import { ZoomIndicator } from './components/ZoomControl';
 import { startZoom } from './lib/zoom';
-import { loadDecisions } from './lib/dupdecisions';
 import { FileDialog } from './components/FileDialog';
-import { IcBackup, IcBank, IcEdit, IcExam, IcImport, IcTree } from './components/Icons';
+import { IcBackup, IcBank, IcEdit, IcExam, IcImport, IcTrash, IcTree } from './components/Icons';
 import { featureOn, type FeatureKey } from './lib/features';
 import type { BootResult } from './lib/store';
 import { BankScreen } from './screens/Bank';
@@ -15,6 +14,8 @@ import { ExamScreen } from './screens/Exam';
 import { ImportScreen } from './screens/Extra';
 import { CurriculumScreen } from './screens/Curriculum';
 import { SystemScreen } from './screens/System';
+import { TrashScreen } from './screens/Trash';
+import { loadDecisions, trashCount, useDecisions } from './lib/dupdecisions';
 import { UpdateProvider, useUpdates } from './update-context';
 
 // "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
@@ -23,6 +24,7 @@ const NAV: { s: Screen; label: string; Icon: typeof IcEdit; feature?: FeatureKey
   { s: 'exam', label: 'Tạo đề', Icon: IcExam, feature: 'exam' },
   { s: 'import', label: 'Nhập liệu', Icon: IcImport },
   { s: 'curriculum', label: 'Chương trình', Icon: IcTree },
+  { s: 'trash', label: 'Thùng rác', Icon: IcTrash },
 ];
 
 export function App({ boot }: { boot: BootResult }) {
@@ -77,7 +79,7 @@ function Shell({ recovered }: { recovered: boolean }) {
     if (recovered) toast('File dữ liệu bị lỗi nên HEdu đã lấy lại từ bản dự phòng. Nên kiểm tra các câu vừa soạn gần đây.');
   }, [recovered, toast]);
 
-  const onFound = useCallback((u: { version: string }) => toast(`Có bản mới v${u.version}. Vào mục Hệ thống để cập nhật.`), [toast]);
+  const onFound = useCallback((u: { version: string }) => toast(`Có bản mới v${u.version}. Vào mục Cài đặt để cập nhật.`), [toast]);
 
   return (
     <AppCtx.Provider value={api}>
@@ -95,20 +97,22 @@ function Shell({ recovered }: { recovered: boolean }) {
 function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
   const { go } = useApp();
   const { available } = useUpdates();
+  useDecisions(); // theo dõi để số câu trong Thùng rác (badge) luôn đúng; tệp phụ được đọc ở Shell lúc mở app
+  const trashN = trashCount();
   return (
     <div className="app">
       <nav className="rail" aria-label="Điều hướng chính">
         <div className="logo" aria-label="HEdu">√</div>
         {NAV.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, Icon }) => (
-          <button key={s} type="button" className="rb" aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
-            <Icon />
+          <button key={s} type="button" className="rb" aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })} aria-label={s === 'trash' && trashN > 0 ? `Thùng rác, ${trashN} câu` : undefined}>
+            <span className="rb-ico"><Icon />{s === 'trash' && trashN > 0 && <span className="rb-count" aria-hidden="true">{trashN > 999 ? '999+' : trashN}</span>}</span>
             <span>{label}</span>
           </button>
         ))}
         <div className="rail-spacer" />
         <button type="button" className="rb" aria-current={screen === 'system' ? 'page' : undefined} onClick={() => go({ screen: 'system' })}>
           <span className="rb-ico"><IcBackup />{available && <span className="dot" role="img" aria-label={`Có bản mới v${available.version}`} />}</span>
-          <span>Hệ thống</span>
+          <span>Cài đặt</span>
         </button>
       </nav>
       <main className="main">
@@ -117,6 +121,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {screen === 'exam' && featureOn('exam') && <ExamScreen pick={nav.examPick} />}
         {screen === 'import' && <ImportScreen />}
         {screen === 'curriculum' && <CurriculumScreen />}
+        {screen === 'trash' && <TrashScreen />}
         {screen === 'system' && <SystemScreen />}
       </main>
     </div>

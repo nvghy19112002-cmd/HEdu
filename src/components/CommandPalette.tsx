@@ -13,7 +13,8 @@ const SCREENS: { s: Screen; name: string }[] = [
   { s: 'exam', name: 'Tạo đề theo ma trận' },
   { s: 'import', name: 'Nhập câu từ LaTeX' },
   { s: 'curriculum', name: 'Xem khung chương trình' },
-  { s: 'system', name: 'Cập nhật, sao lưu và khôi phục' },
+  { s: 'trash', name: 'Mở Thùng rác' },
+  { s: 'system', name: 'Cài đặt: cập nhật, sao lưu và khôi phục' },
 ];
 
 function plain(latex: string): string {

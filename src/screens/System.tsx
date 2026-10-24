@@ -7,11 +7,7 @@ import { isDesktop } from '../lib/platform';
 import { clearTikzCache, defaultPreamble, findTeX, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
 import { asTikzErr } from '../lib/tikz';
 import { addSamples, exportBackup, importBackup, resetToSample, useBank } from '../lib/store';
-import { isTrashBusy, purgeFromTrash, restoreFromTrash, RESTORE_BLOCK_TEXT } from '../lib/trashflow';
-import { decisionsLoaded, loadDecisions, trashList, useDecisions } from '../lib/dupdecisions';
-import { plainSnippet } from '../lib/snippet';
-import { parseExTest } from '../lib/extest';
-import { seqLabel } from '../lib/id';
+import { decisionsLoaded, loadDecisions, trashCount, useDecisions } from '../lib/dupdecisions';
 import {
   backupInfo, checkUpdate, CHANNEL_LABEL, formatBytes, friendlyError, installUpdate, restoreBackup,
   type BackupMeta, type Channel, type Progress, type UpdateInfo,
@@ -32,7 +28,9 @@ function when(ts: number | null): string {
 type Phase = 'idle' | 'installing' | 'restarting';
 
 export function SystemScreen() {
-  const { toast, showFile } = useApp();
+  const { toast, showFile, go } = useApp();
+  useDecisions();
+  const trashN = trashCount();
   const { questions } = useBank();
   const up = useUpdates();
   const desktop = isDesktop();
@@ -119,7 +117,7 @@ export function SystemScreen() {
     <>
       <header className="page-head">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <h1>Hệ thống</h1>
+          <h1>Cài đặt</h1>
           <span className="crumbs">Cập nhật app, sao lưu và khôi phục dữ liệu</span>
         </div>
       </header>
@@ -283,7 +281,13 @@ export function SystemScreen() {
           <span className="sys-hint">Khôi phục từ file sẽ thay toàn bộ ngân hàng hiện tại. Bản sao lưu gồm câu hỏi, khung chương trình, quyết định “giữ cả hai” của Kiểm tra trùng, thùng rác và nhãn chuẩn; khi khôi phục, phần quyết định/thùng rác được GỘP vào dữ liệu đang có (không xoá gì).</span>
         </section>
 
-        <TrashPanel />
+        <section className="panel" aria-label="Thùng rác">
+          <h2>Thùng rác</h2>
+          <span className="sys-hint">Câu đã xoá nằm trong Thùng rác cho tới khi bạn chủ động xoá hẳn. Xem, tìm, khôi phục và xoá hẳn ở màn riêng.</span>
+          <div className="head-actions">
+            <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'trash' })}>Mở Thùng rác ({trashN} câu)</button>
+          </div>
+        </section>
 
         <section className="panel" aria-label="Dữ liệu">
           <h2>Dữ liệu</h2>
@@ -360,42 +364,5 @@ export function SystemScreen() {
         </section>
       </div>
     </>
-  );
-}
-
-
-function TrashPanel() {
-  const { toast } = useApp();
-  useDecisions();
-  const [ask, setAsk] = useState<string | null>(null);
-  useEffect(() => { if (!decisionsLoaded()) void loadDecisions(); }, []);
-  const items = trashList();
-  return (
-    <section className="panel" aria-label="Thùng rác">
-      <h2>Thùng rác ({items.length} câu)</h2>
-      <span className="sys-hint">Câu bị xoá ở Ngân hàng hoặc Kiểm tra trùng nằm ở đây, còn nguyên mã LaTeX, để khôi phục khi cần. Khôi phục giữ số thứ tự cũ nếu số đó chưa có câu khác dùng. Thùng rác lưu tối đa 1.000 câu gần nhất.</span>
-      {items.length === 0 && <span className="sys-hint">Thùng rác trống.</span>}
-      <ul className="trash-list">
-        {items.slice(0, 50).map(({ q, at }) => (
-          <li key={q.uid}>
-            <span className="mono">{seqLabel(q.seq)}</span>
-            <span className="trash-t">{plainSnippet(parseExTest(q.latex).stem) || '(câu chưa có đề bài)'}</span>
-            <span className="muted sm">{new Date(at).toLocaleDateString('vi-VN')}</span>
-            <button type="button" className="btn btn-sm" disabled={isTrashBusy(q.uid)} onClick={async () => {
-              // ghi NGÂN HÀNG bền vững trước, chỉ khi đó mới gỡ bản trong Thùng rác (không còn "khôi phục rồi xoá ngay")
-              const r = await restoreFromTrash([q.uid]);
-              const b = r.blocked[0];
-              if (b) toast(`Câu ${seqLabel(b.seq)}: ${RESTORE_BLOCK_TEXT[b.reason]}`);
-              else if (r.restored[0] && r.restored[0].fromSeq !== r.restored[0].toSeq) toast(`Câu ${seqLabel(r.restored[0].fromSeq)} đã được khôi phục với số mới ${seqLabel(r.restored[0].toSeq)} vì số cũ đã được dùng.${r.strayInTrash.length ? ' Chưa dọn được bản sao trong Thùng rác.' : ''}`);
-              else toast(r.message);
-            }}>Khôi phục</button>
-            {ask === q.uid
-              ? <><button type="button" className="btn btn-sm btn-accent" onClick={async () => { setAsk(null); const r = await purgeFromTrash([q.uid]); if (!r.ok) toast(r.message); }}>Xoá hẳn</button><button type="button" className="btn btn-sm" autoFocus onClick={() => setAsk(null)}>Giữ lại</button></>
-              : <button type="button" className="btn btn-sm btn-outline" onClick={() => setAsk(q.uid)}>Xoá hẳn…</button>}
-          </li>
-        ))}
-      </ul>
-      {items.length > 50 && <span className="sys-hint">Đang hiện 50 câu gần nhất trong {items.length}.</span>}
-    </section>
   );
 }

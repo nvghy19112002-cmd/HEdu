@@ -327,14 +327,14 @@ function PairView({ hit, A, B, snap, onOpen, onGoto, onTrash, onMsg, beforeDecid
             <button type="button" className="btn btn-sm" aria-expanded={del} onClick={() => { setDel(!del); setAsk(null); }}>Loại một câu… ▾</button>
             {del && (
               <span className="dc-del-pop" role="group" aria-label="Chuyển một câu vào thùng rác">
-                <small>Câu được chuyển vào <b>thùng rác</b> (Hệ thống → Thùng rác), không mất hẳn: có thể khôi phục. Cặp còn lại không bị ảnh hưởng.</small>
+                <small>Câu được chuyển vào <b>thùng rác</b> (mở màn Thùng rác ở thanh bên trái), không mất hẳn: có thể khôi phục. Cặp còn lại không bị ảnh hưởng.</small>
                 {([[A, 'A'], [B, 'B']] as const).map(([q, tag]) => ask === q.uid ? (
                   <span key={tag} className="dc-confirm" role="alertdialog" aria-label={`Xác nhận chuyển câu ${tag} vào thùng rác`}>
                     <b>Chuyển câu {tag} ({seqLabel(q.seq)} · {questionCode(q, q.level)}) vào thùng rác?</b>
                     <button type="button" className="btn btn-sm btn-accent" onClick={async () => {
                       const block = await trashBlockReason([q]);
                       const ok = block ? false : await onTrash(q); setAsk(null); setDel(false);
-                      onMsg(ok ? { ok: true, text: `Đã chuyển câu ${seqLabel(q.seq)} vào thùng rác. Khôi phục ở Hệ thống → Thùng rác.` } : { ok: false, text: block ?? 'Không lưu được thùng rác nên CHƯA xoá câu nào. Thử lại hoặc tạo file sao lưu trước.' });
+                      onMsg(ok ? { ok: true, text: `Đã chuyển câu ${seqLabel(q.seq)} vào thùng rác. Khôi phục ở màn Thùng rác (thanh bên trái).` } : { ok: false, text: block ?? 'Không lưu được thùng rác nên CHƯA xoá câu nào. Thử lại hoặc tạo file sao lưu trước.' });
                     }}>Chuyển vào thùng rác</button>
                     <button type="button" className="btn btn-sm" autoFocus onClick={() => setAsk(null)}>Giữ lại</button>
                   </span>
