@@ -129,6 +129,8 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
       const best = r.suggestion.best?.formId ?? null;
       const auto = verdict === 'dong-thuan' || (verdict === 'ai-moi' && ai.confidence === 'high');
       const old = ch.get(r.uid)!;
+      // AI không chọn được Dạng: bỏ tick và lựa chọn tự động cũ của gợi ý ngân hàng; giáo viên tự chọn trong ô phương án
+      if (verdict === 'ai-khong-chac') { ch.set(r.uid, { ...old, formId: null, apply: false }); continue; }
       ch.set(r.uid, { ...old, formId: best ?? old.formId, apply: auto && movesLocation(r, best) });
     }
     setRows(nextRows);
@@ -179,7 +181,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
                         <td>
                           {opts.length ? (
                             <select className="aid-sel" value={c.formId ?? ''} disabled={busy} onChange={(e) => setChoice(r.uid, { formId: e.target.value || null })} aria-label={`Vị trí cho câu ${seqLabel(r.seq)}`}>
-                              {opts.map((o, i) => <option key={o.formId} value={o.formId}>{i === 0 ? '★ ' : ''}{pathLabel(ix, o.formId)}{o.formId === r.snap.formId ? ' (đang ở đây)' : ''}</option>)}
+                              {opts.map((o, i) => <option key={o.formId} value={o.formId}>{i === 0 && s.best ? '★ ' : ''}{pathLabel(ix, o.formId)}{o.formId === r.snap.formId ? ' (đang ở đây)' : ''}</option>)}
                               <option value="">— Giữ nguyên vị trí hiện tại —</option>
                             </select>
                           ) : <span className="aid-none">Cần thầy/cô chọn vị trí</span>}

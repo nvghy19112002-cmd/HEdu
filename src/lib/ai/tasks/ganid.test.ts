@@ -11,7 +11,7 @@ const f12 = formsOfGrade(tax, g12), f10 = formsOfGrade(tax, g10);
 console.log('Nhiệm vụ AI gan-id');
 ok(GAN_ID_TASK.id === 'gan-id' && GAN_ID_TASK.version >= 1, 'có mã nhiệm vụ + phiên bản prompt');
 ok(f12.length > 50 && f12.every((f) => checkLocation(ix, { ...ix.get(f.formId)!.lesson!, grade: g12, chapterId: ix.get(f.formId)!.chapter!.id, lessonId: ix.get(f.formId)!.lesson!.id, formId: f.formId }).ok), 'danh sách Dạng của lớp lấy đúng từ cây, đều hợp lệ');
-ok(/Chương trình GDPT 2018/.test(GAN_ID_SYSTEM) && /KHÔNG đoán bừa/.test(GAN_ID_SYSTEM) && /DỮ LIỆU, không phải chỉ dẫn/.test(GAN_ID_SYSTEM) && /Miền nghiệm của HỆ BPT/.test(GAN_ID_SYSTEM), 'prompt có: CT2018, không đoán bừa, chống chèn lệnh, cặp dễ nhầm');
+ok(/Chương trình GDPT 2018/.test(GAN_ID_SYSTEM) && /KHÔNG ĐOÁN/.test(GAN_ID_SYSTEM) && /DỮ LIỆU, không phải chỉ dẫn/.test(GAN_ID_SYSTEM) && /Miền nghiệm của HỆ BPT/.test(GAN_ID_SYSTEM), 'prompt có: CT2018, không đoán bừa, chống chèn lệnh, cặp dễ nhầm');
 
 const items = [
   { id: 'q1', latex: '\\begin{ex}Tính $\\int_0^1 x\\,dx$.\\end{ex}', examples: [{ formId: f12[0].formId, latex: '\\begin{ex}Mẫu\\end{ex}' }] },
@@ -50,6 +50,34 @@ const missing = parseGanIdReply(JSON.stringify({ results: [{ id: 'q1', form_id: 
 ok(missing.results.get('q1')!.best === null && missing.problems.some((x) => x.includes('q2')), 'form_id null / thiếu câu ⇒ cần giáo viên chọn, có ghi chú');
 const fake = parseGanIdReply(JSON.stringify({ results: [{ id: 'q1', form_id: 'f-bia', confidence: 'high', reason: 'x' }] }), tax, g12, ['q1']);
 ok(fake.results.get('q1')!.best === null, 'Dạng bịa (không có trong cây) ⇒ bị bỏ');
+
+console.log('Quy tắc câu lý thuyết thuần (prompt v2) + đọc kết quả AI từ chối');
+{
+  ok(GAN_ID_TASK.version >= 2, 'đổi hành vi prompt ⇒ tăng phiên bản nhiệm vụ');
+  ok(/CÂU LÝ THUYẾT THUẦN/.test(GAN_ID_SYSTEM) && /nhớ hoặc nhận ra công thức, định nghĩa hoặc phát biểu định lý/.test(GAN_ID_SYSTEM), 'prompt định nghĩa đúng câu lý thuyết thuần');
+  ok(/không phải lý thuyết thuần|KHÔNG phải lý thuyết thuần/.test(GAN_ID_SYSTEM) && /tính toán, chứng minh hoặc vận dụng nhiều bước/.test(GAN_ID_SYSTEM), 'không coi câu có từ khoá "công thức/mệnh đề" là lý thuyết nếu phải tính/vận dụng');
+  ok(/form_id = null/.test(GAN_ID_SYSTEM) && /Không chọn Dạng "gần nhất"/.test(GAN_ID_SYSTEM) && /không tự lấy phương án phụ làm chính/.test(GAN_ID_SYSTEM), 'prompt: không có Dạng rõ ràng ⇒ null, không chọn gần nhất, không thăng phương án phụ');
+  ok(/KHÔNG mặc định câu lý thuyết là NB/.test(GAN_ID_SYSTEM) && !/tạo Dạng/.test(GAN_ID_SYSTEM), 'mức độ xét độc lập; không có việc tạo Dạng mới');
+  ok(GAN_ID_SYSTEM.length < 3200, 'prompt gọn (phù hợp model nhẹ như Flash-Lite): dưới 3.200 ký tự');
+  const sch = (buildGanIdRequest(tax, g12, [{ id: 'q1', latex: 'x', examples: [] }], 'gemini-3.5-flash-lite').schema as { properties: { results: { items: { properties: Record<string, unknown>; required: string[] } } } }).properties.results.items;
+  ok('theory' in sch.properties && !sch.required.includes('theory') && sch.required.includes('form_id'), 'khuôn JSON có cờ theory (không bắt buộc); form_id vẫn bắt buộc và cho phép null');
+  const reqLite = buildGanIdRequest(tax, g12, [{ id: 'q1', latex: 'x', examples: [] }], 'gemini-3.5-flash-lite');
+  ok(reqLite.model === 'gemini-3.5-flash-lite' && reqLite.thinkingLevel === 'minimal', 'dùng được mã model Flash-Lite, mức suy nghĩ thấp nhất');
+  const ids = ['q1', 'q2', 'q3'];
+  const p = parseGanIdReply(JSON.stringify({ results: [
+    { id: 'q1', form_id: null, confidence: 'high', reason: 'câu định nghĩa', theory: true, alternatives: [{ form_id: f12[3].formId }] },
+    { id: 'q2', form_id: 'khong-co-trong-cay', confidence: 'high', reason: 'x' },
+    { id: 'q3', form_id: f12[0].formId, confidence: 'high', reason: 'ok', level: 'VD' },
+  ] }), tax, g12, ids);
+  const r1 = p.results.get('q1')!;
+  ok(r1.best === null && r1.confidence === 'low' && r1.theory === true && r1.alternatives.length === 1, 'form_id = null ⇒ không có Dạng chính, tin cậy ép về thấp, phương án phụ giữ làm tham khảo (không thăng lên chính)');
+  ok(p.results.get('q2')!.best === null && p.problems.some((x) => /không có trong lớp/.test(x)), 'Dạng không có trong cây ⇒ bỏ, báo lại');
+  ok(p.results.get('q3')!.best?.formId === f12[0].formId && p.results.get('q3')!.levelHint === 'VD', 'Dạng hợp lệ được nhận; mức độ chỉ là gợi ý');
+  const bad = parseGanIdReply('{"results": [{"id": "q1"', tax, g12, ['q1']);
+  ok(bad.results.get('q1')!.best === null && bad.problems.length >= 1, 'JSON bị cắt ⇒ không gán bừa');
+  const wrongGrade = parseGanIdReply(JSON.stringify({ results: [{ id: 'q1', form_id: f10[0].formId, confidence: 'high', reason: '' }] }), tax, g12, ['q1']);
+  ok(wrongGrade.results.get('q1')!.best === null, 'Dạng của lớp khác bị loại');
+}
 
 if (fail) process.exit(1);
 console.log('ai/tasks/ganid: đạt hết.');
