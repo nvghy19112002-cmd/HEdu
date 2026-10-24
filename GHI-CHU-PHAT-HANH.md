@@ -1,3 +1,13 @@
+## Có gì mới trong beta.30 (đã phát hành 24/10/2026, kênh beta): lưu trữ SQLite + các cải tiến dữ liệu
+Không đổi schema logic (3), ID6, UID, LaTeX gốc, cây mục lục, thuật toán dò trùng. Gồm PR #91–#99.
+- **SQLite làm nơi lưu chính** (PR #96–#99): lưu nhanh (sửa một câu ~1 ms thay vì ghi lại cả tệp), mất điện/tắt đột ngột không hỏng dữ liệu, nạp theo trang cho ngân hàng lớn. Lần mở đầu có `hedu.json` cũ, HEdu hiện màn **"Nâng cấp lưu trữ"**; chỉ chuyển khi bạn bấm xác nhận, chụp nguyên trạng vào `backups/migration-…`, đối chiếu từng câu, tệp cũ không bị xoá. "Để sau" vẫn dùng cách cũ.
+- **Sao lưu/khôi phục SQLite**: điểm khôi phục tự động (tối đa 5) trước nhập/xoá hàng loạt từ 20 câu, xoá hẳn khỏi Thùng rác, khôi phục từ file; bản chụp .db; khôi phục từ bản chụp/điểm; **Xuất ra JSON** để quay về bản cũ; Kiểm tra toàn vẹn (Cài đặt → Dữ liệu & sao lưu → Lưu trữ SQLite). Sao lưu trước cập nhật vẫn đúng một bản.
+- Khôi phục câu "Vị trí không còn" vào vị trí mới do giáo viên chọn (xem trước ID cũ/mới, câu về "Cần sửa") — PR #92.
+- Nhập .tex có sẵn ID: phân loại ID, bắt xác nhận khi câu vào vị trí chung hoặc Dạng đầu tiên — PR #94.
+- Gán ID bằng Gemini: quy tắc câu lý thuyết thuần, AI "không chắc" không bị ngân hàng ghi đè (PR #91); bộ đo độ chính xác trong Cài đặt → AI Gemini (PR #93, chưa có số đo thật).
+- **Lưu ý quay lui:** sau khi nâng cấp, bản HEdu cũ (beta.29 trở về trước) không thấy dữ liệu mới; dùng "Xuất ra JSON". Dữ liệu cũ vẫn còn trong `data` và `backups`.
+- **Chưa nghiệm thu trên máy Windows thật.** Chưa thử thật: cập nhật beta lên beta (sao lưu trước cập nhật dạng .db), cắt điện thật. Hồ sơ người dùng/nhiều nguồn dữ liệu: beta.31.
+
 ## Có gì mới trong beta.29 (đã phát hành 24/10/2026, kênh beta; gồm PR #83–#89): Thùng rác độc lập, Cài đặt mới, Gemini nhiều khoá
 Không đổi schema (3), ID6, UID, LaTeX gốc, cây mục lục, thuật toán dò trùng. Chờ chủ dự án nghiệm thu trên máy Windows thật.
 - **An toàn dữ liệu Thùng rác (PR #83)**: khôi phục ghi Ngân hàng trước rồi mới gỡ khỏi Thùng rác; xoá hẳn không đụng Ngân hàng; khoá chống bấm đôi; lỗi ghi ở giữa chừng chỉ hoàn lại đúng phần của thao tác đó. Không thể làm mất câu khi một trong hai tệp ghi lỗi (xấu nhất = câu nằm ở cả hai nơi).
