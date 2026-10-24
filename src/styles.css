@@ -1169,3 +1169,6 @@ a { color: var(--accent); }
 .ai-prof-pick small { color: var(--ink-3); }
 .ai-prof-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .ai-add { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+
+.toast-act { margin-left: 12px; padding: 2px 10px; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.toast-act:focus-visible { outline: 2px solid var(--on-dark); outline-offset: 2px; }

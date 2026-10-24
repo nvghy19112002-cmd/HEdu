@@ -378,7 +378,7 @@ export function BankScreen() {
     if (!mv.ok) { toast(mv.why === 'trash-write' ? 'Không lưu được thùng rác nên CHƯA xoá câu. Hãy thử lại hoặc tạo file sao lưu trước.' : mv.message); return; }
     setSel((s) => { const n = new Set(s); n.delete(q.uid); return n; });
     if (active?.uid === q.uid) setActiveUid(next ? next.uid : null);
-    toast(`Đã chuyển ${seqLabel(q.seq)} vào thùng rác (khôi phục ở màn Thùng rác).`);
+    toast(`Đã chuyển ${seqLabel(q.seq)} vào Thùng rác.`, { label: 'Mở Thùng rác', run: () => go({ screen: 'trash' }) });
   };
 
   const renderRows = () => (

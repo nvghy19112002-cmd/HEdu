@@ -147,7 +147,7 @@ pub fn classify(status: u16, retry_after: Option<&str>, body: &[u8], model: &str
         403 => return Err(err("forbidden", "Khoá không có quyền dùng model này (có thể model không thuộc gói miễn phí).")),
         404 => return Err(err("bad_request", "Không tìm thấy model — tên model có thể đã đổi.")),
         429 => {
-            let mut e = if is_daily_quota(&v) { err("quota_day", "Đã hết lượt miễn phí hôm nay. Hãy thử lại vào ngày mai.") } else { err("rate", "Gọi AI quá nhanh — đang chờ để thử lại.") };
+            let mut e = if is_daily_quota(&v) { err("quota_day", "Dự án Gemini đã hết hạn mức của model này. HEdu vẫn gợi ý từ Ngân hàng trên máy và không tự chuyển sang tài khoản khác — hãy thử lại sau khi Google làm mới hạn mức.") } else { err("rate", "Gọi AI quá nhanh — đang chờ để thử lại.") };
             e.retry_after_secs = retry_hint(retry_after, &v);
             return Err(e);
         }

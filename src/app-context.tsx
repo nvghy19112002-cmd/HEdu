@@ -39,7 +39,8 @@ export type NavGuard = (proceed: () => void) => boolean;
 export interface AppApi {
   nav: Nav;
   go(next: Nav): void;
-  toast(msg: string): void;
+  /** `action` = một nút ngắn kèm thông báo (vd. “Mở Thùng rác”) */
+  toast(msg: string, action?: { label: string; run(): void }): void;
   openPalette(): void;
   /** đăng ký (hoặc gỡ bằng null) bộ chặn rời đi; mọi go() đều đi qua đó */
   setGuard(g: NavGuard | null): void;
