@@ -16,6 +16,7 @@ import {
   type BackupMeta, type Channel, type Progress, type UpdateInfo,
 } from '../lib/updates';
 import { FigScalePanel, ZoomPanel } from '../components/ZoomControl';
+import { AiSettingsPanel } from '../components/AiSettingsPanel';
 import { useUpdates } from '../update-context';
 
 function readFile(file: File): Promise<string> {
@@ -308,6 +309,9 @@ export function SystemScreen() {
             </>
           )}
         </section>
+
+        <h2 className="sys-group">AI</h2>
+        <AiSettingsPanel toast={toast} />
 
         <h2 className="sys-group">Hiển thị</h2>
         <ZoomPanel />
