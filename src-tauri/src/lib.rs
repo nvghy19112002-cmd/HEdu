@@ -1,6 +1,7 @@
 // Lõi desktop của HEdu: lưu dữ liệu an toàn + cập nhật hai kênh + quay lại bản trước.
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod ai;
+mod db;
 mod proc;
 mod storage;
 mod support;
