@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ExportChoiceDialog } from '../components/ExportChoiceDialog';
+import { RelocateDialog } from '../components/RelocateDialog';
 import { TrashViewer } from '../components/TrashViewer';
 import { decisionsLoaded, isDecisionsWritable, loadDecisions, TRASH_CAP, trashList, useDecisions } from '../lib/dupdecisions';
 import { parseExTest } from '../lib/extest';
@@ -15,7 +16,7 @@ import { useBank } from '../lib/store';
 import { verbatimTex } from '../lib/texproject';
 import { isTrashBusy, locationProblem, purgeAllTrash, purgeFromTrash, restoreBlockOf, restoreFromTrash, RESTORE_BLOCK_TEXT, type RestoreBlock } from '../lib/trashflow';
 import { afterRemoval, buildRows, capacityNote, dateText, DATE_LABEL, DEFAULT_FILTER, filterRows, isDefaultFilter, pageOf, PAGE_SIZES, SORT_LABEL, STATUS_LABEL, type DateFilter, type SortMode, type StatusFilter, type TrashFilter, type TrashRow } from '../lib/trashview';
-import { TYPE_LABEL, TYPES, type QType, type Question } from '../lib/types';
+import { TYPE_LABEL, TYPES, type Level, type Location, type QType, type Question } from '../lib/types';
 
 const nf = new Intl.NumberFormat('vi-VN');
 type Load = 'loading' | 'ok' | 'error';
@@ -36,6 +37,7 @@ export function TrashScreen() {
   const [activeUid, setActiveUid] = useState<string | null>(null);
   const [ask, setAsk] = useState<null | { kind: 'purge'; uids: string[] } | { kind: 'restore'; uids: string[] } | { kind: 'purgeAll'; step: 1 | 2 }>(null);
   const [cmp, setCmp] = useState<TrashRow | null>(null);
+  const [reloc, setReloc] = useState<TrashRow | null>(null);
   const [menu, setMenu] = useState(false);
   const menuBtn = useRef<HTMLButtonElement>(null);
   const [exportQs, setExportQs] = useState<Question[] | null>(null);
@@ -102,9 +104,9 @@ export function TrashScreen() {
     try { await fn(); } finally { busyRef.current = false; setBusy(false); }
   };
 
-  const restore = (uids: string[]) => run(async () => {
+  const restore = (uids: string[], relocate?: { loc: Location; level?: Level }) => run(async () => {
     if (activeUid && uids.includes(activeUid)) nextRef.current = afterRemoval(results, activeUid);
-    const r = await restoreFromTrash(uids);
+    const r = await restoreFromTrash(uids, relocate ? { relocate } : {});
     const lines = [r.message];
     for (const b of r.blocked.slice(0, 3)) lines.push(`${seqLabel(b.seq)}: ${RESTORE_BLOCK_TEXT[b.reason]}`);
     if (r.blocked.length > 3) lines.push(`… và ${r.blocked.length - 3} câu khác cần xử lý.`);
@@ -152,7 +154,7 @@ export function TrashScreen() {
             {why !== 'bad-location' && <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'bank', openUid: r.q.uid })}>Đến câu trong Ngân hàng</button>}
             {why === 'exists-different' && <button type="button" className="btn btn-sm" onClick={() => setCmp(r)}>So sánh hai bản</button>}
             {why === 'exists-same' && <button type="button" className="btn btn-sm btn-outline tr-danger" disabled={readOnly || busy} onClick={() => setAsk({ kind: 'purge', uids: [r.q.uid] })}>Xoá bản sao trong Thùng rác…</button>}
-            {why === 'bad-location' && <span className="sys-hint">Bạn vẫn có thể Xuất .tex để giữ nội dung. Việc chọn vị trí mới cho câu sẽ được bổ sung sau khi bạn duyệt cách làm.</span>}
+            {why === 'bad-location' && <><button type="button" className="btn btn-sm btn-accent" disabled={readOnly || busy} onClick={() => setReloc(r)}>Chọn vị trí mới và khôi phục…</button><span className="sys-hint">Hoặc Xuất .tex để giữ nội dung.</span></>}
           </span>
         </div>
       </div>
@@ -332,6 +334,7 @@ export function TrashScreen() {
           )}
         </ConfirmDialog>
       )}
+      {reloc && <RelocateDialog q={reloc.q} busy={busy} onCancel={() => setReloc(null)} onConfirm={(loc, level) => { const u = reloc.q.uid; setReloc(null); void restore([u], { loc, level }); }} />}
       {cmp && (
         <ConfirmDialog title={`So sánh câu ${seqLabel(cmp.q.seq)}: Thùng rác và Ngân hàng`} confirmLabel="Đóng" cancelLabel="Đóng" onConfirm={() => setCmp(null)} onCancel={() => setCmp(null)}>
           <div className="tr-cmp">
