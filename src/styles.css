@@ -1180,3 +1180,9 @@ a { color: var(--accent); }
 .rl-prev { margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .rl-prev > div { display: grid; grid-template-columns: 120px 1fr; gap: 8px; }
 .rl-prev dt { color: var(--ink-3); } .rl-prev dd { margin: 0; word-break: break-word; }
+
+/* Bộ đo AI */
+.panel-sub { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.panel-sub > summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.ai-bench-models { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.bench-rep { display: flex; flex-direction: column; gap: 6px; }

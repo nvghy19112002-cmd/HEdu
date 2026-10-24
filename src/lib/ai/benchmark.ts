@@ -38,6 +38,8 @@ export interface BenchScore {
 
 export const MIN_SAMPLE = 100;
 export const TARGET_PRECISION = 0.95;
+/** Dưới mức bao phủ này thì độ đúng cao KHÔNG đủ để kết luận (tránh "đạt 95%" chỉ nhờ chọn ít câu dễ). */
+export const MIN_COVERAGE = 0.5;
 const rate = (n: number, d: number): number | null => (d ? n / d : null);
 
 export function scoreRun(items: readonly BenchItem[]): BenchScore {
@@ -72,8 +74,10 @@ export function describeScore(s: BenchScore, verifiedLabels: boolean): string {
     `Lỗi JSON: ${pct(s.jsonErrorRate)}; thời gian trung bình ${(s.avgMs / 1000).toFixed(1)} giây/câu.`,
   ];
   const reached = s.precision !== null && s.precision >= TARGET_PRECISION;
+  const lowCoverage = s.coverage < MIN_COVERAGE;
   lines.push(!verifiedLabels ? 'Nhãn CHƯA được giáo viên xác minh: chỉ là ước lượng, không kết luận đạt/không đạt.'
     : !s.enoughSample ? 'Chưa đủ mẫu để kết luận đạt mục tiêu.'
+    : reached && lowCoverage ? `Độ đúng đạt nhưng bao phủ chỉ ${pct(s.coverage)} (< ${MIN_COVERAGE * 100}%): chưa đủ để kết luận — AI mới tự đề xuất được ít câu.`
     : reached ? 'Đạt mục tiêu độ đúng trong nhóm đủ tin cậy (trên bộ nhãn này).' : 'CHƯA đạt mục tiêu độ đúng trong nhóm đủ tin cậy.');
   return lines.join('\n');
 }

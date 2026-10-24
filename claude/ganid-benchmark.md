@@ -15,3 +15,9 @@ precision nhóm đủ tin cậy · bao phủ · độ đúng toàn tập · tỉ
 ## Quy tắc an toàn
 - Mỗi lượt gửi câu thật lên Google phải được chủ dự án xác nhận từng lượt (hộp xin phép trong app). Không chạy tự động.
 - Không commit bộ nhãn hay kết quả có nội dung câu thật.
+
+## Công cụ trong app (Cài đặt → AI Gemini → "Đo độ chính xác AI gán Dạng (nâng cao)")
+- Tệp nhãn JSON: `{ "items": [ { "id": "c1", "latex": "\begin{ex}…", "truth": "2D1H1-1", "groups": ["ly-thuyet"] }, { "id": "c2", "latex": "…", "truth": null, "grade": 12 } ] }`. `truth` = ID6 ĐÚNG do giáo viên xác nhận (Dạng lấy từ mã); `null` = trong cây không có Dạng phù hợp (phải ghi `grade`). Nhóm tự gắn: `ly-thuyet`, `tinh-toan`, `dang-gan-nhau`, `thieu-can-cu`; `co-loi-giai`/`khong-loi-giai` tự suy ra từ `\loigiai`; "AI và ngân hàng bất đồng" tự tính. Tối đa 300 câu/lần.
+- Mỗi model được chọn chạy riêng sau khi giáo viên xác nhận hộp xin phép (nêu số câu thật, số lượt, cấu hình đích). Không có chế độ tự chạy. Hết lượt ngày/khoá lỗi ⇒ dừng; quá giờ/quá tải ⇒ ghi nhận rồi chạy tiếp.
+- Câu đang đo bị loại khỏi ngân hàng dùng làm câu mẫu để AI không "chép đáp án".
+- Báo cáo (Markdown) chỉ có số liệu, không có nội dung câu; hai cách tính: AI một mình (tin cậy cao) và AI + ngân hàng (như cách app tự tick). Độ đúng ≥ 95% chỉ được ghi "đạt" khi nhãn đã được giáo viên xác minh, đủ 100 câu và bao phủ ≥ 50%.
