@@ -185,11 +185,12 @@ export function trashRoomFor(qs: readonly { uid: string }[]): boolean {
 export async function trashAdd(q: Question): Promise<boolean> {
   if (!writable || !backend) return false;
   if (!trashRoomFor([q])) return false; // đầy: TỪ CHỐI, không bao giờ âm thầm bỏ câu cũ nhất
-  const prev = trash;
-  trash = [{ q: JSON.parse(JSON.stringify(q)) as Question, at: Date.now() }, ...trash.filter((t) => t.q.uid !== q.uid)];
+  const rec: TrashRec = { q: JSON.parse(JSON.stringify(q)) as Question, at: Date.now() };
+  const replaced = trash.find((t) => t.q.uid === q.uid);
+  trash = [rec, ...trash.filter((t) => t.q.uid !== q.uid)];
   emit();
   const ok = await persist();
-  if (!ok) { trash = prev; emit(); }
+  if (!ok) { undoTrashChange([rec], replaced ? [replaced] : []); emit(); }
   return ok;
 }
 /**
@@ -200,32 +201,38 @@ export async function trashAddMany(qs: readonly Question[]): Promise<boolean> {
   if (!writable || !backend) return false;
   if (!trashRoomFor(qs)) return false;
   if (qs.length === 0) return true;
-  const prev = trash;
   const at = Date.now();
   const ids = new Set(qs.map((q) => q.uid));
-  trash = [...qs.map((q) => ({ q: JSON.parse(JSON.stringify(q)) as Question, at })), ...trash.filter((t) => !ids.has(t.q.uid))];
+  const added: TrashRec[] = qs.map((q) => ({ q: JSON.parse(JSON.stringify(q)) as Question, at }));
+  const replaced = trash.filter((t) => ids.has(t.q.uid));
+  trash = [...added, ...trash.filter((t) => !ids.has(t.q.uid))];
   emit();
   const ok = await persist();
-  if (!ok) { trash = prev; emit(); }
+  if (!ok) { undoTrashChange(added, replaced); emit(); }
   return ok;
 }
 /** Bỏ nhiều bản ghi khỏi thùng rác bằng MỘT lần ghi (dùng để hoàn tác khi xoá khỏi ngân hàng thất bại). */
 export async function trashRemoveMany(uids: readonly string[]): Promise<boolean> {
   const rm = new Set(uids);
-  const prev = trash;
+  const removed = trash.filter((t) => rm.has(t.q.uid));
   trash = trash.filter((t) => !rm.has(t.q.uid));
   emit();
   const ok = await persist();
-  if (!ok) { trash = prev; emit(); }
+  if (!ok) { undoTrashChange([], removed); emit(); }
   return ok;
 }
 export async function trashRemove(uid: string): Promise<boolean> {
-  const prev = trash;
-  trash = trash.filter((t) => t.q.uid !== uid);
-  emit();
-  const ok = await persist();
-  if (!ok) { trash = prev; emit(); }
-  return ok;
+  return trashRemoveMany([uid]);
+}
+/**
+ * Hoàn lại CHỈ phần mà một thao tác thùng rác đã đổi khi ghi lỗi: bỏ các bản nó vừa thêm (nếu còn đúng bản đó),
+ * đặt lại các bản nó vừa gỡ/thay (nếu chưa có bản khác cùng uid). Thao tác khác chạy chồng không bị cuốn về trạng thái cũ.
+ */
+function undoTrashChange(added: readonly TrashRec[], gone: readonly TrashRec[]): void {
+  const addedSet = new Set(added);
+  const kept = trash.filter((t) => !addedSet.has(t));
+  const have = new Set(kept.map((t) => t.q.uid));
+  trash = [...kept, ...gone.filter((t) => !have.has(t.q.uid))];
 }
 
 // ---------- Nhãn chuẩn ----------
