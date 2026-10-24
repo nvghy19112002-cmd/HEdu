@@ -90,6 +90,8 @@ pub struct IntegrityReport {
     pub questions: i64,
     /// số câu có seq trùng với câu khác (không làm hỏng dữ liệu, nhưng cần báo)
     pub duplicate_seq: i64,
+    /// tệp thật sự bị hỏng (cấu trúc SQLite hoặc JSON câu không đọc được) — khác với seq trùng, vốn chỉ là cảnh báo
+    pub damaged: bool,
 }
 
 pub struct Db {
@@ -245,6 +247,14 @@ impl Db {
         Ok(self.conn.query_row("SELECT value FROM meta WHERE key=?1", params![key], |r| r.get(0)).optional()?)
     }
 
+    /// Các dòng meta có khoá bắt đầu bằng `prefix` (trả về khoá đã bỏ tiền tố), xếp theo khoá.
+    pub fn meta_prefix(&self, prefix: &str) -> R<Vec<(String, String)>> {
+        let mut st = self.conn.prepare("SELECT key,value FROM meta WHERE substr(key,1,?1)=?2 ORDER BY key")?;
+        let n = prefix.chars().count() as i64;
+        let rows = st.query_map(params![n, prefix], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows.into_iter().map(|(k, v)| (k[prefix.len()..].to_string(), v)).collect())
+    }
+
     pub fn sidecar_get(&self, key: &str) -> R<Option<String>> {
         Ok(self.conn.query_row("SELECT json FROM sidecar WHERE key=?1", params![key], |r| r.get(0)).optional()?)
     }
@@ -263,9 +273,11 @@ impl Db {
     /// Kiểm toàn vẹn ĐẦY ĐỦ (chậm hơn `quick_check`): cấu trúc tệp, JSON từng câu đọc được và khớp uid/seq, seq trùng.
     pub fn integrity_check(&self) -> R<IntegrityReport> {
         let mut messages = Vec::new();
+        let mut damaged = false;
         let mut st = self.conn.prepare("PRAGMA integrity_check")?;
         let lines = st.query_map([], |r| r.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
         if !(lines.len() == 1 && lines[0] == "ok") {
+            damaged = true;
             messages.extend(lines);
         }
         let questions = self.count()?;
@@ -294,9 +306,10 @@ impl Db {
             after = Some((last.seq, last.uid.clone()));
         }
         if bad > 0 {
+            damaged = true;
             messages.push(format!("{bad} câu có nội dung lưu không đọc được hoặc không khớp mã."));
         }
-        Ok(IntegrityReport { ok: messages.is_empty(), messages, questions, duplicate_seq })
+        Ok(IntegrityReport { ok: messages.is_empty(), messages, questions, duplicate_seq, damaged })
     }
 
     /// Đóng sạch: gộp nhật ký WAL vào tệp chính (không bắt buộc, chỉ để tệp gọn khi sao chép).
@@ -304,6 +317,12 @@ impl Db {
         let _ = self.conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));
         self.conn.close().map_err(|(_, e)| DbError::from(e))
     }
+}
+
+/// (uid, seq) của một câu theo đúng luật của lớp lưu trữ; dùng khi kiểm tra dữ liệu nguồn trước khi chuyển.
+pub fn question_key(json: &str) -> R<(String, i64)> {
+    let p = parse_row(json)?;
+    Ok((p.uid, p.seq))
 }
 
 fn map_open(e: rusqlite::Error) -> DbError {

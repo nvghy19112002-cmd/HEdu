@@ -2,6 +2,7 @@
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod ai;
 mod db;
+mod jsonmig;
 mod proc;
 mod storage;
 mod support;
