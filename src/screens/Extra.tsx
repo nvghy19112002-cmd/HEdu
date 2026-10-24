@@ -7,6 +7,7 @@ import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
 import { indexOf, shortName } from '../lib/taxonomy';
+import { idStateOf, summarizeImportIds } from '../lib/importid';
 import { draftLocation, optionsOf, suggestDrafts, useByDefault, type DraftIdPick } from '../lib/iddraft';
 import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
 import { AiAskBar } from '../components/AiAskBar';
@@ -211,7 +212,7 @@ export function ImportScreen() {
     return [{ latex: text, level: fromId?.level ?? level, tags: [], ...(fromId?.loc ?? draftLocOf(i).loc) } as Draft];
   });
   /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
-  const pendingRefused = rows.flatMap((_r, i) => (decOf(i) === 'import' && refused.has(i) && !fromIdOf(i) && !draftLocOf(i).suggested ? [i] : [])).length;
+  const idSum = summarizeImportIds(rows.map((_r, i) => idStateOf(latexOf(i))), (i) => decOf(i) === 'import', (i) => draftLocOf(i).suggested);
   /** Bước cuối: rà soát LẠI theo kho hiện hành (chống kho đổi sau lúc xem), rồi mới ghi. */
   const commit = async () => {
     setConfirm(false);
@@ -490,12 +491,18 @@ export function ImportScreen() {
               <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Xác nhận nhập">
                 <b>Sẽ nhập {sum.importN} câu, bỏ qua {sum.skipN} câu.</b>
                 {sum.keptSuspect > 0 && <p>Trong số nhập có {sum.keptSuspect} câu HEdu đánh dấu nghi trùng mà bạn đã chọn giữ{sum.keptPairs > 0 ? `, trong đó ${sum.keptPairs} cặp trùng nhau ngay trong file sẽ được nhập cả hai` : ''}.</p>}
-                {pendingRefused > 0 && (
-                  <label className="bd-sure"><input type="checkbox" checked={ackRefused} onChange={(e) => setAckRefused(e.target.checked)} /> {pendingRefused} câu AI chưa đủ căn cứ chọn Dạng và thầy/cô chưa chọn: tôi xác nhận cho vào vị trí chung đang chọn ở trên.</label>
+                {idSum.mustConfirm && (
+                  <label className="bd-sure"><input type="checkbox" checked={ackRefused} onChange={(e) => setAckRefused(e.target.checked)} /> <span>
+                    {idSum.needTeacher.missing > 0 && <>{idSum.needTeacher.missing} câu không có ID{' '}</>}
+                    {idSum.needTeacher.invalid > 0 && <>{idSum.needTeacher.invalid} câu có ID không hợp lệ{' '}</>}
+                    {idSum.needTeacher.missing + idSum.needTeacher.invalid > 0 && <>(thầy/cô chưa chọn Dạng{refused.size > 0 ? ', gồm cả câu AI chưa đủ căn cứ' : ''}) sẽ vào <b>vị trí chung</b> đang chọn ở trên. </>}
+                    {idSum.firstForm > 0 && <>{idSum.firstForm} câu có ID không ghi mã Dạng sẽ vào <b>Dạng đầu tiên</b> của Bài. </>}
+                    Tôi đã xem lại và xác nhận.
+                  </span></label>
                 )}
                 <p>HEdu sẽ rà soát lại với ngân hàng ngay trước khi ghi. Không câu nào trong ngân hàng bị sửa hay xoá.</p>
                 <div className="head-actions">
-                  <button type="button" className="btn btn-accent" autoFocus disabled={pendingRefused > 0 && !ackRefused} onClick={commit}>Nhập {sum.importN} câu</button>
+                  <button type="button" className="btn btn-accent" autoFocus disabled={idSum.mustConfirm && !ackRefused} onClick={commit}>Nhập {sum.importN} câu</button>
                   <button type="button" className="btn" onClick={() => setConfirm(false)}>Quay lại</button>
                 </div>
               </div>
