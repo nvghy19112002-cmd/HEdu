@@ -2,7 +2,7 @@
 
 ## Trạng thái
 - Đã phát hành (beta): tới `v0.1.0-beta.28` (AI Gemini cho Gán ID; sửa AI quá giờ chờ). Repo công khai `nvghy19112002-cmd/HEdu`. Đọc `AGENTS.md` và `GHI-CHU-PHAT-HANH.md` đầu tiên.
-- Đã phát hành `v0.1.0-beta.29` (kênh beta, 24/10/2026) gồm: PR #83 (an toàn Thùng rác), #84 (màn Thùng rác), #85 (khung xem + xuất .tex), #86 (xung đột + dọn sạch), #87 (Cài đặt 8 mục), #88 (Gemini 5 cấu hình khoá), PR-7 (hoàn thiện, tài liệu).
+- Đã phát hành `v0.1.0-beta.30` (SQLite S1–S4, 24/10/2026) và trước đó `v0.1.0-beta.29` (kênh beta, 24/10/2026) gồm: PR #83 (an toàn Thùng rác), #84 (màn Thùng rác), #85 (khung xem + xuất .tex), #86 (xung đột + dọn sạch), #87 (Cài đặt 8 mục), #88 (Gemini 5 cấu hình khoá), PR-7 (hoàn thiện, tài liệu).
 - Việc còn mở: (1) chọn vị trí mới cho câu "Vị trí không còn" trong Thùng rác — đổi vị trí/ID nên cần chủ dự án duyệt cách làm; (2) đổi model mặc định sang 3.6 Flash (chủ dự án quyết cùng bản này); (3) quy tắc "Công thức lý thuyết" chủ dự án sẽ trả lời sau; (4) chưa thử trên Tauri thật bản `vn.hedu.app.thu` và Gemini thật nhiều cấu hình; chủ dự án nghiệm thu Windows thật (xoá 5 câu thử → Thùng rác → Xem chuẩn → khôi phục → xoá hẳn; đổi từng mục Cài đặt; thử Gemini bằng câu giả).
 
 ## Quy tắc không đổi
