@@ -1,15 +1,17 @@
 // Gán ID tự động cho các câu đã chọn ở Ngân hàng: gợi ý (chỉ đối chiếu ngân hàng, không gửi gì ra ngoài) → bảng xem trước →
 // giáo viên tick câu cần áp dụng → kiểm lại ngay trước khi ghi → ghi MỘT lần. Mức độ chỉ đổi khi tick riêng.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AI_VERDICT_LABEL, examplesFor, mergeAi, type AiVerdict, type GanIdRun } from '../lib/ai/tasks/ganidrun';
 import { getTaxonomy } from '../lib/curriculum';
 import { questionCode, seqLabel } from '../lib/id';
 import { applyAutoId, buildRows, defaultChoice, levelTarget, movesLocation, planApply, summarize, type AutoIdRow, type RowChoice } from '../lib/idapply';
-import { CONFIDENCE_LABEL, IdSuggester, type SuggestConfidence } from '../lib/idsuggest';
+import { CONFIDENCE_LABEL, IdSuggester, type SuggestConfidence, type Suggestion } from '../lib/idsuggest';
 import { plainSnippet } from '../lib/snippet';
 import { getState } from '../lib/store';
 import { indexOf, shortName, type TaxIndex } from '../lib/taxonomy';
 import { taxRevision } from '../lib/taxpath';
 import { LEVEL_LABEL, type Location, type Question } from '../lib/types';
+import { AiAskBar } from './AiAskBar';
 
 const nf = new Intl.NumberFormat('vi-VN');
 type Filter = 'all' | SuggestConfidence;
@@ -32,6 +34,9 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
   const [err, setErr] = useState<string | null>(null);
   const busyRef = useRef(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  // gợi ý GỐC của ngân hàng (để hỏi AI lại vẫn trộn với gợi ý gốc) + kết luận trộn AI theo từng câu
+  const localRef = useRef<Map<string, Suggestion>>(new Map());
+  const [verdicts, setVerdicts] = useState<Map<string, AiVerdict>>(new Map());
 
   // quét sau khi hộp thoại đã hiện (để "Đang quét…" kịp vẽ)
   useEffect(() => {
@@ -39,6 +44,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
       const tax = getTaxonomy();
       const tix = indexOf(tax);
       const r = buildRows(qs, new IdSuggester(tax, getState().questions), tix);
+      localRef.current = new Map(r.map((x) => [x.uid, x.suggestion]));
       setIx(tix);
       setRows(r);
       setChoices(new Map(r.map((x) => [x.uid, defaultChoice(x)])));
@@ -101,12 +107,41 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
 
   const codeOf = (loc: Location, level: Question['level']) => questionCode(loc, level);
 
+  /** Hỏi AI cho MỌI câu trong bảng (AI dẫn đầu, ngân hàng làm bằng chứng). */
+  const aiJobs = () => {
+    const bank = new Map(getState().questions.map((q) => [q.uid, q]));
+    return (rows ?? []).map((r) => ({ key: r.uid, latex: r.snap.latex, grade: r.snap.grade, examples: examplesFor(localRef.current.get(r.uid) ?? r.suggestion, bank) }));
+  };
+  /** Trộn kết quả AI vào bảng. Tự tick chỉ khi AI + ngân hàng cùng chọn, hoặc ngân hàng chưa chắc mà AI chắc. */
+  const onAi = (run: GanIdRun) => {
+    if (!rows) return;
+    const nextRows = rows.map((r) => {
+      const ai = run.results.get(r.uid);
+      return ai ? { ...r, suggestion: mergeAi(localRef.current.get(r.uid) ?? r.suggestion, ai).suggestion } : r;
+    });
+    const v = new Map(verdicts);
+    const ch = new Map(choices);
+    for (const r of nextRows) {
+      const ai = run.results.get(r.uid);
+      if (!ai) continue;
+      const verdict = mergeAi(localRef.current.get(r.uid) ?? r.suggestion, ai).verdict;
+      v.set(r.uid, verdict);
+      const best = r.suggestion.best?.formId ?? null;
+      const auto = verdict === 'dong-thuan' || (verdict === 'ai-moi' && ai.confidence === 'high');
+      const old = ch.get(r.uid)!;
+      ch.set(r.uid, { ...old, formId: best ?? old.formId, apply: auto && movesLocation(r, best) });
+    }
+    setRows(nextRows);
+    setVerdicts(v);
+    setChoices(ch);
+  };
+
   return (
     <>
       <div className="cfm-scrim" onClick={() => { if (!busy) onClose(); }} />
       <div className="cfm aid" role="dialog" aria-modal="true" aria-label="Gán ID tự động">
         <h3>Gán ID tự động cho {nf.format(qs.length)} câu</h3>
-        <p className="aid-src">Chỉ dùng đối chiếu Ngân hàng — không gửi dữ liệu ra ngoài. Gợi ý theo nội dung các câu đã có vị trí; tin cậy là nhãn hiển thị, không phải xác suất.</p>
+        <p className="aid-src">Gợi ý ban đầu chỉ đối chiếu Ngân hàng trên máy — không gửi gì ra ngoài. Bấm “Hỏi AI” để nhờ Gemini phân loại (HEdu hỏi trước khi gửi). Tin cậy là nhãn hiển thị, không phải xác suất.</p>
         {!rows || !ix ? (
           <p className="aid-wait" role="status">Đang quét {nf.format(qs.length)} câu…</p>
         ) : (
@@ -120,6 +155,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
               </label>
               <label className="aid-all"><input type="checkbox" checked={allOn} disabled={eligible.length === 0 || busy} onChange={toggleAll} /> Chọn tất cả câu đang hiện có thể đổi</label>
             </div>
+            <AiAskBar count={rows.length} buildJobs={aiJobs} onResults={onAi} disabled={busy} />
             <div className="aid-scroll">
               <table className="aid-table">
                 <thead>
@@ -149,7 +185,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
                           ) : <span className="aid-none">Cần thầy/cô chọn vị trí</span>}
                           {s.notes.map((n) => <small key={n} className="aid-note">{n}</small>)}
                         </td>
-                        <td><span className={`aid-conf c-${s.confidence}`}>{CONFIDENCE_LABEL[s.confidence]}</span>{s.evidence.length > 0 && <small className="aid-note">{nf.format(s.evidence.length)} câu mẫu</small>}</td>
+                        <td><span className={`aid-conf c-${s.confidence}`}>{CONFIDENCE_LABEL[s.confidence]}</span>{verdicts.has(r.uid) && <small className={`aid-note ai-v v-${verdicts.get(r.uid)}`}>{AI_VERDICT_LABEL[verdicts.get(r.uid)!]}</small>}{s.evidence.length > 0 && <small className="aid-note">{nf.format(s.evidence.length)} câu mẫu</small>}</td>
                         <td>
                           <span className={`pill l-${r.snap.level}`}>{LEVEL_LABEL[r.snap.level]}</span>
                           {lt ? (

@@ -7,7 +7,9 @@ import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
 import { indexOf, shortName } from '../lib/taxonomy';
-import { draftLocation, optionsOf, suggestDrafts, type DraftIdPick } from '../lib/iddraft';
+import { draftLocation, optionsOf, suggestDrafts, useByDefault, type DraftIdPick } from '../lib/iddraft';
+import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
+import { AiAskBar } from '../components/AiAskBar';
 import { CONFIDENCE_LABEL, IdSuggester } from '../lib/idsuggest';
 import { taxRevision } from '../lib/taxpath';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
@@ -63,6 +65,22 @@ export function ImportScreen() {
   const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
   useEffect(() => { setIdPicks(null); }, [loc.grade]);
   const pickIx = useMemo(() => (idPicks ? indexOf(getTaxonomy()) : null), [idPicks]);
+  /** Hỏi AI cho các câu đang có gợi ý (câu không có ID): AI dẫn đầu, gợi ý ngân hàng làm bằng chứng. */
+  const draftAiJobs = () => {
+    const bank = new Map(getState().questions.map((q) => [q.uid, q]));
+    return [...(idPicks ?? new Map<number, DraftIdPick>()).entries()].filter(([i, p]) => p.latex === latexOf(i)).map(([i, p]) => ({ key: String(i), latex: p.latex, grade: loc.grade, examples: examplesFor(p.suggestion, bank) }));
+  };
+  const onDraftAi = (run: GanIdRun) => setIdPicks((m) => {
+    if (!m) return m;
+    const n = new Map(m);
+    for (const [i, p] of m) {
+      const ai = run.results.get(String(i));
+      if (!ai) continue;
+      const merged = mergeAi(p.suggestion, ai).suggestion;
+      n.set(i, { ...p, suggestion: merged, formId: useByDefault(merged.confidence) ? merged.best?.formId ?? null : null });
+    }
+    return n;
+  });
   const latexOf = (i: number) => edits[i] ?? rows[i]?.latex ?? '';
   const drafts = useMemo(() => rows.map((r, i) => ({ id: `d${i}`, latex: edits[i] ?? r.latex })), [rows, edits]);
   const draftIds = useMemo(() => new Map(drafts.map((d, i) => [d.id, i] as const)), [drafts]);
@@ -253,6 +271,7 @@ export function ImportScreen() {
                   <button type="button" className="btn btn-sm" onClick={runIdSuggest}>{idPicks ? 'Gợi ý lại' : `Gán ID tự động cho ${noIdRows.length} câu không có ID`}</button>
                   {idPicks && <button type="button" className="btn btn-sm" onClick={() => setIdPicks(null)}>Bỏ gợi ý, dùng vị trí chung</button>}
                 </div>
+                {idPicks && <AiAskBar count={draftAiJobs().length} buildJobs={draftAiJobs} onResults={onDraftAi} />}
                 <span className="sys-hint">Tuỳ chọn. Gợi ý Chương/Bài/Dạng trong <b>Lớp {loc.grade}</b> theo các câu đã có trong ngân hàng — không gửi dữ liệu ra ngoài. Câu có %[ID] hợp lệ giữ nguyên ID; mức độ theo ô Mức độ. Mặc định chỉ dùng gợi ý tin cậy cao/vừa, câu còn lại dùng vị trí chung ở trên.</span>
                 {idPicks && (
                   <div className="aid-scroll aid-scroll-sm">
