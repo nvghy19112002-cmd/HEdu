@@ -18,6 +18,8 @@ export interface AiRequest {
   timeoutSecs?: number;
   /** mức "suy nghĩ" của model; bỏ trống ⇒ mặc định của model (thường chậm) */
   thinkingLevel?: ThinkingLevel;
+  /** hồ sơ khoá dùng cho lượt này; bỏ trống ⇒ hồ sơ đang dùng (setCurrentProfile) */
+  profileId?: string;
 }
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
@@ -39,23 +41,30 @@ function toAiError(e: unknown): AiError {
 
 const desktopOnly = () => new AiError('not_desktop', 'AI chỉ dùng được trong bản cài trên Windows.');
 
-export async function aiKeyStatus(): Promise<{ hasKey: boolean }> {
+/** Hồ sơ khoá đang dùng cho mọi lượt AI. Mặc định 'legacy' (khoá của beta.27); null = chưa chọn ⇒ không gọi AI. Đặt bởi `profiles.ts` sau khi ghi tệp thành công. */
+let currentProfile: string | null = 'legacy';
+export const setCurrentProfile = (id: string | null): void => { currentProfile = id; };
+export const getCurrentProfile = (): string | null => currentProfile;
+
+export async function aiKeyStatus(profileId: string = 'legacy'): Promise<{ hasKey: boolean }> {
   if (!isDesktop()) return { hasKey: false };
-  try { return await invoke<{ hasKey: boolean }>('ai_key_status'); } catch (e) { throw toAiError(e); }
+  try { return await invoke<{ hasKey: boolean }>('ai_key_status', { profileId }); } catch (e) { throw toAiError(e); }
 }
 
-export async function aiKeySet(key: string): Promise<void> {
+export async function aiKeySet(key: string, profileId: string = 'legacy'): Promise<void> {
   if (!isDesktop()) throw desktopOnly();
-  try { await invoke<void>('ai_key_set', { key }); } catch (e) { throw toAiError(e); }
+  try { await invoke<void>('ai_key_set', { profileId, key }); } catch (e) { throw toAiError(e); }
 }
 
-export async function aiKeyClear(): Promise<void> {
+export async function aiKeyClear(profileId: string = 'legacy'): Promise<void> {
   if (!isDesktop()) throw desktopOnly();
-  try { await invoke<void>('ai_key_clear'); } catch (e) { throw toAiError(e); }
+  try { await invoke<void>('ai_key_clear', { profileId }); } catch (e) { throw toAiError(e); }
 }
 
 /** Chạy MỘT lượt nhiệm vụ AI. Người gọi PHẢI đã hỏi và được người dùng đồng ý cho lượt này. */
 export async function aiRun(req: AiRequest): Promise<AiReply> {
   if (!isDesktop()) throw desktopOnly();
-  try { return await invoke<AiReply>('ai_run', { req }); } catch (e) { throw toAiError(e); }
+  const profileId = req.profileId ?? currentProfile;
+  if (!profileId) throw new AiError('no_key', 'Chưa chọn cấu hình AI đang dùng (Cài đặt → AI Gemini).');
+  try { return await invoke<AiReply>('ai_run', { req: { ...req, profileId } }); } catch (e) { throw toAiError(e); }
 }

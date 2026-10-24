@@ -17,7 +17,23 @@ pub const MAX_RESPONSE_BYTES: usize = 2_000_000;
 const MAX_OUTPUT_TOKENS: u32 = 16_384;
 const MAX_RETRIES: u32 = 2;
 const MAX_WAIT_SECS: u64 = 20;
+/// Mục khoá của beta.27 (một khoá duy nhất). KHÔNG đổi tên, KHÔNG tự xoá: hồ sơ "legacy" trỏ thẳng vào đây.
 const KEY_USER: &str = "gemini-api-key";
+pub const LEGACY_PROFILE: &str = "legacy";
+/// Hồ sơ hợp lệ: "legacy" (khoá cũ) hoặc p1..p5. Giao diện chỉ được chọn trong tập này, không tự đặt tên mục kho mật khẩu.
+pub fn valid_profile(id: &str) -> bool {
+    id == LEGACY_PROFILE || matches!(id, "p1" | "p2" | "p3" | "p4" | "p5")
+}
+/// Tên mục trong kho mật khẩu của một hồ sơ (cùng một "service"). Hồ sơ legacy giữ NGUYÊN tên mục cũ.
+pub fn key_user(profile: &str) -> String {
+    if profile == LEGACY_PROFILE { KEY_USER.to_string() } else { format!("gemini-key-{profile}") }
+}
+/// Tệp thông tin hồ sơ (tên, bật/tắt, đang dùng) chỉ được là JSON nhỏ và KHÔNG được chứa thứ giống khoá API.
+pub fn profiles_valid(bytes: &[u8]) -> bool {
+    bytes.len() <= 64 * 1024
+        && serde_json::from_slice::<Value>(bytes).map(|v| v.is_object()).unwrap_or(false)
+        && !String::from_utf8_lossy(bytes).contains("AIza")
+}
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +51,9 @@ pub struct AiRequest {
     /// Suy nghĩ ăn vào maxOutputTokens và làm chậm hẳn (đo 24/10/2026: 3.8 Flash mặc định > 120 s cho câu "1+1").
     #[serde(default)]
     pub thinking_level: Option<String>,
+    /// hồ sơ khoá dùng cho lượt này (legacy | p1..p5); vắng ⇒ legacy (khoá của beta.27)
+    #[serde(default)]
+    pub profile_id: Option<String>,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -163,25 +182,26 @@ pub fn retry_delay(e: &AiError, attempt: u32) -> Option<Duration> {
 
 // ---------------- khoá API (Windows Credential Manager) ----------------
 
-fn entry(service: &str) -> Result<keyring::Entry, AiError> {
-    keyring::Entry::new(service, KEY_USER).map_err(|_| err("no_key", "Không mở được kho mật khẩu của Windows."))
+fn entry(service: &str, profile: &str) -> Result<keyring::Entry, AiError> {
+    if !valid_profile(profile) { return Err(err("bad_request", "Cấu hình khoá không hợp lệ.")); }
+    keyring::Entry::new(service, &key_user(profile)).map_err(|_| err("no_key", "Không mở được kho mật khẩu của Windows."))
 }
 
-pub fn key_set(service: &str, key: &str) -> Result<(), AiError> {
+pub fn key_set(service: &str, profile: &str, key: &str) -> Result<(), AiError> {
     let k = key.trim();
     if !valid_key(k) { return Err(err("bad_key", "Khoá API không đúng định dạng.")); }
-    entry(service)?.set_password(k).map_err(|_| err("no_key", "Không lưu được khoá vào kho mật khẩu của Windows."))
+    entry(service, profile)?.set_password(k).map_err(|_| err("no_key", "Không lưu được khoá vào kho mật khẩu của Windows."))
 }
 
-pub fn key_clear(service: &str) -> Result<(), AiError> {
-    match entry(service)?.delete_credential() {
+pub fn key_clear(service: &str, profile: &str) -> Result<(), AiError> {
+    match entry(service, profile)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err(err("no_key", "Không xoá được khoá trong kho mật khẩu của Windows.")),
     }
 }
 
-pub fn key_get(service: &str) -> Result<Option<String>, AiError> {
-    match entry(service)?.get_password() {
+pub fn key_get(service: &str, profile: &str) -> Result<Option<String>, AiError> {
+    match entry(service, profile)?.get_password() {
         Ok(k) => Ok(Some(k)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(_) => Err(err("no_key", "Không đọc được kho mật khẩu của Windows.")),
@@ -192,7 +212,8 @@ pub fn key_get(service: &str) -> Result<Option<String>, AiError> {
 
 pub async fn run(service: &str, req: AiRequest) -> Result<AiReply, AiError> {
     let body = build_body(&req)?;
-    let key = key_get(service)?.ok_or_else(|| err("no_key", "Chưa nhập khoá API Gemini (Hệ thống → AI)."))?;
+    let profile = req.profile_id.as_deref().unwrap_or(LEGACY_PROFILE);
+    let key = key_get(service, profile)?.ok_or_else(|| err("no_key", "Cấu hình đang dùng chưa có khoá API Gemini (Cài đặt → AI Gemini)."))?;
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
@@ -237,7 +258,7 @@ mod tests {
     use super::*;
 
     fn req() -> AiRequest {
-        AiRequest { provider: "gemini".into(), model: "gemini-3.8-flash".into(), system: "S".into(), user: "U".into(), schema: Some(json!({"type":"object"})), max_output_tokens: None, timeout_secs: None, thinking_level: None }
+        AiRequest { provider: "gemini".into(), model: "gemini-3.8-flash".into(), system: "S".into(), user: "U".into(), schema: Some(json!({"type":"object"})), max_output_tokens: None, timeout_secs: None, thinking_level: None, profile_id: None }
     }
 
     #[test]
@@ -330,19 +351,61 @@ mod tests {
 }
 
 #[cfg(test)]
+mod ho_so {
+    use super::*;
+
+    #[test]
+    fn ten_muc_khoa_cu_khong_doi() {
+        assert_eq!(key_user("legacy"), "gemini-api-key", "khoá của beta.27 phải còn đọc được sau khi nâng cấp");
+        assert_eq!(key_user("p3"), "gemini-key-p3");
+    }
+
+    #[test]
+    fn chi_nhan_ho_so_hop_le() {
+        for ok in ["legacy", "p1", "p2", "p3", "p4", "p5"] { assert!(valid_profile(ok), "{ok}"); }
+        for bad in ["", "p0", "p6", "P1", "p1 ", "../p1", "gemini-api-key", "legacy2"] { assert!(!valid_profile(bad), "{bad}"); }
+        assert_eq!(entry("svc", "p6").err().unwrap().kind, "bad_request");
+    }
+
+    #[test]
+    fn tep_ho_so_khong_chua_khoa() {
+        assert!(profiles_valid(br#"{"v":1,"active":"p1","profiles":[{"id":"p1","name":"A","enabled":true}]}"#));
+        assert!(!profiles_valid(b"[]"));
+        assert!(!profiles_valid(b"khong phai json"));
+        assert!(!profiles_valid(br#"{"v":1,"name":"AIzaSyA1234567890abcdefghijklmnopqrstuv"}"#), "chuỗi giống khoá API bị từ chối");
+        assert!(!profiles_valid(&vec![b' '; 70_000]));
+    }
+
+    #[test]
+    fn yeu_cau_cu_khong_co_ho_so_van_doc_duoc() {
+        let r: AiRequest = serde_json::from_str(r#"{"provider":"gemini","model":"gemini-3.8-flash","system":"S","user":"U"}"#).unwrap();
+        assert!(r.profile_id.is_none(), "bản cũ không gửi profileId ⇒ dùng khoá legacy");
+    }
+}
+
+#[cfg(test)]
 mod kho_khoa_that {
     // Chạy tay trên Windows: cargo test --lib -- --ignored kho_khoa_that  (dùng mục thử riêng, xoá ngay sau khi xong)
     #[test]
     #[ignore]
     fn ghi_doc_xoa_khoa_trong_kho_mat_khau_windows() {
         let svc = "vn.hedu.app.kiemthu.ai";
-        super::key_clear(svc).unwrap();
-        assert_eq!(super::key_get(svc).unwrap(), None);
-        super::key_set(svc, "  KHOA-THU-0123456789  ").unwrap();
-        assert_eq!(super::key_get(svc).unwrap().as_deref(), Some("KHOA-THU-0123456789"), "bỏ khoảng trắng hai đầu");
-        assert_eq!(super::key_set(svc, "sai").unwrap_err().kind, "bad_key");
-        super::key_clear(svc).unwrap();
-        assert_eq!(super::key_get(svc).unwrap(), None);
-        super::key_clear(svc).unwrap();
+        for p in ["legacy", "p1"] {
+            super::key_clear(svc, p).unwrap();
+            assert_eq!(super::key_get(svc, p).unwrap(), None);
+        }
+        super::key_set(svc, "legacy", "  KHOA-THU-0123456789  ").unwrap();
+        super::key_set(svc, "p1", "KHOA-THU-HO-SO-MOT-99").unwrap();
+        assert_eq!(super::key_get(svc, "legacy").unwrap().as_deref(), Some("KHOA-THU-0123456789"), "bỏ khoảng trắng hai đầu");
+        assert_eq!(super::key_get(svc, "p1").unwrap().as_deref(), Some("KHOA-THU-HO-SO-MOT-99"), "hồ sơ khác nhau không đè nhau");
+        assert_eq!(super::key_set(svc, "legacy", "sai").unwrap_err().kind, "bad_key");
+        assert_eq!(super::key_get(svc, "p9").unwrap_err().kind, "bad_request");
+        super::key_clear(svc, "p1").unwrap();
+        assert_eq!(super::key_get(svc, "legacy").unwrap().as_deref(), Some("KHOA-THU-0123456789"), "xoá p1 không đụng khoá cũ");
+        for p in ["legacy", "p1"] {
+            super::key_clear(svc, p).unwrap();
+            assert_eq!(super::key_get(svc, p).unwrap(), None);
+            super::key_clear(svc, p).unwrap();
+        }
     }
 }

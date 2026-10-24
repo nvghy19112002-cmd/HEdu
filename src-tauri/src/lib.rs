@@ -323,20 +323,44 @@ struct AiKeyStatus {
     has_key: bool,
 }
 
-/// Lưu khoá Gemini vào Windows Credential Manager. Không bao giờ trả khoá ngược lại giao diện.
+/// Lưu khoá Gemini của một hồ sơ (legacy | p1..p5) vào Windows Credential Manager. Không bao giờ trả khoá ngược lại giao diện.
 #[tauri::command]
-fn ai_key_set(app: AppHandle, key: String) -> Result<(), ai::AiError> {
-    ai::key_set(&ai_service(&app), &key)
+fn ai_key_set(app: AppHandle, profile_id: Option<String>, key: String) -> Result<(), ai::AiError> {
+    ai::key_set(&ai_service(&app), profile_id.as_deref().unwrap_or(ai::LEGACY_PROFILE), &key)
 }
 
 #[tauri::command]
-fn ai_key_clear(app: AppHandle) -> Result<(), ai::AiError> {
-    ai::key_clear(&ai_service(&app))
+fn ai_key_clear(app: AppHandle, profile_id: Option<String>) -> Result<(), ai::AiError> {
+    ai::key_clear(&ai_service(&app), profile_id.as_deref().unwrap_or(ai::LEGACY_PROFILE))
 }
 
 #[tauri::command]
-fn ai_key_status(app: AppHandle) -> Result<AiKeyStatus, ai::AiError> {
-    Ok(AiKeyStatus { has_key: ai::key_get(&ai_service(&app))?.is_some() })
+fn ai_key_status(app: AppHandle, profile_id: Option<String>) -> Result<AiKeyStatus, ai::AiError> {
+    Ok(AiKeyStatus { has_key: ai::key_get(&ai_service(&app), profile_id.as_deref().unwrap_or(ai::LEGACY_PROFILE))?.is_some() })
+}
+
+/// Thông tin hồ sơ AI (tên, bật/tắt, hồ sơ đang dùng) — tệp riêng `ai_profiles.json`, KHÔNG chứa khoá, không nằm trong hedu.json/sao lưu.
+#[tauri::command]
+fn ai_profiles_load(app: AppHandle) -> Result<Option<String>, String> {
+    let f = app.path().app_data_dir().map_err(|e| e.to_string())?.join("ai_profiles.json");
+    match std::fs::read(&f) {
+        Ok(b) if ai::profiles_valid(&b) => Ok(Some(String::from_utf8_lossy(&b).into_owned())),
+        Ok(_) => Err("Tệp cấu hình AI không hợp lệ.".into()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn ai_profiles_save(app: AppHandle, json: String) -> Result<(), String> {
+    if !ai::profiles_valid(json.as_bytes()) {
+        return Err("Cấu hình AI không hợp lệ, không ghi.".into());
+    }
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let (f, tmp) = (dir.join("ai_profiles.json"), dir.join("ai_profiles.json.tmp"));
+    std::fs::write(&tmp, json.as_bytes()).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &f).map_err(|e| e.to_string())
 }
 
 /// Chạy MỘT lượt nhiệm vụ AI (prompt + khuôn JSON do giao diện gửi). Giao diện phải hỏi người dùng trước khi gọi.
@@ -378,6 +402,8 @@ pub fn run() {
             ai_key_set,
             ai_key_clear,
             ai_key_status,
+            ai_profiles_load,
+            ai_profiles_save,
             ai_run
         ])
         .run(tauri::generate_context!())
