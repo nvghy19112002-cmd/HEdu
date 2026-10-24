@@ -181,7 +181,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
                         <td>
                           {opts.length ? (
                             <select className="aid-sel" value={c.formId ?? ''} disabled={busy} onChange={(e) => setChoice(r.uid, { formId: e.target.value || null })} aria-label={`Vị trí cho câu ${seqLabel(r.seq)}`}>
-                              {opts.map((o, i) => <option key={o.formId} value={o.formId}>{i === 0 ? '★ ' : ''}{pathLabel(ix, o.formId)}{o.formId === r.snap.formId ? ' (đang ở đây)' : ''}</option>)}
+                              {opts.map((o, i) => <option key={o.formId} value={o.formId}>{i === 0 && s.best ? '★ ' : ''}{pathLabel(ix, o.formId)}{o.formId === r.snap.formId ? ' (đang ở đây)' : ''}</option>)}
                               <option value="">— Giữ nguyên vị trí hiện tại —</option>
                             </select>
                           ) : <span className="aid-none">Cần thầy/cô chọn vị trí</span>}
