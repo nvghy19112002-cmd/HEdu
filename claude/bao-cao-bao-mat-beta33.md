@@ -26,6 +26,12 @@ Bối cảnh: Windows Defender cách ly `C:\Users\admin\AppData\Local\HEdu\hedu.
 - Mọi action ghim theo mã SHA (kèm chú thích tag), không nâng phiên bản lớn: `checkout` v5, `setup-node` v5, `rust-cache` v2, `tauri-action` v0, `rust-toolchain` (nhánh stable, thêm `toolchain: stable` vì SHA không mang tên nhánh).
 - Còn lại: `npm audit` báo 1 lỗ hổng mức thấp ở `katex` (cần lên bản 0.19, đổi lớn) — chưa xử lý, sẽ tách PR riêng; liên kết `node_modules` đang bị Git theo dõi (xem AGENTS.md mục 7); chưa có chữ ký số Authenticode.
 
+## 3b. Cập nhật 26/10/2026 — tái hiện và cổng quét
+- Nhật ký Defender: lần bắt đầu tiên xảy ra khi Riot Vanguard (`vgc.exe`) đọc tệp `hedu.exe` → Defender bắt theo **nội dung tệp** (Real-Time Protection, học máy), không phải theo hành vi khi app chạy.
+- Tái hiện với định nghĩa `1.461.199.0`: `hedu.exe` tách từ bộ cài beta.33 chính thức (hash bộ cài khớp `55be595b…`, hash `hedu.exe` `2EE89DD2…B188A`) **bị bắt**. Cùng mã nguồn build trên máy (cả kiểu thường lẫn kiểu CI: gắn phiên bản, kho, khoá cập nhật) **không bị bắt**.
+- Với định nghĩa mới `1.461.201.0`: **cùng tệp `hedu.exe` chính thức đó không còn bị báo**. Microsoft đã gỡ nhận diện cho đúng tệp này. Đây là bằng chứng mạnh nhất hiện có rằng đó là báo nhầm của mô hình học máy; vẫn chưa có thư phản hồi chính thức của Microsoft.
+- Phòng tái diễn: phát hành tạo bản nháp, quét Defender (định nghĩa mới nhất, giải nén bộ cài, quét từng tệp), sạch mới công khai. Không thể bảo đảm 100% vì mô hình của Microsoft thay đổi liên tục; cách giảm mạnh nhất còn lại là **ký số Authenticode** (cần chủ dự án mua/đăng ký chứng chỉ).
+
 ## 4. Lấy mẫu `hedu.exe` từ bản chính thức để gửi Microsoft (không chạy tệp, không khôi phục tệp cách ly)
 1. Tạo thư mục trống riêng, ví dụ `D:\mau-hedu\`. Không đặt trong thư mục dự án.
 2. Tải bộ cài từ trang Releases của kho (`v0.1.0-beta.33`) vào đó. Windows/Defender có thể cách ly ngay tại bước này — nếu vậy, đó cũng là thông tin hữu ích; đừng thêm ngoại lệ.
