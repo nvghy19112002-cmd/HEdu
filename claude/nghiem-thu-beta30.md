@@ -38,3 +38,9 @@ Chỉ chủ dự án nghiệm thu. Dùng bản chạy thử `npx tauri dev --con
 - [ ] Nhập từ 20 câu trở lên / xoá hàng loạt từ 20 câu / xoá hẳn khỏi Thùng rác / khôi phục từ file JSON: xuất hiện điểm khôi phục mới (tối đa 5, cũ nhất tự bị xoá); thử "Khôi phục điểm này…" ⇒ số câu quay về, có điểm "trước khi khôi phục" để quay lại.
 - [ ] Đóng app bằng cách tắt đột ngột (Task Manager → End task) giữa lúc đang nhập: mở lại thấy dữ liệu trước lô đang ghi, không hỏng.
 - [ ] Cập nhật beta → beta (bản thử có kho GitHub): có bản sao lưu trước cập nhật dạng .db; "Khôi phục sau cập nhật" đổi chỗ được hai bản.
+
+## G. Nhập nhiều tệp (N2) — thử trên bản chạy thử `vn.hedu.app.thu` trước
+- [ ] Nhập liệu → "Chọn nhiều tệp…" (Ctrl) và "Chọn thư mục…" (có thư mục con): bảng "Theo tệp" đúng số câu, ID đúng/thiếu Dạng/sai/không ID từng tệp; tệp 0 câu được báo; tệp không phải UTF-8 báo lỗi riêng, các tệp khác vẫn nhập được.
+- [ ] Bỏ tick một tệp → số câu và rà trùng cập nhật; lô trên 5.000 câu bị chặn kèm hướng dẫn bỏ bớt tệp.
+- [ ] "Thông tin lô nhập": ví dụ nhãn đúng (Nguồn / Lô / Thư mục / nhãn tuỳ ý); sau khi nhập, câu có đúng nhãn (xem ở trình sửa câu hoặc tìm chữ "Nguồn:" trong ô tìm Ngân hàng).
+- [ ] LaTeX trong ngân hàng giống hệt tệp gốc; tệp nguồn không bị đổi.
