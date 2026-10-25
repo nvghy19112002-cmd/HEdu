@@ -24,6 +24,11 @@ export function applyToCargoToml(text, version) {
   return text.replace(/^version = ".*"$/m, `version = "${version}"`);
 }
 
+/** Cargo.lock ghi sẵn phiên bản của gói hedu; đổi phiên bản trong Cargo.toml mà không đổi ở đây thì `--locked` báo lỗi. */
+export function applyToCargoLock(text, version) {
+  return text.replace(/(\[\[package\]\]\r?\nname = "hedu"\r?\nversion = )".*"/, `$1"${version}"`);
+}
+
 function main() {
   const [, , tag, repo] = process.argv;
   if (!tag || !repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('Cách dùng: node scripts/ci-config.mjs <tag> <chủ/kho>');
@@ -35,6 +40,8 @@ function main() {
   const confPath = 'src-tauri/tauri.conf.json';
   writeFileSync(confPath, JSON.stringify(applyToTauriConf(JSON.parse(readFileSync(confPath, 'utf8')), { version, repo, pubkey }), null, 2) + '\n');
   writeFileSync('src-tauri/Cargo.toml', applyToCargoToml(readFileSync('src-tauri/Cargo.toml', 'utf8'), version));
+  const lockPath = 'src-tauri/Cargo.lock';
+  if (existsSync(lockPath)) writeFileSync(lockPath, applyToCargoLock(readFileSync(lockPath, 'utf8'), version));
   const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
   pkg.version = version;
   writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');

@@ -63,6 +63,8 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 - Lỗi đã xác định phải có test hồi quy. Build đạt ≠ chức năng đúng: kiểm hành vi người dùng (nút, luồng dữ liệu) khi đụng giao diện.
 - Chỉ chủ dự án nghiệm thu: Claude không viết "đã nghiệm thu"; ghi rõ "chưa thử trên máy thật / zoom / dữ liệu lớn" nếu chưa kiểm.
 - Trước phát hành: test, build Windows xanh, dữ liệu người dùng an toàn, có phương án quay lại.
+- `Cargo.lock` và `package-lock.json` được theo dõi trong Git; đổi dependency phải cập nhật lock trong cùng PR (CI dùng `npm ci` và `--locked`). Action trong workflow ghim theo SHA; nâng phiên bản thì tra SHA chính thức rồi ghi tag trong chú thích. Báo cáo bảo mật: `claude/bao-cao-bao-mat-beta33.md`.
+- Phát hành có cổng Defender: `tauri-action` tạo bản NHÁP → `scripts/quet-defender.ps1` (cập nhật định nghĩa, giải nén bộ cài, quét từng tệp) → sạch mới công khai và chuyển kênh. Bị báo hoặc không quét được = không phát hành; không thêm ngoại lệ để vượt cổng.
 
 **Quy trình mọi thay đổi (kể cả việc S, kể cả chỉ sửa tài liệu):**
 1. Tạo nhánh `claude/<tên-ngắn>` từ `main` mới nhất. Không commit thẳng vào `main`.

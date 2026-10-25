@@ -32,14 +32,16 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || env.TAG }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: src-tauri
 
@@ -48,12 +50,15 @@ jobs:
         run: |
           node -e "import('./scripts/ci-config.mjs').then(m=>{const r=m.parseTag(process.env.TAG);console.log('version='+r.version+'\nchannel='+r.channel)})" >> "$GITHUB_OUTPUT"
 
-      - run: npm install
+      - run: npm ci
       - name: Chạy kiểm thử (lỗi thì dừng, không phát hành)
         run: npm test
 
       - name: Gắn phiên bản và khóa công khai
         run: node scripts/ci-config.mjs "$TAG" "${{ github.repository }}"
+
+      - name: Kiểm tra Cargo.lock còn khớp sau khi gắn phiên bản
+        run: cargo metadata --locked --format-version 1 --manifest-path src-tauri/Cargo.toml > /dev/null
 
       - name: Đọc ghi chú phát hành
         id: notes
@@ -65,7 +70,7 @@ jobs:
             echo 'HEDU_EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -75,10 +80,19 @@ jobs:
           tagName: ${{ env.TAG }}
           releaseName: 'HEdu ${{ steps.info.outputs.version }}'
           releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: false
+          releaseDraft: true   # chỉ công khai sau khi Defender quét sạch (bước dưới)
           prerelease: ${{ steps.info.outputs.channel == 'beta' }}
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+
+      - name: Quét Microsoft Defender (bị báo hoặc không quét được thì KHÔNG công khai)
+        shell: pwsh
+        run: ./scripts/quet-defender.ps1 src-tauri/target/release/hedu.exe src-tauri/target/release/bundle/nsis/*-setup.exe
+
+      - name: Công khai bản phát hành (chỉ khi đã quét sạch)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
 
   kenh:
     # Chuyển bản vừa build vào đúng kênh, giữ bản trước, rồi dọn bản cũ.
@@ -90,10 +104,10 @@ jobs:
       VERSION: ${{ needs.build.outputs.version }}
       REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || env.TAG }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
 
