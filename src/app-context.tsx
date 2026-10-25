@@ -1,7 +1,7 @@
 // Điều hướng giữa các màn hình và thông báo nhỏ dùng chung.
 import { createContext, useContext } from 'react';
 
-export type Screen = 'editor' | 'bank' | 'exam' | 'import' | 'curriculum' | 'trash' | 'system';
+export type Screen = 'editor' | 'bank' | 'exam' | 'import' | 'examlib' | 'curriculum' | 'trash' | 'system';
 
 export interface Nav {
   screen: Screen;

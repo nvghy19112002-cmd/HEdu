@@ -10,6 +10,7 @@ import { TYPE_LABEL } from '../lib/types';
 const SCREENS: { s: Screen; name: string }[] = [
   { s: 'editor', name: 'Soạn câu hỏi mới' }, // không ở thanh bên nhưng vẫn gọi được từ đây
   { s: 'bank', name: 'Mở ngân hàng câu hỏi' },
+  { s: 'examlib', name: 'Mở Thư viện đề thi' },
   { s: 'exam', name: 'Tạo đề theo ma trận' },
   { s: 'import', name: 'Nhập câu từ LaTeX' },
   { s: 'curriculum', name: 'Xem khung chương trình' },
