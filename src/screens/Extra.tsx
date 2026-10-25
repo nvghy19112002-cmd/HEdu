@@ -25,6 +25,9 @@ import { QuestionDrawer } from '../components/QuestionDrawer';
 import { seqLabel } from '../lib/id';
 import { parseExTest, splitExBlocksAt } from '../lib/extest';
 import { parseCode, questionCode } from '../lib/id';
+import { emptyFilters } from '../lib/bankfilter';
+import { saveSession } from '../lib/banksession';
+import { DEFAULT_SORT } from '../lib/qsort';
 import { ImportReportView } from '../components/ImportReportView';
 import { appendLog, buildReport, type IdPlace, type ImportReport, type ReportRow } from '../lib/importreport';
 import { addMany, flushSave, getState, isLastSaveOk, useBank, type Draft } from '../lib/store';
@@ -275,7 +278,7 @@ export function ImportScreen() {
         idState: st, idPlace: place, preview: w === 'loi' || w === 'canh' ? w : '', tex: tex[i] ? (tex[i].ok ? 'ok' : 'loi') : '', uid: q?.uid, seq: q?.seq,
       };
     });
-    const rep = buildReport({ at: Date.now(), name: info.tagBatch || multi ? info.name : '', paste: !multi, restorePoint, rows: rr, warnings: readFailed.map((f) => `Không đọc được tệp ${f.rel ? f.rel + '/' : ''}${f.name}: ${f.message}`) });
+    const rep = buildReport({ at: Date.now(), name: info.name, batchTag: info.tagBatch && info.name.trim() ? `Lô: ${info.name}` : undefined, paste: !multi, restorePoint, rows: rr, warnings: readFailed.map((f) => `Không đọc được tệp ${f.rel ? f.rel + '/' : ''}${f.name}: ${f.message}`) });
     pendingReport.current = rep;
     return rep;
   };
@@ -326,7 +329,7 @@ export function ImportScreen() {
           })}
         </ol>
       </header>
-      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onClose={() => setResult(null)} /></div>}
+      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag! }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => setResult(null)} /></div>}
       {!result && <div className="simple">
         <div className={`panel${rows.length ? ' is-compact' : ''}`}>
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>

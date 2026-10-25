@@ -7,7 +7,7 @@ type View = ImportReport | LogEntry;
 const truncated = (r: View): number => ('rowsTruncated' in r ? r.rowsTruncated : 0);
 
 /** Kết quả một lô nhập (hiện ngay sau khi nhập, và trong Cài đặt → Nhật ký nhập). Không có nội dung câu hỏi. */
-export function ImportReportView({ report, full, onBank, onClose, logSaved }: { report: View; full: boolean; onBank?: () => void; onClose?: () => void; logSaved?: boolean }) {
+export function ImportReportView({ report, full, onBank, onShowBatch, onClose, logSaved }: { report: View; full: boolean; onBank?: () => void; onShowBatch?: () => void; onClose?: () => void; logSaved?: boolean }) {
   const { toast } = useApp();
   const [showAll, setShowAll] = useState(false);
   const r = report;
@@ -68,10 +68,10 @@ export function ImportReportView({ report, full, onBank, onClose, logSaved }: { 
         {full && <label className="chk"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Hiện cả câu đã nhập bình thường</label>}
         {full && <button type="button" className="btn btn-sm" onClick={() => save('csv')}>Lưu báo cáo (.csv)</button>}
         <button type="button" className="btn btn-sm" onClick={() => save('md')}>Lưu bản tóm tắt (.md)</button>
-        {onBank && <button type="button" className="btn btn-sm btn-primary" onClick={onBank}>Mở Ngân hàng</button>}
+        {onShowBatch && <button type="button" className="btn btn-sm btn-primary" onClick={onShowBatch}>Xem các câu vừa nhập</button>}
+        {onBank && <button type="button" className={`btn btn-sm${onShowBatch ? '' : ' btn-primary'}`} onClick={onBank}>Mở Ngân hàng</button>}
         {onClose && <button type="button" className="btn btn-sm" onClick={onClose}>Đóng</button>}
       </div>
-      {onBank && r.name && <span className="sys-hint">Tìm các câu vừa nhập trong Ngân hàng bằng cách gõ vào ô tìm: “Lô: {r.name}”.</span>}
       {logSaved === false && <span className="sys-hint aid-bad">Chưa ghi được báo cáo vào Nhật ký nhập (việc nhập vẫn thành công). Hãy lưu báo cáo ra tệp.</span>}
     </section>
   );

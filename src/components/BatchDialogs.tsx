@@ -1,4 +1,4 @@
-// Hộp thoại cho thao tác hàng loạt: Gắn nhãn (hiện CHƯA gắn vào thanh chọn — chủ dự án chưa cần), Chuyển vào Thùng rác. Có xem trước "bao nhiêu câu sẽ đổi" trước khi bấm.
+// Hộp thoại cho thao tác hàng loạt: Gắn nhãn (menu “Thao tác khác” của thanh chọn), Chuyển vào Thùng rác. Có xem trước "bao nhiêu câu sẽ đổi" trước khi bấm.
 import { useMemo, useState } from 'react';
 import { parseTagInput, tagChangeCount, tagCounts, withTags } from '../lib/batchops';
 import type { Question } from '../lib/types';

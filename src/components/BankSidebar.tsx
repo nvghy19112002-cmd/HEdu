@@ -48,6 +48,11 @@ export function BankSidebar({ tax, f, facets, wide, onF, onClearAttrs, onResetAl
     .map((k) => ({ id: k, label: FIGURE_LABEL[k], count: facets.figure[k] }));
   const revOpts: FieldOption[] = (['unreviewed', 'needs_fix', 'approved'] as const).map((r) => ({ id: r, label: REVIEW_LABEL[r], count: facets.review[r] }));
 
+  const tagOpts: FieldOption[] = [...facets.tag]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi'))
+    .map(([t, n]) => ({ id: t, label: t, count: n }));
+  if (f.tag && !facets.tag.has(f.tag)) tagOpts.unshift({ id: f.tag, label: f.tag, count: 0 });
+
   const toggle = <T extends string>(set: Set<T>, v: T) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); return n; };
   const nAttr = attrCount(f);
   const groups = attrGroups(f);
@@ -115,12 +120,17 @@ export function BankSidebar({ tax, f, facets, wide, onF, onClearAttrs, onResetAl
           options={revOpts} selected={f.review === 'all' ? null : f.review} onPick={(id) => onF({ ...f, review: (id ?? 'all') as ReviewFilter })}
           allLabel="Tất cả" allCount={facets.review.unreviewed + facets.review.needs_fix + facets.review.approved}
         />
+        <FieldMenu
+          label="Nhãn" summary={f.tag ?? 'Tất cả'} active={!!f.tag} searchable hint="Nhãn gắn khi nhập (Nguồn, Lô, Thư mục) hoặc do bạn tự đặt" onReset={() => onF({ ...f, tag: null })}
+          options={tagOpts} selected={f.tag} onPick={(id) => onF({ ...f, tag: id })}
+          allLabel="Tất cả" allCount={facets.tagAll}
+        />
       </div>
 
       <div className="fs-foot">
         <p className="fs-count" aria-live="polite">Đang hiện <b>{nf.format(total)}</b> / {nf.format(facets.scoped)} câu</p>
         <div className="fs-btns">
-          <button type="button" className="btn btn-sm" disabled={nAttr === 0} onClick={onClearAttrs} title="Chỉ bỏ Mức độ, Loại câu, Hình, Kiểm duyệt; giữ nguyên mục đang xem">Xoá bộ lọc{nAttr > 0 ? ` (${nAttr})` : ''}</button>
+          <button type="button" className="btn btn-sm" disabled={nAttr === 0} onClick={onClearAttrs} title="Chỉ bỏ Mức độ, Loại câu, Hình, Duyệt, Nhãn; giữ nguyên mục đang xem">Xoá bộ lọc{nAttr > 0 ? ` (${nAttr})` : ''}</button>
           <button type="button" className="btn btn-sm" disabled={!canReset} onClick={onResetAll} title="Về toàn bộ ngân hàng: bỏ mục đang xem, bộ lọc và chữ tìm. Các câu đã tick vẫn giữ">Đặt lại toàn bộ</button>
         </div>
       </div>

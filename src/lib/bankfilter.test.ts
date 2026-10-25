@@ -140,6 +140,24 @@ const rB = computeFacets(qs, fFil, ctx());
 ok(rB.inScope === 7, `inScope bỏ qua bộ lọc thuộc tính (được ${rB.inScope})`);
 ok(computeFacets(qs, F({ gradeId: g12.id, chapterId: ch1.id }), ctx(false, () => false)).inScope === 7, 'inScope bỏ qua cả chữ tìm');
 
+console.log('Bộ lọc Nhãn');
+{
+  const T: Question[] = [
+    mk({ tags: ['Lô: A', 'Nguồn: de1.tex'] }), mk({ tags: ['Lô: A', 'Nguồn: de2.tex'], level: 'TH' }), mk({ tags: ['Lô: B'], level: 'TH' }), mk({ tags: [] }),
+  ];
+  const f = F({ tag: 'Lô: A' });
+  const r = computeFacets(T, f, ctx());
+  ok(r.list.length === 2 && r.list.every((q) => q.tags.includes('Lô: A')), 'lọc theo nhãn chỉ giữ câu có nhãn đó');
+  ok(r.tag.get('Lô: A') === 2 && r.tag.get('Lô: B') === 1 && r.tag.get('Nguồn: de1.tex') === 1, 'số đếm theo nhãn bỏ riêng bộ lọc Nhãn (thấy cả nhãn khác để chuyển)');
+  const r2 = computeFacets(T, F({ tag: 'Lô: A', levels: new Set<Level>(['TH']) }), ctx());
+  ok(r2.list.length === 1 && r2.tag.get('Lô: A') === 1 && !r2.tag.has('Lô: B') || r2.tag.get('Lô: B') === 1, 'kết hợp với bộ lọc khác; số đếm nhãn tôn trọng mức độ đang chọn');
+  ok(attrCount(f) === 1 && attrGroups(f) === 1 && clearAttrs(f).tag === null, 'tính vào số bộ lọc và Xoá bộ lọc bỏ được nhãn');
+  const chip = attrChips(f, r);
+  ok(chip.length === 1 && chip[0].key === 'tag' && chip[0].after === computeFacets(T, dropAttr(f, 'tag'), ctx()).list.length, 'chip Nhãn: số câu khi bỏ nó khớp kết quả thật');
+  ok(computeFacets(T, F({ tag: 'không có nhãn này' }), ctx()).list.length === 0, 'nhãn không tồn tại ⇒ rỗng, không lỗi');
+  ok(emptyKind(computeFacets(T, F({ tag: 'không có nhãn này' }), ctx()), F({ tag: 'không có nhãn này' }), { totalQuestions: 4, hasText: false, wide: false }) === 'filters', 'rỗng vì bộ lọc nhãn ⇒ trạng thái "bộ lọc"');
+}
+
 console.log('Chip điều kiện và số câu sẽ có');
 const fTwo = F({ gradeId: g12.id, chapterId: ch1.id, levels: new Set<Level>(['VDC']), review: 'approved' });
 const chips = attrChips(fTwo, computeFacets(qs, fTwo, ctx()));
