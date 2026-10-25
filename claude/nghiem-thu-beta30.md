@@ -44,3 +44,10 @@ Chỉ chủ dự án nghiệm thu. Dùng bản chạy thử `npx tauri dev --con
 - [ ] Bỏ tick một tệp → số câu và rà trùng cập nhật; lô trên 5.000 câu bị chặn kèm hướng dẫn bỏ bớt tệp.
 - [ ] "Thông tin lô nhập": ví dụ nhãn đúng (Nguồn / Lô / Thư mục / nhãn tuỳ ý); sau khi nhập, câu có đúng nhãn (xem ở trình sửa câu hoặc tìm chữ "Nguồn:" trong ô tìm Ngân hàng).
 - [ ] LaTeX trong ngân hàng giống hệt tệp gốc; tệp nguồn không bị đổi.
+
+## H. Báo cáo nhập (N3) — thử trên bản chạy thử `vn.hedu.app.thu` trước
+- [ ] Sau khi bấm Nhập: hiện màn "Kết quả nhập" (không nhảy thẳng về Ngân hàng) với số tìm thấy / đã nhập / bỏ qua vì nghi trùng / bỏ qua theo bạn chọn; thống kê vị trí (theo ID, thiếu Dạng, gợi ý, vị trí chung) khớp với những gì đã xác nhận.
+- [ ] Nhập nhiều tệp: bảng "Kết quả theo tệp" đúng; tệp không đọc được hiện ở phần lưu ý.
+- [ ] "Lưu báo cáo (.csv)" mở được bằng Excel, tiếng Việt không vỡ chữ, mỗi câu một dòng, KHÔNG có nội dung câu hỏi; "Lưu bản tóm tắt (.md)" đọc được.
+- [ ] Cài đặt → Dữ liệu & sao lưu → "Nhật ký nhập": thấy lần nhập vừa rồi (tối đa 20 lần), bấm mở xem lại; đóng và mở lại app vẫn còn; "Xoá nhật ký nhập" không ảnh hưởng ngân hàng.
+- [ ] Chế độ lưu JSON cũ ("Để sau"): nhập vẫn thành công, báo cáo vẫn xem/lưu được, Nhật ký nhập ghi rõ là chưa giữ nhật ký.

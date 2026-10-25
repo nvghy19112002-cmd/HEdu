@@ -29,6 +29,7 @@ export const ENTRIES: SettingEntry[] = [
   { pane: 'backup', label: 'Sao lưu trước cập nhật', target: 'Sao lưu trước cập nhật', words: 'sao lưu backup trước cập nhật khôi phục bản trước' },
   { pane: 'backup', label: 'Sao lưu thủ công / khôi phục từ file', target: 'Sao lưu thủ công', words: 'sao lưu file tải về khôi phục từ file json nhập xuất' },
   { pane: 'backup', label: 'Thùng rác', target: 'Thùng rác', words: 'thùng rác câu đã xoá khôi phục xoá hẳn' },
+  { pane: 'backup', label: 'Nhật ký nhập', target: 'Nhật ký nhập', words: 'nhật ký nhập báo cáo lô nhập csv tệp' },
   { pane: 'updates', label: 'Phiên bản và cập nhật', target: 'Phiên bản và cập nhật', words: 'cập nhật update beta stable kênh phiên bản bản mới' },
   { pane: 'updates', label: 'Quay lại phiên bản trước', target: 'Quay lại phiên bản trước', words: 'quay lại rollback bản trước previous' },
   { pane: 'help', label: 'Giới thiệu & trợ giúp', target: '', words: 'giới thiệu trợ giúp hướng dẫn chẩn đoán github phiên bản' },
