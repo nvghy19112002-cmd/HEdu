@@ -8,6 +8,9 @@ import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idStateOf, summarizeImportIds } from '../lib/importid';
+import { BATCH_MAX, buildRows, defaultBatchName, perFile, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
+import { chooseFiles, chooseFolder, describeScan, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
+import { isDesktop } from '../lib/platform';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { draftLocation, optionsOf, suggestDrafts, useByDefault, type DraftIdPick } from '../lib/iddraft';
 import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
@@ -44,11 +47,48 @@ export function ImportScreen() {
     return () => clearTimeout(t);
   }, [src]);
 
-  const rows = useMemo(() => splitExBlocksAt(text250).map(({ text: latex, line }) => {
-    const p = parseExTest(latex);
-    const fromId = p.idComment ? parseCode(p.idComment) : null;
-    return { latex, line, p, fromId };
-  }), [text250]);
+  // ---- Nhiều nguồn (PR N2): nhiều tệp / thư mục; không có nguồn nào ⇒ dùng đoạn dán như cũ ----
+  const [srcs, setSrcs] = useState<(ImportSource & { bytes: number })[]>([]);
+  const [skip, setSkip] = useState<ReadonlySet<number>>(new Set()); // tệp bị bỏ tick (không nhập)
+  const [scanInfo, setScanInfo] = useState<string[]>([]);
+  const [readFailed, setReadFailed] = useState<{ name: string; rel: string; message: string }[]>([]);
+  const [loadProg, setLoadProg] = useState<{ done: number; total: number; phase: string } | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const loadStop = useRef(false);
+  const [fileF, setFileF] = useState<number | 'all'>('all');
+  const [info, setInfo] = useState<BatchInfo>(() => ({ name: defaultBatchName(new Date()), tagFile: true, tagBatch: true, tagFolder: false, extra: '' }));
+  const multi = srcs.length > 0;
+  const allSources = useMemo<ImportSource[]>(() => (srcs.length ? srcs : [{ name: '', rel: '', text: text250 }]), [srcs, text250]);
+  const allRows = useMemo(() => buildRows(allSources), [allSources]);
+  const usedRows = useMemo(() => (skip.size ? allRows.filter((r) => !skip.has(r.srcIdx)) : allRows), [allRows, skip]);
+  /** lô quá lớn: chưa rà trùng/nhập; giáo viên bỏ tick bớt tệp hoặc chia lô */
+  const tooBig = usedRows.length > BATCH_MAX;
+  const rows = useMemo(() => (tooBig ? [] : usedRows), [tooBig, usedRows]);
+  const fileStats = useMemo(() => perFile(allRows, allSources), [allRows, allSources]);
+  /** khoá của lô hiện tại: đổi nguồn/tick tệp ⇒ làm lại rà soát từ đầu */
+  const batchKey = useMemo(() => (multi ? `f|${srcs.map((s) => `${s.name}:${s.text.length}`).join('|')}|${[...skip].sort().join(',')}` : `p|${text250}`), [multi, srcs, skip, text250]);
+  const clearAll = () => { setSrc(''); setSrcs([]); setSkip(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
+
+  const loadPaths = async (paths: string[]) => {
+    if (!paths.length || loadProg) return;
+    setLoadErr(null); setScanInfo([]); setReadFailed([]);
+    loadStop.current = false;
+    setLoadProg({ done: 0, total: 0, phase: 'Đang quét tệp' });
+    try {
+      const sc = await scanSources(paths);
+      const lines = describeScan(sc);
+      setLoadProg({ done: 0, total: sc.files.length, phase: 'Đang đọc tệp' });
+      const r = await readAll(sc.files, { onProgress: (done, total) => setLoadProg({ done, total, phase: 'Đang đọc tệp' }), shouldStop: () => loadStop.current });
+      if (r.cancelled) lines.push('Đã dừng đọc theo yêu cầu; chỉ lấy các tệp đã đọc xong.');
+      if (!r.read.length) { setLoadErr(r.failed.length ? 'Không đọc được tệp nào (xem lý do bên dưới).' : 'Không có tệp .tex/.txt nào để đọc.'); }
+      setScanInfo(lines);
+      setReadFailed(r.failed.map((x) => ({ name: x.file.name, rel: x.file.rel, message: x.message })));
+      if (r.read.length) { setSrcs(r.read.map((x) => ({ name: x.file.name, rel: x.file.rel, text: x.text, bytes: x.file.bytes }))); setSkip(new Set()); setFileF('all'); setInfo((i) => ({ ...i, name: defaultBatchName(new Date()) })); }
+    } catch (e) {
+      setLoadErr(e instanceof Error ? e.message : String(e));
+    }
+    setLoadProg(null);
+  };
 
   // ---- Rà soát trùng: câu mới ↔ kho, câu mới ↔ câu mới trong lô ----
   const [edits, setEdits] = useState<Record<number, string>>({});   // câu mới được giáo viên sửa tại chỗ (không ghi ngược vào ô dán)
@@ -62,7 +102,7 @@ export function ImportScreen() {
   const [confirm, setConfirm] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [bulkAsk, setBulkAsk] = useState(false);
-  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); }, [text250]);
+  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); }, [batchKey]);
   // Gán ID tự động cho câu không có %[ID] hợp lệ (chỉ metadata bản nháp; đổi lớp đích ⇒ gợi ý cũ bỏ)
   const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
   /** câu mà AI không đủ căn cứ chọn Dạng: cần giáo viên chọn, nếu không sẽ vào vị trí chung (phải xác nhận trước khi nhập) */
@@ -162,7 +202,7 @@ export function ImportScreen() {
   const [texOnlyBad, setTexOnlyBad] = useState(false);
   const [exactRow, setExactRow] = useState<number | null>(null);
   const stopRef = useRef({ stop: false });
-  useEffect(() => { stopRef.current.stop = true; setTex({}); setTexRun(false); setExactRow(null); }, [text250]);
+  useEffect(() => { stopRef.current.stop = true; setTex({}); setTexRun(false); setExactRow(null); }, [batchKey]);
   const startTex = async () => {
     const sig = { stop: false };
     stopRef.current = sig;
@@ -179,10 +219,11 @@ export function ImportScreen() {
   const texFail = Object.values(tex).filter((x) => !x.ok) as { ok: false; fail: Failure }[];
   const texByCat = texFail.reduce<Partial<Record<Category, number>>>((a, x) => ({ ...a, [x.fail.category]: (a[x.fail.category] ?? 0) + 1 }), {});
   const blocks = useMemo(() => rows.map((r) => r.latex), [rows]);
-  useEffect(() => { setPkgFilter(null); setLimit(200); }, [text250]);
+  useEffect(() => { setPkgFilter(null); setLimit(200); setFileF('all'); }, [batchKey]);
   const shownRows = rows
     .map((r, i) => ({ r, i }))
     .filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh')
+    .filter(({ r }) => fileF === 'all' || r.srcIdx === fileF)
     .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i))
     .filter(({ i }) => !texOnlyBad || tex[i]?.ok === false)
     .filter(({ i }) => statusF === 'all' || (statusF === 'hold' ? decOf(i) === 'hold' : statusOf(i).key === statusF));
@@ -210,7 +251,7 @@ export function ImportScreen() {
     if (decOf(i) !== 'import') return [];
     const text = latexOf(i).trim();
     const fromId = fromIdOf(i);
-    return [{ latex: text, level: fromId?.level ?? level, tags: [], ...(fromId?.loc ?? draftLocOf(i).loc) } as Draft];
+    return [{ latex: text, level: fromId?.level ?? level, tags: tagsFor(rows[i], info), ...(fromId?.loc ?? draftLocOf(i).loc) } as Draft];
   });
   /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
   const idSum = summarizeImportIds(rows.map((_r, i) => idStateOf(latexOf(i))), (i) => decOf(i) === 'import', (i) => draftLocOf(i).suggested);
@@ -234,15 +275,15 @@ export function ImportScreen() {
       return;
     }
     toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.`);
-    setSrc('');
+    clearAll();
     go({ screen: 'bank' });
   };
-  const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); setSrc(''); go({ screen: 'bank' }); } };
+  const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); clearAll(); go({ screen: 'bank' }); } };
   const setDec = (i: number, d: Decision) => setUserDec((u) => ({ ...u, [`d${i}`]: d }));
   const sureRows = rows.map((_, i) => i).filter((i) => statusOf(i).key === 'sure' && decOf(i) !== 'skip');
   const hitLabel = (h: DraftHit): string => {
     if (h.with === 'bank') { const q = questions.find((x) => x.uid === h.other); return `Câu ${q ? seqLabel(q.seq) : '(đã xoá)'} trong ngân hàng`; }
-    const j = draftIds.get(h.other); return `Câu ${j != null ? j + 1 : '?'} trong file${j != null ? ` (dòng ${rows[j].line})` : ''}`;
+    const j = draftIds.get(h.other); return `Câu ${j != null ? j + 1 : '?'} trong ${j != null && multi ? `tệp ${rows[j].file}` : 'file'}${j != null ? ` (dòng ${rows[j].line})` : ''}`;
   };
 
   return (
@@ -261,13 +302,68 @@ export function ImportScreen() {
           <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
             Mỗi câu nằm trong <span className="mono">\begin{'{ex}'} … \end{'{ex}'}</span>. Câu có sẵn ID dạng <span className="mono">%[2D1H1-1]</span> sẽ tự vào đúng bài và mức độ; câu không có ID dùng vị trí chọn bên dưới. HEdu sẽ so từng câu với ngân hàng và với các câu khác trong file, rồi để bạn quyết định câu nào nhập, câu nào bỏ qua.
           </span>
-          <textarea value={src} onChange={(e) => setSrc(e.target.value)} placeholder={'\\begin{ex}%[2D1N1-1]\n  Đề bài ...\n  \\choice\n  {\\True A}{B}{C}{D}\n\\end{ex}'} aria-label="Mã LaTeX cần nhập" spellCheck={false} />
+          {!multi && <textarea value={src} onChange={(e) => setSrc(e.target.value)} placeholder={'\\begin{ex}%[2D1N1-1]\n  Đề bài ...\n  \\choice\n  {\\True A}{B}{C}{D}\n\\end{ex}'} aria-label="Mã LaTeX cần nhập" spellCheck={false} />}
           <div className="head-actions">
+            {isDesktop() && <button type="button" className="btn btn-sm btn-accent" disabled={!!loadProg} onClick={() => { void chooseFiles().then(loadPaths); }}>Chọn nhiều tệp…</button>}
+            {isDesktop() && <button type="button" className="btn btn-sm btn-accent" disabled={!!loadProg} onClick={() => { void chooseFolder().then((d) => (d ? loadPaths([d]) : undefined)); }}>Chọn thư mục…</button>}
+            {multi && <button type="button" className="btn btn-sm" disabled={!!loadProg} onClick={clearAll}>Bỏ các tệp, quay lại dán trực tiếp</button>}
             <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}>Mở file .tex</button>
             <button type="button" className="btn btn-sm" onClick={() => toast('Nhập từ Word (.docx có Equation) sẽ có ở bản cài trên Windows.')}>Mở file Word</button>
             <input ref={file} type="file" accept=".tex,.txt" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setSrc(await readFile(f)); e.target.value = ''; }} />
           </div>
+          {loadProg && (
+            <div className="chk-sum">
+              <span className="chk-pill" role="status">{loadProg.phase}{loadProg.total ? ` ${loadProg.done}/${loadProg.total}` : ''}…</span>
+              <button type="button" className="btn btn-sm btn-outline" onClick={() => { loadStop.current = true; }}>Dừng</button>
+            </div>
+          )}
+          {loadErr && <div className="note bad" role="alert"><div className="note-body"><b>Chưa nạp được tệp</b><span>{loadErr}</span></div></div>}
+          {scanInfo.map((t) => <span key={t} className="sys-hint">{t}</span>)}
+          {readFailed.length > 0 && (
+            <div className="note warn" role="status"><div className="note-body"><b>{readFailed.length} tệp không đọc được (không ảnh hưởng các tệp khác)</b>
+              <ul className="imp-fail">{readFailed.slice(0, 8).map((f) => <li key={`${f.rel}/${f.name}`}><span className="mono">{f.rel ? `${f.rel}/` : ''}{f.name}</span>: {f.message}</li>)}{readFailed.length > 8 && <li>… và {readFailed.length - 8} tệp khác.</li>}</ul></div></div>
+          )}
+          {multi && (
+            <div className="aid-scroll aid-scroll-sm" aria-label="Theo tệp">
+              <table className="aid-table">
+                <thead><tr><th>Nhập</th><th>Tệp</th><th>Số câu</th><th>ID đúng</th><th>Thiếu Dạng</th><th>ID sai</th><th>Không ID</th>{anaDone && <th>Nghi trùng</th>}</tr></thead>
+                <tbody>
+                  {fileStats.map((f) => {
+                    const dup = anaDone ? rows.reduce((n, r, i) => (r.srcIdx === f.srcIdx && ['sure', 'near', 'conflict'].includes(statusOf(i).key) ? n + 1 : n), 0) : 0;
+                    return (
+                      <tr key={f.srcIdx} className={skip.has(f.srcIdx) ? '' : 'is-on'}>
+                        <td><input type="checkbox" checked={!skip.has(f.srcIdx)} aria-label={`Nhập tệp ${f.name}`} onChange={(e) => setSkip((s) => { const n = new Set(s); if (e.target.checked) n.delete(f.srcIdx); else n.add(f.srcIdx); return n; })} /></td>
+                        <td className="aid-q"><span className="mono">{f.rel ? `${f.rel}/` : ''}{f.name}</span>{f.blocks === 0 && <small className="aid-bad">0 câu (không có \begin{'{ex}'}…\end{'{ex}'})</small>}</td>
+                        <td>{f.blocks}</td><td>{f.idOk}</td><td>{f.idNoForm}</td><td>{f.idInvalid}</td><td>{f.idMissing}</td>{anaDone && <td>{skip.has(f.srcIdx) ? '—' : dup}</td>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {tooBig && (
+            <div className="note bad" role="alert"><div className="note-body"><b>Lô có {usedRows.length.toLocaleString('vi-VN')} câu — vượt giới hạn {BATCH_MAX.toLocaleString('vi-VN')} câu mỗi lô</b>
+              <span>Hãy bỏ tick bớt tệp ở bảng trên (nhập phần còn lại ở lần sau). Tạm giới hạn vì rà soát trùng tốn nhiều bộ nhớ; sẽ nới khi bộ dò trùng được làm nhẹ hơn.</span></div></div>
+          )}
         </div>
+
+        {rows.length > 0 && (
+          <div className="panel" aria-label="Thông tin lô nhập">
+            <h2>Thông tin lô nhập</h2>
+            <span className="sys-hint">Nhãn sau được gắn cho <b>mọi câu được nhập</b> trong lô này để về sau biết câu đến từ đâu (lọc theo nhãn ở Ngân hàng). Không đổi nội dung câu.</span>
+            <div className="grid2">
+              <label className="lbl">Tên lô<input className="bd-in" value={info.name} maxLength={60} onChange={(e) => setInfo({ ...info, name: e.target.value })} aria-label="Tên lô nhập" /></label>
+              <label className="lbl">Nhãn thêm cho cả lô (cách nhau bằng dấu phẩy)<input className="bd-in" value={info.extra} onChange={(e) => setInfo({ ...info, extra: e.target.value })} placeholder="vd: Sách KNTT 12, Đề 2024" aria-label="Nhãn thêm cho cả lô" /></label>
+            </div>
+            <div className="head-actions">
+              <label className="sw"><input type="checkbox" checked={info.tagFile} onChange={(e) => setInfo({ ...info, tagFile: e.target.checked })} />Gắn tên tệp (Nguồn: …)</label>
+              <label className="sw"><input type="checkbox" checked={info.tagBatch} onChange={(e) => setInfo({ ...info, tagBatch: e.target.checked })} />Gắn tên lô (Lô: …)</label>
+              {srcs.some((x) => x.rel) && <label className="sw"><input type="checkbox" checked={info.tagFolder} onChange={(e) => setInfo({ ...info, tagFolder: e.target.checked })} />Gắn thư mục con (Thư mục: …)</label>}
+            </div>
+            <span className="sys-hint">Ví dụ câu đầu tiên sẽ có nhãn: {tagsFor(rows[0], info).map((t) => <span key={t} className="tag" style={{ marginRight: 4 }}>{t}</span>)}{tagsFor(rows[0], info).length === 0 && '(không có nhãn)'}</span>
+          </div>
+        )}
 
         {rows.length > 0 && (
           <div className="panel">
@@ -316,7 +412,7 @@ export function ImportScreen() {
                 )}
               </div>
             )}
-            <PackagePanel src={text250} blocks={blocks} activeFilter={pkgFilter?.key ?? null} onFilter={(r, key) => setPkgFilter(r ? { rows: r, key } : null)} />
+            <PackagePanel src={multi ? rows.length ? allSources.filter((_, k) => !skip.has(k)).map((x) => x.text).join('\n') : '' : text250} blocks={blocks} activeFilter={pkgFilter?.key ?? null} onFilter={(r, key) => setPkgFilter(r ? { rows: r, key } : null)} />
             <h2 style={{ marginTop: 6 }}>Kiểm tra {rows.length} câu trước khi nhập</h2>
             {pkgFilter && <span className="sys-hint">Đang chỉ hiện {pkgFilter.rows.length} câu liên quan tới một gói. Bấm “Hiện lại mọi câu” ở thẻ gói để bỏ lọc.</span>}
             <div className="chk-sum">
@@ -339,6 +435,14 @@ export function ImportScreen() {
                 {!anaDone && !anaProg && rows.length > 0 && <span className="chk-pill warn" role="status">Chưa rà soát trùng xong — chưa thể nhập</span>}
                 {anaDone && <span className="chk-pill ok">Đã rà soát trùng xong</span>}
               </div>
+              {multi && fileStats.length > 1 && (
+                <label className="dc-kindsel">Chỉ hiện tệp
+                  <select value={String(fileF)} onChange={(e) => setFileF(e.target.value === 'all' ? 'all' : Number(e.target.value))} aria-label="Chỉ hiện câu của một tệp">
+                    <option value="all">Tất cả các tệp</option>
+                    {fileStats.filter((f) => !skip.has(f.srcIdx)).map((f) => <option key={f.srcIdx} value={f.srcIdx}>{f.name} ({f.blocks})</option>)}
+                  </select>
+                </label>
+              )}
               {anaDone && (
                 <label className="dc-kindsel">Lọc theo kết quả rà soát
                   <select value={statusF} onChange={(e) => setStatusF(e.target.value as typeof statusF)}>
@@ -393,7 +497,7 @@ export function ImportScreen() {
                 <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'} dec-${decOf(i)}`}>
                   <div className="chk-line">
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
-                    <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của file`}>{i + 1}</span>
+                    <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của ${multi ? `tệp ${r.file}` : 'file'}`}>{i + 1}</span>{multi && <span className="chk-tag tin" title={r.rel ? `${r.rel}/${r.file}` : r.file}>{r.file}</span>}
                     <b>{TYPE_LABEL[r.p.type]}</b>
                     <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : r.p.idComment ? `%[${r.p.idComment}] không hợp lệ` : idPicks && draftLocOf(i).suggested ? `${questionCode(draftLocOf(i).loc, level)} (gợi ý)` : 'không ID'}</span>
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
