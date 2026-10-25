@@ -1,3 +1,11 @@
+## Có gì mới trong beta.32 (đã phát hành 25/10/2026, kênh beta; commit 68c0b70): nhập nhiều tệp, nhãn nguồn, báo cáo nhập
+Gồm PR #104, #105, #107, #108 (so với beta.31). Không đổi schema (3), ID6, UID, LaTeX gốc, thuật toán dò trùng.
+- **Nhập nhiều tệp / thư mục** (Nhập liệu → "Chọn nhiều tệp…", "Chọn thư mục…"): quét cả thư mục con, chỉ đọc, bắt buộc UTF-8 (tệp sai bảng mã báo riêng, không làm hỏng cả lô), bảng "Theo tệp", bỏ tick tệp không nhập, lọc câu theo tệp. Mỗi lô tối đa 5.000 câu (tạm, đến khi dò trùng nhẹ hơn).
+- **Nhãn nguồn**: câu nhập có nhãn `Nguồn: <tệp>`, `Lô: <tên lô>`, tuỳ chọn `Thư mục: …` và nhãn tự đặt.
+- **Báo cáo nhập**: sau khi nhập hiện màn "Kết quả nhập" (tìm thấy / đã nhập / bỏ qua vì trùng / bạn bỏ qua; vị trí theo ID, Dạng đầu, gợi ý, vị trí chung; lỗi xem trước; theo tệp); lưu .csv (Excel đọc được, không có nội dung câu) và .md; **Nhật ký nhập** 20 lần gần nhất ở Cài đặt → Dữ liệu & sao lưu (chỉ ở chế độ SQLite).
+- **Ngân hàng**: ô lọc **Nhãn**, "Gắn nhãn…" hàng loạt (Thao tác khác), nút "Xem các câu vừa nhập".
+- Chưa nghiệm thu máy Windows thật (checklist mục G, H, I trong claude/nghiem-thu-beta30.md). Dò trùng nhẹ (bỏ giới hạn 5.000 câu/lô), S6, hồ sơ/nhiều nguồn: chưa làm.
+
 ## Có gì mới trong beta.31 (đã phát hành 24/10/2026, kênh beta; commit 5303e3f): sửa lỗi rà soát SQLite
 Chỉ gồm PR #101 (so với beta.30). Không đổi schema (3), ID6, UID, LaTeX gốc, Rust.
 - **Cập nhật / khôi phục sau cập nhật** không chạy khi còn thay đổi CHƯA ghi xuống đĩa (trước đây chỉ ghi nốt mà không kiểm tra kết quả).
