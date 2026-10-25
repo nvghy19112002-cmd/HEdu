@@ -80,10 +80,19 @@ jobs:
           tagName: ${{ env.TAG }}
           releaseName: 'HEdu ${{ steps.info.outputs.version }}'
           releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: false
+          releaseDraft: true   # chỉ công khai sau khi Defender quét sạch (bước dưới)
           prerelease: ${{ steps.info.outputs.channel == 'beta' }}
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+
+      - name: Quét Microsoft Defender (bị báo hoặc không quét được thì KHÔNG công khai)
+        shell: pwsh
+        run: ./scripts/quet-defender.ps1 src-tauri/target/release/hedu.exe src-tauri/target/release/bundle/nsis/*-setup.exe
+
+      - name: Công khai bản phát hành (chỉ khi đã quét sạch)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
 
   kenh:
     # Chuyển bản vừa build vào đúng kênh, giữ bản trước, rồi dọn bản cũ.

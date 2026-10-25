@@ -49,3 +49,6 @@ jobs:
         env:
           HEDU_REPO: ${{ github.repository }}
         run: cargo test --lib --locked
+      - name: Kiểm cổng quét Defender (cùng script với phát hành)
+        shell: pwsh
+        run: ./scripts/quet-defender.ps1 src-tauri/target/debug/deps/hedu_lib-*.exe
