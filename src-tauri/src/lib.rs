@@ -4,6 +4,7 @@ mod ai;
 mod db;
 mod dbbackup;
 mod dbcmd;
+mod examlib;
 mod importfs;
 mod jsonmig;
 mod proc;
@@ -442,7 +443,13 @@ pub fn run() {
             dbcmd::backup_restore,
             dbcmd::db_export_json,
             importfs::import_scan,
-            importfs::import_read
+            importfs::import_read,
+            examlib::exam_lib_scan,
+            examlib::exam_lib_import,
+            examlib::exam_lib_create,
+            examlib::exam_lib_list,
+            examlib::exam_lib_get,
+            examlib::exam_lib_verify
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
