@@ -184,6 +184,7 @@ export function ExamLibraryScreen() {
                         {check.ok && check.extra.length === 0 ? <b>Mọi tệp khớp với lúc nhập.</b> : <b>Có khác biệt so với lúc nhập</b>}
                         {check.changed.length > 0 && <span>Đã bị sửa: {check.changed.join(', ')}</span>}
                         {check.missing.length > 0 && <span>Bị mất: {check.missing.join(', ')}</span>}
+                        {check.blocked.length > 0 && <span>Bị chặn vì là liên kết/junction hoặc không đọc an toàn được (HEdu không đi theo): {check.blocked.join(', ')}</span>}
                         {check.extra.length > 0 && <span>Tệp thêm ngoài HEdu: {check.extra.join(', ')}</span>}
                       </div></div>
                     )}

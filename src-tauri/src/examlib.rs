@@ -190,6 +190,45 @@ fn is_link(md: &fs::Metadata) -> bool {
     false
 }
 
+/// Mở MỘT tệp thường nằm trong `root` mà KHÔNG đi theo liên kết/junction ở bất kỳ thành phần nào của đường dẫn.
+/// Kiểm từng thành phần (symlink_metadata), mở bằng cờ không-đi-theo-điểm-phân-tích (Windows), kiểm lại trên chính tay cầm đã mở,
+/// rồi so đường dẫn thật với thư mục gốc. Dùng cho MỌI lần đọc tệp trong quá trình nhập và kiểm tra, để nguồn bị thay thành
+/// liên kết giữa lúc quét và lúc chép (hoặc người khác đặt liên kết trong thư viện) không làm HEdu đọc ngoài thư mục.
+pub fn open_inside(root: &Path, rel: &str) -> Result<fs::File, String> {
+    if let Some(r) = bad_rel(rel) {
+        return Err(format!("Đường dẫn không an toàn '{rel}': {r}"));
+    }
+    let parts: Vec<&str> = rel.split('/').collect();
+    let mut cur = root.to_path_buf();
+    for (i, c) in parts.iter().enumerate() {
+        cur.push(c);
+        let md = fs::symlink_metadata(&cur).map_err(|e| format!("Không đọc được '{rel}': {e}"))?;
+        if is_link(&md) {
+            return Err(format!("'{rel}' đi qua liên kết/junction nên không đọc (để không ra ngoài thư mục)."));
+        }
+        let last = i + 1 == parts.len();
+        if (last && !md.is_file()) || (!last && !md.is_dir()) {
+            return Err(format!("'{rel}' không còn là tệp/thư mục thường."));
+        }
+    }
+    let mut oo = fs::OpenOptions::new();
+    oo.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        oo.custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT: không đi theo liên kết ở tệp cuối
+    }
+    let f = oo.open(&cur).map_err(|e| format!("Không mở được '{rel}': {e}"))?;
+    let hmd = f.metadata().map_err(|e| format!("Không đọc được '{rel}': {e}"))?;
+    if is_link(&hmd) || !hmd.is_file() {
+        return Err(format!("'{rel}' là liên kết nên không đọc."));
+    }
+    match (fs::canonicalize(&cur), fs::canonicalize(root)) {
+        (Ok(r), Ok(b)) if r.starts_with(&b) => Ok(f),
+        _ => Err(format!("'{rel}' nằm ngoài thư mục gốc nên không đọc.")),
+    }
+}
+
 fn ext_of(rel: &str) -> String {
     Path::new(rel).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase()
 }
@@ -402,18 +441,22 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
-pub fn sha256_file(p: &Path) -> std::io::Result<String> {
-    let mut f = fs::File::open(p)?;
+pub fn sha256_reader(r: &mut impl Read) -> std::io::Result<String> {
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 64 * 1024];
     loop {
-        let n = f.read(&mut buf)?;
+        let n = r.read(&mut buf)?;
         if n == 0 {
             break;
         }
         h.update(&buf[..n]);
     }
     Ok(hex(&h.finalize()))
+}
+
+/// Băm tệp do HEdu tự ghi (bản chép/thư mục tạm). Tệp NGUỒN và tệp trong thư viện phải đọc qua `open_inside`.
+pub fn sha256_file(p: &Path) -> std::io::Result<String> {
+    sha256_reader(&mut fs::File::open(p)?)
 }
 
 fn fingerprint(files: &[FileRec]) -> String {
@@ -482,8 +525,17 @@ pub fn read_manifest(lib: &Path, id: &str) -> Result<Manifest, String> {
     if !valid_id(id) {
         return Err("Mã dự án không hợp lệ.".into());
     }
-    let p = projects_dir(lib).join(id).join(HEDU_DIR).join(MANIFEST);
-    let b = fs::read(&p).map_err(|e| format!("Không đọc được manifest của dự án: {e}"))?;
+    let pd = projects_dir(lib).join(id);
+    match fs::symlink_metadata(&pd) {
+        Ok(md) if is_link(&md) => return Err("Thư mục dự án là liên kết/junction nên không đọc (an toàn).".into()),
+        Ok(md) if md.is_dir() => {}
+        _ => return Err("Không tìm thấy dự án trong thư viện.".into()),
+    }
+    let mut b = Vec::new();
+    open_inside(&pd, ".hedu/manifest.json")?
+        .take(8 * 1024 * 1024)
+        .read_to_end(&mut b)
+        .map_err(|e| format!("Không đọc được manifest của dự án: {e}"))?;
     let m: Manifest = serde_json::from_slice(&b).map_err(|e| format!("Manifest hỏng: {e}"))?;
     if m.project_id != id {
         return Err("Manifest không khớp mã thư mục dự án.".into());
@@ -553,8 +605,7 @@ fn list_unlocked(lib: &Path) -> Vec<Summary> {
     rebuild_index(lib)
 }
 
-fn copy_verified(from: &Path, to: &Path) -> Result<(u64, String), String> {
-    let mut src = fs::File::open(from).map_err(|e| format!("Không mở được {}: {e}", from.display()))?;
+fn copy_verified(src: &mut fs::File, label: &str, to: &Path) -> Result<(u64, String), String> {
     if let Some(p) = to.parent() {
         fs::create_dir_all(p).map_err(|e| format!("Không tạo được thư mục đích: {e}"))?;
     }
@@ -563,7 +614,7 @@ fn copy_verified(from: &Path, to: &Path) -> Result<(u64, String), String> {
     let mut buf = vec![0u8; 64 * 1024];
     let mut total = 0u64;
     loop {
-        let n = src.read(&mut buf).map_err(|e| format!("Không đọc được {}: {e}", from.display()))?;
+        let n = src.read(&mut buf).map_err(|e| format!("Không đọc được {label}: {e}"))?;
         if n == 0 {
             break;
         }
@@ -576,9 +627,27 @@ fn copy_verified(from: &Path, to: &Path) -> Result<(u64, String), String> {
     let want = hex(&h.finalize());
     let got = sha256_file(to).map_err(|e| format!("Không đọc lại được tệp đích: {e}"))?;
     if got != want {
-        return Err(format!("Bản chép của {} không khớp (hash khác nhau).", from.display()));
+        return Err(format!("Bản chép của {label} không khớp (hash khác nhau)."));
     }
     Ok((total, want))
+}
+
+/// Chép các tệp đã quét vào `staging`. Mỗi tệp được mở lại qua `open_inside` ngay lúc chép (không tin kết quả quét cũ),
+/// và sau khi chép phải mở lại được với cùng kích thước/thời gian sửa, nếu không là nguồn đã bị đổi.
+fn copy_scanned(src_dir: &Path, files: &[ScanFile], staging: &Path) -> Result<Vec<FileRec>, String> {
+    let changed = |rel: &str| format!("Tệp nguồn '{rel}' bị đổi trong lúc chép. Chưa nhập; hãy thử lại khi không còn chương trình nào đang sửa.");
+    let mut recs = Vec::new();
+    for f in files {
+        let mut src = open_inside(src_dir, &f.rel)?;
+        let before = src.metadata().map_err(|e| format!("Không đọc được {}: {e}", f.rel))?;
+        let (bytes, sha) = copy_verified(&mut src, &f.rel, &staging.join(&f.rel))?;
+        let after = open_inside(src_dir, &f.rel).and_then(|h| h.metadata().map_err(|e| e.to_string())).map_err(|_| changed(&f.rel))?;
+        if bytes != f.bytes || before.len() != after.len() || before.modified().ok() != after.modified().ok() {
+            return Err(changed(&f.rel));
+        }
+        recs.push(FileRec { rel: f.rel.clone(), bytes, sha256: sha });
+    }
+    Ok(recs)
 }
 
 /// Nhập nguồn vào thư viện. `main` do người dùng chọn (bắt buộc nếu nhiều ứng viên). Trả về tóm tắt dự án mới.
@@ -607,18 +676,7 @@ pub fn import(lib: &Path, src: &Path, name: &str, main: Option<&str>) -> Result<
     let staging = projects_dir(lib).join(format!(".staging-{id}"));
     let run = || -> Result<Vec<FileRec>, String> {
         fs::create_dir_all(&staging).map_err(|e| format!("Không tạo được thư mục thư viện: {e}"))?;
-        let mut recs = Vec::new();
-        for f in &sc.files {
-            let from = src_dir.join(&f.rel);
-            let before = fs::metadata(&from).map_err(|e| format!("Không đọc được {}: {e}", f.rel))?;
-            let (bytes, sha) = copy_verified(&from, &staging.join(&f.rel))?;
-            let after = fs::metadata(&from).map_err(|e| format!("Không đọc lại được {}: {e}", f.rel))?;
-            if bytes != f.bytes || before.len() != after.len() || before.modified().ok() != after.modified().ok() {
-                return Err(format!("Tệp nguồn '{}' bị đổi trong lúc chép. Chưa nhập; hãy thử lại khi không còn chương trình nào đang sửa.", f.rel));
-            }
-            recs.push(FileRec { rel: f.rel.clone(), bytes, sha256: sha });
-        }
-        Ok(recs)
+        copy_scanned(&src_dir, &sc.files, &staging)
     };
     let recs = match run() {
         Ok(r) => r,
@@ -719,44 +777,66 @@ pub struct VerifyOut {
     pub changed: Vec<String>,
     /// tệp có trong thư mục nhưng không có trong manifest (người dùng thêm ngoài app)
     pub extra: Vec<String>,
+    /// tệp/thư mục bị CHẶN: là liên kết/junction (hoặc đi qua liên kết) hoặc không đọc an toàn được; không đi theo, không đọc
+    pub blocked: Vec<String>,
 }
 
-/// So tệp thật với manifest (hash). Không sửa gì.
+/// So tệp thật với manifest (hash). Không sửa gì và không bao giờ đi theo liên kết/junction trong thư viện.
 pub fn verify(lib: &Path, id: &str) -> Result<VerifyOut, String> {
     let m = read_manifest(lib, id)?;
     let dir = projects_dir(lib).join(id);
-    let (mut missing, mut changed) = (vec![], vec![]);
+    let (mut missing, mut changed, mut blocked) = (vec![], vec![], vec![]);
     for f in &m.files {
-        let p = dir.join(&f.rel);
-        match fs::metadata(&p) {
-            Ok(md) if md.is_file() => {
-                if md.len() != f.bytes || sha256_file(&p).map(|h| h != f.sha256).unwrap_or(true) {
+        match open_inside(&dir, &f.rel) {
+            Ok(mut h) => {
+                let len_ok = h.metadata().map(|md| md.len() == f.bytes).unwrap_or(false);
+                if !len_ok || sha256_reader(&mut h).map(|x| x != f.sha256).unwrap_or(true) {
                     changed.push(f.rel.clone());
                 }
             }
-            _ => missing.push(f.rel.clone()),
+            Err(_) => {
+                let gone = matches!(fs::symlink_metadata(dir.join(&f.rel)), Err(e) if e.kind() == std::io::ErrorKind::NotFound);
+                if gone {
+                    missing.push(f.rel.clone())
+                } else {
+                    blocked.push(f.rel.clone())
+                }
+            }
         }
     }
     let known: HashSet<&str> = m.files.iter().map(|f| f.rel.as_str()).collect();
     let mut extra = vec![];
-    fn walk(d: &Path, rel: &str, known: &HashSet<&str>, extra: &mut Vec<String>) {
-        if let Ok(rd) = fs::read_dir(d) {
-            for e in rd.flatten() {
-                let n = e.file_name().to_string_lossy().into_owned();
-                let r = if rel.is_empty() { n.clone() } else { format!("{rel}/{n}") };
-                if r == HEDU_DIR {
-                    continue;
+    fn walk(d: &Path, rel: &str, depth: usize, known: &HashSet<&str>, extra: &mut Vec<String>, blocked: &mut Vec<String>) {
+        if depth > MAX_DEPTH + 2 {
+            blocked.push(rel.to_string());
+            return;
+        }
+        let Ok(rd) = fs::read_dir(d) else {
+            blocked.push(rel.to_string());
+            return;
+        };
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            let r = if rel.is_empty() { n.clone() } else { format!("{rel}/{n}") };
+            if r == HEDU_DIR {
+                continue;
+            }
+            match fs::symlink_metadata(e.path()) {
+                Ok(md) if is_link(&md) => blocked.push(r),
+                Ok(md) if md.is_dir() => walk(&e.path(), &r, depth + 1, known, extra, blocked),
+                Ok(_) => {
+                    if !known.contains(r.as_str()) {
+                        extra.push(r)
+                    }
                 }
-                match e.file_type() {
-                    Ok(t) if t.is_dir() => walk(&e.path(), &r, known, extra),
-                    Ok(_) if !known.contains(r.as_str()) => extra.push(r),
-                    _ => {}
-                }
+                Err(_) => blocked.push(r),
             }
         }
     }
-    walk(&dir, "", &known, &mut extra);
-    Ok(VerifyOut { ok: missing.is_empty() && changed.is_empty(), missing, changed, extra })
+    walk(&dir, "", 1, &known, &mut extra, &mut blocked);
+    blocked.sort();
+    blocked.dedup();
+    Ok(VerifyOut { ok: missing.is_empty() && changed.is_empty() && blocked.is_empty(), missing, changed, extra, blocked })
 }
 
 // ---------- lệnh Tauri (mỏng; chạy ở luồng riêng để giao diện không đứng) ----------
@@ -982,21 +1062,157 @@ mod tests {
         let lib = d.join("lib");
         put(&d, "outside/secret.tex", b"bi mat");
         put(&d, "p/main.tex", b"\\documentclass{article}\n");
-        let ok = std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
-            .arg(d.join("p/lien-ket"))
-            .arg(d.join("outside"))
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-        if !ok {
-            let _ = fs::remove_dir_all(&d);
-            return; // máy không cho tạo junction ⇒ bỏ qua
-        }
+        assert!(mk_junction(&d.join("p/lien-ket"), &d.join("outside")), "phải tạo được junction để kiểm");
         let sc = scan(&d.join("p"), &lib).unwrap();
         assert!(sc.files.iter().all(|f| !f.rel.contains("secret")), "không được đi theo junction");
         assert!(sc.skipped.iter().any(|k| k.rel == "lien-ket" && k.reason.contains("liên kết")));
         assert!(scan(&d.join("p/lien-ket"), &lib).is_err(), "nguồn là junction ⇒ từ chối");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// Tạo junction `link` -> `target` (Windows; không cần quyền quản trị). Đổi '/' thành '\' vì cmd hiểu "/sub" là tuỳ chọn.
+    #[cfg(windows)]
+    fn mk_junction(link: &Path, target: &Path) -> bool {
+        let fix = |p: &Path| p.to_string_lossy().replace('/', "\\");
+        std::process::Command::new("cmd").args(["/C", "mklink", "/J", &fix(link), &fix(target)]).output().map(|o| o.status.success()).unwrap_or(false)
+    }
+
+    // ---- hồi quy TOCTOU: nguồn bị thay thành liên kết GIỮA lúc quét và lúc chép ----
+
+    #[cfg(windows)]
+    #[test]
+    fn toctou_thu_muc_con_bi_thay_bang_junction_giua_quet_va_chep() {
+        let d = tmp("toctou-dir");
+        let lib = d.join("lib");
+        put(&d, "p/main.tex", b"\\documentclass{article}\n");
+        put(&d, "p/sub/a.tex", b"that");
+        put(&d, "outside/a.tex", b"XXXX"); // cùng độ dài với bản thật để lỗi KHÔNG thể được phát hiện chỉ nhờ so kích thước
+        let sc = scan(&d.join("p"), &lib).unwrap();
+        assert!(sc.files.iter().any(|f| f.rel == "sub/a.tex"));
+        // kẻ khác thay thư mục `sub` bằng junction trỏ ra ngoài
+        fs::remove_dir_all(d.join("p/sub")).unwrap();
+        assert!(mk_junction(&d.join("p/sub"), &d.join("outside")), "phải tạo được junction để kiểm");
+        let staging = d.join("stg");
+        fs::create_dir_all(&staging).unwrap();
+        let r = copy_scanned(&d.join("p"), &sc.files, &staging);
+        assert!(r.is_err(), "phải từ chối, không được đọc ngoài thư mục nguồn");
+        assert!(!staging.join("sub/a.tex").exists(), "nội dung ngoài thư mục không được lọt vào bản chép");
+        // import cả quy trình cũng không để lại dự án dở
+        let _ = fs::remove_dir(d.join("p/sub"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn open_inside_tu_choi_qua_junction_o_thanh_phan_cha() {
+        let d = tmp("open-junc");
+        put(&d, "root/ok.tex", b"1");
+        put(&d, "outside/x.tex", b"2");
+        assert!(open_inside(&d.join("root"), "ok.tex").is_ok());
+        assert!(mk_junction(&d.join("root/lk"), &d.join("outside")), "phải tạo được junction để kiểm");
+        assert!(open_inside(&d.join("root"), "lk/x.tex").is_err());
+        assert!(open_inside(&d.join("root"), "../outside/x.tex").is_err());
+        let _ = fs::remove_dir(d.join("root/lk"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn toctou_tep_bi_thay_bang_symlink_giua_quet_va_chep() {
+        let d = tmp("toctou-file");
+        let lib = d.join("lib");
+        put(&d, "p/main.tex", b"\\documentclass{article}\n");
+        put(&d, "outside.tex", b"BI-MAT");
+        let sc = scan(&d.join("p"), &lib).unwrap();
+        fs::remove_file(d.join("p/main.tex")).unwrap();
+        std::os::unix::fs::symlink(d.join("outside.tex"), d.join("p/main.tex")).unwrap();
+        let staging = d.join("stg");
+        fs::create_dir_all(&staging).unwrap();
+        assert!(copy_scanned(&d.join("p"), &sc.files, &staging).is_err());
+        assert!(!staging.join("main.tex").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn toctou_tep_bi_thay_bang_symlink_windows_neu_may_cho_phep() {
+        let d = tmp("toctou-wsym");
+        let lib = d.join("lib");
+        put(&d, "p/main.tex", b"\\documentclass{article}\n");
+        put(&d, "outside.tex", b"BI-MAT");
+        let sc = scan(&d.join("p"), &lib).unwrap();
+        fs::remove_file(d.join("p/main.tex")).unwrap();
+        if std::os::windows::fs::symlink_file(d.join("outside.tex"), d.join("p/main.tex")).is_err() {
+            let _ = fs::remove_dir_all(&d); // không có quyền tạo symlink ⇒ bỏ qua (junction đã được kiểm ở test khác)
+            return;
+        }
+        let staging = d.join("stg");
+        fs::create_dir_all(&staging).unwrap();
+        assert!(copy_scanned(&d.join("p"), &sc.files, &staging).is_err());
+        assert!(!staging.join("main.tex").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn nguon_doi_noi_dung_giua_quet_va_chep_thi_bao_loi() {
+        let d = tmp("toctou-size");
+        let lib = d.join("lib");
+        put(&d, "p/main.tex", b"\\documentclass{article}\n");
+        let sc = scan(&d.join("p"), &lib).unwrap();
+        fs::write(d.join("p/main.tex"), b"\\documentclass{article}\n%them cho dai ra\n").unwrap();
+        let staging = d.join("stg");
+        fs::create_dir_all(&staging).unwrap();
+        assert!(copy_scanned(&d.join("p"), &sc.files, &staging).is_err());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    // ---- hồi quy verify()/read_manifest(): không đi theo liên kết trong thư viện ----
+
+    #[cfg(windows)]
+    #[test]
+    fn verify_khong_di_theo_junction_dat_trong_thu_vien() {
+        let d = tmp("verify-junc");
+        let lib = d.join("lib");
+        put(&d, "p/main.tex", b"\\documentclass{article}\n");
+        put(&d, "p/s/a.tex", b"giong");
+        put(&d, "outside/a.tex", b"giong"); // cùng nội dung: nếu đi theo junction, hash sẽ KHỚP và verify báo sai là ổn
+        put(&d, "outside/them.tex", b"tep ngoai");
+        let s = import(&lib, &d.join("p"), "v", None).unwrap();
+        let pd = lib.join("projects").join(&s.id);
+        fs::remove_dir_all(pd.join("s")).unwrap();
+        assert!(mk_junction(&pd.join("s"), &d.join("outside")), "phải tạo được junction để kiểm");
+        let v = verify(&lib, &s.id).unwrap();
+        assert!(!v.ok, "phải báo không ổn thay vì coi là khớp");
+        assert_eq!(v.blocked, vec!["s".to_string(), "s/a.tex".to_string()]);
+        assert!(v.extra.iter().all(|e| !e.starts_with("s/")), "không được liệt kê tệp bên ngoài như tệp của dự án: {:?}", v.extra);
+        assert_eq!(fs::read(d.join("outside/a.tex")).unwrap(), b"giong", "tệp ngoài không bị đụng");
+        let _ = fs::remove_dir(pd.join("s"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn thu_muc_du_an_hoac_hedu_la_junction_thi_khong_doc() {
+        let d = tmp("proj-junc");
+        let lib = d.join("lib");
+        put(&d, "a.tex", b"\\documentclass{article}\n");
+        put(&d, "b.tex", b"\\documentclass{book}\n");
+        let a = import(&lib, &d.join("a.tex"), "A", None).unwrap();
+        let b = import(&lib, &d.join("b.tex"), "B", None).unwrap();
+        // thư mục dự án A bị thay bằng junction sang dự án B
+        let pa = lib.join("projects").join(&a.id);
+        fs::remove_dir_all(&pa).unwrap();
+        assert!(mk_junction(&pa, &lib.join("projects").join(&b.id)), "phải tạo được junction để kiểm");
+        assert!(read_manifest(&lib, &a.id).is_err());
+        assert!(verify(&lib, &a.id).is_err());
+        let _ = fs::remove_dir(&pa);
+        // `.hedu` của B bị thay bằng junction ra ngoài
+        let pb = lib.join("projects").join(&b.id);
+        put(&d, "evil/manifest.json", b"{}");
+        fs::remove_dir_all(pb.join(".hedu")).unwrap();
+        assert!(mk_junction(&pb.join(".hedu"), &d.join("evil")), "phải tạo được junction để kiểm");
+        assert!(read_manifest(&lib, &b.id).is_err());
+        let _ = fs::remove_dir(pb.join(".hedu"));
         let _ = fs::remove_dir_all(&d);
     }
 

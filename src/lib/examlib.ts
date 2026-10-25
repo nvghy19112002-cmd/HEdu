@@ -19,7 +19,7 @@ export interface ExamScan {
 export interface ExamManifest extends Omit<ExamSummary, 'id' | 'fileCount' | 'totalBytes' | 'warningCount' | 'skippedCount'> {
   projectId: string; source: { mode: string; originalPathDisplay: string; fingerprint: string }; files: { rel: string; bytes: number; sha256: string }[]; skipped: ExamSkip[]; warnings: string[];
 }
-export interface ExamVerify { ok: boolean; missing: string[]; changed: string[]; extra: string[] }
+export interface ExamVerify { ok: boolean; missing: string[]; changed: string[]; extra: string[]; blocked: string[] }
 
 export const examScan = (path: string) => invoke<ExamScan>('exam_lib_scan', { path });
 export const examImport = (path: string, name: string, main: string | null) => invoke<ExamSummary>('exam_lib_import', { path, name, main });
