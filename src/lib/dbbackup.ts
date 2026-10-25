@@ -26,13 +26,13 @@ export const isSqlite = (): boolean => getStorageMode() === 'sqlite';
  * Chụp điểm khôi phục TRƯỚC thao tác dễ mất dữ liệu (chỉ chế độ SQLite; chế độ khác luôn ok).
  * Ghi nốt dữ liệu chờ ghi trước; không chụp được ⇒ trả ok=false và thao tác KHÔNG được làm (thà không làm còn hơn làm mà không có lưới an toàn).
  */
-export async function ensureRestorePoint(reason: PointReason, when = true): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (!when || !isSqlite()) return { ok: true };
+export async function ensureRestorePoint(reason: PointReason, when = true): Promise<{ ok: true; taken: boolean } | { ok: false; message: string }> {
+  if (!when || !isSqlite()) return { ok: true, taken: false };
   try {
     await flushSave();
     if (!isLastSaveOk()) return { ok: false, message: 'Chưa ghi được dữ liệu hiện tại xuống đĩa nên chưa làm thao tác này (chưa mất gì). Hãy kiểm tra ổ đĩa rồi thử lại.' };
     await invoke('backup_point', { reason });
-    return { ok: true };
+    return { ok: true, taken: true };
   } catch (e) {
     return { ok: false, message: `Chưa làm vì không tạo được điểm khôi phục để phòng khi cần quay lại: ${e instanceof Error ? e.message : String(e)}` };
   }

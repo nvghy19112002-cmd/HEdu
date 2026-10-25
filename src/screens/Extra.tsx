@@ -25,6 +25,8 @@ import { QuestionDrawer } from '../components/QuestionDrawer';
 import { seqLabel } from '../lib/id';
 import { parseExTest, splitExBlocksAt } from '../lib/extest';
 import { parseCode, questionCode } from '../lib/id';
+import { ImportReportView } from '../components/ImportReportView';
+import { appendLog, buildReport, type IdPlace, type ImportReport, type ReportRow } from '../lib/importreport';
 import { addMany, flushSave, getState, isLastSaveOk, useBank, type Draft } from '../lib/store';
 import { LEVEL_LABEL, LEVELS, TYPE_LABEL, type Level, type Location } from '../lib/types';
 
@@ -55,6 +57,7 @@ export function ImportScreen() {
   const [loadProg, setLoadProg] = useState<{ done: number; total: number; phase: string } | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const loadStop = useRef(false);
+  const [result, setResult] = useState<{ report: ImportReport; logSaved: boolean } | null>(null);
   const [fileF, setFileF] = useState<number | 'all'>('all');
   const [info, setInfo] = useState<BatchInfo>(() => ({ name: defaultBatchName(new Date()), tagFile: true, tagBatch: true, tagFolder: false, extra: '' }));
   const multi = srcs.length > 0;
@@ -255,6 +258,33 @@ export function ImportScreen() {
   });
   /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
   const idSum = summarizeImportIds(rows.map((_r, i) => idStateOf(latexOf(i))), (i) => decOf(i) === 'import', (i) => draftLocOf(i).suggested);
+  /** Báo cáo của lô vừa nhập (dựng ngay sau addMany, trước khi xoá nội dung đang xem). */
+  const pendingReport = useRef<ImportReport | null>(null);
+  const makeReport = (added: { uid: string; seq: number }[], restorePoint: boolean): ImportReport => {
+    let k = 0;
+    const rr: ReportRow[] = rows.map((r, i) => {
+      const dec = decOf(i);
+      const st = idStateOf(latexOf(i));
+      const key = statusOf(i).key;
+      const place: IdPlace | undefined = dec !== 'import' ? undefined : st === 'ok' ? 'dung-ma' : st === 'thieu-dang' ? 'dang-dau' : draftLocOf(i).suggested ? 'ai' : 'vi-tri-chung';
+      const q = dec === 'import' ? added[k++] : undefined;
+      const w = issues[i] ? worstLevel(issues[i]!) : null;
+      return {
+        file: r.file, rel: r.rel, line: r.line, decision: dec === 'import' ? 'import' : ['sure', 'near', 'conflict'].includes(key) ? 'skip-dup' : 'skip-user',
+        reason: dec === 'import' ? (key === 'new' ? 'Mới' : ['sure', 'near', 'conflict'].includes(key) ? statusOf(i).label + ' (bạn giữ lại)' : statusOf(i).label) : statusOf(i).label,
+        idState: st, idPlace: place, preview: w === 'loi' || w === 'canh' ? w : '', tex: tex[i] ? (tex[i].ok ? 'ok' : 'loi') : '', uid: q?.uid, seq: q?.seq,
+      };
+    });
+    const rep = buildReport({ at: Date.now(), name: info.tagBatch || multi ? info.name : '', paste: !multi, restorePoint, rows: rr, warnings: readFailed.map((f) => `Không đọc được tệp ${f.rel ? f.rel + '/' : ''}${f.name}: ${f.message}`) });
+    pendingReport.current = rep;
+    return rep;
+  };
+  const finish = async (report: ImportReport | null) => {
+    if (!report) { clearAll(); go({ screen: 'bank' }); return; }
+    const logSaved = await appendLog(report);
+    clearAll();
+    setResult({ report, logSaved });
+  };
   /** Bước cuối: rà soát LẠI theo kho hiện hành (chống kho đổi sau lúc xem), rồi mới ghi. */
   const commit = async () => {
     setConfirm(false);
@@ -269,16 +299,16 @@ export function ImportScreen() {
     const rp = await ensureRestorePoint('nhap-hang-loat', sum.importN >= BIG_OP);
     if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
     const added = addMany(toDrafts());
+    const report = makeReport(added, rp.taken);
     await flushSave();
     if (!isLastSaveOk()) {
       setSaveErr(`Đã đưa ${added.length} câu vào ngân hàng trong phiên này nhưng CHƯA ghi được xuống đĩa. Đừng đóng app. Nội dung dán vẫn được giữ lại; các câu đã thêm sẽ hiện là “trùng chắc”, nên thử lại không bị nhân đôi.`);
       return;
     }
     toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.`);
-    clearAll();
-    go({ screen: 'bank' });
+    finish(report);
   };
-  const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); clearAll(); go({ screen: 'bank' }); } };
+  const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); finish(pendingReport.current); } };
   const setDec = (i: number, d: Decision) => setUserDec((u) => ({ ...u, [`d${i}`]: d }));
   const sureRows = rows.map((_, i) => i).filter((i) => statusOf(i).key === 'sure' && decOf(i) !== 'skip');
   const hitLabel = (h: DraftHit): string => {
@@ -296,7 +326,8 @@ export function ImportScreen() {
           })}
         </ol>
       </header>
-      <div className="simple">
+      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onClose={() => setResult(null)} /></div>}
+      {!result && <div className="simple">
         <div className={`panel${rows.length ? ' is-compact' : ''}`}>
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>
           <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
@@ -618,7 +649,7 @@ export function ImportScreen() {
             {openBank && questions.find((q) => q.uid === openBank) && <QuestionDrawer q={questions.find((q) => q.uid === openBank)!} onClose={() => setOpenBank(null)} onDirty={() => undefined} />}
           </div>
         )}
-      </div>
+      </div>}
     </>
   );
 }
