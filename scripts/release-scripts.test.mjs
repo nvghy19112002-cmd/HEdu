@@ -1,5 +1,5 @@
 // Kiểm thử các hàm thuần của script phát hành.
-import { parseTag, applyToTauriConf, applyToCargoToml } from './ci-config.mjs';
+import { parseTag, applyToTauriConf, applyToCargoToml, applyToCargoLock } from './ci-config.mjs';
 import { selectToDelete } from './prune-releases.mjs';
 
 let failed = 0;
@@ -17,6 +17,9 @@ const out = applyToTauriConf(conf, { version: '0.2.0', repo: 'a/b', pubkey: 'KEY
 ok(out.version === '0.2.0' && out.plugins.updater.pubkey === 'KEY' && out.plugins.updater.endpoints[0].includes('a/b/releases/download/channel-stable'), 'ghi phiên bản, khóa, địa chỉ kênh');
 ok(conf.version === '0.1.0', 'không sửa bản gốc');
 ok(applyToCargoToml('[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\nfoo = { version = "2" }\n', '0.2.0').includes('version = "0.2.0"\n[dependencies]\nfoo = { version = "2" }'), 'chỉ đổi version của gói chính');
+const lock = '[[package]]\nname = "a"\nversion = "1.0.0"\n\n[[package]]\nname = "hedu"\nversion = "0.1.0"\n';
+const lock2 = applyToCargoLock(lock, '0.1.0-beta.34');
+ok(lock2.includes('name = "hedu"\nversion = "0.1.0-beta.34"') && lock2.includes('name = "a"\nversion = "1.0.0"'), 'Cargo.lock: chỉ đổi phiên bản của gói hedu');
 
 console.log('Dọn bản cũ');
 const tags = ['v0.1.0', 'v0.2.0', 'v0.3.0-beta.1', 'v0.3.0-beta.2', 'channel-stable', 'channel-beta', 'channel-previous'];
