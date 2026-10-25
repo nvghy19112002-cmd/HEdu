@@ -24,7 +24,7 @@ import { BankSidebar } from '../components/BankSidebar';
 import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AutoIdDialog } from '../components/AutoIdDialog';
-import { BatchTrashDialog } from '../components/BatchDialogs';
+import { BatchTagDialog, BatchTrashDialog } from '../components/BatchDialogs';
 import { AUTO_ID_MAX, clearAutoIdUndo, getAutoIdUndo, undoAutoId, undoConflicts, type AutoIdUndo } from '../lib/idapply';
 import { withReview } from '../lib/batchops';
 import { exportSizeMB } from '../lib/texexport';
@@ -71,7 +71,7 @@ export function BankScreen() {
   const [showSol, setShowSol] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [ask, setAsk] = useState<null | { title: string; body: string; label: string; run: () => void }>(null);
-  const [batch, setBatch] = useState<null | 'trash' | 'autoid'>(null); // hộp thoại thao tác hàng loạt
+  const [batch, setBatch] = useState<null | 'trash' | 'autoid' | 'tag'>(null); // hộp thoại thao tác hàng loạt
   const [autoUndo, setAutoUndo] = useState<AutoIdUndo | null>(() => getAutoIdUndo()); // Hoàn tác Gán ID (trong phiên)
   const [batchBusy, setBatchBusy] = useState(false);
   const [undo, setUndo] = useState<null | { qs: Question[]; n: number }>(null); // dải "Hoàn tác" sau khi chuyển vào Thùng rác
@@ -467,7 +467,8 @@ export function BankScreen() {
                   <button ref={moreBtnRef} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
                   {moreSel && (
                     <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMoreSel(false); moreBtnRef.current?.focus(); } }}>
-                      <button type="button" role="menuitem" autoFocus onClick={() => { setMoreSel(false); setAsk({ title: `Đánh dấu “Cần sửa” cho ${nf.format(sel.size)} câu?`, body: 'Chỉ đổi trạng thái kiểm duyệt. Nội dung câu không đổi. (HEdu không có “Đã duyệt hàng loạt”: việc duyệt do thầy/cô xác nhận từng câu.)', label: 'Đánh dấu Cần sửa', run: () => { void runBatch(withReview('needs_fix'), 'đánh dấu Cần sửa'); } }); }}>Đánh dấu “Cần sửa”</button>
+                      <button type="button" role="menuitem" autoFocus onClick={() => { setMoreSel(false); setBatch('tag'); }}>Gắn nhãn…</button>
+                      <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đánh dấu “Cần sửa” cho ${nf.format(sel.size)} câu?`, body: 'Chỉ đổi trạng thái kiểm duyệt. Nội dung câu không đổi. (HEdu không có “Đã duyệt hàng loạt”: việc duyệt do thầy/cô xác nhận từng câu.)', label: 'Đánh dấu Cần sửa', run: () => { void runBatch(withReview('needs_fix'), 'đánh dấu Cần sửa'); } }); }}>Đánh dấu “Cần sửa”</button>
                       <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đưa ${nf.format(sel.size)} câu về “Chưa kiểm tra”?`, body: 'Các câu đang “Đã duyệt” hoặc “Cần sửa” sẽ trở về “Chưa kiểm tra”. Nội dung không đổi.', label: 'Về Chưa kiểm tra', run: () => { void runBatch(withReview(undefined), 'đưa về Chưa kiểm tra'); } }); }}>Về “Chưa kiểm tra”</button>
                       <button type="button" role="menuitem" className="danger" onClick={() => { setMoreSel(false); void openTrashBatch(); }}>Chuyển vào Thùng rác…</button>
                     </div>
@@ -571,6 +572,7 @@ export function BankScreen() {
           <button type="button" className="ico" aria-label="Đóng (không hoàn tác nữa)" onClick={() => { clearAutoIdUndo(); setAutoUndo(null); }}>×</button>
         </div>
       )}
+      {batch === 'tag' && <BatchTagDialog qs={selectedQs} busy={batchBusy} onRun={(fn) => { void runBatch(fn, 'nhãn'); }} onCancel={() => setBatch(null)} />}
       {batch === 'trash' && <BatchTrashDialog qs={selectedQs} busy={batchBusy} onRun={() => { void runTrashBatch(); }} onCancel={() => setBatch(null)} />}
       {exportPick && <ExportChoiceDialog qs={selectedQs} onFileOnly={runFileOnly} onClose={() => setExportPick(false)} onToast={toast} />}
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}

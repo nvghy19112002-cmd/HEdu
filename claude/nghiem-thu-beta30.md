@@ -51,3 +51,8 @@ Chỉ chủ dự án nghiệm thu. Dùng bản chạy thử `npx tauri dev --con
 - [ ] "Lưu báo cáo (.csv)" mở được bằng Excel, tiếng Việt không vỡ chữ, mỗi câu một dòng, KHÔNG có nội dung câu hỏi; "Lưu bản tóm tắt (.md)" đọc được.
 - [ ] Cài đặt → Dữ liệu & sao lưu → "Nhật ký nhập": thấy lần nhập vừa rồi (tối đa 20 lần), bấm mở xem lại; đóng và mở lại app vẫn còn; "Xoá nhật ký nhập" không ảnh hưởng ngân hàng.
 - [ ] Chế độ lưu JSON cũ ("Để sau"): nhập vẫn thành công, báo cáo vẫn xem/lưu được, Nhật ký nhập ghi rõ là chưa giữ nhật ký.
+
+## I. Nhãn trong Ngân hàng (N4) — thử trên bản chạy thử `vn.hedu.app.thu` trước
+- [ ] Sau khi nhập: màn "Kết quả nhập" có nút "Xem các câu vừa nhập" ⇒ Ngân hàng chỉ hiện đúng các câu của lô (bộ lọc Nhãn = `Lô: …`).
+- [ ] Thanh Mục lục & bộ lọc có ô "Nhãn" (có ô tìm, số câu mỗi nhãn); chọn nhãn lọc đúng, "Xoá bộ lọc" bỏ được nhãn; kết hợp được với Mức độ/Loại câu/Duyệt.
+- [ ] Chọn vài câu → "Thao tác khác" → "Gắn nhãn…": xem trước số câu sẽ đổi, áp dụng, thẻ câu hiện nhãn mới; bỏ nhãn cũng được; nhãn khác giữ nguyên.

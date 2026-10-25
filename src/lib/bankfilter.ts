@@ -15,20 +15,22 @@ export interface BankFilters {
   types: Set<QType>;
   figure: FigureFilter;
   review: ReviewFilter;
+  /** nhãn (Question.tags) phải có; null = không lọc */
+  tag: string | null;
 }
 
 export const emptyFilters = (): BankFilters => ({
   gradeId: null, branchId: null, chapterId: null, lessonId: null, formId: null,
-  levels: new Set(), types: new Set(), figure: 'all', review: 'all',
+  levels: new Set(), types: new Set(), figure: 'all', review: 'all', tag: null,
 });
 
 /** Chọn nhiều: chọn ĐỦ mọi giá trị ≡ "Tất cả" (không phải đang lọc). Rỗng cũng là không lọc. */
 export const levelsActive = (f: BankFilters) => f.levels.size > 0 && f.levels.size < LEVELS.length;
 export const typesActive = (f: BankFilters) => f.types.size > 0 && f.types.size < TYPES.length;
 /** Số bộ lọc THUỘC TÍNH đang bật (Mức độ và Loại câu đếm theo số giá trị chọn; chọn đủ = 0). */
-export const attrCount = (f: BankFilters) => (levelsActive(f) ? f.levels.size : 0) + (typesActive(f) ? f.types.size : 0) + (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0);
+export const attrCount = (f: BankFilters) => (levelsActive(f) ? f.levels.size : 0) + (typesActive(f) ? f.types.size : 0) + (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0);
 /** Số nhóm thuộc tính đang bật (để hiện trên đầu nhóm "Lọc câu hỏi"). */
-export const attrGroups = (f: BankFilters) => (levelsActive(f) ? 1 : 0) + (typesActive(f) ? 1 : 0) + (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0);
+export const attrGroups = (f: BankFilters) => (levelsActive(f) ? 1 : 0) + (typesActive(f) ? 1 : 0) + (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0);
 export const posActive = (f: BankFilters) => f.gradeId != null;
 
 // ---- cascade ----
@@ -47,7 +49,7 @@ export const pickChapter = (tax: Taxonomy, f: BankFilters, id: string | null): B
 export const pickLesson = (f: BankFilters, id: string | null): BankFilters => ({ ...f, ...clearFrom.lesson, lessonId: id });
 export const pickForm = (f: BankFilters, id: string | null): BankFilters => ({ ...f, formId: id });
 /** "Xoá bộ lọc": chỉ 4 thuộc tính; KHÔNG đụng vị trí. */
-export const clearAttrs = (f: BankFilters): BankFilters => ({ ...f, levels: new Set(), types: new Set(), figure: 'all', review: 'all' });
+export const clearAttrs = (f: BankFilters): BankFilters => ({ ...f, levels: new Set(), types: new Set(), figure: 'all', review: 'all', tag: null });
 /** "Đặt lại toàn bộ" (phần bộ lọc): vị trí + thuộc tính. Ô tìm và phạm vi do màn Ngân hàng đặt lại. */
 export const resetAll = (): BankFilters => emptyFilters();
 
@@ -127,10 +129,14 @@ export interface Facets {
   type: Map<QType, number>;
   figure: Record<'yes' | 'no' | 'unknown', number>;
   review: Record<'unreviewed' | 'needs_fix' | 'approved', number>;
+  /** nhãn → số câu (áp vị trí + mọi thuộc tính khác + ô tìm, bỏ riêng bộ lọc Nhãn) */
+  tag: Map<string, number>;
+  /** số câu khi bỏ riêng bộ lọc Nhãn (một câu nhiều nhãn chỉ đếm một lần) */
+  tagAll: number;
 }
 
 const inc = <K,>(m: Map<K, number>, k: K) => m.set(k, (m.get(k) ?? 0) + 1);
-const B_LEVEL = 1, B_TYPE = 2, B_FIG = 4, B_REV = 8;
+const B_LEVEL = 1, B_TYPE = 2, B_FIG = 4, B_REV = 8, B_TAG = 16;
 
 /**
  * Một lượt O(N). Số đếm "theo chiều":
@@ -140,7 +146,7 @@ const B_LEVEL = 1, B_TYPE = 2, B_FIG = 4, B_REV = 8;
 export function computeFacets(questions: readonly Question[], f: BankFilters, ctx: FilterCtx): Facets {
   const r: Facets = {
     list: [], scoped: 0, inScope: 0, grade: new Map(), gradeAll: 0, branch: new Map(), chapter: new Map(), lesson: new Map(), form: new Map(),
-    level: new Map(), type: new Map(), figure: { yes: 0, no: 0, unknown: 0 }, review: { unreviewed: 0, needs_fix: 0, approved: 0 },
+    level: new Map(), type: new Map(), figure: { yes: 0, no: 0, unknown: 0 }, review: { unreviewed: 0, needs_fix: 0, approved: 0 }, tag: new Map(), tagAll: 0,
   };
   const lv = levelsActive(f), ty = typesActive(f);
   for (const q of questions) {
@@ -167,6 +173,8 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
     const rv = reviewOf(q);
     if (f.review !== 'all' && rv !== f.review) fails |= B_REV;
 
+    if (f.tag && !q.tags.includes(f.tag)) fails |= B_TAG;
+
     if (posOk && fails === 0) r.list.push(q);
     if (posOk) r.scoped++;
     if (fails === 0) {
@@ -182,6 +190,7 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
       if ((fails & ~B_TYPE) === 0) inc(r.type, q.type);
       if ((fails & ~B_FIG) === 0) r.figure[fig]++;
       if ((fails & ~B_REV) === 0) r.review[rv]++;
+      if ((fails & ~B_TAG) === 0) { r.tagAll++; for (const t of q.tags) inc(r.tag, t); }
     }
   }
   r.list.sort(comparator(ctx.sort ?? DEFAULT_SORT));
@@ -189,7 +198,7 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
 }
 
 // ---- trạng thái rỗng & chip điều kiện ----
-export type AttrKey = 'level' | 'type' | 'figure' | 'review';
+export type AttrKey = 'level' | 'type' | 'figure' | 'review' | 'tag';
 export interface AttrChip { key: AttrKey; label: string; /** số câu sẽ có nếu bỏ riêng điều kiện này */ after: number }
 
 const sumMap = <K,>(m: Map<K, number>) => { let n = 0; for (const v of m.values()) n += v; return n; };
@@ -201,11 +210,12 @@ export function attrChips(f: BankFilters, facets: Facets): AttrChip[] {
   if (typesActive(f)) out.push({ key: 'type', label: `Loại câu: ${TYPES.filter((t) => f.types.has(t)).map((t) => TYPE_LABEL[t]).join(', ')}`, after: sumMap(facets.type) });
   if (f.figure !== 'all') out.push({ key: 'figure', label: `Hình: ${FIGURE_LABEL[f.figure]}`, after: facets.figure.yes + facets.figure.no + facets.figure.unknown });
   if (f.review !== 'all') out.push({ key: 'review', label: `Duyệt: ${REVIEW_LABEL[f.review]}`, after: facets.review.unreviewed + facets.review.needs_fix + facets.review.approved });
+  if (f.tag) out.push({ key: 'tag', label: `Nhãn: ${f.tag}`, after: facets.tagAll });
   return out;
 }
 /** Bỏ riêng một điều kiện thuộc tính. */
 export function dropAttr(f: BankFilters, key: AttrKey): BankFilters {
-  return key === 'level' ? { ...f, levels: new Set() } : key === 'type' ? { ...f, types: new Set() } : key === 'figure' ? { ...f, figure: 'all' } : { ...f, review: 'all' };
+  return key === 'level' ? { ...f, levels: new Set() } : key === 'type' ? { ...f, types: new Set() } : key === 'figure' ? { ...f, figure: 'all' } : key === 'tag' ? { ...f, tag: null } : { ...f, review: 'all' };
 }
 
 /** Vì sao danh sách rỗng: 'bank' kho trống · 'scope' mục chưa có câu · 'filters' có câu nhưng bộ lọc loại hết · 'text' do chữ tìm. null = không rỗng. */

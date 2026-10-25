@@ -31,6 +31,8 @@ export interface ImportReport {
   at: number;
   /** tên lô (nhãn "Lô: …") */
   name: string;
+  /** nhãn "Lô: …" đã gắn vào các câu (để lọc trong Ngân hàng); vắng = không gắn */
+  batchTag?: string;
   paste: boolean;
   found: number;
   imported: number;
@@ -52,7 +54,7 @@ export const DECISION_TEXT: Record<RowDecision, string> = { import: 'Đã nhập
 export const ID_STATE_TEXT: Record<IdState, string> = { ok: 'Có ID đủ', 'thieu-dang': 'ID thiếu Dạng', 'khong-hop-le': 'ID không hợp lệ', 'khong-co': 'Không có ID' };
 export const ID_PLACE_TEXT: Record<IdPlace, string> = { 'dung-ma': 'Theo mã ID', 'dang-dau': 'Dạng đầu của Bài', ai: 'Gợi ý đã chọn', 'vi-tri-chung': 'Vị trí chung' };
 
-export function buildReport(input: { at: number; name: string; paste: boolean; restorePoint: boolean; rows: ReportRow[]; warnings?: string[] }): ImportReport {
+export function buildReport(input: { at: number; name: string; batchTag?: string; paste: boolean; restorePoint: boolean; rows: ReportRow[]; warnings?: string[] }): ImportReport {
   const rows = input.rows;
   const byFile = new Map<string, FileStat>();
   for (const r of rows) {
@@ -75,6 +77,7 @@ export function buildReport(input: { at: number; name: string; paste: boolean; r
     v: 1,
     at: input.at,
     name: input.name,
+    ...(input.batchTag ? { batchTag: input.batchTag } : {}),
     paste: input.paste,
     found: rows.length,
     imported: imp.length,
