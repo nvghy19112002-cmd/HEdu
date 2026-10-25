@@ -5,9 +5,12 @@
 - Thiết kế đã duyệt: `claude/thiet-ke-nhap-nhieu-tep.md` (PR #103, có thể còn mở: hỏi chủ dự án trước khi gộp).
 - Test đã chạy cho từng PR: `npm test`, `npm run build`, typecheck, CI `giao-dien` + `windows` xanh; giao diện thử trong trình duyệt. Chưa thử Tauri/Windows thật.
 
+## Cập nhật beta.33
+- Phát hành `v0.1.0-beta.33` = beta.32 + PR #110 (dò trùng nhẹ). PR #103 đã gộp, #106 đã đóng. Giới hạn 5.000 câu/lô giữ nguyên tới khi đo trên Windows thật.
+
 ## Chưa làm (theo thứ tự)
 1. Chủ dự án nghiệm thu mục G, H, I (`claude/nghiem-thu-beta30.md`) trên `vn.hedu.app.thu`, rồi mới tới ngân hàng thật.
-2. "Dò trùng nhẹ" để bỏ giới hạn 5.000 câu/lô (chỉ mục dò trùng ~36–44 KB/câu, dựng 29 s cho 60k câu).
+2. Đo lô lớn trên bản chạy thử rồi quyết định nâng giới hạn 5.000 câu/lô (dò trùng nhẹ đã xong ở beta.33: chỉ mục −55% bộ nhớ).
 3. Hoãn: S6 (giao dịch chung Thùng rác + Ngân hàng), hồ sơ/nhiều nguồn (S5); đo Gemini chờ nhãn đã kiểm của chủ dự án; nhóm "Chưa phân loại" cho câu thiếu/sai ID (chủ dự án chưa quyết).
 
 ## Lỗi còn lại
