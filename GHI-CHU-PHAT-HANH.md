@@ -1,3 +1,9 @@
+## Có gì mới trong beta.33 (kênh beta): dò trùng nhẹ hơn
+Gồm PR #110 (so với beta.32). Không đổi schema (3), ID6, UID, LaTeX gốc, Rust; kết quả dò trùng không đổi (đã đối chiếu giống hệt bản cũ trên 602 câu).
+- Chỉ mục dò trùng dùng ít bộ nhớ hơn khoảng 55% (đo 10.000 câu mô phỏng: 10,6 → 4,8 KB/câu), thời gian dựng tương đương. Lợi cho ngân hàng lớn và khi nhập nhiều câu.
+- Giới hạn 5.000 câu mỗi lô nhập giữ nguyên cho đến khi đo trên ngân hàng thật.
+- Chưa nghiệm thu máy Windows thật (checklist mục G, H, I trong claude/nghiem-thu-beta30.md).
+
 ## Có gì mới trong beta.32 (đã phát hành 25/10/2026, kênh beta; commit 68c0b70): nhập nhiều tệp, nhãn nguồn, báo cáo nhập
 Gồm PR #104, #105, #107, #108 (so với beta.31). Không đổi schema (3), ID6, UID, LaTeX gốc, thuật toán dò trùng.
 - **Nhập nhiều tệp / thư mục** (Nhập liệu → "Chọn nhiều tệp…", "Chọn thư mục…"): quét cả thư mục con, chỉ đọc, bắt buộc UTF-8 (tệp sai bảng mã báo riêng, không làm hỏng cả lô), bảng "Theo tệp", bỏ tick tệp không nhập, lọc câu theo tệp. Mỗi lô tối đa 5.000 câu (tạm, đến khi dò trùng nhẹ hơn).
