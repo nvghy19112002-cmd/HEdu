@@ -4,6 +4,7 @@ mod ai;
 mod db;
 mod dbbackup;
 mod dbcmd;
+mod importfs;
 mod jsonmig;
 mod proc;
 mod storage;
@@ -439,7 +440,9 @@ pub fn run() {
             dbcmd::backup_points,
             dbcmd::backup_inspect,
             dbcmd::backup_restore,
-            dbcmd::db_export_json
+            dbcmd::db_export_json,
+            importfs::import_scan,
+            importfs::import_read
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
