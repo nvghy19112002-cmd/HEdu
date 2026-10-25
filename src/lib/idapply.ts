@@ -1,12 +1,15 @@
 // Gán ID tự động — phần logic thuần (không giao diện, không mạng) của luồng Ngân hàng:
 // chụp trạng thái câu lúc xem trước → giáo viên chọn → kiểm lại ngay trước khi ghi → biến đổi CHỈ vị trí (và mức độ nếu tick riêng).
-// ID6 không lưu ở đâu cả: nó được tính lại từ vị trí + mức độ bằng questionCode(), nên "gán ID" = gán vị trí đúng trong cây.
-// uid, seq, latex, loại câu, nhãn, kiểm duyệt, ngày tạo, ngày sửa: KHÔNG đổi (giống các thao tác hàng loạt khác).
+// "Gán ID" = gán vị trí đúng trong cây VÀ ghi ID6 tương ứng vào vùng `%[ID]` của LaTeX (idsync.placeWithId) — cả hai, hoặc không gì.
+// Ngoài vùng ID: uid, seq, nội dung LaTeX, loại câu, nhãn, kiểm duyệt, ngày tạo, ngày sửa KHÔNG đổi.
+import { getTaxonomy } from './curriculum';
 import type { IdSuggester, Suggestion } from './idsuggest';
+import { idStatus, placeWithId, type SyncState } from './idsync';
+import { writeHeadId } from './idtex';
 import { getState, updateMany, type BatchResult } from './store';
 import type { TaxIndex } from './taxonomy';
 import { checkLocation, locationOfForm } from './taxpath';
-import type { Level, Location, Question } from './types';
+import type { Level, Location, Question, Taxonomy } from './types';
 
 /** Số câu tối đa mỗi lượt (chủ dự án duyệt 24/10/2026) — để bảng xem trước đủ ngắn mà xem kỹ. */
 export const AUTO_ID_MAX = 200;
@@ -73,7 +76,8 @@ export function summarize(rows: readonly AutoIdRow[], choices: ReadonlyMap<strin
   return { chosen, moveLoc, moveLevel, needTeacher };
 }
 
-export interface Edit { snap: RowSnap; loc: Location | null; level: Level | null }
+/** `latex`: mã LaTeX sau khi ghi ID mới (chỉ khác vùng ID); vị trí/mức độ và LaTeX luôn đi cùng nhau. */
+export interface Edit { snap: RowSnap; loc: Location | null; level: Level | null; latex: string }
 
 export interface ApplyPlan {
   edits: Map<string, Edit>;
@@ -81,6 +85,8 @@ export interface ApplyPlan {
   stale: string[];
   /** vị trí chọn không còn đúng đường dẫn cây / ra ngoài lớp — không ghi */
   invalid: string[];
+  /** không ghi được ID vào LaTeX (câu có nhiều ID, cây có mã trùng…) — không ghi gì để vị trí và ID không lệch nhau */
+  idBlocked: string[];
 }
 
 const sameSnap = (q: Question, s: RowSnap): boolean =>
@@ -90,9 +96,10 @@ const sameSnap = (q: Question, s: RowSnap): boolean =>
 /**
  * Kiểm lại NGAY TRƯỚC khi ghi: câu còn y như lúc xem trước, cây chưa đổi, vị trí chọn đúng đủ đường dẫn và cùng lớp.
  * `treeChanged` = dấu phiên bản cây hiện tại khác lúc gợi ý ⇒ mọi gợi ý đã cũ.
+ * ID cũ trong LaTeX (một mã) được THAY bằng mã mới: giáo viên đã xem "ID hiện tại → đề xuất" và tick áp dụng.
  */
-export function planApply(rows: readonly AutoIdRow[], choices: ReadonlyMap<string, RowChoice>, current: ReadonlyMap<string, Question>, ix: TaxIndex, treeChanged: boolean): ApplyPlan {
-  const plan: ApplyPlan = { edits: new Map(), stale: [], invalid: [] };
+export function planApply(rows: readonly AutoIdRow[], choices: ReadonlyMap<string, RowChoice>, current: ReadonlyMap<string, Question>, ix: TaxIndex, treeChanged: boolean, tax: Taxonomy = getTaxonomy()): ApplyPlan {
+  const plan: ApplyPlan = { edits: new Map(), stale: [], invalid: [], idBlocked: [] };
   for (const r of rows) {
     const c = choices.get(r.uid);
     if (!c?.apply) continue;
@@ -104,28 +111,32 @@ export function planApply(rows: readonly AutoIdRow[], choices: ReadonlyMap<strin
       if (!loc || !checkLocation(ix, loc, r.snap.grade).ok) { plan.invalid.push(r.uid); continue; }
     }
     const level = c.changeLevel ? levelTarget(r) : null;
-    if (loc || level) plan.edits.set(r.uid, { snap: r.snap, loc, level });
+    if (!loc && !level) continue;
+    const w = placeWithId(r.snap.latex, loc ?? r.snap, level ?? r.snap.level, tax, true);
+    if (!('latex' in w)) { plan.idBlocked.push(r.uid); continue; }
+    plan.edits.set(r.uid, { snap: r.snap, loc, level, latex: w.latex });
   }
   return plan;
 }
 
-/** Bộ biến đổi cho `updateMany`: kiểm lần cuối trên câu ĐÚNG lúc ghi; chỉ đổi vị trí và (nếu có) mức độ. */
+/** Bộ biến đổi cho `updateMany`: kiểm lần cuối trên câu ĐÚNG lúc ghi; đổi vị trí và (nếu có) mức độ cùng với vùng ID của LaTeX. */
 export const withAutoId = (edits: ReadonlyMap<string, Edit>) => (q: Question): Question | null => {
   const e = edits.get(q.uid);
   if (!e || !sameSnap(q, e.snap)) return null;
   const n: Question = { ...q };
   if (e.loc) { n.grade = e.loc.grade; n.chapterId = e.loc.chapterId; n.lessonId = e.loc.lessonId; n.formId = e.loc.formId; }
   if (e.level) n.level = e.level;
+  n.latex = e.latex;
   return n.grade === q.grade && n.chapterId === q.chapterId && n.lessonId === q.lessonId && n.formId === q.formId && n.level === q.level ? null : n;
 };
 
 // ---------- Hoàn tác TRONG PHIÊN (đóng app là mất; không lưu lịch sử vào dữ liệu) ----------
 
-type Placement = Pick<Question, 'grade' | 'chapterId' | 'lessonId' | 'formId' | 'level'>;
+type Placement = Pick<Question, 'grade' | 'chapterId' | 'lessonId' | 'formId' | 'level' | 'latex'>;
 export interface UndoItem { uid: string; before: Placement; after: RowSnap }
 export interface AutoIdUndo { at: number; items: UndoItem[] }
 
-const placementOf = (q: Question): Placement => ({ grade: q.grade, chapterId: q.chapterId, lessonId: q.lessonId, formId: q.formId, level: q.level });
+const placementOf = (q: Question): Placement => ({ grade: q.grade, chapterId: q.chapterId, lessonId: q.lessonId, formId: q.formId, level: q.level, latex: q.latex });
 
 let lastUndo: AutoIdUndo | null = null;
 /** Lần Gán ID gần nhất còn hoàn tác được trong phiên này (mỗi lần áp dụng mới thay lần trước). */
@@ -152,7 +163,7 @@ export function undoConflicts(u: AutoIdUndo, current: ReadonlyMap<string, Questi
 
 export interface UndoResult { ok: boolean; restored: number; conflicts: number }
 
-/** Trả vị trí + mức độ cũ cho các câu còn y như lúc gán; câu đã sửa tiếp thì giữ nguyên (không xoá chỉnh sửa mới). */
+/** Trả vị trí + mức độ + LaTeX (vùng ID) cũ cho các câu còn y như lúc gán; câu đã sửa tiếp thì giữ nguyên (không xoá chỉnh sửa mới). */
 export async function undoAutoId(u: AutoIdUndo): Promise<UndoResult> {
   const byUid = new Map(u.items.map((it) => [it.uid, it]));
   const conflicts = undoConflicts(u, new Map(getState().questions.map((q) => [q.uid, q]))).length;
@@ -162,4 +173,32 @@ export async function undoAutoId(u: AutoIdUndo): Promise<UndoResult> {
   });
   if (r.ok && lastUndo === u) lastUndo = null;
   return { ok: r.ok, restored: r.changed, conflicts };
+}
+
+// ---------- Đồng bộ ID cho dữ liệu cũ (LaTeX chưa có `%[ID]`) ----------
+
+/** Đếm các câu theo trạng thái ID (để hộp xác nhận nói rõ: bao nhiêu câu thêm ID, bao nhiêu giữ nguyên, bao nhiêu cần xử lý). */
+export function syncCounts(qs: readonly Question[], tax: Taxonomy = getTaxonomy()): Record<SyncState, number> {
+  const n: Record<SyncState, number> = { khop: 0, 'chua-co-id': 0, lech: 0, 'id-loi': 0, 'vi-tri-loi': 0 };
+  for (const q of qs) n[idStatus(q, tax).state]++;
+  return n;
+}
+
+/**
+ * Thêm ID theo vị trí vào LaTeX của các câu "LaTeX chưa có ID" (vị trí đúng đủ đường dẫn). KHÔNG đụng câu đã có ID — kể cả ID lệch hay lỗi:
+ * các câu đó giáo viên xử lý từng câu (trình sửa câu / Gán ID). Ghi một lần; ghi lỗi ⇒ không câu nào đổi. Hoàn tác được trong phiên.
+ */
+export async function applyIdSync(uids: Iterable<string>, tax: Taxonomy = getTaxonomy()): Promise<BatchResult> {
+  const items: UndoItem[] = [];
+  const r = await updateMany(uids, (q) => {
+    const st = idStatus(q, tax);
+    if (st.state !== 'chua-co-id' || !st.meta.ok) return null;
+    const w = writeHeadId(q.latex, st.meta.code, 'them');
+    if (w.action !== 'them') return null;
+    const n: Question = { ...q, latex: w.latex };
+    items.push({ uid: q.uid, before: placementOf(q), after: snapOf(n) });
+    return n;
+  });
+  if (r.ok && items.length) lastUndo = { at: Date.now(), items };
+  return r;
 }

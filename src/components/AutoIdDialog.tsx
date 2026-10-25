@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AI_VERDICT_LABEL, examplesFor, mergeAi, type AiVerdict, type GanIdRun } from '../lib/ai/tasks/ganidrun';
 import { getTaxonomy } from '../lib/curriculum';
 import { questionCode, seqLabel } from '../lib/id';
+import { idStatus, SYNC_LABEL } from '../lib/idsync';
 import { applyAutoId, buildRows, defaultChoice, levelTarget, movesLocation, planApply, summarize, type AutoIdRow, type RowChoice } from '../lib/idapply';
 import { CONFIDENCE_LABEL, IdSuggester, type SuggestConfidence, type Suggestion } from '../lib/idsuggest';
 import { plainSnippet } from '../lib/snippet';
@@ -89,10 +90,11 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
     if (!rows || busyRef.current) return;
     const tax = getTaxonomy();
     const tix = indexOf(tax);
-    const plan = planApply(rows, choices, new Map(getState().questions.map((q) => [q.uid, q])), tix, taxRevision(tax) !== rows[0]?.suggestion.taxRev);
+    const plan = planApply(rows, choices, new Map(getState().questions.map((q) => [q.uid, q])), tix, taxRevision(tax) !== rows[0]?.suggestion.taxRev, tax);
     const skipped = [
       plan.stale.length ? `${nf.format(plan.stale.length)} câu đã bị sửa/xoá hoặc cây đã đổi sau lúc xem trước nên KHÔNG ghi (hãy mở lại để gợi ý mới)` : '',
       plan.invalid.length ? `${nf.format(plan.invalid.length)} câu có vị trí chọn không còn hợp lệ trong cây nên KHÔNG ghi` : '',
+      plan.idBlocked.length ? `${nf.format(plan.idBlocked.length)} câu không ghi được ID vào LaTeX (có nhiều ID, hoặc cây có mã trùng) nên KHÔNG ghi — mở câu để sửa ID` : '',
     ].filter(Boolean).join('; ');
     if (plan.edits.size === 0) { setErr(skipped ? `Không có câu nào được ghi: ${skipped}.` : 'Không có gì thay đổi.'); return; }
     busyRef.current = true;
@@ -102,7 +104,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
     busyRef.current = false;
     setBusy(false);
     if (!r.ok) { setErr('Chưa lưu được — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi bấm Áp dụng lại.'); return; }
-    onDone(`Đã gán vị trí mới cho ${nf.format(r.changed)}/${nf.format(plan.edits.size)} câu${skipped ? `. ${skipped}` : ''}.`);
+    onDone(`Đã gán vị trí mới và ghi ID vào LaTeX cho ${nf.format(r.changed)}/${nf.format(plan.edits.size)} câu${skipped ? `. ${skipped}` : ''}.`);
   };
 
   const codeOf = (loc: Location, level: Question['level']) => questionCode(loc, level);
@@ -173,11 +175,12 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
                     const newLevel = c.changeLevel && lt ? lt : r.snap.level;
                     const newCode = codeOf(target && movesLocation(r, c.formId) ? target : r.snap, newLevel);
                     const oldCode = r.currentOk ? codeOf(r.snap, r.snap.level) : '—';
+                    const ids = idStatus(r.snap, getTaxonomy());
                     return (
                       <tr key={r.uid} className={c.apply ? 'is-on' : ''}>
                         <td><input type="checkbox" checked={c.apply} disabled={busy || !canApply(r, c)} aria-label={`Áp dụng cho câu ${seqLabel(r.seq)}`} onChange={(e) => setChoice(r.uid, { apply: e.target.checked })} /></td>
                         <td className="aid-q"><span className="mono">{seqLabel(r.seq)}</span><small>{plainSnippet(r.snap.latex, 90)}</small></td>
-                        <td className="aid-code"><span className="code-tag">{oldCode}</span>{newCode !== oldCode && <> → <span className="code-tag is-new">{newCode}</span></>}{!r.currentOk && <small className="aid-bad">Vị trí hiện tại sai đường dẫn cây</small>}</td>
+                        <td className="aid-code"><span className="code-tag">{oldCode}</span>{newCode !== oldCode && <> → <span className="code-tag is-new">{newCode}</span></>}{!r.currentOk && <small className="aid-bad">Vị trí hiện tại sai đường dẫn cây</small>}{ids.state !== 'khop' && <small className={ids.state === 'chua-co-id' ? 'aid-note' : 'aid-bad'}>{SYNC_LABEL[ids.state]}{ids.latex.raw ? `: %[${ids.latex.raw}]` : ''}</small>}</td>
                         <td>
                           {opts.length ? (
                             <select className="aid-sel" value={c.formId ?? ''} disabled={busy} onChange={(e) => setChoice(r.uid, { formId: e.target.value || null })} aria-label={`Vị trí cho câu ${seqLabel(r.seq)}`}>

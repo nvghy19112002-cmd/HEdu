@@ -1,16 +1,16 @@
-// Xuất .tex NGUYÊN VĂN: chép đúng mã LaTeX gốc của từng câu, chỉ cập nhật dòng chú thích ID `%[2D1H1-1]` ngay sau \begin{ex}.
+// Xuất .tex NGUYÊN VĂN: chép đúng mã LaTeX gốc của từng câu, chỉ cập nhật vùng ID `%[2D1H1-1]` đầu câu bằng bộ ghi chung (idtex).
 // KHÔNG phân tích rồi dựng lại (cách cũ làm mất ghi chú %, dời chữ vào \immini, kéo \newcommand ra ngoài).
+import { writeHeadId } from './idtex';
 import type { Question } from './types';
 
-const BEGIN_EX = /\\begin\{ex\}(%\[[^\]\r\n]*\])?/;
-
-/** Mã của một câu khi xuất: đổi/ thêm `%[id]` sau \begin{ex} đầu tiên. id rỗng hoặc "—" (chưa có vị trí) ⇒ giữ nguyên dòng cũ. */
+/**
+ * Mã của một câu khi xuất: thêm/thay ID chính bằng `id` (nhãn nguồn như `%[Đề Sở HN]` giữ nguyên).
+ * id rỗng hoặc "—" (chưa có vị trí) ⇒ giữ nguyên. Câu có nhiều ID mâu thuẫn ⇒ giữ nguyên (không tự chọn bên nào).
+ */
 export function exportQuestionTex(latex: string, id: string | null | undefined): string {
   const src = latex.replace(/\s+$/, '');
   if (!id || id === '—') return src;
-  const m = BEGIN_EX.exec(src);
-  if (!m) return src; // không phải khối ex hoàn chỉnh: không đụng
-  return src.slice(0, m.index) + `\\begin{ex}%[${id}]` + src.slice(m.index + m[0].length);
+  return writeHeadId(src, id, 'thay').latex;
 }
 
 /** Ghép nhiều câu thành một file .tex nguyên văn. Mỗi câu cách nhau một dòng trống. */

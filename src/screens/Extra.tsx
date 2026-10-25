@@ -7,7 +7,8 @@ import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
 import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
 import { indexOf, shortName } from '../lib/taxonomy';
-import { idStateOf, summarizeImportIds } from '../lib/importid';
+import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
+import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
 import { BATCH_MAX, buildRows, defaultBatchName, perFile, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
 import { chooseFiles, chooseFolder, describeScan, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
 import { isDesktop } from '../lib/platform';
@@ -24,7 +25,7 @@ import { PairCompare } from '../components/PairCompare';
 import { QuestionDrawer } from '../components/QuestionDrawer';
 import { seqLabel } from '../lib/id';
 import { parseExTest, splitExBlocksAt } from '../lib/extest';
-import { parseCode, questionCode } from '../lib/id';
+import { questionCode } from '../lib/id';
 import { emptyFilters } from '../lib/bankfilter';
 import { saveSession } from '../lib/banksession';
 import { DEFAULT_SORT } from '../lib/qsort';
@@ -242,10 +243,14 @@ export function ImportScreen() {
   const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0;
   const fromIdOf = (i: number) => {
     if (edits[i] == null) return rows[i].fromId;
-    const id = parseExTest(latexOf(i)).idComment;
-    return id ? parseCode(id) : null;
+    return idFromLatex(latexOf(i));
   };
   const noIdRows = rows.map((_, i) => i).filter((i) => !fromIdOf(i));
+  /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
+  const headIdNote = (latex: string): string | null => {
+    const r = readLatexId(latex, getTaxonomy());
+    return r.raw && r.state !== 'hop-le' ? `%[${r.raw}] — ${LATEX_ID_LABEL[r.state]}` : null;
+  };
   const runIdSuggest = () => {
     const tax = getTaxonomy();
     setIdPicks(suggestDrafts(noIdRows.map((i) => ({ index: i, latex: latexOf(i) })), new IdSuggester(tax, getState().questions), loc.grade));
@@ -257,7 +262,12 @@ export function ImportScreen() {
     if (decOf(i) !== 'import') return [];
     const text = latexOf(i).trim();
     const fromId = fromIdOf(i);
-    return [{ latex: text, level: fromId?.level ?? level, tags: tagsFor(rows[i], info), ...(fromId?.loc ?? draftLocOf(i).loc) } as Draft];
+    if (fromId) return [{ latex: text, level: fromId.level, tags: tagsFor(rows[i], info), ...fromId.loc }];
+    // Câu chưa có ID: ghi ID theo vị trí đã xác nhận vào mã LaTeX lưu trong ngân hàng (tệp .tex gốc không bị sửa).
+    // Câu có ID lỗi/thiếu Dạng/nhiều ID: giữ nguyên LaTeX (không tự thay), vị trí vẫn theo lựa chọn của giáo viên.
+    const at = draftLocOf(i).loc;
+    const w = placeWithId(text, at, level, getTaxonomy(), false);
+    return [{ latex: 'latex' in w ? w.latex : text, level, tags: tagsFor(rows[i], info), ...at }];
   });
   /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
   const idSum = summarizeImportIds(rows.map((_r, i) => idStateOf(latexOf(i))), (i) => decOf(i) === 'import', (i) => draftLocOf(i).suggested);
@@ -269,7 +279,7 @@ export function ImportScreen() {
       const dec = decOf(i);
       const st = idStateOf(latexOf(i));
       const key = statusOf(i).key;
-      const place: IdPlace | undefined = dec !== 'import' ? undefined : st === 'ok' ? 'dung-ma' : st === 'thieu-dang' ? 'dang-dau' : draftLocOf(i).suggested ? 'ai' : 'vi-tri-chung';
+      const place: IdPlace | undefined = dec !== 'import' ? undefined : st === 'ok' ? 'dung-ma' : draftLocOf(i).suggested ? 'ai' : 'vi-tri-chung';
       const q = dec === 'import' ? added[k++] : undefined;
       const w = issues[i] ? worstLevel(issues[i]!) : null;
       return {
@@ -533,7 +543,7 @@ export function ImportScreen() {
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
                     <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của ${multi ? `tệp ${r.file}` : 'file'}`}>{i + 1}</span>{multi && <span className="chk-tag tin" title={r.rel ? `${r.rel}/${r.file}` : r.file}>{r.file}</span>}
                     <b>{TYPE_LABEL[r.p.type]}</b>
-                    <span className="mono">{r.fromId ? questionCode(r.fromId.loc, r.fromId.level) : r.p.idComment ? `%[${r.p.idComment}] không hợp lệ` : idPicks && draftLocOf(i).suggested ? `${questionCode(draftLocOf(i).loc, level)} (gợi ý)` : 'không ID'}</span>
+                    <span className="mono">{fromIdOf(i) ? questionCode(fromIdOf(i)!.loc, fromIdOf(i)!.level) : headIdNote(latexOf(i)) ?? (idPicks && draftLocOf(i).suggested ? `${questionCode(draftLocOf(i).loc, level)} (gợi ý)` : 'không ID')}</span>
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
                     {anaDone && statusOf(i).key !== 'new' && <span className={`chk-tag dup d-${statusOf(i).key}`}>{statusOf(i).label}{(ana!.rows[i]?.hits.length ?? 0) > 0 ? ` · ${ana!.rows[i]!.hits.length}` : ''}</span>}
                     {edits[i] != null && <span className="chk-tag tin">đã sửa tại chỗ</span>}
@@ -637,8 +647,9 @@ export function ImportScreen() {
                   <label className="bd-sure"><input type="checkbox" checked={ackRefused} onChange={(e) => setAckRefused(e.target.checked)} /> <span>
                     {idSum.needTeacher.missing > 0 && <>{idSum.needTeacher.missing} câu không có ID{' '}</>}
                     {idSum.needTeacher.invalid > 0 && <>{idSum.needTeacher.invalid} câu có ID không hợp lệ{' '}</>}
-                    {idSum.needTeacher.missing + idSum.needTeacher.invalid > 0 && <>(thầy/cô chưa chọn Dạng{refused.size > 0 ? ', gồm cả câu AI chưa đủ căn cứ' : ''}) sẽ vào <b>vị trí chung</b> đang chọn ở trên. </>}
-                    {idSum.firstForm > 0 && <>{idSum.firstForm} câu có ID không ghi mã Dạng sẽ vào <b>Dạng đầu tiên</b> của Bài. </>}
+                    {idSum.needTeacher.noForm > 0 && <>{idSum.needTeacher.noForm} câu có ID thiếu mã Dạng{' '}</>}
+                    (thầy/cô chưa chọn Dạng{refused.size > 0 ? ', gồm cả câu AI chưa đủ căn cứ' : ''}) sẽ vào <b>vị trí chung</b> đang chọn ở trên.{' '}
+                    {idSum.needTeacher.missing > 0 && <>Câu chưa có ID sẽ được HEdu ghi ID theo vị trí vào mã LaTeX trong ngân hàng (tệp gốc không đổi); câu có ID lỗi giữ nguyên mã để thầy/cô sửa sau. </>}
                     Tôi đã xem lại và xác nhận.
                   </span></label>
                 )}

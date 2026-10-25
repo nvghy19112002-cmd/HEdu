@@ -1,4 +1,6 @@
 import { decisionCount, previewImport, recOf, restoreRec, _reset, TRASH_CAP, trashRoomFor, goldList, goldOf, goldSet, restoreSidecar, sidecarForBackup, trashAdd, trashList, trashRemove, clearDecision, exportDecisions, importDecisions, isDecisionsWritable, loadDecisions, setDecision, statusOf, DUP_ALGO_VERSION, type Backend } from './dupdecisions';
+import { rawKeyOf } from './dup2';
+import { writeHeadId } from './idtex';
 import type { Question } from './types';
 
 let failed = 0;
@@ -160,6 +162,26 @@ const mem = (init: string | null = null) => {
     const r = await restoreSidecar({ v: 1, recs: [], trash: extra, gold: [] });
     ok(r.added === 1 && r.skippedTrash === 2 && trashList().length === TRASH_CAP, 'khôi phục sao lưu khi gần đầy: thêm 1, bỏ qua 2 và BÁO số bỏ qua, không cắt câu đang có');
     ok(trashList().some((t) => t.q.uid === 't0'), 'câu cũ nhất vẫn còn');
+  }
+
+  console.log('Quyết định giữ nguyên khi HEdu chỉ thêm/đổi ID trong LaTeX');
+  {
+    const be = mem(); _reset(be); await loadDecisions();
+    await setDecision(A, B, 'not_duplicate');
+    const A1 = Q('ua', writeHeadId(A.latex, '2D1H1-1', 'them').latex);
+    ok(A1.latex !== A.latex && statusOf(A1, B).status === 'valid', 'thêm ID vào câu ⇒ quyết định vẫn còn hiệu lực');
+    const A2 = Q('ua', writeHeadId(A1.latex, '2D1V1-2', 'thay').latex);
+    ok(statusOf(A2, B).status === 'valid', 'đổi ID (phân loại lại) ⇒ vẫn còn hiệu lực');
+    const inl = Q('ua', '\\begin{ex}Cho hàm số $y=x^3-3x+2$.\n\\choice{$1$}{$2$}{$3$}{$4$}\n\\end{ex}');
+    await setDecision(inl, B, 'not_duplicate');
+    ok(statusOf(Q('ua', writeHeadId(inl.latex, '2D1H1-1', 'them').latex), B).status === 'valid', 'đề cùng dòng \\begin{ex} (ID chèn kèm xuống dòng) ⇒ vẫn còn hiệu lực');
+    ok(statusOf(Q('ua', A2.latex.replace('3x+2', '3x+7')), B).status === 'stale', 'sửa nội dung thật ⇒ quyết định cũ (cần xem lại)');
+    // bản ghi kiểu cũ (không có ia/ib), lưu khi câu chưa có ID
+    const old = { a: 'ua', b: 'ub', fa: rawKeyOf(A.latex), fb: rawKeyOf(B.latex), algo: DUP_ALGO_VERSION, d: 'not_duplicate', at: 1 };
+    _reset(mem(JSON.stringify({ v: 1, recs: [old] }))); await loadDecisions();
+    ok(statusOf(A1, B).status === 'valid', 'bản ghi cũ (trước bản này) + câu vừa được thêm ID ⇒ vẫn còn hiệu lực');
+    await goldSet(A, B, 'different', 'none');
+    ok(!!goldOf(A1, B), 'nhãn chuẩn cũng giữ khi chỉ thêm ID');
   }
 
   if (failed) { console.error(`\n${failed} lỗi`); process.exit(1); }
