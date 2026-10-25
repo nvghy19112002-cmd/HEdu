@@ -24,6 +24,26 @@ export const DUP_KIND_RANK: Record<DupKind, number> = { raw: 0, conflict: 1, sam
 
 export const FP_VERSION = 1;
 
+// ---- bảng mã token dùng chung (mỗi chuỗi token chỉ lưu MỘT lần cho cả ngân hàng) ----
+const vocabW = new Map<string, number>(); // token 'w'+từ
+const vocabM = new Map<string, number>(); // token 'm'+bộ ba
+const vocabText: string[] = [];           // chữ đầy đủ (kèm tiền tố) của mỗi mã
+/** Chữ của một token (để sắp xếp ổn định như khi còn lưu chuỗi). */
+export const tokenText = (id: number): string => vocabText[id];
+function toIds(prefix: 'w' | 'm', items: Iterable<string>): Int32Array {
+  const map = prefix === 'w' ? vocabW : vocabM;
+  const raw: number[] = [];
+  for (const x of items) {
+    let id = map.get(x);
+    if (id === undefined) { id = vocabText.length; map.set(x, id); vocabText.push(prefix + x); }
+    raw.push(id);
+  }
+  raw.sort((p, q) => p - q);
+  let n = 0;
+  for (let i = 0; i < raw.length; i++) if (i === 0 || raw[i] !== raw[i - 1]) raw[n++] = raw[i];
+  return Int32Array.from(raw.slice(0, n));
+}
+
 export interface Fingerprint {
   v: number;
   rawKey: string;
@@ -42,9 +62,10 @@ export interface Fingerprint {
   nums: string[];        // mọi số trong đề + phương án + đáp án ngắn (đã sắp)
   ops: string[];         // mọi dấu/phép toán/lệnh toán (đã sắp)
   keys: string[];        // từ khoá đổi nghĩa trong tiếng Việt (đã sắp)
-  words: Set<string>;    // từ + cặp từ (đề, phương án)
-  mathGrams: Set<string>;// bộ ba token công thức
-  loose: Set<string>;    // mọi từ/số của nguồn thô — dùng khi câu đọc chưa đủ
+  // Ba tập dưới đây lưu dạng mã số đã sắp, không trùng (Int32Array) thay vì Set<string> để chỉ mục dò trùng nhẹ hơn nhiều; kết quả so sánh không đổi.
+  words: Int32Array;     // từ + cặp từ (đề, phương án); mã token 'w'+từ
+  mathGrams: Int32Array; // bộ ba token công thức; mã token 'm'+bộ ba
+  loose: Int32Array;     // mọi từ/số của nguồn thô — dùng khi câu đọc chưa đủ; mã token 'w'+từ
   /** Khoá gom nhóm “cùng nội dung” (loại câu + đề + phương án + hình), không gồm đáp án đúng */
   contentKey: string;
   /** Khoá “dữ kiện” (loại câu + phương án + số + dấu + hình), KHÔNG gồm lời dẫn: cặp gần trùng cùng dữ kiện nên tra chính xác được. Rỗng nếu quá ít dữ kiện để làm khoá. */
@@ -267,7 +288,7 @@ function build(latex: string): Fingerprint {
     stemKey: stemFlow.key,
     optKeys, optSet, optItemsSet, ansKey, figKey,
     solKey: sol ? sol.key : null,
-    nums, ops, keys, words, mathGrams, loose,
+    nums, ops, keys, words: toIds('w', words), mathGrams: toIds('m', mathGrams), loose: toIds('w', loose),
     contentKey: hashKey([p.type, stemFlow.key, optSet, figKey].join('\u0004')),
     factsKey: optKeys.length > 0 || nums.length >= 2 ? hashKey([p.type, optSet, nums.join(','), ops.join(','), figKey].join('\u0004')) : '',
   };
@@ -284,12 +305,15 @@ export interface PairResult {
   reasons: string[];
 }
 
-function jaccard<T>(a: Set<T>, b: Set<T>): number {
-  if (!a.size && !b.size) return 0;
-  let inter = 0;
-  const [s, l] = a.size <= b.size ? [a, b] : [b, a];
-  for (const x of s) if (l.has(x)) inter++;
-  return inter / (a.size + b.size - inter);
+/** Jaccard của hai tập mã số đã sắp, không trùng (đếm phần chung bằng một lượt duyệt song song). */
+function jaccard(a: Int32Array, b: Int32Array): number {
+  if (!a.length && !b.length) return 0;
+  let inter = 0, i = 0, j = 0;
+  while (i < a.length && j < b.length) {
+    const x = a[i], y = b[j];
+    if (x === y) { inter++; i++; j++; } else if (x < y) i++; else j++;
+  }
+  return inter / (a.length + b.length - inter);
 }
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 export const NEAR_MIN = 0.5;
@@ -297,8 +321,8 @@ export const NEAR_MIN = 0.5;
 function lexical(a: Fingerprint, b: Fingerprint): { text: number; math: number; lex: number } {
   const text = jaccard(a.words, b.words);
   const math = jaccard(a.mathGrams, b.mathGrams);
-  const hasMath = a.mathGrams.size > 0 && b.mathGrams.size > 0;
-  const hasText = a.words.size > 0 && b.words.size > 0;
+  const hasMath = a.mathGrams.length > 0 && b.mathGrams.length > 0;
+  const hasText = a.words.length > 0 && b.words.length > 0;
   const lex = hasMath && hasText ? 0.55 * text + 0.45 * math : hasMath ? math : hasText ? text : 0;
   return { text, math, lex };
 }

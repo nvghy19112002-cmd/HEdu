@@ -2,7 +2,7 @@
 // Không so mọi cặp: mỗi câu chỉ được so với "ứng viên" lấy từ
 //  (1) nhóm cùng nội dung (cùng loại + đề + phương án + hình) và nhóm cùng mã nguồn;
 //  (2) chỉ mục đảo trên các từ/cụm công thức hiếm, lấy top-K theo số mục chung.
-import { comparePair, DUP_KIND_RANK, fingerprint, type DupKind, type Fingerprint, type PairResult } from './dup2';
+import { comparePair, DUP_KIND_RANK, fingerprint, tokenText, type DupKind, type Fingerprint, type PairResult } from './dup2';
 
 export interface QLike { uid: string; latex: string }
 export interface DupPairHit { a: string; b: string; result: PairResult }
@@ -39,18 +39,19 @@ export class DupIndex {
   private raw = new Map<string, Set<string>>();
   private content = new Map<string, Set<string>>();
   private facts = new Map<string, Set<string>>();
-  private post = new Map<string, Set<string>>();
+  private post = new Map<number, Set<string>>();
 
   /** chỉ dùng trong kiểm thử: ép ngưỡng loại từ phổ biến thấp để tái hiện ngân hàng rất lớn trên bộ nhỏ */
   dfCapOverride?: number;
   get size(): number { return this.fps.size; }
   get(uid: string): Fingerprint | undefined { return this.fps.get(uid); }
 
-  private tokens(f: Fingerprint): string[] {
-    const t: string[] = [];
-    for (const w of f.words) t.push('w' + w);
-    for (const g of f.mathGrams) t.push('m' + g);
-    if (!f.complete) for (const w of f.loose) t.push('w' + w);
+  /** Mã token của câu (có thể lặp giữa words và loose khi câu chưa đọc đủ — giữ đúng như trước). */
+  private tokens(f: Fingerprint): number[] {
+    const t: number[] = [];
+    for (const w of f.words) t.push(w);
+    for (const g of f.mathGrams) t.push(g);
+    if (!f.complete) for (const w of f.loose) t.push(w);
     return t;
   }
   private link<T>(m: Map<T, Set<string>>, k: T, uid: string, add: boolean) {
@@ -96,7 +97,7 @@ export class DupIndex {
     }
     // bỏ các mục quá phổ biến (xuất hiện ở rất nhiều câu): chúng không phân biệt được câu nào và làm quét chậm theo bình phương
     const dfCap = this.dfCapOverride ?? Math.max(50, Math.ceil(2 * Math.sqrt(this.fps.size)));
-    const toks = this.tokens(f).map((t) => [t, this.post.get(t)?.size ?? 0] as const).filter((x) => x[1] > 1 && x[1] <= dfCap).sort((x, y) => x[1] - y[1] || (x[0] < y[0] ? -1 : 1)).slice(0, probe);
+    const toks = this.tokens(f).map((t) => [t, this.post.get(t)?.size ?? 0] as const).filter((x) => x[1] > 1 && x[1] <= dfCap).sort((x, y) => x[1] - y[1] || (tokenText(x[0]) < tokenText(y[0]) ? -1 : 1)).slice(0, probe);
     const cnt = new Map<string, number>();
     for (const [t] of toks) for (const u of this.post.get(t)!) if (u !== uid) cnt.set(u, (cnt.get(u) ?? 0) + 1);
     const need = Math.min(minShared, toks.length);

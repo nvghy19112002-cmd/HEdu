@@ -42,7 +42,7 @@ export interface DupHit { question: Question; score: number; kind: DupKind; reas
  */
 export function findDuplicates(latex: string, bank: Question[], excludeUid?: string, threshold = 0.8): DupHit[] {
   const a = fingerprint(latex);
-  if (a.loose.size < 3) return [];
+  if (a.loose.length < 3) return [];
   const hits: DupHit[] = [];
   for (const q of bank) {
     if (q.uid === excludeUid) continue;

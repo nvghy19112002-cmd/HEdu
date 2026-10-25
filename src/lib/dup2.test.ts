@@ -79,5 +79,17 @@ console.log('Không được làm mất chữ của đề khi bỏ tên môi tr�
   ok(compareLatex(t('\\begin{enumerate}[a)]\\item Tính $1+1$\\end{enumerate}'), t('\\begin{enumerate}[1)]\\item Tính $1+1$\\end{enumerate}')).kind === 'same', 'nhãn danh sách [a)] ≠ nội dung');
 }
 
+console.log('Dấu vân nhẹ (mã số thay chuỗi)');
+{
+  const BS = String.fromCharCode(92);
+  const q = `${BS}begin{ex}Tính $x^2+x+1$ tại điểm, tính giá trị lớn nhất, tính giá trị lớn nhất.${BS}choice{${BS}True 1}{2}{3}{4}${BS}end{ex}`;
+  const f = fingerprint(q);
+  const sortedUnique = (a: Int32Array) => a.every((x, i) => i === 0 || a[i - 1] < x);
+  ok(f.words instanceof Int32Array && f.mathGrams instanceof Int32Array && f.loose instanceof Int32Array, 'ba tập từ/công thức/nguồn thô là mảng mã số');
+  ok(sortedUnique(f.words) && sortedUnique(f.mathGrams) && sortedUnique(f.loose) && f.words.length > 0, 'đã sắp và không trùng (từ lặp chỉ tính một lần)');
+  const other = `${BS}begin{ex}Khác hẳn về nội dung.${BS}choice{${BS}True 5}{6}{7}{8}${BS}end{ex}`;
+  ok(comparePair(f, fingerprint(q)).score === 1 && comparePair(f, fingerprint(other)).score < 1, 'giống hệt ⇒ điểm 1; khác ⇒ dưới 1');
+}
+
 if (failed) { console.log(`\n${failed} kiểm thử dup2 lỗi`); process.exit(1); }
 console.log('dup2: đạt hết.');
