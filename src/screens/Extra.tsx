@@ -137,6 +137,14 @@ export function ImportScreen() {
     return n;
   });
   const latexOf = (i: number) => edits[i] ?? rows[i]?.latex ?? '';
+  /** Câu có Dạng đề xuất (★) mà chưa được chọn — để giáo viên nhận cả loạt bằng MỘT thao tác chủ động (không tự tick). */
+  const pendingPicks = [...(idPicks ?? new Map<number, DraftIdPick>()).entries()].filter(([i, p]) => !p.formId && !!p.suggestion.best && p.latex === latexOf(i)).length;
+  const acceptAllPicks = () => setIdPicks((m) => {
+    if (!m) return m;
+    const n = new Map(m);
+    for (const [i, p] of m) if (!p.formId && p.suggestion.best && p.latex === latexOf(i)) n.set(i, { ...p, formId: p.suggestion.best.formId });
+    return n;
+  });
   const drafts = useMemo(() => rows.map((r, i) => ({ id: `d${i}`, latex: edits[i] ?? r.latex })), [rows, edits]);
   const draftIds = useMemo(() => new Map(drafts.map((d, i) => [d.id, i] as const)), [drafts]);
   useEffect(() => {
@@ -423,9 +431,10 @@ export function ImportScreen() {
                 <div className="head-actions">
                   <button type="button" className="btn btn-sm" onClick={runIdSuggest}>{idPicks ? 'Gợi ý lại' : `Gán ID tự động cho ${noIdRows.length} câu không có ID`}</button>
                   {idPicks && <button type="button" className="btn btn-sm" onClick={() => setIdPicks(null)}>Bỏ gợi ý, dùng vị trí chung</button>}
+                  {idPicks && pendingPicks > 0 && <button type="button" className="btn btn-sm" onClick={acceptAllPicks} title="Dùng Dạng đề xuất (★) cho mọi câu đang có đề xuất mà thầy/cô chưa chọn. Câu AI không đủ căn cứ vẫn để trống.">Nhận mọi đề xuất ({pendingPicks} câu)</button>}
                 </div>
                 {idPicks && <AiAskBar count={draftAiJobs().length} buildJobs={draftAiJobs} onResults={onDraftAi} />}
-                <span className="sys-hint">Tuỳ chọn. Gợi ý Chương/Bài/Dạng trong <b>Lớp {loc.grade}</b> theo các câu đã có trong ngân hàng — không gửi dữ liệu ra ngoài. Câu có %[ID] hợp lệ giữ nguyên ID; mức độ theo ô Mức độ. Mặc định chỉ dùng gợi ý tin cậy cao/vừa, câu còn lại dùng vị trí chung ở trên.</span>
+                <span className="sys-hint">Tuỳ chọn. Gợi ý Chương/Bài/Dạng trong <b>Lớp {loc.grade}</b> theo các câu đã có trong ngân hàng — không gửi dữ liệu ra ngoài. Câu có %[ID] hợp lệ giữ nguyên ID; mức độ theo ô Mức độ. HEdu chỉ tự điền gợi ý ngân hàng tin cậy cao; đề xuất của AI thầy/cô tự nhận (từng câu hoặc “Nhận mọi đề xuất”). Câu chưa chọn dùng vị trí chung ở trên. Khi nhập, ID theo vị trí được ghi vào LaTeX lưu trong ngân hàng.</span>
                 {idPicks && (
                   <div className="aid-scroll aid-scroll-sm">
                     <table className="aid-table">

@@ -1,7 +1,7 @@
-import { applyAutoId, AUTO_ID_MAX, buildRows, defaultChoice, getAutoIdUndo, levelTarget, planApply, summarize, undoAutoId, undoConflicts, withAutoId, type RowChoice } from './idapply';
+import { applyAutoId, AUTO_ID_MAX, buildRows, canApply, defaultChoice, rowAction, getAutoIdUndo, levelTarget, planApply, summarize, undoAutoId, undoConflicts, withAutoId, type RowChoice } from './idapply';
 import { IdSuggester } from './idsuggest';
 import { idStatus, strictCode } from './idsync';
-import { sameExceptId, writeHeadId } from './idtex';
+import { readHead, sameExceptId, writeHeadId } from './idtex';
 import { addMany, getState, initStore, updateMany } from './store';
 import { buildDefault, indexOf } from './taxonomy';
 import { checkLocation } from './taxpath';
@@ -43,13 +43,16 @@ ok(rows.length === 2 && rw.snap.formId === B.formId && rw.currentOk && !rb.curre
 ok(rw.suggestion.best?.formId === A.formId, 'câu gán nhầm ⇒ gợi ý Dạng đúng');
 const cw = defaultChoice(rw);
 ok(cw.changeLevel === false, 'mức độ KHÔNG bao giờ tự tick');
-ok(cw.apply === (rw.suggestion.confidence === 'cao'), 'chỉ tự tick khi tin cậy cao');
+ok(cw.apply === false && cw.formId === null, 'KHÔNG tự tick câu nào (kể cả tin cậy cao); vị trí hiện tại đúng ⇒ mặc định giữ, gợi ý chỉ nằm trong ô chọn');
+ok(defaultChoice(rb).apply === false && defaultChoice(rb).formId === rb.suggestion.best?.formId, 'vị trí hiện tại sai đường dẫn ⇒ điền sẵn Dạng gợi ý (vẫn không tick)');
 const same = buildRows([getState().questions.find((q) => q.latex === drafts[0].latex)!], s, ix)[0];
-ok(!defaultChoice(same).apply || same.suggestion.best?.formId !== same.snap.formId, 'gợi ý trùng vị trí hiện tại ⇒ không tự tick');
+ok(!defaultChoice(same).apply, 'gợi ý trùng vị trí hiện tại ⇒ không tự tick');
+const sameAct = rowAction(same, defaultChoice(same), ix, tax);
+ok(sameAct.kind === 'them' && sameAct.loc === null && canApply(sameAct), 'câu đúng vị trí nhưng LaTeX chưa có ID ⇒ đề xuất THÊM ID (không đổi vị trí)');
 
 const choices = new Map<string, RowChoice>([[rw.uid, { apply: true, formId: A.formId, changeLevel: false }], [rb.uid, { apply: true, formId: A.formId, changeLevel: false }]]);
-const sum = summarize(rows, choices);
-ok(sum.chosen === 2 && sum.moveLoc === 2 && sum.moveLevel === 0, 'tóm tắt: 2 câu chọn, 2 đổi vị trí, 0 đổi mức độ');
+const sum = summarize(rows, choices, ix, tax);
+ok(sum.chosen === 2 && sum.add === 2 && sum.change === 0 && sum.moveLoc === 2 && sum.moveLevel === 0, 'tóm tắt: 2 câu chọn, 2 thêm ID (kèm đổi vị trí), 0 đổi mức độ');
 
 // kiểm lại trước khi ghi
 let plan = planApply(rows, choices, all(), ix, false);
@@ -65,7 +68,8 @@ ok(planApply(rows, bad, all(), ix, false).invalid.includes(rw.uid), 'chọn Dạ
 bad.set(rw.uid, { apply: true, formId: 'f-khong-co', changeLevel: false });
 ok(planApply(rows, bad, all(), ix, false).invalid.includes(rw.uid), 'Dạng không có trong cây ⇒ bị chặn');
 const keep = new Map(choices); keep.set(rw.uid, { apply: true, formId: rw.snap.formId, changeLevel: false });
-ok(!planApply(rows, keep, all(), ix, false).edits.has(rw.uid), 'chọn đúng vị trí hiện tại, không đổi mức độ ⇒ không có gì để ghi');
+{ const ke = planApply(rows, keep, all(), ix, false).edits.get(rw.uid); ok(!!ke && ke.loc === null && ke.level === null && ke.latex !== rw.snap.latex && sameExceptId(ke.latex, rw.snap.latex), 'chọn đúng vị trí hiện tại (LaTeX chưa có ID) ⇒ chỉ THÊM ID, không đổi vị trí/mức độ'); }
+{ const synced = { ...rw, snap: { ...rw.snap, latex: writeHeadId(rw.snap.latex, (strictCode(rw.snap, rw.snap.level, tax) as { code: string }).code, 'them').latex } }; const cur = all(); cur.set(rw.uid, { ...cur.get(rw.uid)!, ...synced.snap }); ok(!planApply([synced], keep, cur, ix, false, tax).edits.has(rw.uid) && rowAction(synced, keep.get(rw.uid), ix, tax).kind === 'giu', 'câu đã có ID hợp lệ khớp vị trí ⇒ giữ nguyên, không ghi gì'); }
 const lvl = new Map(keep); lvl.set(rw.uid, { apply: true, formId: rw.snap.formId, changeLevel: true });
 const lp = planApply(rows, lvl, all(), ix, false).edits.get(rw.uid);
 ok(levelTarget(rw) ? lp?.level === levelTarget(rw) && lp?.loc === null : !lp, 'tick Đổi mức độ ⇒ chỉ đổi mức độ (nếu có gợi ý khác)');
@@ -149,6 +153,27 @@ const rf = await pending;
 disk.fail = false; disk.gate = null;
 ok(!rf.ok && fresh().get(p1)!.tags.join() === t1, 'lô ghi lỗi ⇒ câu của lô trở về như cũ');
 ok(fresh().get(p2)!.tags.includes('giu-lai'), 'sửa đổi khác xảy ra lúc chờ ghi được GIỮ, không bị hoàn lại nhầm');
+
+console.log('Sửa ID lệch/lỗi bằng cách chọn lại CHÍNH Dạng đang lưu');
+{
+  const base = rows[0]; // vị trí B, đúng đường dẫn
+  const meta = (strictCode(base.snap, base.snap.level, tax) as { code: string }).code;
+  const at = (head: string) => ({ ...base, snap: { ...base.snap, latex: base.snap.latex.replace('\\begin{ex}', `\\begin{ex}${head}`) } });
+  const other = meta.slice(0, 3) + (meta[3] === 'N' ? 'V' : 'N') + meta.slice(4); // cùng Dạng, khác mức độ ⇒ ID hợp lệ nhưng lệch
+  const lech = at(`%[${other}]`), loi = at(`%[${meta.split('-')[0]}]`), hai = at(`%[${meta}]%[${other}]`), khop = at(`%[${meta}]`);
+  const keepC: RowChoice = { apply: false, formId: null, changeLevel: false };
+  const sameC: RowChoice = { apply: true, formId: base.snap.formId, changeLevel: false };
+  ok(rowAction(lech, keepC, ix, tax).kind === 'loi' && rowAction(loi, keepC, ix, tax).kind === 'loi', 'mặc định (không chọn gì): ID lệch / ID thiếu Dạng chỉ báo "cần xử lý", không tự sửa');
+  const a1 = rowAction(lech, sameC, ix, tax), a2 = rowAction(loi, sameC, ix, tax);
+  ok(a1.kind === 'thay' && a1.old === other && a1.code === meta && a1.loc === null && canApply(a1), 'ID lệch + chọn lại chính Dạng đang lưu ⇒ đổi ID cũ → ID theo vị trí, không đổi vị trí');
+  ok(a2.kind === 'thay' && a2.code === meta && sameExceptId(a2.latex, loi.snap.latex) && readHead(a2.latex).ids.length === 1, 'ID thiếu Dạng + chọn lại chính Dạng ⇒ sửa thành ID đầy đủ, chỉ đổi vùng ID');
+  ok(rowAction(hai, sameC, ix, tax).kind === 'loi', 'LaTeX có hai ID mâu thuẫn ⇒ vẫn không tự xoá (mở câu để sửa)');
+  ok(rowAction(khop, sameC, ix, tax).kind === 'giu', 'ID hợp lệ đã khớp ⇒ giữ nguyên, không ghi đè dù chọn lại chính Dạng');
+  const cur = all(); cur.set(base.uid, { ...cur.get(base.uid)!, ...lech.snap });
+  const pl = planApply([lech], new Map([[base.uid, sameC]]), cur, ix, false, tax);
+  const e = pl.edits.get(base.uid);
+  ok(!!e && e.loc === null && e.level === null && readHead(e.latex).ids[0].code === meta, 'kế hoạch ghi: chỉ thay ID trong LaTeX, vị trí/mức độ giữ nguyên');
+}
 
 if (fail) process.exit(1);
 console.log('idapply: đạt hết.');

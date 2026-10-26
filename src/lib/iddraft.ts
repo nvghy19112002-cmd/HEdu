@@ -14,8 +14,8 @@ export interface DraftIdPick {
   formId: string | null;
 }
 
-/** Mặc định chỉ dùng gợi ý khi tin cậy cao/vừa; thấp/không đủ căn cứ ⇒ vị trí chung (giáo viên vẫn đổi được). */
-export const useByDefault = (c: SuggestConfidence): boolean => c === 'cao' || c === 'vua';
+/** Mặc định chỉ điền sẵn gợi ý NGÂN HÀNG tin cậy cao (kết quả trộn AI không bao giờ cao ⇒ giáo viên tự nhận); còn lại ⇒ vị trí chung. */
+export const useByDefault = (c: SuggestConfidence): boolean => c === 'cao';
 
 /** Gợi ý cho các câu nháp KHÔNG có %[ID] hợp lệ, trong lớp đích giáo viên đã chọn. Khoá = số thứ tự câu trong file. */
 export function suggestDrafts(drafts: readonly { index: number; latex: string }[], s: IdSuggester, grade: number): Map<number, DraftIdPick> {
