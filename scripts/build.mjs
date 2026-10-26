@@ -2,7 +2,7 @@
 //   node scripts/build.mjs          → dist/ (index.html + app.js + app.css + font KaTeX)
 //   node scripts/build.mjs --single → dist/hedu-xem-thu.html (một file duy nhất, dùng để xem thử)
 import { build } from 'esbuild';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const single = process.argv.includes('--single');
 const dev = process.argv.includes('--dev'); // dùng bởi scripts/dev.mjs
@@ -86,6 +86,10 @@ if (single) {
   writeFileSync(`${out}/hedu-artifact.html`, artifact);
   console.log(`dist/hedu-xem-thu.html  ${(html.length / 1024).toFixed(0)} KB (+ hedu-artifact.html)`);
 } else {
+  // Trình xem PDF (E2b): pdf.js bản legacy đã nén, chép nguyên vào dist để chạy offline (không CDN); nạp bằng import() lúc mở PDF.
+  for (const [from, to] of [['pdf.min.mjs', 'pdf.mjs'], ['pdf.worker.min.mjs', 'pdf.worker.mjs']]) {
+    copyFileSync(`node_modules/pdfjs-dist/legacy/build/${from}`, `${out}/${to}`);
+  }
   writeFileSync(`${out}/index.html`, page('<link rel="stylesheet" href="./app.css">', '<script type="module" src="./app.js"></script>'));
   console.log('dist/ ready');
 }

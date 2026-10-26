@@ -2,6 +2,7 @@
 // Chỉ ĐỌC/SAO CHÉP: tệp gốc ngoài không bị đụng. Biên dịch PDF, soạn nhiều tab, sao lưu: E2–E4 (claude/thiet-ke-de-thi.md).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { PdfViewer } from '../components/PdfViewer';
 import { canJump, ENGINES, examCompile, examCompileCancel, examCompileLast, groupDiagnostics, RAW_MODE_NOTE, summarize, type CompileOut, type Engine, type GoodInfo } from '../lib/examcompile';
 import { getSettings } from '../lib/tikz';
 import { isDesktop } from '../lib/platform';
@@ -32,6 +33,7 @@ export function ExamLibraryScreen() {
   const [compiling, setCompiling] = useState(false);
   const [result, setResult] = useState<CompileOut | null>(null);
   const [good, setGood] = useState<GoodInfo | null>(null);
+  const [viewing, setViewing] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -44,7 +46,7 @@ export function ExamLibraryScreen() {
   useEffect(() => { if (desktop) void reload(); }, [desktop, reload]);
 
   useEffect(() => {
-    setDetail(null); setCheck(null); setResult(null); setGood(null);
+    setDetail(null); setCheck(null); setResult(null); setGood(null); setViewing(false);
     if (activeId) examCompileLast(activeId).then(setGood).catch(() => undefined);
     if (!activeId) return;
     let live = true;
@@ -231,6 +233,7 @@ export function ExamLibraryScreen() {
                         </details>
                       ))}
                       {result && result.rawLog && <details><summary>Nhật ký TeX (thô)</summary><pre className="xl-ctx">{result.rawLog}</pre></details>}
+                      {good && desktop && <button type="button" className="btn btn-sm" onClick={() => setViewing(true)}>Xem PDF</button>}
                       {good && <p className="xl-meta">PDF tốt gần nhất: {good.pages ?? '?'} trang · {good.engine} · {dateText(good.at)}{result && result.status !== 'ok' ? ' (BẢN CŨ: lần biên dịch vừa rồi không thành công)' : ''}</p>}
                     </section>
                     {check && (
@@ -249,6 +252,7 @@ export function ExamLibraryScreen() {
           </div>
         )}
       </div>
+      {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={!!result && result.status !== 'ok'} note={RAW_MODE_NOTE} onClose={() => setViewing(false)} />}
     </>
   );
 }
