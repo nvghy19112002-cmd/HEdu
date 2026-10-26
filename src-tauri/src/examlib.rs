@@ -98,6 +98,9 @@ pub struct Manifest {
     pub skipped: Vec<Skip>,
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// thư mục ảo trong thư viện (vd. "Lớp 12/Học kỳ 1"), dùng '/' ngăn cấp; None = ngoài cùng
+    #[serde(default)]
+    pub folder: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -115,6 +118,8 @@ pub struct Summary {
     pub warning_count: u32,
     pub skipped_count: u32,
     pub metadata: Meta,
+    #[serde(default)]
+    pub folder: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -223,9 +228,45 @@ pub fn open_inside(root: &Path, rel: &str) -> Result<fs::File, String> {
     if is_link(&hmd) || !hmd.is_file() {
         return Err(format!("'{rel}' là liên kết nên không đọc."));
     }
-    match (fs::canonicalize(&cur), fs::canonicalize(root)) {
-        (Ok(r), Ok(b)) if r.starts_with(&b) => Ok(f),
+    // Kiểm bằng CHÍNH tay cầm đã mở (không mở lại theo đường dẫn): nếu giữa lúc kiểm và lúc mở có thư mục cha bị hoán thành
+    // junction thì tệp thật nằm ngoài `root` và bị từ chối; nội dung đọc từ tay cầm này luôn là của tệp đã được kiểm.
+    match fs::canonicalize(root) {
+        Ok(b) if handle_inside(&f, &cur, &b) => Ok(f),
         _ => Err(format!("'{rel}' nằm ngoài thư mục gốc nên không đọc.")),
+    }
+}
+
+/// Đường dẫn THẬT của tệp đang mở (Windows: GetFinalPathNameByHandleW trên tay cầm) có nằm trong `base` (đã canonicalize) không.
+pub(crate) fn handle_inside(f: &fs::File, by_path: &Path, base: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Foundation::HANDLE;
+        use windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW;
+        let _ = by_path;
+        let h = f.as_raw_handle() as HANDLE;
+        let mut buf = vec![0u16; 1024];
+        loop {
+            let n = unsafe { GetFinalPathNameByHandleW(h, buf.as_mut_ptr(), buf.len() as u32, 0) } as usize;
+            if n == 0 {
+                return false;
+            }
+            if n > buf.len() {
+                buf.resize(n + 1, 0);
+                continue;
+            }
+            let real = PathBuf::from(OsString::from_wide(&buf[..n])).to_string_lossy().to_lowercase().replace('/', "\\");
+            let root = base.to_string_lossy().to_lowercase().replace('/', "\\");
+            let root = root.trim_end_matches('\\');
+            return real == root || real.starts_with(&format!("{root}\\"));
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = f;
+        fs::canonicalize(by_path).map(|r| r.starts_with(base)).unwrap_or(false)
     }
 }
 
@@ -418,7 +459,7 @@ pub(crate) fn iso_now() -> String {
     format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", rem / 3600, rem % 3600 / 60, rem % 60)
 }
 
-fn new_id(salt: &str) -> String {
+pub(crate) fn new_id(salt: &str) -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
@@ -459,7 +500,7 @@ pub fn sha256_file(p: &Path) -> std::io::Result<String> {
     sha256_reader(&mut fs::File::open(p)?)
 }
 
-fn fingerprint(files: &[FileRec]) -> String {
+pub(crate) fn fingerprint(files: &[FileRec]) -> String {
     let mut h = Sha256::new();
     for f in files {
         h.update(f.rel.as_bytes());
@@ -476,7 +517,7 @@ pub(crate) fn projects_dir(lib: &Path) -> PathBuf {
     lib.join("projects")
 }
 
-fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("part");
     {
         let mut f = fs::File::create(&tmp)?;
@@ -492,7 +533,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-fn summary_of(m: &Manifest) -> Summary {
+pub(crate) fn summary_of(m: &Manifest) -> Summary {
     Summary {
         id: m.project_id.clone(),
         name: m.name.clone(),
@@ -506,6 +547,7 @@ fn summary_of(m: &Manifest) -> Summary {
         warning_count: m.warnings.len() as u32,
         skipped_count: m.skipped.len() as u32,
         metadata: m.metadata.clone(),
+        folder: m.folder.clone(),
     }
 }
 
@@ -572,7 +614,7 @@ pub fn rebuild_index(lib: &Path) -> Vec<Summary> {
     out
 }
 
-fn count_project_dirs(lib: &Path) -> usize {
+pub(crate) fn count_project_dirs(lib: &Path) -> usize {
     fs::read_dir(projects_dir(lib)).map(|rd| rd.flatten().filter(|e| !e.file_name().to_string_lossy().starts_with(".staging")).count()).unwrap_or(0)
 }
 
@@ -587,6 +629,20 @@ pub fn list(lib: &Path) -> Vec<Summary> {
     }
     let _g = WRITE_GATE.lock().unwrap_or_else(|e| e.into_inner());
     rebuild_index(lib)
+}
+
+/// Thêm/cập nhật một dự án trong chỉ mục (giữ khoá ghi của thư viện).
+pub(crate) fn index_upsert(lib: &Path, s: Summary) {
+    let _g = WRITE_GATE.lock().unwrap_or_else(|e| e.into_inner());
+    add_to_index(lib, s);
+}
+
+/// Bỏ một dự án khỏi chỉ mục (khi chuyển vào thùng rác).
+pub(crate) fn index_remove(lib: &Path, id: &str) {
+    let _g = WRITE_GATE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut v = list_unlocked(lib);
+    v.retain(|x| x.id != id);
+    write_index(lib, &v);
 }
 
 fn add_to_index(lib: &Path, s: Summary) {
@@ -634,7 +690,7 @@ fn copy_verified(src: &mut fs::File, label: &str, to: &Path) -> Result<(u64, Str
 
 /// Chép các tệp đã quét vào `staging`. Mỗi tệp được mở lại qua `open_inside` ngay lúc chép (không tin kết quả quét cũ),
 /// và sau khi chép phải mở lại được với cùng kích thước/thời gian sửa, nếu không là nguồn đã bị đổi.
-fn copy_scanned(src_dir: &Path, files: &[ScanFile], staging: &Path) -> Result<Vec<FileRec>, String> {
+pub(crate) fn copy_scanned(src_dir: &Path, files: &[ScanFile], staging: &Path) -> Result<Vec<FileRec>, String> {
     let changed = |rel: &str| format!("Tệp nguồn '{rel}' bị đổi trong lúc chép. Chưa nhập; hãy thử lại khi không còn chương trình nào đang sửa.");
     let mut recs = Vec::new();
     for f in files {
@@ -701,6 +757,7 @@ pub fn import(lib: &Path, src: &Path, name: &str, main: Option<&str>) -> Result<
         files: recs,
         skipped: sc.skipped.clone(),
         warnings: sc.warnings.clone(),
+        folder: None,
     };
     if let Err(e) = write_manifest(&staging, &m) {
         let _ = fs::remove_dir_all(&staging);
@@ -749,6 +806,7 @@ pub fn create_blank(lib: &Path, name: &str) -> Result<Summary, String> {
             files: vec![rec],
             skipped: vec![],
             warnings: vec![],
+            folder: None,
         };
         write_manifest(&staging, &m)?;
         Ok(m)
@@ -1213,6 +1271,28 @@ mod tests {
         assert!(mk_junction(&pb.join(".hedu"), &d.join("evil")), "phải tạo được junction để kiểm");
         assert!(read_manifest(&lib, &b.id).is_err());
         let _ = fs::remove_dir(pb.join(".hedu"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// Hồi quy TOCTOU: kiểm bằng CHÍNH tay cầm đã mở. Mở thẳng một tệp qua junction (bỏ qua các bước kiểm trước, như khi thư mục cha
+    /// bị hoán đúng lúc mở) thì tay cầm phải bị nhận ra là nằm ngoài thư mục gốc.
+    #[cfg(windows)]
+    #[test]
+    fn tay_cam_mo_qua_junction_bi_nhan_ra_la_ngoai_thu_muc() {
+        let d = tmp("handle");
+        put(&d, "root/trong.tex", b"1");
+        put(&d, "ngoai/x.tex", b"2");
+        assert!(mk_junction(&d.join("root/lk"), &d.join("ngoai")), "phải tạo được junction để kiểm");
+        let base = fs::canonicalize(d.join("root")).unwrap();
+        let good = fs::File::open(d.join("root/trong.tex")).unwrap();
+        assert!(handle_inside(&good, &d.join("root/trong.tex"), &base));
+        let bad = fs::File::open(d.join("root/lk/x.tex")).unwrap(); // mở được vì junction trỏ ra ngoài
+        assert!(!handle_inside(&bad, &d.join("root/lk/x.tex"), &base), "tay cầm của tệp ngoài phải bị từ chối");
+        // tiền tố giống nhau nhưng khác thư mục: root2 không được coi là nằm trong root
+        put(&d, "root2/y.tex", b"3");
+        let other = fs::File::open(d.join("root2/y.tex")).unwrap();
+        assert!(!handle_inside(&other, &d.join("root2/y.tex"), &base));
+        let _ = fs::remove_dir(d.join("root/lk"));
         let _ = fs::remove_dir_all(&d);
     }
 

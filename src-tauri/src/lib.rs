@@ -4,6 +4,7 @@ mod ai;
 mod db;
 mod dbbackup;
 mod dbcmd;
+mod examadmin;
 mod examcompile;
 mod examfiles;
 mod examlib;
@@ -466,7 +467,20 @@ pub fn run() {
             examfiles::exam_file_image,
             examfiles::exam_draft_write,
             examfiles::exam_draft_read,
-            examfiles::exam_draft_clear
+            examfiles::exam_draft_clear,
+            examadmin::exam_meta_update,
+            examadmin::exam_duplicate,
+            examadmin::exam_trash,
+            examadmin::exam_trash_list,
+            examadmin::exam_trash_restore,
+            examadmin::exam_trash_purge,
+            examadmin::exam_bundle_export,
+            examadmin::exam_bundle_import,
+            examadmin::exam_backup_create,
+            examadmin::exam_backup_list,
+            examadmin::exam_backup_verify,
+            examadmin::exam_backup_restore,
+            examadmin::exam_reveal
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");

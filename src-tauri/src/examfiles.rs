@@ -14,10 +14,10 @@ use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 use crate::examcompile::collect;
-use crate::examlib::{bad_rel, is_link, iso_now, open_inside, projects_dir, read_manifest, sha256_reader, valid_id, write_manifest, FileRec};
+use crate::examlib::{bad_rel, handle_inside, is_link, iso_now, open_inside, projects_dir, read_manifest, sha256_reader, valid_id, write_manifest, FileRec};
 
 /// Chỉ một thao tác ghi tệp dự án tại một thời điểm (tránh hai lần lưu chồng nhau và hỏng manifest).
-static WRITE_GATE: Mutex<()> = Mutex::new(());
+pub(crate) static WRITE_GATE: Mutex<()> = Mutex::new(());
 pub const MAX_EDIT_BYTES: u64 = 20 * 1024 * 1024;
 pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 const KEEP_VERSIONS: usize = 10;
@@ -231,20 +231,29 @@ fn checkpoint(dir: &Path, rel: &str, old: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn write_atomic(dest: &Path, bytes: &[u8]) -> Result<(), String> {
+/// Ghi tạm rồi đổi tên. `guard` (nếu có) là thư mục gốc mà tệp tạm BẮT BUỘC nằm trong: kiểm bằng chính tay cầm vừa tạo, TRƯỚC khi ghi chữ nào,
+/// nên thư mục cha bị hoán thành junction giữa chừng thì không có dữ liệu nào bị ghi ra ngoài.
+fn write_atomic_in(guard: Option<&Path>, dest: &Path, bytes: &[u8]) -> Result<(), String> {
     let part = dest.with_extension("hedu-part");
-    let r = (|| -> std::io::Result<()> {
-        let mut f = fs::File::create(&part)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
+    let r = (|| -> Result<(), String> {
+        let mut f = fs::File::create(&part).map_err(|e| format!("Không ghi được tệp: {e}"))?;
+        if let Some(g) = guard {
+            if !fs::canonicalize(g).map(|b| handle_inside(&f, &part, &b)).unwrap_or(false) {
+                return Err("Vị trí ghi nằm ngoài thư mục dự án (có liên kết/junction) nên đã dừng, chưa ghi gì.".into());
+            }
+        }
+        f.write_all(bytes).and_then(|_| f.sync_all()).map_err(|e| format!("Không ghi được tệp: {e}"))?;
         drop(f);
-        fs::rename(&part, dest)
+        fs::rename(&part, dest).map_err(|e| format!("Không ghi được tệp: {e}"))
     })();
-    if let Err(e) = r {
+    if r.is_err() {
         let _ = fs::remove_file(&part);
-        return Err(format!("Không ghi được tệp: {e}"));
     }
-    Ok(())
+    r
+}
+
+fn write_atomic(dest: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_atomic_in(None, dest, bytes)
 }
 
 fn note_in_manifest(dir: &Path, lib: &Path, id: &str, rel: &str, bytes: u64, sha: &str) -> Result<(), String> {
@@ -292,7 +301,7 @@ pub fn write_text_file(lib: &Path, id: &str, rel: &str, text: &str, eol: &str, b
         return Ok(WriteOut::Saved { sha256: cur_sha, bytes: cur.len() as u64, mtime_ms: mtime_ms(&md), changed: false });
     }
     checkpoint(&dir, rel, &cur)?;
-    write_atomic(&dir.join(rel), &new)?;
+    write_atomic_in(Some(&dir), &dir.join(rel), &new)?;
     let sha = sha_hex(&new);
     note_in_manifest(&dir, lib, id, rel, new.len() as u64, &sha)?;
     let md = fs::metadata(dir.join(rel)).map_err(|e| e.to_string())?;
@@ -327,6 +336,11 @@ pub fn create_text_file(lib: &Path, id: &str, rel: &str, text: &str) -> Result<F
     }
     let bytes = encode(text, "lf", false);
     let mut f = fs::OpenOptions::new().write(true).create_new(true).open(&cur).map_err(|e| format!("Không tạo được tệp: {e}"))?;
+    if !fs::canonicalize(&dir).map(|b| handle_inside(&f, &cur, &b)).unwrap_or(false) {
+        drop(f);
+        let _ = fs::remove_file(&cur);
+        return Err("Vị trí tạo tệp nằm ngoài thư mục dự án (có liên kết/junction) nên đã dừng.".into());
+    }
     f.write_all(&bytes).and_then(|_| f.sync_all()).map_err(|e| format!("Không ghi được tệp: {e}"))?;
     drop(f);
     note_in_manifest(&dir, lib, id, rel, bytes.len() as u64, &sha_hex(&bytes))?;

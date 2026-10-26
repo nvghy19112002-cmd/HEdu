@@ -1,17 +1,21 @@
-// Màn Thư viện đề thi (E1): danh sách dự án đề, nhập .tex đơn / thư mục (sao chép vào thư viện), tạo đề trống, xem chi tiết tệp.
-// Chỉ ĐỌC/SAO CHÉP: tệp gốc ngoài không bị đụng. Biên dịch PDF, soạn nhiều tab, sao lưu: E2–E4 (claude/thiet-ke-de-thi.md).
+// Màn Thư viện đề thi: cây thư mục ảo + bộ lọc · danh sách đề · chi tiết. Nhập .tex/thư mục/gói (sao chép, tệp gốc không bị đụng), tạo đề trống,
+// sao chép (phiên bản mới), đổi thông tin, chốt đề, Thùng rác đề, sao lưu/khôi phục thư viện đề, mở Biên tập và xem PDF.
+// Biên dịch/soạn tệp nằm ở không gian Biên tập (ExamWorkspace). Thiết kế: claude/thiet-ke-de-thi.md.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ExamBackupPanel, ExamTrashPanel } from '../components/ExamAdminPanels';
+import { ExamInfoForm } from '../components/ExamInfoForm';
 import { PdfViewer } from '../components/PdfViewer';
-import { ExamWorkspace } from './ExamWorkspace';
-import { canJump, ENGINES, examCompile, examCompileCancel, examCompileLast, groupDiagnostics, RAW_MODE_NOTE, summarize, type CompileOut, type Engine, type GoodInfo } from '../lib/examcompile';
-import { getSettings } from '../lib/tikz';
+import { RAW_MODE_NOTE, examCompileLast, type GoodInfo } from '../lib/examcompile';
+import { allFolders, applyFacets, EMPTY_SEL, facets, folderTree, isEmptySel, type FacetSel, type FolderNode } from '../lib/examfacets';
 import { isDesktop } from '../lib/platform';
 import {
-  chooseProjectFolder, chooseTexFile, DEFAULT_EXAM_FILTER, dateText, describeScan, examCreate, examGet, examImport, examList, examScan, examVerify, filterExams,
-  formatBytes, KIND_LABEL, needsMainChoice, SORT_LABEL, sortExams, STATUS_LABEL,
+  bundleFolderName, chooseProjectFolder, chooseTexFile, DEFAULT_EXAM_FILTER, dateText, describeScan, examBundleExport, examBundleImport, examCreate, examDuplicate, examGet, examImport, examList, examMetaUpdate,
+  examReveal, examScan, examTrash, examVerify, filterExams, formatBytes, KIND_LABEL, needsMainChoice, SORT_LABEL, sortExams, STATUS_LABEL,
   type ExamFilter, type ExamKind, type ExamManifest, type ExamScan, type ExamSort, type ExamStatus, type ExamSummary, type ExamVerify,
 } from '../lib/examlib';
+import { ExamWorkspace } from './ExamWorkspace';
 
 const nf = new Intl.NumberFormat('vi-VN');
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -25,17 +29,16 @@ export function ExamLibraryScreen() {
   const [load, setLoad] = useState<'loading' | 'ok' | 'error'>(desktop ? 'loading' : 'ok');
   const [err, setErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<ExamFilter>(DEFAULT_EXAM_FILTER);
+  const [sel, setSel] = useState<FacetSel>(EMPTY_SEL);
   const [sort, setSort] = useState<ExamSort>('updated');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ExamManifest | null>(null);
   const [check, setCheck] = useState<ExamVerify | null>(null);
-  const [engine, setEngine] = useState<Engine>('pdflatex');
-  const [runs, setRuns] = useState(2);
-  const [compiling, setCompiling] = useState(false);
-  const [result, setResult] = useState<CompileOut | null>(null);
   const [good, setGood] = useState<GoodInfo | null>(null);
   const [viewing, setViewing] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [panel, setPanel] = useState<null | 'trash' | 'backup'>(null);
+  const [ask, setAsk] = useState<null | 'trash'>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -47,17 +50,21 @@ export function ExamLibraryScreen() {
   }, []);
   useEffect(() => { if (desktop) void reload(); }, [desktop, reload]);
 
-  useEffect(() => {
-    setDetail(null); setCheck(null); setResult(null); setGood(null); setViewing(false); setEditing(false);
-    if (activeId) examCompileLast(activeId).then(setGood).catch(() => undefined);
-    if (!activeId) return;
-    let live = true;
-    examGet(activeId).then((m) => { if (live) setDetail(m); }).catch((e) => { if (live) toast(`Không đọc được dự án: ${msg(e)}`); });
-    return () => { live = false; };
-  }, [activeId, toast]);
+  const loadDetail = useCallback((id: string) => {
+    examGet(id).then(setDetail).catch((e) => toast(`Không đọc được dự án: ${msg(e)}`));
+    examCompileLast(id).then(setGood).catch(() => undefined);
+  }, [toast]);
 
-  const shown = useMemo(() => sortExams(filterExams(items, filter), sort), [items, filter, sort]);
-  const filtered = filter.text.trim() !== '' || filter.kind !== 'all' || filter.status !== 'all';
+  useEffect(() => {
+    setDetail(null); setCheck(null); setGood(null); setViewing(false); setEditing(false);
+    if (activeId) loadDetail(activeId);
+  }, [activeId, loadDetail]);
+
+  const facetList = useMemo(() => facets(items, sel), [items, sel]);
+  const tree = useMemo(() => folderTree(items, sel), [items, sel]);
+  const folders = useMemo(() => allFolders(items), [items]);
+  const shown = useMemo(() => sortExams(filterExams(applyFacets(items, sel), filter), sort), [items, sel, filter, sort]);
+  const filtered = filter.text.trim() !== '' || filter.kind !== 'all' || filter.status !== 'all' || !isEmptySel(sel);
 
   const run = async (f: () => Promise<void>) => {
     if (busyRef.current) return;
@@ -82,6 +89,15 @@ export function ExamLibraryScreen() {
     toast(`Đã nhập “${s.name}” vào thư viện. Tệp gốc không bị thay đổi.`);
   });
 
+  const importBundle = () => run(async () => {
+    const path = await chooseProjectFolder();
+    if (!path) return;
+    const s = await examBundleImport(path);
+    await reload();
+    setActiveId(s.id);
+    toast(`Đã nhập gói thành đề mới “${s.name}”. Từng tệp được đối chiếu với sổ của gói.`);
+  });
+
   const createBlank = () => run(async () => {
     const s = await examCreate(newName ?? '');
     setNewName(null);
@@ -89,31 +105,73 @@ export function ExamLibraryScreen() {
     setActiveId(s.id);
   });
 
-  const compile = async () => {
-    if (!activeId || compiling) return;
-    setCompiling(true); setResult(null);
-    try {
-      const st = getSettings();
-      const r = await examCompile(activeId, { engine, runs, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120) });
-      setResult(r);
-      if (r.lastGood) setGood(r.lastGood);
-    } catch (e) { toast(msg(e)); } finally { setCompiling(false); }
-  };
-  const stop = () => { if (activeId) void examCompileCancel(activeId).catch(() => undefined); };
-
   const verify = () => run(async () => { if (activeId) setCheck(await examVerify(activeId)); });
+
+  const duplicate = () => run(async () => {
+    if (!activeId) return;
+    const s = await examDuplicate(activeId, null);
+    await reload();
+    setActiveId(s.id);
+    toast(`Đã tạo bản sao “${s.name}” (đang soạn). Đề gốc không đổi.`);
+  });
+
+  const exportBundle = () => run(async () => {
+    if (!activeId || !detail) return;
+    const parent = await chooseProjectFolder();
+    if (!parent) return;
+    const dest = await examBundleExport(activeId, parent, bundleFolderName(detail.name));
+    toast(`Đã xuất gói: ${dest}`);
+  });
+
+  const saveMeta = (m: Parameters<typeof examMetaUpdate>[1]) => run(async () => {
+    if (!activeId) return;
+    const s = await examMetaUpdate(activeId, m);
+    await reload();
+    loadDetail(activeId);
+    toast(s.status === 'finalized' && m.status === 'finalized' && detail?.status !== 'finalized' ? `Đã chốt đề “${s.name}”.` : 'Đã lưu thông tin đề.');
+  });
+
+  const trash = () => run(async () => {
+    if (!activeId) return;
+    await examTrash(activeId);
+    setAsk(null); setActiveId(null);
+    await reload();
+    toast('Đã chuyển đề vào Thùng rác đề. Có thể khôi phục ở nút “Thùng rác đề”.');
+  });
+
+  const folderNode = (n: FolderNode, depth: number): React.ReactNode => (
+    <li key={n.path}>
+      <button type="button" className={`xl-fnode${sel.folder === n.path ? ' on' : ''}`} style={{ paddingLeft: 8 + depth * 12 }} aria-pressed={sel.folder === n.path} onClick={() => setSel({ ...sel, folder: sel.folder === n.path ? null : n.path })}>
+        {n.name} <span className="xl-meta">({n.count})</span>
+      </button>
+      {n.children.length > 0 && <ul className="xl-ftree">{n.children.map((c) => folderNode(c, depth + 1))}</ul>}
+    </li>
+  );
+  const facetBtns = <T extends string | number>(label: string, key: 'grade' | 'year' | 'type' | 'tag' | 'status', vals: { value: T; count: number }[], show: (v: T) => string) => vals.length > 0 && (
+    <div className="xl-facet" role="group" aria-label={label}>
+      <b>{label}</b>
+      {vals.map((v) => (
+        <button key={String(v.value)} type="button" className={`xl-fnode${sel[key] === v.value ? ' on' : ''}`} aria-pressed={sel[key] === v.value} onClick={() => setSel({ ...sel, [key]: sel[key] === v.value ? null : v.value })}>
+          {show(v.value)} <span className="xl-meta">({v.count})</span>
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <>
       <header className="page-head">
         <div>
           <h1>Thư viện đề thi</h1>
-          <span className="sys-hint">Đề được SAO CHÉP vào thư viện của HEdu; tệp gốc của bạn không bị sửa. Biên dịch PDF và soạn thảo có ở các bản sau.</span>
+          <span className="sys-hint">Đề được SAO CHÉP vào thư viện của HEdu; tệp gốc của bạn không bị sửa. Thư viện đề có Thùng rác và sao lưu RIÊNG.</span>
         </div>
         <div className="xl-actions">
           <button type="button" className="btn btn-sm" disabled={!desktop || busy} onClick={() => pick(chooseTexFile)}>Nhập .tex</button>
           <button type="button" className="btn btn-sm" disabled={!desktop || busy} onClick={() => pick(chooseProjectFolder)}>Nhập thư mục</button>
+          <button type="button" className="btn btn-sm" disabled={!desktop || busy} onClick={importBundle}>Nhập gói</button>
           <button type="button" className="btn btn-sm" disabled={!desktop || busy} onClick={() => setNewName('')}>Tạo đề trống</button>
+          <button type="button" className="btn btn-sm" disabled={!desktop} onClick={() => setPanel('trash')}>Thùng rác đề</button>
+          <button type="button" className="btn btn-sm" disabled={!desktop} onClick={() => setPanel('backup')}>Sao lưu thư viện</button>
         </div>
       </header>
       <div className="simple xl-wrap">
@@ -158,9 +216,6 @@ export function ExamLibraryScreen() {
           <select className="xl-in" aria-label="Loại dự án" value={filter.kind} onChange={(e) => setFilter({ ...filter, kind: e.target.value as ExamKind | 'all' })}>
             <option value="all">Mọi loại</option>{(Object.keys(KIND_LABEL) as ExamKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
           </select>
-          <select className="xl-in" aria-label="Trạng thái" value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value as ExamStatus | 'all' })}>
-            <option value="all">Mọi trạng thái</option>{(Object.keys(STATUS_LABEL) as ExamStatus[]).map((k) => <option key={k} value={k}>{STATUS_LABEL[k]}</option>)}
-          </select>
           <select className="xl-in" aria-label="Sắp xếp" value={sort} onChange={(e) => setSort(e.target.value as ExamSort)}>
             {(Object.keys(SORT_LABEL) as ExamSort[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
           </select>
@@ -169,94 +224,93 @@ export function ExamLibraryScreen() {
 
         {load === 'loading' && <p className="aid-wait" role="status">Đang đọc thư viện đề…</p>}
         {load === 'ok' && items.length === 0 && desktop && (
-          <div className="empty" role="status"><b>Thư viện đề chưa có đề nào.</b><span>Nhập một tệp .tex, một thư mục dự án, hoặc tạo đề trống để bắt đầu.</span></div>
-        )}
-        {items.length > 0 && shown.length === 0 && (
-          <div className="empty" role="status"><b>Không có đề nào khớp.</b>{filtered && <button type="button" className="btn btn-sm" onClick={() => setFilter(DEFAULT_EXAM_FILTER)}>Xoá bộ lọc</button>}</div>
+          <div className="empty" role="status"><b>Thư viện đề chưa có đề nào.</b><span>Nhập một tệp .tex, một thư mục dự án hoặc gói, hay tạo đề trống để bắt đầu.</span></div>
         )}
 
-        {shown.length > 0 && (
-          <div className="xl-split">
-            <ul className="xl-list" aria-label="Danh sách đề">
-              {shown.map((e) => (
-                <li key={e.id}>
-                  <button type="button" className="xl-row" aria-pressed={e.id === activeId} onClick={() => setActiveId(e.id === activeId ? null : e.id)}>
-                    <span className="xl-name">{e.name}</span>
-                    <span className="xl-meta">{KIND_LABEL[e.kind]} · {e.fileCount} tệp · {formatBytes(e.totalBytes)} · {STATUS_LABEL[e.status]} · sửa {dateText(e.updatedAt)}</span>
-                    {(e.warningCount > 0 || e.skippedCount > 0 || !e.mainFile) && (
-                      <span className="xl-flags">{!e.mainFile && 'Chưa chọn tệp chính. '}{e.skippedCount > 0 && `${e.skippedCount} mục không chép. `}{e.warningCount > 0 && `${e.warningCount} cảnh báo.`}</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {activeId && (
-              <aside className="xl-detail" aria-label="Chi tiết đề">
-                {!detail ? <p className="aid-wait">Đang đọc…</p> : (
-                  <>
-                    <h2>{detail.name}</h2>
-                    <p className="xl-meta">Tệp chính: <b>{detail.mainFile ?? 'chưa chọn'}</b> · tạo {dateText(detail.createdAt)}</p>
-                    <p className="xl-meta">Nguồn: {detail.source.mode === 'created' ? 'tạo trong HEdu' : `đã chép từ ${detail.source.originalPathDisplay}`}</p>
-                    {detail.warnings.length > 0 && <div className="note warn"><div className="note-body">{detail.warnings.map((w, i) => <span key={i}>{w}</span>)}</div></div>}
-                    {detail.skipped.length > 0 && <details><summary>{detail.skipped.length} mục không được chép</summary><ul className="xl-lines">{detail.skipped.map((k, i) => <li key={i}><code>{k.rel}</code>: {k.reason}</li>)}</ul></details>}
-                    <details open><summary>{detail.files.length} tệp</summary>
-                      <ul className="xl-lines">{detail.files.slice(0, 300).map((f) => <li key={f.rel}><code>{f.rel}</code> <span className="xl-meta">{formatBytes(f.bytes)}</span></li>)}{detail.files.length > 300 && <li>…và {detail.files.length - 300} tệp khác.</li>}</ul>
-                    </details>
-                    <button type="button" className="btn btn-sm" disabled={busy} onClick={verify}>Kiểm tra tệp trong thư viện</button>
-                    <button type="button" className="btn btn-sm btn-primary" disabled={!desktop || !detail.mainFile} onClick={() => setEditing(true)}>Biên tập</button>
-                    <section className="xl-compile" aria-label="Biên dịch PDF">
-                      <h3>Biên dịch PDF</h3>
-                      {!detail.mainFile ? <p className="xl-meta">Dự án chưa có tệp chính nên chưa biên dịch được.</p> : (
-                        <>
-                          <div className="xl-actions">
-                            <label className="xl-meta">Trình dịch <select className="xl-in" value={engine} disabled={compiling} onChange={(e) => setEngine(e.target.value as Engine)}>{ENGINES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
-                            <label className="xl-meta">Số lượt <select className="xl-in" value={runs} disabled={compiling} onChange={(e) => setRuns(+e.target.value)}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-                            {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!desktop} onClick={compile}>Biên dịch PDF</button> : <button type="button" className="btn btn-sm" onClick={stop}>Dừng</button>}
-                          </div>
-                          {compiling && <p className="aid-wait" role="status">Đang biên dịch…</p>}
-                        </>
+        {items.length > 0 && (
+          <div className="xl-main">
+            <nav className="xl-side" aria-label="Thư mục và bộ lọc">
+              <div className="xl-facet" role="group" aria-label="Thư mục">
+                <b>Thư mục</b>
+                <button type="button" className={`xl-fnode${sel.folder === null ? ' on' : ''}`} aria-pressed={sel.folder === null} onClick={() => setSel({ ...sel, folder: null })}>Tất cả <span className="xl-meta">({tree.total})</span></button>
+                <ul className="xl-ftree">{tree.roots.map((n) => folderNode(n, 0))}</ul>
+                {tree.unfiled > 0 && <button type="button" className={`xl-fnode${sel.folder === '' ? ' on' : ''}`} aria-pressed={sel.folder === ''} onClick={() => setSel({ ...sel, folder: sel.folder === '' ? null : '' })}>Chưa xếp thư mục <span className="xl-meta">({tree.unfiled})</span></button>}
+              </div>
+              {facetBtns('Lớp', 'grade', facetList.grades, (v) => `Lớp ${v}`)}
+              {facetBtns('Năm học', 'year', facetList.years, (v) => v)}
+              {facetBtns('Loại đề', 'type', facetList.types, (v) => v)}
+              {facetBtns('Trạng thái', 'status', facetList.statuses, (v) => STATUS_LABEL[v as ExamStatus])}
+              {facetBtns('Nhãn', 'tag', facetList.tags, (v) => v)}
+              {filtered && <button type="button" className="btn btn-sm" onClick={() => { setSel(EMPTY_SEL); setFilter(DEFAULT_EXAM_FILTER); }}>Xoá bộ lọc</button>}
+            </nav>
+
+            <div className="xl-split">
+              {shown.length === 0 ? (
+                <div className="empty" role="status"><b>Không có đề nào khớp.</b><button type="button" className="btn btn-sm" onClick={() => { setSel(EMPTY_SEL); setFilter(DEFAULT_EXAM_FILTER); }}>Xoá bộ lọc</button></div>
+              ) : (
+                <ul className="xl-list" aria-label="Danh sách đề">
+                  {shown.map((e) => (
+                    <li key={e.id}>
+                      <button type="button" className="xl-row" aria-pressed={e.id === activeId} onClick={() => setActiveId(e.id === activeId ? null : e.id)}>
+                        <span className="xl-name">{e.name}</span>
+                        <span className="xl-meta">{e.folder ? `${e.folder} · ` : ''}{KIND_LABEL[e.kind]} · {e.fileCount} tệp · {formatBytes(e.totalBytes)} · {STATUS_LABEL[e.status]} · sửa {dateText(e.updatedAt)}</span>
+                        {(e.warningCount > 0 || e.skippedCount > 0 || !e.mainFile) && (
+                          <span className="xl-flags">{!e.mainFile && 'Chưa chọn tệp chính. '}{e.skippedCount > 0 && `${e.skippedCount} mục không chép. `}{e.warningCount > 0 && `${e.warningCount} cảnh báo.`}</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {activeId && (
+                <aside className="xl-detail" aria-label="Chi tiết đề">
+                  {!detail ? <p className="aid-wait">Đang đọc…</p> : (
+                    <>
+                      <h2>{detail.name}</h2>
+                      <p className="xl-meta">Tệp chính: <b>{detail.mainFile ?? 'chưa chọn'}</b> · tạo {dateText(detail.createdAt)}{detail.folder ? ` · thư mục ${detail.folder}` : ''}</p>
+                      <p className="xl-meta">Nguồn: {detail.source.mode === 'created' ? 'tạo trong HEdu' : detail.source.mode === 'duplicated' ? detail.source.originalPathDisplay : detail.source.mode === 'restored' ? `khôi phục từ ${detail.source.originalPathDisplay}` : `đã chép từ ${detail.source.originalPathDisplay}`}</p>
+                      <div className="xl-actions">
+                        <button type="button" className="btn btn-sm btn-primary" disabled={!desktop || !detail.mainFile} onClick={() => setEditing(true)}>Biên tập</button>
+                        {good && desktop && <button type="button" className="btn btn-sm" onClick={() => setViewing(true)}>Xem PDF</button>}
+                        <button type="button" className="btn btn-sm" disabled={busy} onClick={duplicate}>Sao chép</button>
+                        <button type="button" className="btn btn-sm" disabled={busy} onClick={exportBundle}>Xuất gói…</button>
+                        <button type="button" className="btn btn-sm" disabled={busy} onClick={() => activeId && void examReveal(activeId).catch((e) => toast(msg(e)))}>Hiện trong Explorer</button>
+                        <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setAsk('trash')}>Chuyển vào Thùng rác…</button>
+                      </div>
+                      {good && <p className="xl-meta">PDF gần nhất: {good.pages ?? '?'} trang · {good.engine} · {dateText(good.at)}</p>}
+                      <ExamInfoForm detail={detail} folders={folders} busy={busy} hasPdf={!!good} onSave={saveMeta} />
+                      {detail.warnings.length > 0 && <div className="note warn"><div className="note-body">{detail.warnings.map((w, i) => <span key={i}>{w}</span>)}</div></div>}
+                      {detail.skipped.length > 0 && <details><summary>{detail.skipped.length} mục không được chép</summary><ul className="xl-lines">{detail.skipped.map((k, i) => <li key={i}><code>{k.rel}</code>: {k.reason}</li>)}</ul></details>}
+                      <details><summary>{detail.files.length} tệp</summary>
+                        <ul className="xl-lines">{detail.files.slice(0, 300).map((f) => <li key={f.rel}><code>{f.rel}</code> <span className="xl-meta">{formatBytes(f.bytes)}</span></li>)}{detail.files.length > 300 && <li>…và {detail.files.length - 300} tệp khác.</li>}</ul>
+                      </details>
+                      <button type="button" className="btn btn-sm" disabled={busy} onClick={verify}>Kiểm tra tệp trong thư viện</button>
+                      {check && (
+                        <div className={`note ${check.ok && check.extra.length === 0 ? 'ok' : 'warn'}`} role="status"><div className="note-body">
+                          {check.ok && check.extra.length === 0 ? <b>Mọi tệp khớp với sổ.</b> : <b>Có khác biệt so với sổ</b>}
+                          {check.changed.length > 0 && <span>Đã bị sửa: {check.changed.join(', ')}</span>}
+                          {check.missing.length > 0 && <span>Bị mất: {check.missing.join(', ')}</span>}
+                          {check.blocked.length > 0 && <span>Bị chặn vì là liên kết/junction hoặc không đọc an toàn được (HEdu không đi theo): {check.blocked.join(', ')}</span>}
+                          {check.extra.length > 0 && <span>Tệp thêm ngoài HEdu: {check.extra.join(', ')}</span>}
+                        </div></div>
                       )}
-                      {result && (() => {
-                        const sm = summarize(result);
-                        return (
-                          <div className={`note ${sm.tone === 'bad' ? 'bad' : sm.tone}`} role="status"><div className="note-body">
-                            <b>{sm.text}</b>
-                            {result.warnings.map((w, i) => <span key={i}>{w}</span>)}
-                            {result.status === 'ok' && <span>{RAW_MODE_NOTE}</span>}
-                            {result.texVersion && <span className="xl-meta">{result.texVersion} · {result.runs} lượt · {Math.round(result.ms / 100) / 10} giây{result.cached ? ' · dùng lại bộ đệm' : ''}</span>}
-                          </div></div>
-                        );
-                      })()}
-                      {result && result.diagnostics.length > 0 && groupDiagnostics(result.diagnostics).map((g) => (
-                        <details key={g.file ?? '?'} open={g.items.some((d) => d.severity === 'error')}>
-                          <summary>{g.file ?? 'Không rõ tệp'} ({g.items.length})</summary>
-                          <ul className="xl-lines">{g.items.map((d, i) => (
-                            <li key={i}><b>{d.severity === 'error' ? 'Lỗi' : 'Cảnh báo'}{canJump(d) ? ` dòng ${d.line}` : ''}:</b> {d.message}{d.context.length > 0 && <pre className="xl-ctx">{d.context.join('\n')}</pre>}</li>
-                          ))}</ul>
-                        </details>
-                      ))}
-                      {result && result.rawLog && <details><summary>Nhật ký TeX (thô)</summary><pre className="xl-ctx">{result.rawLog}</pre></details>}
-                      {good && desktop && <button type="button" className="btn btn-sm" onClick={() => setViewing(true)}>Xem PDF</button>}
-                      {good && <p className="xl-meta">PDF tốt gần nhất: {good.pages ?? '?'} trang · {good.engine} · {dateText(good.at)}{result && result.status !== 'ok' ? ' (BẢN CŨ: lần biên dịch vừa rồi không thành công)' : ''}</p>}
-                    </section>
-                    {check && (
-                      <div className={`note ${check.ok && check.extra.length === 0 ? 'ok' : 'warn'}`} role="status"><div className="note-body">
-                        {check.ok && check.extra.length === 0 ? <b>Mọi tệp khớp với lúc nhập.</b> : <b>Có khác biệt so với lúc nhập</b>}
-                        {check.changed.length > 0 && <span>Đã bị sửa: {check.changed.join(', ')}</span>}
-                        {check.missing.length > 0 && <span>Bị mất: {check.missing.join(', ')}</span>}
-                        {check.blocked.length > 0 && <span>Bị chặn vì là liên kết/junction hoặc không đọc an toàn được (HEdu không đi theo): {check.blocked.join(', ')}</span>}
-                        {check.extra.length > 0 && <span>Tệp thêm ngoài HEdu: {check.extra.join(', ')}</span>}
-                      </div></div>
-                    )}
-                  </>
-                )}
-              </aside>
-            )}
+                    </>
+                  )}
+                </aside>
+              )}
+            </div>
           </div>
         )}
       </div>
-      {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={!!result && result.status !== 'ok'} note={RAW_MODE_NOTE} onClose={() => setViewing(false)} />}
-      {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={() => { setEditing(false); void reload(); examCompileLast(activeId).then(setGood).catch(() => undefined); }} />}
+      {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} note={RAW_MODE_NOTE} onClose={() => setViewing(false)} />}
+      {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={() => { setEditing(false); void reload(); loadDetail(activeId); }} />}
+      {panel === 'trash' && <ExamTrashPanel toast={toast} onClose={() => setPanel(null)} onChanged={(rid) => { void reload().then(() => { if (rid) setActiveId(rid); }); }} />}
+      {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}
+      {ask === 'trash' && detail && (
+        <ConfirmDialog title="Chuyển vào Thùng rác đề?" confirmLabel="Chuyển vào Thùng rác" cancelLabel="Giữ lại" busy={busy} onCancel={() => setAsk(null)} onConfirm={trash}>
+          <p>Đề “{detail.name}” sẽ rời khỏi thư viện nhưng KHÔNG bị xoá: bạn khôi phục được ở nút “Thùng rác đề”.</p>
+        </ConfirmDialog>
+      )}
     </>
   );
 }

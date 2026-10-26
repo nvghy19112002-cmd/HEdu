@@ -1279,3 +1279,21 @@ a { color: var(--accent); }
 .cm-hl-b { color: var(--ed-b); }
 .cm-hl-m { color: var(--ed-m); }
 .cm-hl-c { color: var(--ed-c); font-style: italic; }
+
+/* Thư viện đề thi: thư mục ảo, bộ lọc, bảng điều khiển (E4) */
+.xl-main { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .xl-main { grid-template-columns: minmax(0, 1fr); } }
+.xl-side { display: flex; flex-direction: column; gap: 12px; padding: 8px 4px; font-size: 13px; }
+.xl-facet { display: flex; flex-direction: column; gap: 2px; }
+.xl-facet > b { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; padding: 0 8px 2px; }
+.xl-ftree { list-style: none; margin: 0; padding: 0; }
+.xl-fnode { width: 100%; text-align: left; border: 0; background: none; font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 6px; cursor: pointer; color: inherit; }
+.xl-fnode:hover { background: var(--hover); }
+.xl-fnode.on { background: var(--pri-soft); color: var(--pri-ink); font-weight: 600; }
+.xl-info > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.xl-form { display: grid; gap: 8px; padding-top: 8px; }
+.xl-form label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--ink-3); }
+.xl-form .xl-in { height: 32px; }
+.xl-panel { width: min(640px, calc(100vw - 32px)); }
+.xl-panel-body { display: flex; flex-direction: column; gap: 10px; overflow: auto; max-height: 60vh; }
+.xl-static { cursor: default; }
