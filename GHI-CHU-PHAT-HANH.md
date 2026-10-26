@@ -1,3 +1,7 @@
+## Có gì mới trong beta.34 (kênh beta): Ngân hàng đề thi LaTeX
+Gồm PR #112–#125 (so với beta.33). Chưa nghiệm thu máy Windows thật (checklist: claude/nghiem-thu-de-thi.md).
+**Ngân hàng đề thi LaTeX (beta):** mục mới **Đề thi**: nhập đề `.tex`/thư mục dự án vào thư viện của HEdu (tệp gốc không bị sửa), thư mục ảo và bộ lọc, **Biên tập** nhiều tệp (CodeMirror, lưu an toàn, cảnh báo khi tệp đổi ngoài HEdu, bản nháp), **biên dịch PDF** bằng TeX Live (pdfLaTeX/XeLaTeX/LuaLaTeX, huỷ được cả cây tiến trình, giữ PDF tốt gần nhất), **xem PDF** ngay trong app, **PDF Đề và PDF Lời giải riêng** từ cùng một nguồn khi nhận diện chắc `ex_test`, chép câu **nguyên văn** từ Ngân hàng kèm nguồn UID, **Thùng rác đề** và **sao lưu/khôi phục thư viện đề** riêng, chốt đề, xuất/nhập gói. Không đổi cấu trúc dữ liệu ngân hàng câu hỏi (schema 3), ID, UID. Màn Tạo đề (trộn mã) vẫn tạm tắt. Sao lưu của Ngân hàng câu hỏi KHÔNG bao gồm thư viện đề: dùng "Sao lưu thư viện" trong mục Đề thi.
+
 ## Có gì mới trong beta.33 (kênh beta): dò trùng nhẹ hơn
 Gồm PR #110 (so với beta.32). Không đổi schema (3), ID6, UID, LaTeX gốc, Rust; kết quả dò trùng không đổi (đã đối chiếu giống hệt bản cũ trên 602 câu).
 - Chỉ mục dò trùng dùng ít bộ nhớ hơn khoảng 55% (đo 10.000 câu mô phỏng: 10,6 → 4,8 KB/câu), thời gian dựng tương đương. Lợi cho ngân hàng lớn và khi nhập nhiều câu.
