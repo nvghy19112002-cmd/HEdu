@@ -34,6 +34,68 @@ Bàn giao (hai AI không đọc chung lịch sử; mọi bàn giao nằm trong t
 - GPT → Claude: vấn đề · hành vi cần có · phương án đề xuất · rủi ro · tiêu chí nghiệm thu · điều chủ dự án đã duyệt.
 - Claude → GPT/chủ dự án: báo cáo theo mẫu mục 6 + link PR + điểm cần GPT rà hoặc chủ dự án quyết.
 
+## 2a. Phát triển song song nhiều phiên Claude Code (bắt buộc khi chạy từ hai phiên trở lên)
+
+**Mục đích:** Cho phép nhiều phiên làm các tính năng khác nhau mà không ghi đè mã, nhầm dữ liệu thử, mất test hoặc phát hành thay đổi chưa duyệt. Mục này bổ sung mục 2, 4, 5; không làm giảm yêu cầu bảo vệ dữ liệu và quyền quyết định của chủ dự án.
+
+### A. Ba vai trò, một nguồn sự thật
+| Phiên | Trách nhiệm | Không được làm |
+|---|---|---|
+| **Phát triển A** (ví dụ Gán ID) | Code/test/commit/PR trong phạm vi được giao; báo tệp chung bị ảnh hưởng | Sửa nhánh/thư mục B hoặc C; tự gộp/phát hành |
+| **Phát triển B** (ví dụ Thư viện đề thi) | Tương tự A nhưng ở tính năng độc lập | Sửa nhánh/thư mục A hoặc C; tự gộp/phát hành |
+| **Tích hợp C** | Đọc PR/HEAD/CI; rà xung đột; điều phối sửa; kiểm thử bản tích hợp; chuẩn bị phát hành | Tự viết lại phần A/B đang làm; tự gộp hoặc phát hành |
+
+- **Mỗi tính năng có đúng một phiên chịu trách nhiệm sửa chính.** C không đụng trực tiếp nhánh đang được A/B sửa. Khi cần sửa, yêu cầu phiên sở hữu cập nhật PR; C chỉ làm bản vá trên nhánh riêng của C, hoặc khi được chủ dự án ủy quyền rõ.
+- **GitHub (main, PR, HEAD SHA, CI) là trạng thái chung kiểm chứng được.** Lịch sử chat và báo cáo cũ chỉ là bàn giao. Mỗi phiên bắt đầu/tiếp tục phải đọc AGENTS.md mới nhất và kiểm tra trạng thái Git/PR liên quan.
+- C có thể rà PR sớm; nhưng chỉ tích hợp mã đã giao nộp, có kiểm tra và được chủ dự án cho phép.
+
+### B. Cách ly nơi làm việc, nhánh và dữ liệu
+- **Một phiên = một thư mục Git riêng + một nhánh do phiên đó sở hữu.** Dùng clone hoặc git worktree; không cho hai phiên cùng sửa một working tree. Ví dụ: A ở D:\HEdu-id; B ở D:\HEdu; C có thể dùng D:\HEdu-integrate nếu chưa ai sử dụng. Đây là ví dụ, không phải yêu cầu xóa/chuyển các thư mục hiện có.
+- Nhánh mới theo mẫu claude/<tinh-nang>-<cong-viec> từ origin/main mới nhất; không sửa trực tiếp main. Không checkout, commit, rebase, reset, clean, force-push hoặc xóa nhánh/thư mục của phiên khác. Không dùng git reset --hard hoặc git clean -fd làm cách giải quyết xung đột; có thay đổi chưa commit thì phải giữ nguyên và báo người sở hữu.
+- Trước khi sửa: kiểm tra git status --short, nhánh hiện tại, HEAD SHA, origin/main, PR đang mở. Nhánh không đúng, thư mục có thay đổi không rõ chủ, hoặc cùng phạm vi với phiên khác ⇒ dừng phần xung đột và báo.
+- **Tauri thử nghiệm:** không dùng identifier thật vn.hedu.app. Hai phiên thử đồng thời phải dùng định danh thử riêng (ví dụ vn.hedu.app.thu.id và vn.hedu.app.thu.exam) cùng dữ liệu thử riêng, qua cấu hình tạm; không sửa identifier thật trong tauri.conf.json.
+- **Cổng 1420 chỉ do một tiến trình dùng mỗi lúc.** Ưu tiên chạy Tauri tuần tự. Nếu thử song song, phải đặt cổng Vite khác nhau và devUrl Tauri tương ứng bằng cấu hình thử riêng; kiểm cổng trước khi chạy, không tắt tiến trình của phiên khác. Nếu không chạy được Tauri, ghi rõ CHƯA THỬ thay vì tuyên bố đã kiểm.
+
+### C. Phân phạm vi, đặc biệt tệp chung
+- Trước khi code, ghi trong phiếu/PR: chủ sở hữu A/B; tính năng; nhánh/thư mục; danh sách module/tệp dự kiến; tệp chung; phụ thuộc PR khác. Nếu trùng phạm vi nghiệp vụ, chủ dự án quyết định bên sở hữu.
+- Tệp thường bị nhiều nhánh thay đổi: AGENTS.md, scripts/test.mjs, package.json, package-lock.json, src-tauri/Cargo.toml, src-tauri/Cargo.lock, src/lib/store.ts, src/App.tsx, src/styles.css, cấu hình Tauri, workflow và module dữ liệu/ID chung. Không coi đó là tài sản riêng vĩnh viễn của một tính năng.
+- Hai phiên có thể sửa cùng tên tệp **trên nhánh riêng** nhưng phải báo trước, sửa tối thiểu và không ghi đè tác dụng của nhau. Khi cùng sửa một hành vi/hợp đồng module thì tạm dừng phần giao nhau, thống nhất giao diện hoặc để phiên được phân công làm trước.
+- Khi gộp, giữ **tất cả** test mới và cũ (ví dụ cả idtex.test và examcompile.test trong scripts/test.mjs). Không giải quyết xung đột bằng cách chọn nguyên một phía ours/theirs mà không rà từng thay đổi.
+- Không thay đổi schema, ID6, UID, LaTeX/TikZ gốc, dữ liệu thật hay cơ chế bảo mật để né xung đột; vẫn áp dụng mục 4.
+
+### D. Nhánh PR, cập nhật main và gộp tuần tự
+- Mặc định mỗi PR độc lập nhắm main. Chỉ khi cần **PR xếp chồng trong cùng một tính năng** (ví dụ Gán ID #117 → #119 → #120) mới cho phép tạm dùng nhánh PR trước làm base; bắt buộc nêu sơ đồ phụ thuộc và thứ tự gộp. Không xếp chồng giữa A và B nếu chưa được chủ dự án duyệt.
+- Khi main nhận thay đổi mới, phiên sở hữu tự cập nhật origin/main vào nhánh của mình, giải quyết xung đột, chạy lại test; C rà bản tích hợp. **CI xanh trên commit cũ không chứng minh bản tích hợp mới an toàn.**
+- Với PR xếp chồng: sau khi gộp PR trước, đổi base PR sau sang main; rà lại diff để không chứa phần đã gộp, kiểm mergeability và CI trên HEAD mới. Lặp lại theo thứ tự; không gộp nhảy cóc.
+- Xung đột phải có ghi chú: tệp, hai thay đổi cần giữ, phương án, test hồi quy. Chưa giữ đồng thời được an toàn ⇒ dừng, giao lại cho phiên sở hữu. Không tự force-push/auto-merge.
+- **Chỉ squash-merge khi chủ dự án duyệt rõ đúng PR và HEAD SHA.** Nếu HEAD đổi sau lúc duyệt, cần xác nhận lại. C không được tự cho phép mình gộp vì đang ở vai trò tích hợp.
+
+### E. Cổng tích hợp, kiểm thử và phát hành
+1. **Từng PR:** phạm vi rõ; diff sạch; npm test và npm run build; cargo test --lib --locked khi liên quan Rust; CI giao-dien + windows xanh trên HEAD thực tế. Kiểm thử chưa thực hiện phải khai báo.
+2. **Mã đã tích hợp:** sau mỗi PR gộp, cập nhật main, rà lại test của các tính năng khác, chạy kiểm thử tổng thể. Nếu chạm SQLite, dữ liệu hoặc cây/ID, kiểm thêm dữ liệu cũ, migration (nếu có), sao lưu/khôi phục và lỗi ghi.
+3. **Windows thật:** thử đúng đường dùng giao diện, LaTeX/TikZ/TeX Live, dùng identifier thử nghiệm riêng. CI xanh không thay việc chủ dự án nghiệm thu app thật.
+4. **Phát hành:** C chuẩn bị danh sách PR/SHA, ghi chú, phương án quay lại; chỉ chạy release.yml sau khi chủ dự án phê chuẩn **phát hành riêng**. Giữ cổng Microsoft Defender cho hedu.exe và bộ cài; quét thất bại/có cảnh báo ⇒ không công khai, không ngoại lệ. Duyệt gộp không phải duyệt phát hành.
+5. Thiếu CI, thiếu test Windows, xung đột dữ liệu, lỗi Defender hoặc nhánh chưa xác định ⇒ báo **CHƯA SẴN SÀNG** và mục còn thiếu; không dùng kiểm thử giả lập thay kết quả thật.
+
+### F. Mẫu bàn giao bắt buộc giữa các phiên
+Khi mở PR, đổi HEAD/base, bàn giao cho C hoặc kết thúc phiên, ghi trên PR/phiếu chung (không dựa vào chat riêng):
+
+~~~text
+Phiên: A | B | C
+Tính năng và phạm vi:
+Thư mục; nhánh; base SHA; HEAD SHA; PR số/link:
+Tệp đã sửa; tệp chung/xung đột dự kiến:
+Phụ thuộc PR; thứ tự tích hợp:
+Test, build, Rust, CI đã chạy; bằng chứng:
+Tauri thật đã thử? identifier, cổng, dữ liệu thử; giới hạn:
+Có ảnh hưởng schema, ID6, dữ liệu thật, LaTeX/TikZ không:
+Việc còn lại; người chịu trách nhiệm; điều cần chủ dự án duyệt:
+~~~
+
+C đối chiếu lại trực tiếp trên GitHub. Nếu thực trạng khác lời bàn giao, ưu tiên HEAD, diff, CI mới nhất và báo chỗ lệch.
+
+**Nhớ ngắn:** *Phát triển song song; thư mục và nhánh tách biệt; phối hợp tệp chung; gộp tuần tự có phép duyệt; kiểm thử lại trên mã tích hợp; phát hành riêng có cổng bảo mật.*
+
 ## 3. Quy mô việc (giữ ngắn để tiết kiệm token)
 - **S** (sửa nhỏ, giao diện, chữ): chủ dự án nói thẳng với Claude, không cần Issue. Claude làm trên nhánh, chạy test, mở PR, báo 2–3 dòng (vẫn theo quy trình PR ở mục 5).
 - **M** (tính năng vừa): phiếu ngắn (hiện trạng, kết quả mong muốn, tiêu chí nghiệm thu). Issue hoặc chat đều được.
