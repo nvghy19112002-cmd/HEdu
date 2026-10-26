@@ -9,7 +9,7 @@ export type ExamStatus = 'draft' | 'needs_review' | 'finalized';
 export interface ExamSummary {
   id: string; name: string; kind: ExamKind; mainFile: string | null; status: ExamStatus;
   createdAt: string; updatedAt: string; fileCount: number; totalBytes: number;
-  warningCount: number; skippedCount: number; metadata: ExamMeta;
+  warningCount: number; skippedCount: number; metadata: ExamMeta; folder?: string | null;
 }
 export interface ExamSkip { rel: string; reason: string }
 export interface ExamScan {
@@ -102,4 +102,44 @@ export async function chooseTexFile(): Promise<string | null> {
 export async function chooseProjectFolder(): Promise<string | null> {
   const d = dlg();
   return d?.open ? one(await d.open({ title: 'Chọn thư mục dự án đề', multiple: false, directory: true })) : null;
+}
+
+// ---------- E4: thông tin, sao chép, Thùng rác đề, gói, sao lưu ----------
+export interface ExamMetaIn { name: string; folder: string | null; grade: number | null; schoolYear: string | null; examType: string | null; tags: string[]; status: ExamStatus }
+export interface TrashItem { id: string; name: string; deletedAt: string; fileCount: number; totalBytes: number }
+export interface BackupInfo { name: string; createdAt: string; projects: [string, string][]; files: number; bytes: number; warnings: string[] }
+export interface BackupCheck { ok: boolean; missing: string[]; changed: string[] }
+
+export const examMetaUpdate = (id: string, meta: ExamMetaIn) => invoke<ExamSummary>('exam_meta_update', { id, meta });
+export const examDuplicate = (id: string, name: string | null) => invoke<ExamSummary>('exam_duplicate', { id, name });
+export const examTrash = (id: string) => invoke<void>('exam_trash', { id });
+export const examTrashList = () => invoke<TrashItem[]>('exam_trash_list');
+export const examTrashRestore = (id: string) => invoke<ExamSummary>('exam_trash_restore', { id });
+export const examTrashPurge = (id: string) => invoke<void>('exam_trash_purge', { id });
+export const examBundleExport = (id: string, parent: string, name: string) => invoke<string>('exam_bundle_export', { id, parent, name });
+export const examBundleImport = (path: string) => invoke<ExamSummary>('exam_bundle_import', { path });
+export const examBackupCreate = () => invoke<BackupInfo>('exam_backup_create');
+export const examBackupList = () => invoke<BackupInfo[]>('exam_backup_list');
+export const examBackupVerify = (name: string) => invoke<BackupCheck>('exam_backup_verify', { name });
+export const examBackupRestore = (name: string, ids: string[]) => invoke<ExamSummary[]>('exam_backup_restore', { name, ids });
+export const examReveal = (id: string) => invoke<void>('exam_reveal', { id });
+
+/** Tên thư mục gói an toàn từ tên đề (Windows). */
+export function bundleFolderName(name: string): string {
+  const s = name.replace(/[\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '');
+  const base = s.slice(0, 80) || 'de-thi';
+  return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base.split('.')[0]) ? `${base}-de` : base;
+}
+
+/** Tên bản sao lưu dạng "20261026T055146123" → "26/10/2026 05:51:46" (giờ UTC như đã ghi). */
+export function backupLabel(name: string): string {
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/.exec(name);
+  return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}:${m[6]}` : name;
+}
+
+/** Nhãn nhập tay "a, b ,c" → ["a","b","c"] (bỏ rỗng, bỏ trùng, tối đa 10). */
+export function parseTags(s: string): string[] {
+  const out: string[] = [];
+  for (const t of s.split(',').map((x) => x.trim()).filter(Boolean)) if (!out.includes(t)) out.push(t);
+  return out.slice(0, 10);
 }

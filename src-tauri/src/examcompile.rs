@@ -67,6 +67,9 @@ pub struct GoodInfo {
     pub bytes: u64,
     pub at: String,
     pub pdf_path: String,
+    /// dấu vân của danh sách tệp nguồn lúc biên dịch (để biết PDF còn khớp nguồn hiện tại hay không)
+    #[serde(default)]
+    pub files_hash: String,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -348,6 +351,20 @@ pub fn sync_workspace(project_dir: &Path, work: &Path, state_file: &Path) -> Res
     Ok(SyncOut { files, blocked, bytes: total })
 }
 
+/// Dấu vân chỉ của danh sách tệp (không kèm engine/phiên bản TeX).
+pub fn files_hash(files: &[(String, String)]) -> String {
+    let mut sorted: Vec<&(String, String)> = files.iter().collect();
+    sorted.sort();
+    let mut h = Sha256::new();
+    for (r, s) in sorted {
+        h.update(r.as_bytes());
+        h.update([0]);
+        h.update(s.as_bytes());
+        h.update([b'\n']);
+    }
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
 pub fn fingerprint(files: &[(String, String)], engine: &str, runs: u32, mode: &str, tex_version: &str) -> String {
     let mut sorted: Vec<&(String, String)> = files.iter().collect();
     sorted.sort();
@@ -364,7 +381,7 @@ pub fn fingerprint(files: &[(String, String)], engine: &str, runs: u32, mode: &s
 
 // ---------- bản tốt gần nhất ----------
 
-fn build_dir(root: &Path, id: &str) -> PathBuf {
+pub(crate) fn build_dir(root: &Path, id: &str) -> PathBuf {
     root.join("cache").join("exam-build").join(id)
 }
 
@@ -384,7 +401,7 @@ pub fn last_good(root: &Path, id: &str) -> Option<GoodInfo> {
     (pdf.metadata().map(|m| m.len() == info.bytes).unwrap_or(false)).then_some(GoodInfo { pdf_path: build_dir(root, id).join("out").join("last-good.pdf").to_string_lossy().into_owned(), ..info })
 }
 
-fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Result<GoodInfo, String> {
+pub(crate) fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Result<GoodInfo, String> {
     let out = build_dir(root, id).join("out");
     fs::create_dir_all(&out).map_err(|e| format!("Không tạo được thư mục PDF: {e}"))?;
     for d in [build_dir(root, id), out.clone()] {
@@ -411,7 +428,7 @@ fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Result<GoodInf
 
 static RUNNING: Mutex<Option<HashMap<String, Arc<AtomicBool>>>> = Mutex::new(None);
 
-struct RunGuard(String);
+pub(crate) struct RunGuard(String);
 impl Drop for RunGuard {
     fn drop(&mut self) {
         if let Some(m) = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
@@ -421,7 +438,7 @@ impl Drop for RunGuard {
 }
 
 /// Đăng ký một lần biên dịch cho dự án; đang chạy rồi thì từ chối (không chạy song song trên cùng thư mục build).
-fn register(id: &str) -> Result<(RunGuard, Arc<AtomicBool>), String> {
+pub(crate) fn register(id: &str) -> Result<(RunGuard, Arc<AtomicBool>), String> {
     let mut g = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
     let m = g.get_or_insert_with(HashMap::new);
     if m.contains_key(id) {
@@ -430,6 +447,11 @@ fn register(id: &str) -> Result<(RunGuard, Arc<AtomicBool>), String> {
     let flag = Arc::new(AtomicBool::new(false));
     m.insert(id.to_string(), flag.clone());
     Ok((RunGuard(id.to_string()), flag))
+}
+
+/// Dự án có đang được biên dịch không.
+pub(crate) fn is_running(id: &str) -> bool {
+    RUNNING.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|m| m.contains_key(id)).unwrap_or(false)
 }
 
 /// Yêu cầu dừng lần biên dịch đang chạy của dự án. true nếu có lần đang chạy.
@@ -597,7 +619,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     out.raw_log = tail(&last_log, RAW_LOG_KEEP);
 
     if out.status == "ok" {
-        let info = GoodInfo { fingerprint: out.fingerprint.clone(), engine: engine.to_string(), mode: MODE_RAW.to_string(), tex_version: ver, pages: out.pages, bytes: 0, at: examlib::iso_now(), pdf_path: String::new() };
+        let info = GoodInfo { fingerprint: out.fingerprint.clone(), engine: engine.to_string(), mode: MODE_RAW.to_string(), tex_version: ver, pages: out.pages, bytes: 0, at: examlib::iso_now(), pdf_path: String::new(), files_hash: files_hash(&sync.files) };
         let rec = publish(root, id, &pdf, &info)?;
         out.published = true;
         out.last_good = Some(rec);
@@ -1005,7 +1027,7 @@ mod tests {
 noi dung
 %%EOF
 ";
-        let info = GoodInfo { fingerprint: "f".into(), engine: "pdflatex".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: Some(1), bytes: 0, at: "x".into(), pdf_path: String::new() };
+        let info = GoodInfo { fingerprint: "f".into(), engine: "pdflatex".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: Some(1), bytes: 0, at: "x".into(), pdf_path: String::new(), files_hash: String::new() };
         let src = d.join("tam.pdf");
         fs::write(&src, pdf).unwrap();
         publish(&root, id, &src, &info).unwrap();
@@ -1038,7 +1060,7 @@ A
 ";
         let src = d.join("tam.pdf");
         fs::write(&src, pdf).unwrap();
-        let info = GoodInfo { fingerprint: "f".into(), engine: "e".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: None, bytes: 0, at: "x".into(), pdf_path: String::new() };
+        let info = GoodInfo { fingerprint: "f".into(), engine: "e".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: None, bytes: 0, at: "x".into(), pdf_path: String::new(), files_hash: String::new() };
         publish(&root, id, &src, &info).unwrap();
         // thư mục out bị thay bằng junction sang nơi khác chứa PDF "bí mật" cùng kích thước
         let out = build_dir(&root, id).join("out");
