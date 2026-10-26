@@ -5,7 +5,7 @@ const t = (name: string, f: () => void) => { f(); console.log('  ✓ ' + name); 
 const d = (o: Partial<Diag>): Diag => ({ severity: 'error', file: 'main.tex', line: 1, inProject: true, message: 'x', context: [], ...o });
 const out = (o: Partial<CompileOut>): CompileOut => ({
   status: 'ok', message: 'ok', published: true, cached: false, invalidPdf: false, keptPrevious: false, pages: 1, runs: 1, ms: 1, engine: 'pdflatex', texVersion: '', fingerprint: '', mode: 'nguyen-van',
-  diagnostics: [], errorCount: 0, warningCount: 0, warnings: [], rawLog: '', lastGood: null, treeGuard: true, ...o,
+  diagnostics: [], errorCount: 0, warningCount: 0, warnings: [], rawLog: '', lastGood: null, treeGuard: true, profileChanges: [], ...o,
 });
 
 t('nhóm theo tệp, lỗi trước cảnh báo, theo dòng; mục không rõ tệp ở cuối', () => {

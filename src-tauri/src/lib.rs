@@ -8,6 +8,8 @@ mod examadmin;
 mod examcompile;
 mod examfiles;
 mod examlib;
+mod examprofile;
+mod examsources;
 mod importfs;
 mod jsonmig;
 mod proc;
@@ -456,6 +458,8 @@ pub fn run() {
             examcompile::exam_compile,
             examcompile::exam_compile_cancel,
             examcompile::exam_compile_last,
+            examcompile::exam_compile_all,
+            examcompile::exam_profiles,
             examcompile::exam_pdf_read,
             examcompile::exam_pdf_export,
             examcompile::exam_pdf_open_external,
@@ -480,7 +484,11 @@ pub fn run() {
             examadmin::exam_backup_list,
             examadmin::exam_backup_verify,
             examadmin::exam_backup_restore,
-            examadmin::exam_reveal
+            examadmin::exam_reveal,
+            examsources::exam_sources_add,
+            examsources::exam_sources_status,
+            examsources::exam_sources_forget,
+            examsources::exam_lib_create_files
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");

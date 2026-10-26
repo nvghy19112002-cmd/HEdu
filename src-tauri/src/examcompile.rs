@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::examprofile;
 use crate::examlib::{self, bad_rel, is_link, open_inside, projects_dir, read_manifest, sha256_file, sha256_reader, valid_id, MAX_DEPTH, MAX_FILES, MAX_TOTAL_BYTES};
 use crate::proc::run_job;
 use crate::support;
@@ -40,6 +41,8 @@ pub struct CompileOpts {
     pub tex_bin: Option<String>,
     /// true = bỏ qua bộ đệm, luôn dịch lại
     pub force: Option<bool>,
+    /// nguyen-van (mặc định) | de | loigiai — hai chế độ sau cần nhận diện chắc ex_test (xem examprofile.rs)
+    pub mode: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -102,6 +105,27 @@ pub struct CompileOut {
     pub last_good: Option<GoodInfo>,
     /// tiến trình có nằm trong Job Object (dừng được cả cây)
     pub tree_guard: bool,
+    /// những dòng bị đổi trong BẢN DẪN XUẤT (chỉ trong thư mục build) khi biên dịch chế độ Đề/Lời giải
+    pub profile_changes: Vec<examprofile::Change>,
+}
+
+/// Chế độ biên dịch hợp lệ.
+pub fn mode_of(m: &Option<String>) -> Result<&'static str, String> {
+    match m.as_deref() {
+        None | Some("") | Some("nguyen-van") => Ok(MODE_RAW),
+        Some("de") => Ok(examprofile::MODE_DE),
+        Some("loigiai") => Ok(examprofile::MODE_LOIGIAI),
+        Some(o) => Err(format!("Chế độ '{o}' không hợp lệ.")),
+    }
+}
+
+/// Tên tệp PDF/sổ của bản tốt gần nhất theo chế độ (nguyên văn giữ tên cũ để tương thích).
+fn good_names(mode: &str) -> (&'static str, &'static str) {
+    match mode {
+        "de" => ("last-good-de.json", "last-good-de.pdf"),
+        "loigiai" => ("last-good-loigiai.json", "last-good-loigiai.pdf"),
+        _ => ("last-good.json", "last-good.pdf"),
+    }
 }
 
 // ---------- engine, chạy một lượt ----------
@@ -389,19 +413,34 @@ fn out_rel(id: &str, name: &str) -> String {
     format!("cache/exam-build/{id}/out/{name}")
 }
 
-/// Bản tốt gần nhất. Mọi tệp đọc qua `open_inside` từ thư mục dữ liệu: không đi theo liên kết/junction ở bất kỳ cấp nào.
+/// Bản tốt gần nhất (chế độ nguyên văn).
 pub fn last_good(root: &Path, id: &str) -> Option<GoodInfo> {
+    last_good_mode(root, id, MODE_RAW)
+}
+
+/// Bản tốt gần nhất theo chế độ. Mọi tệp đọc qua `open_inside` từ thư mục dữ liệu: không đi theo liên kết/junction ở bất kỳ cấp nào.
+pub fn last_good_mode(root: &Path, id: &str, mode: &str) -> Option<GoodInfo> {
     if !valid_id(id) {
         return None;
     }
+    let (jn, pn) = good_names(mode);
     let mut b = Vec::new();
-    open_inside(root, &out_rel(id, "last-good.json")).ok()?.take(1024 * 1024).read_to_end(&mut b).ok()?;
+    open_inside(root, &out_rel(id, jn)).ok()?.take(1024 * 1024).read_to_end(&mut b).ok()?;
     let info: GoodInfo = serde_json::from_slice(&b).ok()?;
-    let pdf = open_inside(root, &out_rel(id, "last-good.pdf")).ok()?;
-    (pdf.metadata().map(|m| m.len() == info.bytes).unwrap_or(false)).then_some(GoodInfo { pdf_path: build_dir(root, id).join("out").join("last-good.pdf").to_string_lossy().into_owned(), ..info })
+    if info.mode != mode && !(mode == MODE_RAW && info.mode.is_empty()) {
+        return None; // sổ không đúng chế độ của tệp (bị đổi tay) ⇒ không tin
+    }
+    let pdf = open_inside(root, &out_rel(id, pn)).ok()?;
+    (pdf.metadata().map(|m| m.len() == info.bytes).unwrap_or(false)).then_some(GoodInfo { pdf_path: build_dir(root, id).join("out").join(pn).to_string_lossy().into_owned(), ..info })
+}
+
+/// Mọi bản tốt hiện có (mỗi chế độ một bản).
+pub fn all_good(root: &Path, id: &str) -> Vec<GoodInfo> {
+    [MODE_RAW, examprofile::MODE_DE, examprofile::MODE_LOIGIAI].iter().filter_map(|m| last_good_mode(root, id, m)).collect()
 }
 
 pub(crate) fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Result<GoodInfo, String> {
+    let (jn, pn) = good_names(&info.mode);
     let out = build_dir(root, id).join("out");
     fs::create_dir_all(&out).map_err(|e| format!("Không tạo được thư mục PDF: {e}"))?;
     for d in [build_dir(root, id), out.clone()] {
@@ -409,14 +448,14 @@ pub(crate) fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Res
             return Err("Thư mục PDF là liên kết/junction nên không xuất bản (an toàn).".into());
         }
     }
-    let dest = out.join("last-good.pdf");
+    let dest = out.join(pn);
     let mut src = fs::File::open(pdf).map_err(|e| format!("Không mở được PDF vừa dịch: {e}"))?;
     copy_atomic(&mut src, &dest).map_err(|e| format!("Không xuất bản được PDF: {e}"))?;
     let bytes = fs::metadata(&dest).map(|m| m.len()).map_err(|e| e.to_string())?;
     let rec = GoodInfo { bytes, pdf_path: dest.to_string_lossy().into_owned(), ..info.clone() };
-    let part = out.join("last-good.json.part");
+    let part = out.join(format!("{jn}.part"));
     fs::write(&part, serde_json::to_vec(&rec).map_err(|e| e.to_string())?).map_err(|e| format!("Không ghi được thông tin PDF: {e}"))?;
-    let j = out.join("last-good.json");
+    let j = out.join(jn);
     if fs::rename(&part, &j).is_err() {
         let _ = fs::remove_file(&j);
         fs::rename(&part, &j).map_err(|e| format!("Không ghi được thông tin PDF: {e}"))?;
@@ -497,6 +536,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     let engine = engine_of(&opts.engine.clone().or_else(|| Some(m.compile.engine.clone())))?;
     let limit = Duration::from_secs(opts.timeout_secs.unwrap_or(m.compile.timeout_secs as u64).clamp(1, 900));
     let runs = opts.runs.unwrap_or(m.compile.runs).clamp(1, 3);
+    let mode = mode_of(&opts.mode)?;
     let (_guard, cancel_flag) = register(id)?;
     let started = Instant::now();
 
@@ -506,7 +546,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     if !sync.files.iter().any(|(r, _)| *r == main) {
         return Err(format!("Tệp chính '{main}' không còn trong dự án."));
     }
-    let mut out = CompileOut { engine: engine.to_string(), mode: MODE_RAW.to_string(), ..Default::default() };
+    let mut out = CompileOut { engine: engine.to_string(), mode: mode.to_string(), ..Default::default() };
     if !sync.blocked.is_empty() {
         out.warnings.push(format!("{} mục KHÔNG được đưa vào biên dịch vì là liên kết/junction hoặc tên không an toàn: {}.", sync.blocked.len(), sync.blocked.iter().take(8).cloned().collect::<Vec<_>>().join(", ")));
     }
@@ -523,6 +563,33 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     let work_fwd = work.to_string_lossy().replace('\\', "/");
     let work_fwd = work_fwd.trim_start_matches("//?/").to_string();
 
+    // chế độ Đề/Lời giải: bản dẫn xuất CHỈ trong thư mục build; không chắc cách bật/tắt lời giải ⇒ KHÔNG biên dịch (không xuất PDF mang nhãn Đề)
+    let mut mode_sig = mode.to_string();
+    if mode != MODE_RAW {
+        let rels: Vec<String> = sync.files.iter().map(|(r, _)| r.clone()).collect();
+        let projdir = projects_dir(&lib).join(id);
+        match examprofile::derive(&projdir, &rels, mode) {
+            Ok(d) => {
+                examprofile::write_derived(&work, &d)?;
+                let mut h = Sha256::new();
+                for (r, t) in &d.files {
+                    h.update(r.as_bytes());
+                    h.update([0]);
+                    h.update(t.as_bytes());
+                }
+                mode_sig = format!("{mode}|{}", h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>());
+                out.profile_changes = d.changes;
+            }
+            Err(reason) => {
+                out.status = "no-profile".into();
+                out.message = format!("Chưa biên dịch được bản {}: {reason} Bạn vẫn có thể biên dịch 'nguyên văn' (PDF chưa xác định đề hay lời giải).", if mode == examprofile::MODE_DE { "ĐỀ" } else { "LỜI GIẢI" });
+                out.last_good = last_good_mode(root, id, mode);
+                out.kept_previous = out.last_good.is_some();
+                return Ok(out);
+            }
+        }
+    }
+
     // phiên bản TeX (vào dấu vân bộ đệm; cũng là phép thử có TeX Live hay chưa)
     let tex_bin = opts.tex_bin.clone();
     let mut vc = engine_command(&tex_bin, engine, support_dir, &work);
@@ -533,16 +600,16 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             let t = tikz::missing_tool(engine);
             out.status = "no-tex".into();
             out.message = t.message;
-            out.last_good = last_good(root, id);
+            out.last_good = last_good_mode(root, id, mode);
             return Ok(out);
         }
         Err(e) => return Err(format!("Không chạy được {engine}: {e}")),
     };
     out.tex_version = ver.clone();
-    out.fingerprint = fingerprint(&sync.files, engine, runs, MODE_RAW, &ver);
+    out.fingerprint = fingerprint(&sync.files, engine, runs, &mode_sig, &ver);
 
     if !opts.force.unwrap_or(false) {
-        if let Some(g) = last_good(root, id) {
+        if let Some(g) = last_good_mode(root, id, mode) {
             if g.fingerprint == out.fingerprint {
                 out.status = "ok".into();
                 out.message = "Không có gì thay đổi từ lần biên dịch thành công trước nên dùng lại PDF đó.".into();
@@ -577,7 +644,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 out.status = "no-tex".into();
                 out.message = tikz::missing_tool(engine).message;
-                out.last_good = last_good(root, id);
+                out.last_good = last_good_mode(root, id, mode);
                 return Ok(out);
             }
             Err(e) => return Err(format!("Không chạy được {engine}: {e}")),
@@ -619,13 +686,13 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     out.raw_log = tail(&last_log, RAW_LOG_KEEP);
 
     if out.status == "ok" {
-        let info = GoodInfo { fingerprint: out.fingerprint.clone(), engine: engine.to_string(), mode: MODE_RAW.to_string(), tex_version: ver, pages: out.pages, bytes: 0, at: examlib::iso_now(), pdf_path: String::new(), files_hash: files_hash(&sync.files) };
+        let info = GoodInfo { fingerprint: out.fingerprint.clone(), engine: engine.to_string(), mode: mode.to_string(), tex_version: ver, pages: out.pages, bytes: 0, at: examlib::iso_now(), pdf_path: String::new(), files_hash: files_hash(&sync.files) };
         let rec = publish(root, id, &pdf, &info)?;
         out.published = true;
         out.last_good = Some(rec);
         out.message = format!("Biên dịch thành công{}.", out.pages.map(|p| format!(" ({p} trang)")).unwrap_or_default());
     } else {
-        out.last_good = last_good(root, id);
+        out.last_good = last_good_mode(root, id, mode);
         out.kept_previous = out.last_good.is_some();
         out.message = match out.status.as_str() {
             "timeout" => format!("Biên dịch quá {} giây nên đã dừng (cả cây tiến trình TeX).", limit.as_secs()),
@@ -647,15 +714,20 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
 /// Giới hạn PDF nạp vào giao diện (đọc cả tệp qua IPC).
 pub const MAX_PDF_VIEW: u64 = 200 * 1024 * 1024;
 
-fn good_pdf_handle(root: &Path, id: &str) -> Result<(fs::File, GoodInfo), String> {
-    let g = last_good(root, id).ok_or("Chưa có PDF biên dịch thành công cho dự án này.")?;
-    let h = open_inside(root, &out_rel(id, "last-good.pdf"))?;
+fn good_pdf_handle(root: &Path, id: &str, mode: &str) -> Result<(fs::File, GoodInfo), String> {
+    let g = last_good_mode(root, id, mode).ok_or("Chưa có PDF biên dịch thành công cho dự án này.")?;
+    let h = open_inside(root, &out_rel(id, good_names(mode).1))?;
     Ok((h, g))
 }
 
-/// Nội dung PDF tốt gần nhất (chỉ đúng tệp `last-good.pdf` của dự án, qua `open_inside`).
+/// Nội dung PDF tốt gần nhất (chế độ nguyên văn).
 pub fn read_good(root: &Path, id: &str) -> Result<Vec<u8>, String> {
-    let (h, g) = good_pdf_handle(root, id)?;
+    read_good_mode(root, id, MODE_RAW)
+}
+
+/// Nội dung PDF tốt gần nhất của một chế độ (chỉ đúng tệp của dự án, qua `open_inside`).
+pub fn read_good_mode(root: &Path, id: &str, mode: &str) -> Result<Vec<u8>, String> {
+    let (h, g) = good_pdf_handle(root, id, mode)?;
     if g.bytes > MAX_PDF_VIEW {
         return Err(format!("PDF quá lớn để xem trong HEdu ({} MB). Hãy mở bằng ứng dụng khác.", g.bytes / 1024 / 1024));
     }
@@ -667,8 +739,12 @@ pub fn read_good(root: &Path, id: &str) -> Result<Vec<u8>, String> {
     Ok(b)
 }
 
-/// Lưu một BẢN SAO PDF tốt gần nhất ra nơi người dùng chọn (đuôi .pdf; ghi tạm rồi đổi tên; không đụng bản trong thư viện).
 pub fn export_good(root: &Path, id: &str, dest: &Path) -> Result<(), String> {
+    export_good_mode(root, id, dest, MODE_RAW)
+}
+
+/// Lưu một BẢN SAO PDF tốt gần nhất ra nơi người dùng chọn (đuôi .pdf; ghi tạm rồi đổi tên; không đụng bản trong thư viện).
+pub fn export_good_mode(root: &Path, id: &str, dest: &Path, mode: &str) -> Result<(), String> {
     if !dest.to_string_lossy().to_lowercase().ends_with(".pdf") {
         return Err("Tên tệp lưu phải có đuôi .pdf.".into());
     }
@@ -680,13 +756,13 @@ pub fn export_good(root: &Path, id: &str, dest: &Path) -> Result<(), String> {
             return Err("Không lưu vào thư mục build của HEdu. Hãy chọn nơi khác.".into());
         }
     }
-    let (mut h, _) = good_pdf_handle(root, id)?;
+    let (mut h, _) = good_pdf_handle(root, id, mode)?;
     copy_atomic(&mut h, dest).map_err(|e| format!("Không lưu được PDF: {e}"))
 }
 
 /// Mở PDF bằng ứng dụng mặc định của Windows (explorer.exe + đường dẫn; không qua shell).
-pub fn open_external(root: &Path, id: &str) -> Result<(), String> {
-    let (_h, g) = good_pdf_handle(root, id)?;
+pub fn open_external(root: &Path, id: &str, mode: &str) -> Result<(), String> {
+    let (_h, g) = good_pdf_handle(root, id, mode)?;
     #[cfg(windows)]
     {
         let mut c = Command::new("explorer.exe");
@@ -721,24 +797,45 @@ pub fn exam_compile_cancel(id: String) -> bool {
 }
 
 #[tauri::command]
-pub fn exam_compile_last(app: AppHandle, id: String) -> Result<Option<GoodInfo>, String> {
-    Ok(last_good(&root_of(&app)?, &id))
+pub fn exam_compile_last(app: AppHandle, id: String, mode: Option<String>) -> Result<Option<GoodInfo>, String> {
+    Ok(last_good_mode(&root_of(&app)?, &id, mode_of(&mode)?))
 }
 
+/// Mọi bản PDF tốt hiện có của dự án (nguyên văn / đề / lời giải).
 #[tauri::command]
-pub fn exam_pdf_read(app: AppHandle, id: String) -> Result<tauri::ipc::Response, String> {
-    read_good(&root_of(&app)?, &id).map(tauri::ipc::Response::new)
+pub fn exam_compile_all(app: AppHandle, id: String) -> Result<Vec<GoodInfo>, String> {
+    Ok(all_good(&root_of(&app)?, &id))
 }
 
+/// Dự án có biên dịch riêng được "Đề" và "Lời giải" không (và lý do nếu không).
 #[tauri::command]
-pub async fn exam_pdf_export(app: AppHandle, id: String, dest: String) -> Result<(), String> {
+pub async fn exam_profiles(app: AppHandle, id: String) -> Result<examprofile::ProfileInfo, String> {
     let root = root_of(&app)?;
-    tauri::async_runtime::spawn_blocking(move || export_good(&root, &id, Path::new(&dest))).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        let lib = root.join("exam-library");
+        let m = read_manifest(&lib, &id)?;
+        let dir = projects_dir(&lib).join(&id);
+        let rels: Vec<String> = { let (mut r, mut b) = (vec![], vec![]); collect(&dir, "", 1, &mut r, &mut b); r };
+        let _ = &m;
+        Ok(examprofile::detect(&dir, &rels))
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn exam_pdf_open_external(app: AppHandle, id: String) -> Result<(), String> {
-    open_external(&root_of(&app)?, &id)
+pub fn exam_pdf_read(app: AppHandle, id: String, mode: Option<String>) -> Result<tauri::ipc::Response, String> {
+    read_good_mode(&root_of(&app)?, &id, mode_of(&mode)?).map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+pub async fn exam_pdf_export(app: AppHandle, id: String, dest: String, mode: Option<String>) -> Result<(), String> {
+    let root = root_of(&app)?;
+    let mode = mode_of(&mode)?;
+    tauri::async_runtime::spawn_blocking(move || export_good_mode(&root, &id, Path::new(&dest), mode)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn exam_pdf_open_external(app: AppHandle, id: String, mode: Option<String>) -> Result<(), String> {
+    open_external(&root_of(&app)?, &id, mode_of(&mode)?)
 }
 
 #[cfg(test)]
@@ -1079,6 +1176,75 @@ B
         let _ = fs::remove_dir_all(&d);
     }
 
+    #[cfg(windows)]
+    fn env_main(tag: &str, main: &str) -> Env {
+        let e = env(tag);
+        let p = proj(&e);
+        fs::write(p.join("main.tex"), main).unwrap();
+        // sổ phải khớp tệp vừa đổi (thư viện coi đây là trạng thái đã biết)
+        let lib = e.root.join("exam-library");
+        let mut m = examlib::read_manifest(&lib, &e.id).unwrap();
+        m.files[0].sha256 = examlib::sha256_file(&p.join("main.tex")).unwrap();
+        m.files[0].bytes = main.len() as u64;
+        fs::write(p.join(".hedu/manifest.json"), serde_json::to_vec(&m).unwrap()).unwrap();
+        e
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn che_do_de_va_loi_giai_bien_dich_rieng_tu_cung_mot_nguon_khong_sua_nguon() {
+        let src = "\\documentclass{article}\n\\usepackage[loigiai]{ex_test}\nNOI-DUNG\n";
+        let e = env_main("modes", src);
+        let de = compile(&e.root, &e.id, &CompileOpts { mode: Some("de".into()), ..e.opts.clone() }, &None).unwrap();
+        assert_eq!((de.status.as_str(), de.mode.as_str(), de.published), ("ok", "de", true), "{de:?}");
+        assert_eq!(de.profile_changes.len(), 1);
+        let de_pdf = String::from_utf8_lossy(&fs::read(&de.last_good.as_ref().unwrap().pdf_path).unwrap()).into_owned();
+        assert!(de_pdf.contains("[dethi]{ex_test}") && !de_pdf.contains("loigiai"), "bản Đề phải là bản dẫn xuất: {de_pdf}");
+        // chưa có bản lời giải/nguyên văn: các chế độ không lẫn vào nhau
+        assert!(last_good_mode(&e.root, &e.id, "loigiai").is_none() && last_good(&e.root, &e.id).is_none());
+        let lg = compile(&e.root, &e.id, &CompileOpts { mode: Some("loigiai".into()), ..e.opts.clone() }, &None).unwrap();
+        assert_eq!((lg.status.as_str(), lg.mode.as_str()), ("ok", "loigiai"));
+        let lg_pdf = String::from_utf8_lossy(&fs::read(&lg.last_good.as_ref().unwrap().pdf_path).unwrap()).into_owned();
+        assert!(lg_pdf.contains("[loigiai]{ex_test}") && !lg_pdf.contains("dethi"));
+        let raw = compile(&e.root, &e.id, &e.opts, &None).unwrap();
+        assert_eq!((raw.status.as_str(), raw.mode.as_str()), ("ok", MODE_RAW));
+        assert_eq!(fs::read_to_string(proj(&e).join("main.tex")).unwrap(), src, "tệp nguồn không bao giờ bị sửa");
+        assert_eq!(all_good(&e.root, &e.id).len(), 3);
+        // mỗi chế độ có bộ đệm riêng; sau chế độ khác vẫn dùng lại đúng
+        let again = compile(&e.root, &e.id, &CompileOpts { mode: Some("de".into()), ..e.opts.clone() }, &None).unwrap();
+        assert!(again.cached, "{again:?}");
+        assert!(String::from_utf8_lossy(&fs::read(&again.last_good.unwrap().pdf_path).unwrap()).contains("[dethi]"));
+        let _ = fs::remove_dir_all(&e.d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn khong_nhan_dien_chac_thi_khong_xuat_pdf_de_nhung_van_co_nguyen_van() {
+        let e = env_main("noprof", "\\documentclass{article}\nKHONG CO ex_test\n");
+        for m in ["de", "loigiai"] {
+            let r = compile(&e.root, &e.id, &CompileOpts { mode: Some(m.into()), ..e.opts.clone() }, &None).unwrap();
+            assert_eq!(r.status, "no-profile", "{m}: {r:?}");
+            assert!(!r.published && r.last_good.is_none() && r.message.contains("nguyên văn"));
+            assert!(last_good_mode(&e.root, &e.id, m).is_none(), "không có PDF mang nhãn {m}");
+        }
+        let raw = compile(&e.root, &e.id, &e.opts, &None).unwrap();
+        assert_eq!(raw.status, "ok");
+        assert!(compile(&e.root, &e.id, &CompileOpts { mode: Some("xyz".into()), ..e.opts.clone() }, &None).is_err());
+        let _ = fs::remove_dir_all(&e.d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn che_do_loi_giai_tat_anloigiai_trong_ban_dan_xuat() {
+        let e = env_main("modes2", "\\usepackage[loigiai]{ex_test}\n\\anloigiai\nA\n");
+        let lg = compile(&e.root, &e.id, &CompileOpts { mode: Some("loigiai".into()), ..e.opts.clone() }, &None).unwrap();
+        let pdf = String::from_utf8_lossy(&fs::read(&lg.last_good.as_ref().unwrap().pdf_path).unwrap()).into_owned();
+        assert!(pdf.contains("%\\anloigiai"), "bản Lời giải phải tắt anloigiai trong bản dẫn xuất: {pdf}");
+        assert!(lg.profile_changes.iter().any(|c| c.after.starts_with("%\\anloigiai")));
+        assert_eq!(fs::read_to_string(proj(&e).join("main.tex")).unwrap(), "\\usepackage[loigiai]{ex_test}\n\\anloigiai\nA\n");
+        let _ = fs::remove_dir_all(&e.d);
+    }
+
     #[test]
     fn texinputs_uu_tien_du_an_roi_goi_di_kem() {
         let t = texinputs_for_project(&Some(PathBuf::from("C:\\a\\b"))).unwrap();
@@ -1100,7 +1266,7 @@ B
         let sup = support::prepare(&root);
         assert!(sup.is_some());
         for eng in ["pdflatex", "xelatex", "lualatex"] {
-            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true) };
+            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None };
             let r = compile(&root, &s.id, &o, &sup).unwrap();
             eprintln!("{eng}: {} · {} · {:?} trang · {} ms · {}", r.status, r.message, r.pages, r.ms, r.tex_version);
             assert_eq!(r.status, "ok", "{eng}: {:?} {}", r.diagnostics, r.raw_log);
@@ -1118,6 +1284,31 @@ B
         assert_eq!((e.file.as_deref(), e.line, e.in_project), (Some("chapters/c1.tex"), Some(2), true));
         assert!(r.kept_previous && !r.published);
         assert_eq!(fs::read(&r.last_good.unwrap().pdf_path).unwrap(), fs::read(&good.pdf_path).unwrap());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// Bằng chứng với ex_test THẬT: bản Đề KHÔNG chạy nội dung `\loigiai`, bản Lời giải thì có (dấu `\typeout` chỉ chạy khi lời giải được in).
+    #[test]
+    #[ignore]
+    fn tex_live_that_che_do_de_khong_lo_loi_giai() {
+        let Ok(bin) = std::env::var("HEDU_TEX_BIN") else { return };
+        let d = tmp("real-modes");
+        let root = d.join("root");
+        let main = "\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amsmath,amssymb}\n\\usepackage[loigiai]{ex_test}\n\\begin{document}\n\\begin{ex}\nCho $1+1=?$\n\\choice{$1$}{\\True $2$}{$3$}{$4$}\n\\loigiai{\\typeout{HEDU-SOL-MARK} Vì $1+1=2$.}\n\\end{ex}\n\\end{document}\n";
+        put(&d, "src/main.tex", main.as_bytes());
+        let s = examlib::import(&root.join("exam-library"), &d.join("src"), "Thật", None).unwrap();
+        let sup = support::prepare(&root);
+        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()) };
+        let de = compile(&root, &s.id, &o("de"), &sup).unwrap();
+        let lg = compile(&root, &s.id, &o("loigiai"), &sup).unwrap();
+        eprintln!("de: {} {:?} | loigiai: {} {:?}", de.status, de.pages, lg.status, lg.pages);
+        assert_eq!((de.status.as_str(), lg.status.as_str()), ("ok", "ok"), "{:?} {:?} {}", de.diagnostics, lg.diagnostics, de.raw_log);
+        assert!(!de.raw_log.contains("HEDU-SOL-MARK"), "bản ĐỀ không được chạy nội dung lời giải");
+        assert!(lg.raw_log.contains("HEDU-SOL-MARK"), "bản LỜI GIẢI phải chạy nội dung lời giải");
+        assert_eq!(fs::read_to_string(root.join("exam-library/projects").join(&s.id).join("main.tex")).unwrap(), main, "nguồn không đổi");
+        let a = fs::read(&de.last_good.unwrap().pdf_path).unwrap();
+        let b = fs::read(&lg.last_good.unwrap().pdf_path).unwrap();
+        assert!(a.starts_with(b"%PDF") && b.starts_with(b"%PDF") && a != b);
         let _ = fs::remove_dir_all(&d);
     }
 }

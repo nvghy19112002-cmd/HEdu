@@ -1303,3 +1303,13 @@ a { color: var(--accent); }
 .xl-panel { width: min(640px, calc(100vw - 32px)); }
 .xl-panel-body { display: flex; flex-direction: column; gap: 10px; overflow: auto; max-height: 60vh; }
 .xl-static { cursor: default; }
+
+/* E5: chọn câu từ ngân hàng, so sánh nguồn */
+.bp-body { gap: 8px; }
+.bp-row { flex-direction: row; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.bp-row label { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.bp-snip { flex: 1 1 260px; min-width: 0; text-align: left; border: 0; background: none; font: inherit; font-size: 12px; color: var(--ink-2); cursor: pointer; overflow-wrap: anywhere; }
+.sp-diff { width: 100%; }
+.sp-del { color: var(--danger-ink); background: var(--danger-soft); display: block; }
+.sp-add { color: var(--ok-ink); background: var(--ok-bg); display: block; }
+.sp-same { display: block; }
