@@ -2,7 +2,7 @@
 
 ## Git (26/10/2026)
 - `main` đã có: E0 (#112), E1 (#113), E2a (#116) trên nền `v0.1.0-beta.33` (beta.33 là bản phát hành gần nhất; chưa có bản phát hành nào chứa Ngân hàng đề thi).
-- Đang chờ chủ dự án duyệt gộp, **xếp chồng** (gộp theo thứ tự): #118 E2b xem PDF → #121 E3 biên tập → #122 E4 thư viện hoàn chỉnh → #124 E5 Đề/Lời giải + nguồn UID → PR E6 (kiểm thử hiệu năng + tài liệu). Sau mỗi lần gộp, đổi nền PR kế tiếp về `main`.
+- Đang chờ chủ dự án duyệt gộp, **xếp chồng** (gộp theo thứ tự): #118 E2b xem PDF → #121 E3 biên tập → #122 E4 thư viện hoàn chỉnh → #124 E5 Đề/Lời giải + nguồn UID → #125 E6 (kiểm thử hiệu năng + tài liệu). Sau mỗi lần gộp, đổi nền PR kế tiếp về `main`.
 - Chưa phát hành. Phát hành chỉ khi chủ dự án ra lệnh riêng (`release.yml`, nhập `tag`); chủ dự án nói sẽ ra lệnh ở cuộc trò chuyện khác sau khi kênh khác cập nhật GitHub.
 
 ## Đọc gì trước

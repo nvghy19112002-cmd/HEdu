@@ -19,7 +19,7 @@ Dữ liệu thử nằm ở `%APPDATA%\vn.hedu.app.thu` (ban đầu trống). D�
 | #121 | E3 Biên tập: cây tệp, nhiều tab, lưu an toàn |
 | #122 | E4 Thư mục ảo, Thùng rác đề, sao lưu/khôi phục, chốt đề, gói |
 | #124 | E5 Đề/Lời giải, nguồn UID, lưu từ Ngân hàng |
-| (PR này) | E6 Kiểm thử hiệu năng + tài liệu nghiệm thu |
+| #125 | E6 Kiểm thử hiệu năng + tài liệu nghiệm thu |
 
 Các PR xếp chồng: mỗi PR dựa trên PR trước. Gộp #118 → #121 → #122 → #124 → E6; sau mỗi lần gộp, đổi nền PR kế tiếp về `main`.
 
