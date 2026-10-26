@@ -1,5 +1,6 @@
 // Khôi phục sang VỊ TRÍ MỚI: giữ uid + LaTeX gốc (kể cả %[ID] cũ), đặt "Cần sửa", chỉ gỡ Thùng rác sau khi Ngân hàng ghi xong;
 // lỗi ghi / "đóng app giữa chừng" không làm mất câu và không tạo bản sao thứ hai khi khôi phục lại.
+import { sameExceptId } from './idtex';
 import { _reset, loadDecisions, trashAddMany, trashCount, trashList, type Backend } from './dupdecisions';
 import { buildDefault, indexOf } from './taxonomy';
 import { getTaxonomy } from './curriculum';
@@ -48,7 +49,7 @@ console.log('Xem trước: vị trí cũ/mới, ID cũ/mới, cảnh báo lệch
   ok(relocatePreview(q, newLoc, 'VD', ix).levelChanged && !relocatePreview(q, newLoc, q.level, ix).levelChanged, 'chỉ báo đổi mức độ khi giáo viên chủ động đổi');
   ok(/Lớp|lớp/.test(placeLabel(ix, newLoc)), 'nhãn vị trí hiện tên lớp/chương/bài/dạng');
   const r = relocated(q, newLoc);
-  ok(r.latex === q.latex && r.uid === q.uid && r.level === q.level && r.review === 'needs_fix' && r.tags.join() === 'ôn' && r.formId === newLoc.formId && r.grade === 12, 'bản khôi phục: giữ uid/LaTeX/mức độ/nhãn, đổi vị trí, về "Cần sửa"');
+  ok(r.latex === q.latex.replace('0D0H2-2', p.newCode) && sameExceptId(r.latex, q.latex) && r.uid === q.uid && r.level === q.level && r.review === 'needs_fix' && r.tags.join() === 'ôn' && r.formId === newLoc.formId && r.grade === 12, 'bản khôi phục: đổi vị trí và ID trong LaTeX (chỉ chữ mã), giữ uid/nội dung/mức độ/nhãn, về "Cần sửa"');
 }
 
 console.log('Khôi phục sang vị trí mới (ghi Ngân hàng trước, gỡ Thùng rác sau)');
@@ -58,7 +59,7 @@ console.log('Khôi phục sang vị trí mới (ghi Ngân hàng trước, gỡ T
   ok(bad.blocked[0]?.reason === 'bad-location' && trashList().some((t) => t.q.uid === q.uid), 'không chọn vị trí ⇒ vẫn bị giữ lại, không tự gán chỗ khác');
   const r = await restoreFromTrash([q.uid], { relocate: { loc: newLoc } });
   const inBank = getState().questions.find((x) => x.uid === q.uid);
-  ok(r.ok && r.restored.length === 1 && inBank?.latex === q.latex && inBank?.review === 'needs_fix' && inBank?.formId === newLoc.formId && inBank?.level === 'TH', 'thành công: câu về Ngân hàng đúng vị trí mới, LaTeX nguyên vẹn (kể cả %[0D0H2-2]), "Cần sửa", mức độ giữ nguyên');
+  ok(r.ok && r.restored.length === 1 && inBank?.latex === relocated(q, newLoc).latex && inBank?.latex.includes(`%[${relocatePreview(q, newLoc, q.level, ix).newCode}]`) && inBank?.review === 'needs_fix' && inBank?.formId === newLoc.formId && inBank?.level === 'TH', 'thành công: câu về Ngân hàng đúng vị trí mới, ID cũ %[0D0H2-2] trong LaTeX được thay bằng ID mới, phần còn lại nguyên vẹn, "Cần sửa", mức độ giữ nguyên');
   ok(!trashOnDisk().includes(q.uid) && bankOnDisk().some((x) => x.uid === q.uid), 'đĩa: có trong ngân hàng, đã gỡ khỏi Thùng rác');
 }
 {

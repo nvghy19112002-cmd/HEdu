@@ -4,10 +4,11 @@
 //   V vận dụng, C vận dụng cao.
 // Mã của từng cấp lấy từ cây mục lục, nên đổi cây là đổi mã — không phải sửa code.
 import { getTaxonomy, place } from './curriculum';
+import { LEVEL_LETTER, resolveCode } from './idsync';
 import { gradeCode } from './taxonomy';
 import type { Level, Location } from './types';
 
-export const LEVEL_LETTER: Record<Level, string> = { NB: 'N', TH: 'H', VD: 'V', VDC: 'C' };
+export { LEVEL_LETTER };
 
 export function gradeDigit(grade: number): string {
   return gradeCode(grade);
@@ -21,26 +22,13 @@ export function questionCode(loc: Location, level: Level): string {
   return `${p.grade.code}${p.branch.code}${p.chapter.code}${LEVEL_LETTER[level]}${lesson}-${form}`;
 }
 
-const CODE_RE = /^([0-9A-Za-z])([0-9A-Za-z])([0-9A-Za-z])([NHVC])([0-9A-Za-z])(?:-([0-9A-Za-z]))?$/;
-
-/** Đọc ngược ID (vd. 2D1H1-1) ra vị trí và mức độ; dùng khi nhập câu đã có sẵn ID. */
+/**
+ * Đọc ngược ID (vd. 2D1H1-1) ra vị trí và mức độ theo cây hiện hành — CHẶT: mã thiếu Dạng, Dạng không còn,
+ * mã trùng trong cây ⇒ null (trước đây mã thiếu Dạng bị hiểu lặng lẽ là Dạng đầu tiên của Bài). Lý do cụ thể: idsync.resolveCode.
+ */
 export function parseCode(code: string): { loc: Location; level: Level } | null {
-  const m = CODE_RE.exec(code.trim());
-  if (!m) return null;
-  const [, gc, bc, cc, lv, lc, fc] = m;
-  const up = (s: string) => s.toUpperCase();
-  const level = (Object.keys(LEVEL_LETTER) as Level[]).find((k) => LEVEL_LETTER[k] === up(lv));
-  if (!level) return null;
-  const g = getTaxonomy().grades.find((x) => up(x.code) === up(gc));
-  const b = g?.branches.find((x) => up(x.code) === up(bc));
-  const ch = b?.chapters.find((x) => up(x.code) === up(cc));
-  const ls = ch?.lessons.find((x) => up(x.code) === up(lc));
-  if (!g || !ch || !ls) return null;
-  // Có ghi mã Dạng mà Dạng đó không có trong cây ⇒ ID không hợp lệ (trước đây lặng lẽ xếp vào Dạng đầu tiên của Bài).
-  // Không ghi mã Dạng (vd 2D1H1) ⇒ vẫn hiểu là Dạng đầu tiên như cũ.
-  const fm = fc ? ls.forms.find((f) => up(f.code) === up(fc)) : ls.forms[0];
-  if (fc && !fm) return null;
-  return { loc: { grade: g.grade, chapterId: ch.id, lessonId: ls.id, formId: fm?.id ?? '' }, level };
+  const r = resolveCode(code, getTaxonomy());
+  return r.ok ? { loc: r.loc, level: r.level } : null;
 }
 
 export function seqLabel(seq: number): string {

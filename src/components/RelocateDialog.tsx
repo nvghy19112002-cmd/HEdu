@@ -101,10 +101,10 @@ export function RelocateDialog({ q, busy, onConfirm, onCancel }: { q: Question; 
           <div><dt>Vị trí cũ</dt><dd>{pv.oldPlace}</dd></div>
           <div><dt>Vị trí mới</dt><dd>{pv.newPlace}</dd></div>
           <div><dt>ID cũ → ID mới</dt><dd><span className="code-tag">{pv.oldCode}</span> → <span className="code-tag is-new">{pv.newCode}</span>{pv.levelChanged ? ' (mức độ đổi theo lựa chọn của thầy/cô)' : ''}</dd></div>
-          {pv.latexCode && <div><dt>Mã trong LaTeX</dt><dd><span className="code-tag">{pv.latexCode}</span> (giữ nguyên, HEdu không sửa)</dd></div>}
+          <div><dt>ID trong LaTeX</dt><dd>{pv.idBlocked ? <>{pv.latexCode ? <span className="code-tag">{pv.latexCode}</span> : null} (giữ nguyên — không ghi được ID mới)</> : pv.mismatch ? <><span className="code-tag">{pv.latexCode}</span> → <span className="code-tag is-new">{pv.newCode}</span> (HEdu thay đúng mã này)</> : pv.latexCode ? <span className="code-tag">{pv.latexCode}</span> : <>chưa có → thêm <span className="code-tag is-new">{pv.newCode}</span></>}</dd></div>
         </dl>
       ) : <p className="sys-hint">Chọn đủ 5 cấp để xem trước ID mới.</p>}
-      {pv?.mismatch && <p className="aid-warn" role="alert">Cảnh báo: mã trong LaTeX gốc (<b>{pv.latexCode}</b>) khác ID mới (<b>{pv.newCode}</b>). HEdu không tự sửa LaTeX; nếu muốn khớp, thầy/cô sửa sau trong Ngân hàng.</p>}
+      {pv?.idBlocked && <p className="aid-warn" role="alert">Cảnh báo: LaTeX của câu có nhiều ID mâu thuẫn (hoặc không phải khối ex) nên HEdu KHÔNG ghi được ID mới; câu vẫn khôi phục ở vị trí mới với trạng thái “Cần sửa”, thầy/cô sửa ID sau trong Ngân hàng.</p>}
     </ConfirmDialog>
   );
 }
