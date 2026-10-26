@@ -31,7 +31,10 @@ Thư mục build riêng cho mỗi dự án, chỉ chép tệp đã đổi. `Comm
 | E2a | Biên dịch toàn tài liệu, Job Object, nhật ký, xuất bản PDF | huỷ cây tiến trình thật, quá giờ, PDF lỗi không xuất bản |
 | E2b | Trình xem PDF (pdf.js) | CSP trên bản thử |
 | E3 | Trình soạn nhiều tab, lưu atomic, xung đột | giữ byte khi không sửa |
-| E4 | Thư viện hoàn chỉnh, thùng rác, sao lưu/khôi phục riêng | khôi phục + so hash |
+| E4 | Thư viện hoàn chỉnh, thùng rác, sao lưu/khôi phục riêng; **đóng nốt TOCTOU còn lại** (xem dưới) | khôi phục + so hash; test hoán đổi thư mục cha thành junction đúng lúc mở tệp |
 | E5 | Tích hợp Tạo đề, câu nguyên văn + UID, hai chế độ đề/lời giải | nhận diện chế độ, không lộ lời giải |
 | E6 | Kiểm thử Windows tổng thể, hiệu năng, tài liệu | checklist nghiệm thu |
 Mỗi PR: test, build, CI Windows xanh, chạy thử bằng `vn.hedu.app.thu`, chủ dự án duyệt riêng. Phát hành chỉ sau E6 và lệnh riêng.
+
+## 5. Rủi ro còn lại ghi nhận cho E4 (từ review PR #113)
+E1 đã chặn đi theo liên kết/junction bằng `open_inside` (kiểm từng thành phần, mở không-đi-theo, kiểm tay cầm, so đường dẫn thật với thư mục gốc) và mở lại mỗi tệp lúc chép. Còn một khoảng cực hẹp: giữa lần kiểm đường dẫn cuối và lúc mở tệp, thư mục cha vẫn có thể bị hoán thành junction. Cách chặn trọn vẹn là mở theo tay cầm thư mục gốc của Windows (NtCreateFile/`openat` tương đối, không đi theo điểm phân tích) và kiểm đường dẫn cuối của tay cầm đã mở (GetFinalPathNameByHandle). Làm ở E4 (sao lưu/khôi phục cần đúng cơ chế này), kèm test hoán đổi thư mục cha đúng lúc mở.

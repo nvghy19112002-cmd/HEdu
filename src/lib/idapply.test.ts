@@ -1,7 +1,7 @@
 import { applyAutoId, AUTO_ID_MAX, buildRows, canApply, defaultChoice, rowAction, getAutoIdUndo, levelTarget, planApply, summarize, undoAutoId, undoConflicts, withAutoId, type RowChoice } from './idapply';
 import { IdSuggester } from './idsuggest';
 import { idStatus, strictCode } from './idsync';
-import { sameExceptId, writeHeadId } from './idtex';
+import { readHead, sameExceptId, writeHeadId } from './idtex';
 import { addMany, getState, initStore, updateMany } from './store';
 import { buildDefault, indexOf } from './taxonomy';
 import { checkLocation } from './taxpath';
@@ -153,6 +153,27 @@ const rf = await pending;
 disk.fail = false; disk.gate = null;
 ok(!rf.ok && fresh().get(p1)!.tags.join() === t1, 'lô ghi lỗi ⇒ câu của lô trở về như cũ');
 ok(fresh().get(p2)!.tags.includes('giu-lai'), 'sửa đổi khác xảy ra lúc chờ ghi được GIỮ, không bị hoàn lại nhầm');
+
+console.log('Sửa ID lệch/lỗi bằng cách chọn lại CHÍNH Dạng đang lưu');
+{
+  const base = rows[0]; // vị trí B, đúng đường dẫn
+  const meta = (strictCode(base.snap, base.snap.level, tax) as { code: string }).code;
+  const at = (head: string) => ({ ...base, snap: { ...base.snap, latex: base.snap.latex.replace('\\begin{ex}', `\\begin{ex}${head}`) } });
+  const other = meta.slice(0, 3) + (meta[3] === 'N' ? 'V' : 'N') + meta.slice(4); // cùng Dạng, khác mức độ ⇒ ID hợp lệ nhưng lệch
+  const lech = at(`%[${other}]`), loi = at(`%[${meta.split('-')[0]}]`), hai = at(`%[${meta}]%[${other}]`), khop = at(`%[${meta}]`);
+  const keepC: RowChoice = { apply: false, formId: null, changeLevel: false };
+  const sameC: RowChoice = { apply: true, formId: base.snap.formId, changeLevel: false };
+  ok(rowAction(lech, keepC, ix, tax).kind === 'loi' && rowAction(loi, keepC, ix, tax).kind === 'loi', 'mặc định (không chọn gì): ID lệch / ID thiếu Dạng chỉ báo "cần xử lý", không tự sửa');
+  const a1 = rowAction(lech, sameC, ix, tax), a2 = rowAction(loi, sameC, ix, tax);
+  ok(a1.kind === 'thay' && a1.old === other && a1.code === meta && a1.loc === null && canApply(a1), 'ID lệch + chọn lại chính Dạng đang lưu ⇒ đổi ID cũ → ID theo vị trí, không đổi vị trí');
+  ok(a2.kind === 'thay' && a2.code === meta && sameExceptId(a2.latex, loi.snap.latex) && readHead(a2.latex).ids.length === 1, 'ID thiếu Dạng + chọn lại chính Dạng ⇒ sửa thành ID đầy đủ, chỉ đổi vùng ID');
+  ok(rowAction(hai, sameC, ix, tax).kind === 'loi', 'LaTeX có hai ID mâu thuẫn ⇒ vẫn không tự xoá (mở câu để sửa)');
+  ok(rowAction(khop, sameC, ix, tax).kind === 'giu', 'ID hợp lệ đã khớp ⇒ giữ nguyên, không ghi đè dù chọn lại chính Dạng');
+  const cur = all(); cur.set(base.uid, { ...cur.get(base.uid)!, ...lech.snap });
+  const pl = planApply([lech], new Map([[base.uid, sameC]]), cur, ix, false, tax);
+  const e = pl.edits.get(base.uid);
+  ok(!!e && e.loc === null && e.level === null && readHead(e.latex).ids[0].code === meta, 'kế hoạch ghi: chỉ thay ID trong LaTeX, vị trí/mức độ giữ nguyên');
+}
 
 if (fail) process.exit(1);
 console.log('idapply: đạt hết.');

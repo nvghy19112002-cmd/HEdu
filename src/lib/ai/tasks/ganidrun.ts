@@ -3,6 +3,7 @@
 import type { Question, Taxonomy } from '../../types';
 import type { SuggestConfidence, SuggestOption, Suggestion } from '../../idsuggest';
 import { aiRun, AiError } from '../client';
+import { latexForAi } from '../../idtex';
 import { buildGanIdRequest, compactInfo, GAN_ID_BATCH, parseGanIdReply, type GanIdExample, type GanIdResult } from './ganid';
 
 export interface GanIdJob { key: string; latex: string; grade: number; examples: GanIdExample[] }
@@ -54,7 +55,7 @@ export async function runGanId(tax: Taxonomy, jobs: readonly GanIdJob[], model: 
       b.forEach((j, i) => {
         const r = { ...p.results.get(ids[i])!, id: j.key };
         // phần hình/đề bị lược khi gửi ⇒ có thể mất dữ kiện quyết định: không để kết quả trông như chắc chắn
-        if (compactInfo(j.latex).cut) { r.cut = true; r.confidence = 'low'; }
+        if (compactInfo(latexForAi(j.latex)).cut) { r.cut = true; r.confidence = 'low'; }
         run.results.set(j.key, r);
       });
       run.problems.push(...p.problems.map((x) => x.replace(/câu q\d+/g, `một câu trong lượt ${run.done + 1}`)));

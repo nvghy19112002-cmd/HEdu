@@ -184,6 +184,8 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
                     const lt = levelTarget(r);
                     const ids = idStatus(r.snap, tax);
                     const fromLatex = ids.latex.raw;
+                    /** vị trí đang lưu đúng nhưng ID trong LaTeX lệch/lỗi ⇒ cho chọn lại chính vị trí này để sửa ID (có tick xác nhận) */
+                    const fixable = r.currentOk && (ids.state === 'lech' || ids.state === 'id-loi');
                     return (
                       <tr key={r.uid} className={c.apply ? 'is-on' : ''}>
                         <td><input type="checkbox" checked={c.apply} disabled={busy || !canApply(a)} aria-label={`Áp dụng cho câu ${seqLabel(r.seq)}`} onChange={(e) => setChoice(r.uid, { apply: e.target.checked })} /></td>
@@ -197,9 +199,10 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
                           {a.kind === 'thay' && a.old && <small className="aid-note">Đổi {a.old} → {a.code}</small>}
                         </td>
                         <td>
-                          {opts.length ? (
+                          {opts.length || fixable ? (
                             <select className="aid-sel" value={c.formId ?? ''} disabled={busy} onChange={(e) => setChoice(r.uid, { formId: e.target.value || null })} aria-label={`Vị trí cho câu ${seqLabel(r.seq)}`}>
-                              {opts.map((o, i) => <option key={o.formId} value={o.formId}>{i === 0 && s.best ? '★ ' : ''}{pathLabel(ix, o.formId)}{o.formId === r.snap.formId ? ' (đang ở đây)' : ''}</option>)}
+                              {opts.map((o, i) => <option key={o.formId} value={o.formId}>{i === 0 && s.best ? '★ ' : ''}{pathLabel(ix, o.formId)}{o.formId === r.snap.formId ? (fixable ? ' (đang ở đây — sửa ID theo vị trí này)' : ' (đang ở đây)') : ''}</option>)}
+                              {fixable && !opts.some((o) => o.formId === r.snap.formId) && <option value={r.snap.formId}>Vị trí hiện tại — sửa ID theo vị trí này ({pathLabel(ix, r.snap.formId)})</option>}
                               <option value="">— Giữ nguyên vị trí hiện tại —</option>
                             </select>
                           ) : <span className="sys-hint">{pathLabel(ix, r.snap.formId)}</span>}

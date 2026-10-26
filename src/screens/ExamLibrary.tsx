@@ -2,6 +2,8 @@
 // Chỉ ĐỌC/SAO CHÉP: tệp gốc ngoài không bị đụng. Biên dịch PDF, soạn nhiều tab, sao lưu: E2–E4 (claude/thiet-ke-de-thi.md).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { canJump, ENGINES, examCompile, examCompileCancel, examCompileLast, groupDiagnostics, RAW_MODE_NOTE, summarize, type CompileOut, type Engine, type GoodInfo } from '../lib/examcompile';
+import { getSettings } from '../lib/tikz';
 import { isDesktop } from '../lib/platform';
 import {
   chooseProjectFolder, chooseTexFile, DEFAULT_EXAM_FILTER, dateText, describeScan, examCreate, examGet, examImport, examList, examScan, examVerify, filterExams,
@@ -25,6 +27,11 @@ export function ExamLibraryScreen() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ExamManifest | null>(null);
   const [check, setCheck] = useState<ExamVerify | null>(null);
+  const [engine, setEngine] = useState<Engine>('pdflatex');
+  const [runs, setRuns] = useState(2);
+  const [compiling, setCompiling] = useState(false);
+  const [result, setResult] = useState<CompileOut | null>(null);
+  const [good, setGood] = useState<GoodInfo | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -37,7 +44,8 @@ export function ExamLibraryScreen() {
   useEffect(() => { if (desktop) void reload(); }, [desktop, reload]);
 
   useEffect(() => {
-    setDetail(null); setCheck(null);
+    setDetail(null); setCheck(null); setResult(null); setGood(null);
+    if (activeId) examCompileLast(activeId).then(setGood).catch(() => undefined);
     if (!activeId) return;
     let live = true;
     examGet(activeId).then((m) => { if (live) setDetail(m); }).catch((e) => { if (live) toast(`Không đọc được dự án: ${msg(e)}`); });
@@ -76,6 +84,18 @@ export function ExamLibraryScreen() {
     await reload();
     setActiveId(s.id);
   });
+
+  const compile = async () => {
+    if (!activeId || compiling) return;
+    setCompiling(true); setResult(null);
+    try {
+      const st = getSettings();
+      const r = await examCompile(activeId, { engine, runs, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120) });
+      setResult(r);
+      if (r.lastGood) setGood(r.lastGood);
+    } catch (e) { toast(msg(e)); } finally { setCompiling(false); }
+  };
+  const stop = () => { if (activeId) void examCompileCancel(activeId).catch(() => undefined); };
 
   const verify = () => run(async () => { if (activeId) setCheck(await examVerify(activeId)); });
 
@@ -179,6 +199,40 @@ export function ExamLibraryScreen() {
                       <ul className="xl-lines">{detail.files.slice(0, 300).map((f) => <li key={f.rel}><code>{f.rel}</code> <span className="xl-meta">{formatBytes(f.bytes)}</span></li>)}{detail.files.length > 300 && <li>…và {detail.files.length - 300} tệp khác.</li>}</ul>
                     </details>
                     <button type="button" className="btn btn-sm" disabled={busy} onClick={verify}>Kiểm tra tệp trong thư viện</button>
+                    <section className="xl-compile" aria-label="Biên dịch PDF">
+                      <h3>Biên dịch PDF</h3>
+                      {!detail.mainFile ? <p className="xl-meta">Dự án chưa có tệp chính nên chưa biên dịch được.</p> : (
+                        <>
+                          <div className="xl-actions">
+                            <label className="xl-meta">Trình dịch <select className="xl-in" value={engine} disabled={compiling} onChange={(e) => setEngine(e.target.value as Engine)}>{ENGINES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
+                            <label className="xl-meta">Số lượt <select className="xl-in" value={runs} disabled={compiling} onChange={(e) => setRuns(+e.target.value)}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+                            {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!desktop} onClick={compile}>Biên dịch PDF</button> : <button type="button" className="btn btn-sm" onClick={stop}>Dừng</button>}
+                          </div>
+                          {compiling && <p className="aid-wait" role="status">Đang biên dịch…</p>}
+                        </>
+                      )}
+                      {result && (() => {
+                        const sm = summarize(result);
+                        return (
+                          <div className={`note ${sm.tone === 'bad' ? 'bad' : sm.tone}`} role="status"><div className="note-body">
+                            <b>{sm.text}</b>
+                            {result.warnings.map((w, i) => <span key={i}>{w}</span>)}
+                            {result.status === 'ok' && <span>{RAW_MODE_NOTE}</span>}
+                            {result.texVersion && <span className="xl-meta">{result.texVersion} · {result.runs} lượt · {Math.round(result.ms / 100) / 10} giây{result.cached ? ' · dùng lại bộ đệm' : ''}</span>}
+                          </div></div>
+                        );
+                      })()}
+                      {result && result.diagnostics.length > 0 && groupDiagnostics(result.diagnostics).map((g) => (
+                        <details key={g.file ?? '?'} open={g.items.some((d) => d.severity === 'error')}>
+                          <summary>{g.file ?? 'Không rõ tệp'} ({g.items.length})</summary>
+                          <ul className="xl-lines">{g.items.map((d, i) => (
+                            <li key={i}><b>{d.severity === 'error' ? 'Lỗi' : 'Cảnh báo'}{canJump(d) ? ` dòng ${d.line}` : ''}:</b> {d.message}{d.context.length > 0 && <pre className="xl-ctx">{d.context.join('\n')}</pre>}</li>
+                          ))}</ul>
+                        </details>
+                      ))}
+                      {result && result.rawLog && <details><summary>Nhật ký TeX (thô)</summary><pre className="xl-ctx">{result.rawLog}</pre></details>}
+                      {good && <p className="xl-meta">PDF tốt gần nhất: {good.pages ?? '?'} trang · {good.engine} · {dateText(good.at)}{result && result.status !== 'ok' ? ' (BẢN CŨ: lần biên dịch vừa rồi không thành công)' : ''}</p>}
+                    </section>
                     {check && (
                       <div className={`note ${check.ok && check.extra.length === 0 ? 'ok' : 'warn'}`} role="status"><div className="note-body">
                         {check.ok && check.extra.length === 0 ? <b>Mọi tệp khớp với lúc nhập.</b> : <b>Có khác biệt so với lúc nhập</b>}

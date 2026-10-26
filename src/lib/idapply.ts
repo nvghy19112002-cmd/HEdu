@@ -101,8 +101,15 @@ export function rowAction(r: AutoIdRow, c: RowChoice | undefined, ix: TaxIndex, 
       const w = writeHeadId(r.snap.latex, st.meta.code, 'them');
       return w.action === 'them' ? { kind: 'them', code: st.meta.code, old: null, loc: null, level: null, latex: w.latex } : { kind: 'loi', why: WHY[w.action === 'bo-qua' ? w.reason : ''] ?? 'Không ghi được ID' };
     }
+    // Giáo viên CHỦ ĐỘNG chọn lại chính Dạng đang lưu (không đổi sang Dạng khác) để sửa ID lệch/lỗi theo vị trí này: thay ID cũ (một mã)
+    // sau khi tick xác nhận. Mặc định (formId = null) không bao giờ đi vào nhánh này ⇒ không tự ghi đè ID hợp lệ.
+    if (formId === r.snap.formId && r.currentOk && (st.state === 'lech' || st.state === 'id-loi')) {
+      const w = placeWithId(r.snap.latex, r.snap, r.snap.level, tax, true);
+      if (!('latex' in w)) return { kind: 'loi', why: WHY[w.problem] ?? 'Không ghi được ID' };
+      return { kind: 'thay', code: w.code, old: w.write.old, loc: null, level: null, latex: w.latex };
+    }
     if (!r.suggestion.best && !formId && (st.state === 'vi-tri-loi' || st.state === 'chua-co-id')) return { kind: 'khong-du' };
-    return { kind: 'loi', why: st.state === 'lech' ? 'ID trong LaTeX khác vị trí — chọn Dạng đúng, hoặc mở câu để chọn bên đúng' : st.state === 'id-loi' ? 'ID trong LaTeX bị lỗi — chọn Dạng để thay, hoặc mở câu để sửa' : 'Vị trí hiện tại không ra được ID — hãy chọn Dạng' };
+    return { kind: 'loi', why: st.state === 'lech' ? 'ID trong LaTeX khác vị trí — chọn Dạng đúng (hoặc "Vị trí hiện tại — sửa ID theo vị trí này")' : st.state === 'id-loi' ? 'ID trong LaTeX bị lỗi — chọn Dạng để thay (hoặc "Vị trí hiện tại — sửa ID theo vị trí này")' : 'Vị trí hiện tại không ra được ID — hãy chọn Dạng' };
   }
   const w = placeWithId(r.snap.latex, loc ?? r.snap, level ?? r.snap.level, tax, true);
   if (!('latex' in w)) return { kind: 'loi', why: WHY[w.problem] ?? 'Vị trí chọn không ra được ID hợp lệ' };
