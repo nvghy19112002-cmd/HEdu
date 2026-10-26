@@ -25,7 +25,7 @@ import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AutoIdDialog } from '../components/AutoIdDialog';
 import { BatchTagDialog, BatchTrashDialog } from '../components/BatchDialogs';
-import { AUTO_ID_MAX, clearAutoIdUndo, getAutoIdUndo, undoAutoId, undoConflicts, type AutoIdUndo } from '../lib/idapply';
+import { applyIdSync, AUTO_ID_MAX, clearAutoIdUndo, getAutoIdUndo, syncCounts, undoAutoId, undoConflicts, type AutoIdUndo } from '../lib/idapply';
 import { withReview } from '../lib/batchops';
 import { exportSizeMB } from '../lib/texexport';
 import { verbatimTex } from '../lib/texproject';
@@ -250,14 +250,37 @@ export function BankScreen() {
     busyRef.current = false;
     if (!r.ok) { toast('Chưa hoàn tác được — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi thử lại.'); return; }
     setAutoUndo(getAutoIdUndo());
-    toast(`Đã hoàn tác vị trí cho ${nf.format(r.restored)} câu${r.conflicts ? `; ${nf.format(r.conflicts)} câu đã bị sửa tiếp hoặc xoá nên giữ nguyên` : ''}.`);
+    toast(`Đã hoàn tác (vị trí, mức độ, ID trong LaTeX) cho ${nf.format(r.restored)} câu${r.conflicts ? `; ${nf.format(r.conflicts)} câu đã bị sửa tiếp hoặc xoá nên giữ nguyên` : ''}.`);
   };
   const askAutoUndo = () => {
     const u = autoUndo;
     if (!u) return;
     const n = undoConflicts(u, new Map(questions.map((q) => [q.uid, q]))).length;
     if (n === 0) { void runAutoUndo(u); return; }
-    setAsk({ title: `Hoàn tác Gán ID cho ${nf.format(u.items.length - n)} câu?`, body: `${nf.format(n)} câu đã bị sửa tiếp (vị trí, mức độ hoặc nội dung) hoặc đã xoá sau lần gán — các câu đó GIỮ NGUYÊN, không bị ghi đè.`, label: 'Hoàn tác', run: () => { void runAutoUndo(u); } });
+    setAsk({ title: `Hoàn tác cập nhật ID cho ${nf.format(u.items.length - n)} câu?`, body: `${nf.format(n)} câu đã bị sửa tiếp (vị trí, mức độ hoặc nội dung) hoặc đã xoá sau lần gán — các câu đó GIỮ NGUYÊN, không bị ghi đè.`, label: 'Hoàn tác', run: () => { void runAutoUndo(u); } });
+  };
+  /** Dữ liệu cũ: thêm `%[ID]` theo vị trí vào LaTeX của câu chưa có ID. Câu có ID (khớp, lệch hay lỗi) không bị đụng. */
+  const askIdSync = () => {
+    const n = syncCounts(selectedQs);
+    const other = n.lech + n['id-loi'] + n['vi-tri-loi'];
+    if (n['chua-co-id'] === 0) { toast(`Không có câu nào cần thêm ID: ${nf.format(n.khop)} câu đã khớp${other ? `, ${nf.format(other)} câu có ID lệch/lỗi — mở từng câu để chọn bên đúng` : ''}.`); return; }
+    setAsk({
+      title: `Thêm ID vào LaTeX cho ${nf.format(n['chua-co-id'])} câu?`,
+      body: `HEdu ghi %[ID] theo vị trí + mức độ đang lưu ngay sau \\begin{ex} của ${nf.format(n['chua-co-id'])} câu chưa có ID; nội dung câu, kiểm duyệt, nhãn không đổi. ${nf.format(n.khop)} câu đã khớp: giữ nguyên.${other ? ` ${nf.format(n.lech)} câu có ID khác vị trí, ${nf.format(n['id-loi'])} câu có ID lỗi, ${nf.format(n['vi-tri-loi'])} câu có vị trí chưa ra được ID: KHÔNG đụng — mở từng câu để xử lý.` : ''} Có thể Hoàn tác ngay sau đó.`,
+      label: `Thêm ID cho ${nf.format(n['chua-co-id'])} câu`,
+      run: () => { void runIdSync(); },
+    });
+  };
+  const runIdSync = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBatchBusy(true);
+    const r = await applyIdSync(sel);
+    busyRef.current = false;
+    setBatchBusy(false);
+    if (!r.ok) { toast('Chưa lưu được — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi thử lại.'); return; }
+    setAutoUndo(getAutoIdUndo());
+    toast(r.changed ? `Đã thêm ID vào LaTeX cho ${nf.format(r.changed)} câu.` : 'Không có gì thay đổi.');
   };
   const openTrashBatch = async () => { if (!decisionsLoaded()) await loadDecisions(); setBatch('trash'); };
   /** Xoá hàng loạt vào Thùng rác: tất cả hoặc không câu nào; chỉ nói "Đã chuyển N câu" khi cả thùng rác và ngân hàng đã ghi xong. */
@@ -470,6 +493,7 @@ export function BankScreen() {
                       <button type="button" role="menuitem" autoFocus onClick={() => { setMoreSel(false); setBatch('tag'); }}>Gắn nhãn…</button>
                       <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đánh dấu “Cần sửa” cho ${nf.format(sel.size)} câu?`, body: 'Chỉ đổi trạng thái kiểm duyệt. Nội dung câu không đổi. (HEdu không có “Đã duyệt hàng loạt”: việc duyệt do thầy/cô xác nhận từng câu.)', label: 'Đánh dấu Cần sửa', run: () => { void runBatch(withReview('needs_fix'), 'đánh dấu Cần sửa'); } }); }}>Đánh dấu “Cần sửa”</button>
                       <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đưa ${nf.format(sel.size)} câu về “Chưa kiểm tra”?`, body: 'Các câu đang “Đã duyệt” hoặc “Cần sửa” sẽ trở về “Chưa kiểm tra”. Nội dung không đổi.', label: 'Về Chưa kiểm tra', run: () => { void runBatch(withReview(undefined), 'đưa về Chưa kiểm tra'); } }); }}>Về “Chưa kiểm tra”</button>
+                      <button type="button" role="menuitem" onClick={() => { setMoreSel(false); askIdSync(); }}>Đồng bộ ID vào LaTeX…</button>
                       <button type="button" role="menuitem" className="danger" onClick={() => { setMoreSel(false); void openTrashBatch(); }}>Chuyển vào Thùng rác…</button>
                     </div>
                   )}
@@ -567,7 +591,7 @@ export function BankScreen() {
       {batch === 'autoid' && <AutoIdDialog qs={selectedQs} onClose={() => setBatch(null)} onDone={(m) => { setBatch(null); setAutoUndo(getAutoIdUndo()); toast(m); }} />}
       {autoUndo && !undo && (
         <div className="undo-bar" role="status">
-          <span>Đã gán vị trí mới cho <b>{nf.format(autoUndo.items.length)}</b> câu. <small>Hoàn tác được trong phiên này.</small></span>
+          <span>Đã cập nhật ID (vị trí/LaTeX) cho <b>{nf.format(autoUndo.items.length)}</b> câu. <small>Hoàn tác được trong phiên này.</small></span>
           <button type="button" className="btn btn-sm btn-accent" onClick={askAutoUndo}>Hoàn tác</button>
           <button type="button" className="ico" aria-label="Đóng (không hoàn tác nữa)" onClick={() => { clearAutoIdUndo(); setAutoUndo(null); }}>×</button>
         </div>

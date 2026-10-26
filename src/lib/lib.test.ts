@@ -97,7 +97,7 @@ ok(parseCode('2H2N2-2')?.loc.formId === 'f2H222', '2H2N2-2 → đúng dạng 2')
 ok(parseCode('9X9') === null, 'ID sai định dạng trả về null');
 ok(parseCode('2D1X1-1') === null, 'chữ mức độ lạ bị từ chối');
 ok(parseCode('2D1H1-Z') === null, 'mã Dạng không có trong cây ⇒ ID không hợp lệ (không lặng lẽ vào Dạng đầu tiên)');
-ok(parseCode('2D1H1')?.loc.lessonId === 'l2D11' && !!parseCode('2D1H1')?.loc.formId, 'ID không ghi Dạng ⇒ vẫn hiểu là Dạng đầu của Bài như cũ');
+ok(parseCode('2D1H1') === null, 'ID không ghi Dạng ⇒ KHÔNG còn tự hiểu là Dạng đầu của Bài (đặc tả Gán ID III: giáo viên phải chọn Dạng)');
 
 console.log('Cây mục lục sửa được');
 const tax0 = buildDefault();

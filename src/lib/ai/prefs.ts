@@ -8,7 +8,7 @@ export interface AiModelChoice { id: string; label: string; note: string }
 export const AI_MODELS: readonly AiModelChoice[] = [
   { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Mặc định — có gói miễn phí (chậm: ~1–2 phút/10 câu)' },
   { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', note: 'Nhanh — có gói miễn phí (chưa đo độ chính xác)' },
-  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Rất nhanh, nhẹ — chưa đo độ chính xác, chỉ thử khi tài khoản có model này' },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Ứng viên chính cho Gán ID (rất nhanh, suy nghĩ tối thiểu) — CHƯA đo trên bộ nhãn chuẩn, chưa làm mặc định' },
   { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Cho câu khó — chỉ khi gói miễn phí của tài khoản cho phép' },
 ];
 
