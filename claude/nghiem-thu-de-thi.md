@@ -9,19 +9,19 @@ npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu
 
 Dữ liệu thử nằm ở `%APPDATA%\vn.hedu.app.thu` (ban đầu trống). Dùng đề GIẢ, không dùng đề thật khi thử.
 
-## Các PR (gộp theo đúng thứ tự)
+## Các PR (đã gộp vào `main` theo đúng thứ tự, 26/10/2026; CHƯA phát hành)
 | PR | Nội dung |
 |---|---|
 | #112 | Thiết kế E0 (đã gộp) |
 | #113 | E1 Thư viện đề: nhập .tex/thư mục (đã gộp) |
 | #116 | E2a Biên dịch toàn dự án, Job Object (đã gộp) |
-| #118 | E2b Xem PDF (pdf.js offline) |
-| #121 | E3 Biên tập: cây tệp, nhiều tab, lưu an toàn |
-| #122 | E4 Thư mục ảo, Thùng rác đề, sao lưu/khôi phục, chốt đề, gói |
-| #124 | E5 Đề/Lời giải, nguồn UID, lưu từ Ngân hàng |
-| #125 | E6 Kiểm thử hiệu năng + tài liệu nghiệm thu |
+| #118 | E2b Xem PDF (pdf.js offline) (đã gộp) |
+| #121 | E3 Biên tập: cây tệp, nhiều tab, lưu an toàn (đã gộp) |
+| #122 | E4 Thư mục ảo, Thùng rác đề, sao lưu/khôi phục, chốt đề, gói (đã gộp) |
+| #124 | E5 Đề/Lời giải, nguồn UID, lưu từ Ngân hàng (đã gộp) |
+| #125 | E6 Kiểm thử hiệu năng + tài liệu nghiệm thu (PR này) |
 
-Các PR xếp chồng: mỗi PR dựa trên PR trước. Gộp #118 → #121 → #122 → #124 → E6; sau mỗi lần gộp, đổi nền PR kế tiếp về `main`.
+Các PR đã xếp chồng và đã gộp lần lượt; `main` đã có toàn bộ E0–E5, PR này thêm tài liệu và kiểm thử E6.
 
 ## Việc kiểm trên máy Windows thật (tick từng dòng)
 ### Nhập và thư viện

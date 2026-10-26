@@ -1,8 +1,7 @@
 # Bàn giao HEdu sang phiên Claude Code mới (26/10/2026, sau E6 Ngân hàng đề thi LaTeX)
 
 ## Git (26/10/2026)
-- `main` đã có: E0 (#112), E1 (#113), E2a (#116) trên nền `v0.1.0-beta.33` (beta.33 là bản phát hành gần nhất; chưa có bản phát hành nào chứa Ngân hàng đề thi).
-- Đang chờ chủ dự án duyệt gộp, **xếp chồng** (gộp theo thứ tự): #118 E2b xem PDF → #121 E3 biên tập → #122 E4 thư viện hoàn chỉnh → #124 E5 Đề/Lời giải + nguồn UID → #125 E6 (kiểm thử hiệu năng + tài liệu). Sau mỗi lần gộp, đổi nền PR kế tiếp về `main`.
+- `main` đã có (26/10/2026): E0 (#112), E1 (#113), E2a (#116), E2b (#118), E3 (#121), E4 (#122), E5 (#124); #125 (E6: kiểm thử hiệu năng + tài liệu) là PR cuối. `v0.1.0-beta.33` vẫn là bản phát hành gần nhất; chưa có bản phát hành nào chứa Ngân hàng đề thi.
 - Chưa phát hành. Phát hành chỉ khi chủ dự án ra lệnh riêng (`release.yml`, nhập `tag`); chủ dự án nói sẽ ra lệnh ở cuộc trò chuyện khác sau khi kênh khác cập nhật GitHub.
 
 ## Đọc gì trước
@@ -17,7 +16,7 @@
 `cargo test --lib --locked`, `npm test`, `npm run build`, typecheck; kiểm tay với TeX Live 2026 (`HEDU_TEX_BIN=<thư mục bin> cargo test --lib --locked tex_live_that -- --ignored --nocapture`). Giao diện đã thử bằng trình duyệt với dữ liệu giả lập; **chưa bấm thử trong cửa sổ Tauri thật, chưa nghiệm thu Windows thật**.
 
 ## Việc tiếp
-1. Chủ dự án nghiệm thu theo `claude/nghiem-thu-de-thi.md`; gộp các PR theo thứ tự.
+1. Chủ dự án nghiệm thu theo `claude/nghiem-thu-de-thi.md` trên bản chạy thử.
 2. Backlog: đổi tên/xoá/di chuyển từng tệp trong cây tệp; BibTeX/Biber; bật lại màn Tạo đề (kiểm cấu trúc trước khi trộn mã); nghiệm thu mục G, H, I của beta.30; đo lô nhập lớn (giới hạn 5.000 câu/lô).
 3. Mẹo kỹ thuật: Bash heredoc làm hỏng dấu `\` của LaTeX/Rust: dùng công cụ Write hoặc Edit cho tệp có `\`. Typecheck cần `@types/node` (dùng `--typeRoots`). `node_modules` do `npm ci`; `Cargo.lock`/`package-lock.json` được theo dõi (dùng `--locked`).
 
