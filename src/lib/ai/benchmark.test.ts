@@ -31,6 +31,25 @@ console.log('Ngưỡng 95%');
   ok(scoreRun([]).total === 0 && scoreRun([]).accuracyAll === 0, 'rỗng không lỗi');
 }
 
+console.log('Đo riêng Chương / Bài / Dạng / mức độ / ID6');
+{
+  const items: BenchItem[] = [
+    it('a', 'F1', 'F1', true, { chapterHit: true, lessonHit: true, truthLevel: 'TH', predLevel: 'TH' }),
+    it('b', 'F2', 'F3', true, { chapterHit: true, lessonHit: true, truthLevel: 'TH', predLevel: 'TH' }),
+    it('c', 'F4', 'F9', false, { chapterHit: true, lessonHit: false, truthLevel: 'VD', predLevel: 'NB' }),
+    it('d', 'F5', 'F5', true, { chapterHit: true, lessonHit: true, truthLevel: 'NB', predLevel: 'TH' }),
+    it('e', 'F6', null, false, { chapterHit: false, lessonHit: false, truthLevel: 'NB', predLevel: null }),
+    it('f', null, null, false, { timeout: true, jsonOk: false }),
+    it('g', null, null, false, { apiError: true, jsonOk: false }),
+  ];
+  const s = scoreRun(items);
+  ok(s.chapterAcc === 4 / 5 && s.lessonAcc === 3 / 5 && s.formAcc === 2 / 5, 'Chương 4/5, Bài 3/5, Dạng 2/5 (trên câu có Dạng phù hợp; từ chối tính là chưa đúng)');
+  ok(s.levelAcc === 2 / 5 && s.id6Acc === 1 / 5, 'mức độ 2/5; ID6 đúng hoàn toàn chỉ 1/5 — KHÔNG lấy độ đúng Dạng thay cho ID6');
+  ok(s.wrongInConfident === 1 / 3 && s.timeoutRate === 1 / 7 && s.apiErrorRate === 1 / 7 && s.jsonErrorRate === 0, 'gán sai trong nhóm tin cậy 1/3; quá giờ / lỗi API tách khỏi lỗi JSON');
+  const d = describeScore(s, true);
+  ok(d.includes('đúng Chương 80.0% · đúng Bài 60.0% · đúng Dạng 40.0%') && d.includes('ID6 đúng hoàn toàn (Dạng + mức độ) 20.0%') && d.includes('Gán sai trong nhóm đủ tin cậy: 33.3%'), 'báo cáo ghi đủ từng tầng');
+}
+
 console.log('Bao phủ thấp không được tính là đạt')
 {
   const items: BenchItem[] = Array.from({ length: 200 }, (_, i) => it(`z${i}`, 'F1', i < 40 ? 'F1' : null, i < 40));
