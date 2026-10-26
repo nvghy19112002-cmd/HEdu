@@ -11,14 +11,14 @@ import { indexOf, type TaxIndex } from '../../taxonomy';
 import { checkLocation, locationOfForm } from '../../taxpath';
 import { LEVELS, type Level, type Location, type Taxonomy } from '../../types';
 
-export const GAN_ID_TASK = { id: 'gan-id', version: 3, label: 'Gán ID (Chương › Bài › Dạng)' } as const;
+export const GAN_ID_TASK = { id: 'gan-id', version: 4, label: 'Gán ID (Chương › Bài › Dạng)' } as const;
 /** Số câu mỗi lượt gọi (giữ lô nhỏ: câu trả lời ngắn, lỗi một lượt chỉ mất ít câu). Đo hiệu năng thật ở PR 3 rồi mới chỉnh. */
 export const GAN_ID_BATCH = 10;
 const MAX_Q_CHARS = 8000;
 const MAX_EXAMPLE_CHARS = 600;
 const MAX_TIKZ_CHARS = 2500;
 
-// Prompt v3 (đặc tả Gán ID mục VIII). Không chứa cây hay tên Dạng cố định: cây + quy tắc phân biệt đi kèm từng lượt.
+// Prompt v4 (đặc tả Gán ID mục VIII). Không chứa cây hay tên Dạng cố định: cây + quy tắc phân biệt đi kèm từng lượt.
 export const GAN_ID_SYSTEM = `Bạn là chuyên gia phân loại câu hỏi Toán theo cây chương trình của giáo viên trong HEdu (Chương trình GDPT 2018).
 
 NHIỆM VỤ: với MỖI câu hỏi, chọn Dạng phù hợp nhất có thật trong cây được cung cấp. Không tạo mã ID6, không sửa câu hỏi.
@@ -34,7 +34,7 @@ PHÂN TÍCH:
 6. Chọn đúng một form_id thuộc cây được cung cấp; Dạng chọn phải nói đúng thứ đề bài yêu cầu tìm/chứng minh, không chỉ cùng chủ đề.
 Ghi yeu_cau (yêu cầu chính, ≤15 từ) và kien_thuc (kiến thức được kiểm tra, ≤10 từ) TRƯỚC khi chọn form_id.
 Không nhầm kỹ năng được yêu cầu với công cụ phụ dùng trong lời giải (vd tìm u20 của cấp số cộng là "tìm số hạng cụ thể", dù lời giải dùng công thức số hạng tổng quát).
-Câu lý thuyết: phân loại theo nội dung thực tế, không chỉ theo các từ "công thức", "định lý", "mệnh đề", "đúng/sai"; có Dạng phù hợp rõ thì chọn, không mặc định Dạng đầu tiên.
+Câu lý thuyết thuần (chỉ nhớ/nhận ra định nghĩa, công thức, định lý, không tính): chọn Dạng lý thuyết của đúng Bài đó nếu có; Bài không có Dạng lý thuyết thì form_id = null. Phân loại theo yêu cầu thực tế của đề, không chỉ theo các từ "công thức", "định lý", "mệnh đề", "đúng/sai": câu phải tính hay chứng minh thì chọn Dạng tính; không mặc định Dạng đầu tiên.
 Câu nhiều chủ đề, câu đúng/sai nhiều ý: đọc đủ các ý; chỉ chọn khi xác định được mục tiêu chính, các ý thuộc nhiều Dạng ngang nhau thì từ chối.
 Câu có hình: phải hiểu dữ kiện hình liên quan; hình bị lược làm thiếu căn cứ thì không tự tin.
 Câu mẫu đã được giáo viên xác nhận chỉ là chứng cứ tham khảo.
@@ -70,7 +70,7 @@ export function formsOfGrade(tax: Taxonomy, grade: number, rules: Readonly<Recor
   for (const g of tax.grades) if (g.grade === grade)
     for (const b of g.branches) for (const c of b.chapters) for (const l of c.lessons) for (const f of l.forms) {
       const path = `${c.name} › ${l.name} › ${f.name}`;
-      const rule = ruleLine(f.id, rules);
+      const rule = ruleLine(f.id, rules, f.name);
       out.push({ formId: f.id, path, line: `${f.id} | ${b.name} | Chương ${c.code}: ${c.name} › Bài ${l.code}: ${l.name} › Dạng ${f.code}: ${f.name}${rule ? ` | ${rule}` : ''}` });
     }
   return out;
