@@ -109,5 +109,24 @@ console.log('PR 3: nhãn ID6, chống rò nhãn, đọc ID, so sánh model');
   ok(cmp.includes('| gemini-3.8-flash |') && cmp.includes('| gemini-3.6-flash |') && cmp.includes('CHƯA được giáo viên xác minh') && !cmp.includes('| Có |') && !cmp.includes('CASE-'), 'bảng so sánh model: mỗi model một dòng, không chứa nội dung câu, nhãn chưa xác minh ⇒ không model nào "đạt"');
 }
 
+console.log('Bộ đo: nhãn chuẩn tách khỏi nội dung gửi AI (câu thử mang sẵn ID đúng hoặc cố tình sai)');
+{
+  sent.length = 0; mode = 'ok';
+  const wrongCode = codeOf(F[6]);
+  const items = Array.from({ length: 6 }, (_, i) => {
+    const truth = codeOf(F[i % 7]);
+    const head = i % 2 === 0 ? `%[${truth}]` : `%[Đề thử]%[${wrongCode}]`; // câu chẵn: ID ĐÚNG ngay trong LaTeX; câu lẻ: ID cố tình SAI
+    return { id: `L${i}`, latex: `\\begin{ex}${head}\nCASE-${i} nội dung ${i}\\loigiai{x}\\end{ex}`, truth, groups: ['tinh-toan'] };
+  });
+  const lc = parseBenchFile(JSON.stringify({ items }), tax).cases;
+  const before = lc.map((c) => c.latex);
+  const lr = await runBench(tax, lc, 'gemini-3.5-flash-lite', []);
+  const all = sent.join('\n');
+  ok(lr.itemsAi.length === 6 && sent.length === 1, 'đã chạy đủ 6 câu thử (AI giả lập)');
+  ok(lc.every((c) => !all.includes(c.truthCode!)) && !all.includes(wrongCode), 'model KHÔNG nhìn thấy ID đúng (nhãn) cũng như ID cố tình sai có sẵn trong câu thử');
+  ok(all.includes('Đề thử') && lc.every((_, i) => all.includes(`CASE-${i} nội dung ${i}`)), 'nội dung câu và nhãn nguồn vẫn gửi đủ');
+  ok(lc.every((c, i) => c.latex === before[i]) && lc.every((c) => c.truth && c.truthCode), 'nhãn chuẩn giữ riêng trong bộ đo (truth / truthCode), LaTeX câu thử không bị sửa');
+}
+
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
 console.log('\nbenchrun: đạt hết.');
