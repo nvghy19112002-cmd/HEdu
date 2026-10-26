@@ -453,7 +453,10 @@ pub fn run() {
             examlib::exam_lib_verify,
             examcompile::exam_compile,
             examcompile::exam_compile_cancel,
-            examcompile::exam_compile_last
+            examcompile::exam_compile_last,
+            examcompile::exam_pdf_read,
+            examcompile::exam_pdf_export,
+            examcompile::exam_pdf_open_external
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");

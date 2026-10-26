@@ -13,19 +13,20 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "katex": "^0.16.47",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "@fontsource/be-vietnam-pro": "^5.2.0",
+    "@fontsource/jetbrains-mono": "^5.2.0",
     "@fontsource/lora": "^5.2.0",
-    "@fontsource/jetbrains-mono": "^5.2.0"
+    "katex": "^0.16.47",
+    "pdfjs-dist": "4.10.38",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "esbuild": "^0.28.0",
-    "typescript": "^6.0.0",
+    "@tauri-apps/cli": "^2.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@tauri-apps/cli": "^2.0.0"
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.0"
   }
 }

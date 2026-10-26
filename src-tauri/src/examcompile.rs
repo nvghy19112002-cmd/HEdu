@@ -368,19 +368,30 @@ fn build_dir(root: &Path, id: &str) -> PathBuf {
     root.join("cache").join("exam-build").join(id)
 }
 
+fn out_rel(id: &str, name: &str) -> String {
+    format!("cache/exam-build/{id}/out/{name}")
+}
+
+/// Bản tốt gần nhất. Mọi tệp đọc qua `open_inside` từ thư mục dữ liệu: không đi theo liên kết/junction ở bất kỳ cấp nào.
 pub fn last_good(root: &Path, id: &str) -> Option<GoodInfo> {
     if !valid_id(id) {
         return None;
     }
-    let out = build_dir(root, id).join("out");
-    let info: GoodInfo = serde_json::from_slice(&fs::read(out.join("last-good.json")).ok()?).ok()?;
-    let pdf = out.join("last-good.pdf");
-    (fs::metadata(&pdf).map(|m| m.is_file() && m.len() == info.bytes).unwrap_or(false)).then_some(GoodInfo { pdf_path: pdf.to_string_lossy().into_owned(), ..info })
+    let mut b = Vec::new();
+    open_inside(root, &out_rel(id, "last-good.json")).ok()?.take(1024 * 1024).read_to_end(&mut b).ok()?;
+    let info: GoodInfo = serde_json::from_slice(&b).ok()?;
+    let pdf = open_inside(root, &out_rel(id, "last-good.pdf")).ok()?;
+    (pdf.metadata().map(|m| m.len() == info.bytes).unwrap_or(false)).then_some(GoodInfo { pdf_path: build_dir(root, id).join("out").join("last-good.pdf").to_string_lossy().into_owned(), ..info })
 }
 
 fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Result<GoodInfo, String> {
     let out = build_dir(root, id).join("out");
     fs::create_dir_all(&out).map_err(|e| format!("Không tạo được thư mục PDF: {e}"))?;
+    for d in [build_dir(root, id), out.clone()] {
+        if fs::symlink_metadata(&d).map(|m| is_link(&m)).unwrap_or(true) {
+            return Err("Thư mục PDF là liên kết/junction nên không xuất bản (an toàn).".into());
+        }
+    }
     let dest = out.join("last-good.pdf");
     let mut src = fs::File::open(pdf).map_err(|e| format!("Không mở được PDF vừa dịch: {e}"))?;
     copy_atomic(&mut src, &dest).map_err(|e| format!("Không xuất bản được PDF: {e}"))?;
@@ -609,6 +620,64 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     Ok(out)
 }
 
+// ---------- đọc / xuất / mở PDF tốt gần nhất (E2b) ----------
+
+/// Giới hạn PDF nạp vào giao diện (đọc cả tệp qua IPC).
+pub const MAX_PDF_VIEW: u64 = 200 * 1024 * 1024;
+
+fn good_pdf_handle(root: &Path, id: &str) -> Result<(fs::File, GoodInfo), String> {
+    let g = last_good(root, id).ok_or("Chưa có PDF biên dịch thành công cho dự án này.")?;
+    let h = open_inside(root, &out_rel(id, "last-good.pdf"))?;
+    Ok((h, g))
+}
+
+/// Nội dung PDF tốt gần nhất (chỉ đúng tệp `last-good.pdf` của dự án, qua `open_inside`).
+pub fn read_good(root: &Path, id: &str) -> Result<Vec<u8>, String> {
+    let (h, g) = good_pdf_handle(root, id)?;
+    if g.bytes > MAX_PDF_VIEW {
+        return Err(format!("PDF quá lớn để xem trong HEdu ({} MB). Hãy mở bằng ứng dụng khác.", g.bytes / 1024 / 1024));
+    }
+    let mut b = Vec::with_capacity(g.bytes as usize);
+    h.take(MAX_PDF_VIEW + 1).read_to_end(&mut b).map_err(|e| format!("Không đọc được PDF: {e}"))?;
+    if b.len() as u64 != g.bytes || !b.starts_with(b"%PDF") {
+        return Err("Tệp PDF đã lưu bị hỏng hoặc đã bị đổi ngoài HEdu. Hãy biên dịch lại.".into());
+    }
+    Ok(b)
+}
+
+/// Lưu một BẢN SAO PDF tốt gần nhất ra nơi người dùng chọn (đuôi .pdf; ghi tạm rồi đổi tên; không đụng bản trong thư viện).
+pub fn export_good(root: &Path, id: &str, dest: &Path) -> Result<(), String> {
+    if !dest.to_string_lossy().to_lowercase().ends_with(".pdf") {
+        return Err("Tên tệp lưu phải có đuôi .pdf.".into());
+    }
+    if dest.is_dir() {
+        return Err("Đường dẫn lưu là một thư mục.".into());
+    }
+    if let (Some(p), Ok(base)) = (dest.parent(), fs::canonicalize(build_dir(root, id))) {
+        if fs::canonicalize(p).map(|c| c.starts_with(&base)).unwrap_or(false) {
+            return Err("Không lưu vào thư mục build của HEdu. Hãy chọn nơi khác.".into());
+        }
+    }
+    let (mut h, _) = good_pdf_handle(root, id)?;
+    copy_atomic(&mut h, dest).map_err(|e| format!("Không lưu được PDF: {e}"))
+}
+
+/// Mở PDF bằng ứng dụng mặc định của Windows (explorer.exe + đường dẫn; không qua shell).
+pub fn open_external(root: &Path, id: &str) -> Result<(), String> {
+    let (_h, g) = good_pdf_handle(root, id)?;
+    #[cfg(windows)]
+    {
+        let mut c = Command::new("explorer.exe");
+        c.arg(&g.pdf_path);
+        c.spawn().map(|_| ()).map_err(|e| format!("Không mở được PDF: {e}"))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = g;
+        Err("Chỉ hỗ trợ trên Windows.".into())
+    }
+}
+
 // ---------- lệnh Tauri ----------
 
 use tauri::{AppHandle, Manager};
@@ -632,6 +701,22 @@ pub fn exam_compile_cancel(id: String) -> bool {
 #[tauri::command]
 pub fn exam_compile_last(app: AppHandle, id: String) -> Result<Option<GoodInfo>, String> {
     Ok(last_good(&root_of(&app)?, &id))
+}
+
+#[tauri::command]
+pub fn exam_pdf_read(app: AppHandle, id: String) -> Result<tauri::ipc::Response, String> {
+    read_good(&root_of(&app)?, &id).map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+pub async fn exam_pdf_export(app: AppHandle, id: String, dest: String) -> Result<(), String> {
+    let root = root_of(&app)?;
+    tauri::async_runtime::spawn_blocking(move || export_good(&root, &id, Path::new(&dest))).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn exam_pdf_open_external(app: AppHandle, id: String) -> Result<(), String> {
+    open_external(&root_of(&app)?, &id)
 }
 
 #[cfg(test)]
@@ -907,6 +992,69 @@ mod tests {
         assert!(compile(&e.root, &e.id, &CompileOpts { engine: Some("cmd.exe".into()), ..e.opts.clone() }, &None).is_err());
         assert!(compile(&e.root, "../..", &e.opts, &None).is_err());
         let _ = fs::remove_dir_all(&e.d);
+    }
+
+    #[test]
+    fn doc_xuat_pdf_tot_va_tu_choi_dau_vao_xau() {
+        let d = tmp("pdfio");
+        let root = d.join("root");
+        let id = "11111111-2222-4333-a444-555555555555";
+        assert!(read_good(&root, id).is_err(), "chưa có PDF");
+        assert!(read_good(&root, "../..").is_err());
+        let pdf = b"%PDF-1.5
+noi dung
+%%EOF
+";
+        let info = GoodInfo { fingerprint: "f".into(), engine: "pdflatex".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: Some(1), bytes: 0, at: "x".into(), pdf_path: String::new() };
+        let src = d.join("tam.pdf");
+        fs::write(&src, pdf).unwrap();
+        publish(&root, id, &src, &info).unwrap();
+        assert_eq!(read_good(&root, id).unwrap(), pdf);
+        // xuất bản sao
+        let out = d.join("ra").join("de.pdf");
+        fs::create_dir_all(out.parent().unwrap()).unwrap();
+        export_good(&root, id, &out).unwrap();
+        assert_eq!(fs::read(&out).unwrap(), pdf);
+        assert!(export_good(&root, id, &d.join("de.txt")).is_err(), "đuôi phải là .pdf");
+        assert!(export_good(&root, id, &d.join("ra")).is_err(), "không ghi đè thư mục");
+        let inside = build_dir(&root, id).join("out").join("x.pdf");
+        assert!(export_good(&root, id, &inside).is_err(), "không lưu vào thư mục build");
+        // tệp bị hỏng/đổi ngoài HEdu thì không đưa cho giao diện
+        let good = build_dir(&root, id).join("out").join("last-good.pdf");
+        fs::write(&good, b"khong phai pdf!!!!!!!!!!!!!").unwrap();
+        assert!(read_good(&root, id).is_err());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn khong_doc_pdf_qua_junction() {
+        let d = tmp("pdfjunc");
+        let root = d.join("root");
+        let id = "11111111-2222-4333-a444-555555555555";
+        let pdf = b"%PDF-1.5
+A
+%%EOF
+";
+        let src = d.join("tam.pdf");
+        fs::write(&src, pdf).unwrap();
+        let info = GoodInfo { fingerprint: "f".into(), engine: "e".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: None, bytes: 0, at: "x".into(), pdf_path: String::new() };
+        publish(&root, id, &src, &info).unwrap();
+        // thư mục out bị thay bằng junction sang nơi khác chứa PDF "bí mật" cùng kích thước
+        let out = build_dir(&root, id).join("out");
+        let other = d.join("khac");
+        fs::create_dir_all(&other).unwrap();
+        fs::write(other.join("last-good.pdf"), b"%PDF-1.5
+B
+%%EOF
+").unwrap();
+        fs::copy(out.join("last-good.json"), other.join("last-good.json")).unwrap();
+        fs::remove_dir_all(&out).unwrap();
+        let ok = Command::new("cmd").args(["/C", "mklink", "/J", &out.to_string_lossy().replace('/', "\\"), &other.to_string_lossy().replace('/', "\\")]).output().map(|o| o.status.success()).unwrap_or(false);
+        assert!(ok, "phải tạo được junction để kiểm");
+        assert!(read_good(&root, id).is_err(), "không được đọc qua junction");
+        let _ = fs::remove_dir(&out);
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]
