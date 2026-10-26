@@ -1287,6 +1287,24 @@ B
         let _ = fs::remove_dir_all(&d);
     }
 
+    /// Hiệu năng với TikZ phức tạp (tikz-3dplot, hàng nghìn đoạn vẽ, bảng biến thiên tkz-tab) qua TeX Live THẬT; in thời gian, không có ngưỡng cứng ngoài giờ chót.
+    #[test]
+    #[ignore]
+    fn tex_live_that_tikz_phuc_tap_trong_gioi_han_gio() {
+        let Ok(bin) = std::env::var("HEDU_TEX_BIN") else { return };
+        let d = tmp("real-tikz");
+        let root = d.join("root");
+        let main = "\\documentclass[12pt,a4paper]{article}\n\\usepackage{amsmath,amssymb,tikz,tikz-3dplot,tkz-tab}\n\\usetikzlibrary{calc}\n\\begin{document}\n\\tdplotsetmaincoords{70}{110}\n\\begin{tikzpicture}[tdplot_main_coords]\n\\foreach \\i in {0,...,1500}{\\draw[thin,gray] ({cos(\\i*0.9)*(1+\\i/1500)},{sin(\\i*0.9)*(1+\\i/1500)},{\\i/700}) -- ({cos(\\i*0.9+7)*2},{sin(\\i*0.9+7)*2},{\\i/900});}\n\\draw[->] (0,0,0) -- (3,0,0) node[right]{$x$};\n\\end{tikzpicture}\n\\begin{tikzpicture}\n\\tkzTabInit[lgt=2,espcl=2]{$x$/1,$f'(x)$/1,$f(x)$/2}{$-\\infty$,$0$,$+\\infty$}\n\\tkzTabLine{,+,z,-,}\n\\tkzTabVar{-/$-\\infty$,+/$1$,-/$-\\infty$}\n\\end{tikzpicture}\n\\end{document}\n";
+        put(&d, "src/main.tex", main.as_bytes());
+        let s = examlib::import(&root.join("exam-library"), &d.join("src"), "TikZ nặng", None).unwrap();
+        let sup = support::prepare(&root);
+        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None };
+        let r = compile(&root, &s.id, &o, &sup).unwrap();
+        eprintln!("TikZ nặng: {} · {:?} trang · {} ms · {} lượt", r.status, r.pages, r.ms, r.runs);
+        assert_eq!(r.status, "ok", "{:?} {}", r.diagnostics, r.raw_log);
+        let _ = fs::remove_dir_all(&d);
+    }
+
     /// Bằng chứng với ex_test THẬT: bản Đề KHÔNG chạy nội dung `\loigiai`, bản Lời giải thì có (dấu `\typeout` chỉ chạy khi lời giải được in).
     #[test]
     #[ignore]

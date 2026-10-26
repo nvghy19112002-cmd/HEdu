@@ -1296,6 +1296,42 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
     }
 
+    /// Hiệu năng/bộ nhớ: nhiều đề thì danh sách đọc từ chỉ mục (chỉ trường tóm tắt), không đọc từng sổ, không nạp danh sách tệp.
+    #[test]
+    fn thu_vien_nhieu_de_danh_sach_dung_chi_muc() {
+        const N: usize = 1500;
+        let d = tmp("many");
+        let lib = d.join("lib");
+        let base = create_blank(&lib, "Mẫu").unwrap();
+        let m0 = read_manifest(&lib, &base.id).unwrap();
+        for i in 0..N - 1 {
+            let id = new_id(&i.to_string());
+            let dir = projects_dir(&lib).join(&id);
+            fs::create_dir_all(&dir).unwrap();
+            let mut m = m0.clone();
+            m.project_id = id;
+            m.name = format!("Đề số {i}");
+            write_manifest(&dir, &m).unwrap();
+        }
+        fs::remove_file(lib.join("index.json")).unwrap();
+        let t = std::time::Instant::now();
+        let a = list(&lib);
+        let rebuild = t.elapsed();
+        assert_eq!(a.len(), N);
+        let t = std::time::Instant::now();
+        let b = list(&lib);
+        let hit = t.elapsed();
+        assert_eq!(b.len(), N);
+        eprintln!("{N} đề: dựng chỉ mục {rebuild:?}, đọc từ chỉ mục {hit:?}");
+        assert!(rebuild < std::time::Duration::from_secs(30), "dựng chỉ mục quá chậm: {rebuild:?}");
+        assert!(hit < std::time::Duration::from_secs(3), "đọc từ chỉ mục quá chậm: {hit:?}");
+        // lần sau không đọc lại từng sổ: làm hỏng một sổ mà số thư mục vẫn khớp thì danh sách vẫn trả đủ (nguồn là chỉ mục)
+        let victim = projects_dir(&lib).join(&a[5].id).join(".hedu/manifest.json");
+        fs::write(&victim, b"{hong").unwrap();
+        assert_eq!(list(&lib).len(), N);
+        let _ = fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn chi_muc_dung_lai_duoc_va_manifest_hong_khong_xoa_tep() {
         let d = tmp("index");

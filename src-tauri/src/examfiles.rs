@@ -665,6 +665,33 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
     }
 
+    /// Tệp lớn: mở/lưu không đổi trong thời gian hợp lý và giữ nguyên byte; quá giới hạn thì từ chối rõ ràng (không treo).
+    #[test]
+    fn tep_lon_mo_luu_nguyen_byte_va_tu_choi_qua_gioi_han() {
+        let mut big = String::with_capacity(13 * 1024 * 1024);
+        let mut i = 0usize;
+        while big.len() < 12 * 1024 * 1024 {
+            big.push_str(&format!("\\item Dòng {i} với công thức $x_{{{i}}}^2+\\frac{{1}}{{{}}}$ % chú thích\r\n", i + 1));
+            i += 1;
+        }
+        let (d, lib, id) = proj("big", &[("main.tex", b"a\n"), ("big.tex", big.as_bytes())]);
+        let t = std::time::Instant::now();
+        let f = read_text_file(&lib, &id, "big.tex").unwrap();
+        let read = t.elapsed();
+        assert_eq!((f.eol.as_str(), f.bytes), ("crlf", big.len() as u64));
+        let t = std::time::Instant::now();
+        let w = write_text_file(&lib, &id, "big.tex", &f.text, &f.eol, f.bom, &f.sha256).unwrap();
+        let noop = t.elapsed();
+        assert!(matches!(w, WriteOut::Saved { changed: false, .. }));
+        assert_eq!(on_disk(&lib, &id, "big.tex"), big.as_bytes(), "mở rồi lưu không sửa: giữ nguyên từng byte");
+        eprintln!("{} dòng, {} MB: đọc {read:?}, lưu không đổi {noop:?}", i, big.len() / 1024 / 1024);
+        assert!(read < std::time::Duration::from_secs(10) && noop < std::time::Duration::from_secs(10));
+        // quá giới hạn (20 MB): từ chối rõ ràng
+        put(&projects_dir(&lib).join(&id), "qua-lon.tex", &vec![b'a'; (MAX_EDIT_BYTES + 1) as usize]);
+        assert!(read_text_file(&lib, &id, "qua-lon.tex").unwrap_err().contains("quá lớn"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn stat_phat_hien_doi_va_mat() {
         let (d, lib, id) = proj("stat", &[("main.tex", b"a\n")]);
