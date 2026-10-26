@@ -244,7 +244,7 @@ pub struct SyncOut {
     pub bytes: u64,
 }
 
-fn collect(dir: &Path, rel: &str, depth: usize, out: &mut Vec<String>, blocked: &mut Vec<String>) {
+pub(crate) fn collect(dir: &Path, rel: &str, depth: usize, out: &mut Vec<String>, blocked: &mut Vec<String>) {
     if depth > MAX_DEPTH + 2 {
         blocked.push(rel.to_string());
         return;
