@@ -19,6 +19,10 @@ export interface CodeEditorHandle {
   markSaved(key: string, text: string): void;
   /** Thay nội dung bằng `text` nhưng GIỮ mốc đã lưu: tệp thành "chưa lưu" (dùng khi khôi phục bản nháp). Hoàn tác được. */
   replaceDoc(key: string, text: string): void;
+  /** Chèn `text` tại con trỏ (thay vùng đang chọn). false nếu tệp không đang mở/không sửa được. */
+  insertAtCursor(key: string, text: string): boolean;
+  /** Thay MỘT lần xuất hiện nguyên văn của `from` bằng `to`. false nếu không thấy đúng nguyên văn (không đoán). */
+  replaceText(key: string, from: string, to: string): boolean;
   text(key: string): string | null;
   drop(key: string): void;
   jump(key: string, line: number): void;
@@ -122,6 +126,22 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
       const v = view.current;
       if (!v || current.current !== key) return;
       v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: text } });
+    },
+    insertAtCursor(key, text) {
+      const v = view.current;
+      if (!v || current.current !== key || v.state.readOnly) return false;
+      v.dispatch(v.state.replaceSelection(text), { scrollIntoView: true, userEvent: 'input.paste' });
+      v.focus();
+      return true;
+    },
+    replaceText(key, from, to) {
+      const v = view.current;
+      if (!v || current.current !== key || v.state.readOnly) return false;
+      const doc = v.state.doc.toString();
+      const i = doc.indexOf(from);
+      if (i < 0) return false;
+      v.dispatch({ changes: { from: i, to: i + from.length, insert: to }, scrollIntoView: true });
+      return true;
     },
     text(key) {
       const v = view.current;

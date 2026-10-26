@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ExamBackupPanel, ExamTrashPanel } from '../components/ExamAdminPanels';
 import { ExamInfoForm } from '../components/ExamInfoForm';
 import { PdfViewer } from '../components/PdfViewer';
-import { RAW_MODE_NOTE, examCompileLast, type GoodInfo } from '../lib/examcompile';
+import { examCompileAll, MODE_NOTE, modeLabel, type ExamMode, type GoodInfo } from '../lib/examcompile';
 import { allFolders, applyFacets, EMPTY_SEL, facets, folderTree, isEmptySel, type FacetSel, type FolderNode } from '../lib/examfacets';
 import { isDesktop } from '../lib/platform';
 import {
@@ -34,8 +34,8 @@ export function ExamLibraryScreen() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ExamManifest | null>(null);
   const [check, setCheck] = useState<ExamVerify | null>(null);
-  const [good, setGood] = useState<GoodInfo | null>(null);
-  const [viewing, setViewing] = useState(false);
+  const [goods, setGoods] = useState<GoodInfo[]>([]);
+  const [viewing, setViewing] = useState<ExamMode | null>(null);
   const [editing, setEditing] = useState(false);
   const [panel, setPanel] = useState<null | 'trash' | 'backup'>(null);
   const [ask, setAsk] = useState<null | 'trash'>(null);
@@ -52,11 +52,11 @@ export function ExamLibraryScreen() {
 
   const loadDetail = useCallback((id: string) => {
     examGet(id).then(setDetail).catch((e) => toast(`Không đọc được dự án: ${msg(e)}`));
-    examCompileLast(id).then(setGood).catch(() => undefined);
+    examCompileAll(id).then(setGoods).catch(() => undefined);
   }, [toast]);
 
   useEffect(() => {
-    setDetail(null); setCheck(null); setGood(null); setViewing(false); setEditing(false);
+    setDetail(null); setCheck(null); setGoods([]); setViewing(null); setEditing(false);
     if (activeId) loadDetail(activeId);
   }, [activeId, loadDetail]);
 
@@ -271,14 +271,14 @@ export function ExamLibraryScreen() {
                       <p className="xl-meta">Nguồn: {detail.source.mode === 'created' ? 'tạo trong HEdu' : detail.source.mode === 'duplicated' ? detail.source.originalPathDisplay : detail.source.mode === 'restored' ? `khôi phục từ ${detail.source.originalPathDisplay}` : `đã chép từ ${detail.source.originalPathDisplay}`}</p>
                       <div className="xl-actions">
                         <button type="button" className="btn btn-sm btn-primary" disabled={!desktop || !detail.mainFile} onClick={() => setEditing(true)}>Biên tập</button>
-                        {good && desktop && <button type="button" className="btn btn-sm" onClick={() => setViewing(true)}>Xem PDF</button>}
+                        {desktop && goods.map((g) => <button key={g.mode} type="button" className="btn btn-sm" onClick={() => setViewing(g.mode as ExamMode)}>Xem PDF: {modeLabel(g.mode)}</button>)}
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={duplicate}>Sao chép</button>
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={exportBundle}>Xuất gói…</button>
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={() => activeId && void examReveal(activeId).catch((e) => toast(msg(e)))}>Hiện trong Explorer</button>
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setAsk('trash')}>Chuyển vào Thùng rác…</button>
                       </div>
-                      {good && <p className="xl-meta">PDF gần nhất: {good.pages ?? '?'} trang · {good.engine} · {dateText(good.at)}</p>}
-                      <ExamInfoForm detail={detail} folders={folders} busy={busy} hasPdf={!!good} onSave={saveMeta} />
+                      {goods.map((g) => <p key={g.mode} className="xl-meta">PDF {modeLabel(g.mode)}: {g.pages ?? '?'} trang · {g.engine} · {dateText(g.at)}</p>)}
+                      <ExamInfoForm detail={detail} folders={folders} busy={busy} hasPdf={goods.length > 0} onSave={saveMeta} />
                       {detail.warnings.length > 0 && <div className="note warn"><div className="note-body">{detail.warnings.map((w, i) => <span key={i}>{w}</span>)}</div></div>}
                       {detail.skipped.length > 0 && <details><summary>{detail.skipped.length} mục không được chép</summary><ul className="xl-lines">{detail.skipped.map((k, i) => <li key={i}><code>{k.rel}</code>: {k.reason}</li>)}</ul></details>}
                       <details><summary>{detail.files.length} tệp</summary>
@@ -302,7 +302,7 @@ export function ExamLibraryScreen() {
           </div>
         )}
       </div>
-      {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} note={RAW_MODE_NOTE} onClose={() => setViewing(false)} />}
+      {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} mode={viewing} note={MODE_NOTE[viewing]} onClose={() => setViewing(null)} />}
       {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={() => { setEditing(false); void reload(); loadDetail(activeId); }} />}
       {panel === 'trash' && <ExamTrashPanel toast={toast} onClose={() => setPanel(null)} onChanged={(rid) => { void reload().then(() => { if (rid) setActiveId(rid); }); }} />}
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}

@@ -4,8 +4,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
+import { BankPicker } from '../components/BankPicker';
 import { PdfViewer } from '../components/PdfViewer';
-import { canJump, ENGINES, examCompile, examCompileCancel, examCompileLast, groupDiagnostics, RAW_MODE_NOTE, summarize, type CompileOut, type Engine, type GoodInfo } from '../lib/examcompile';
+import { SourcesPanel } from '../components/SourcesPanel';
+import { canJump, ENGINES, examCompile, examCompileAll, examCompileCancel, examProfiles, groupDiagnostics, MODE_NOTE, MODES, modeLabel, summarize, type CompileOut, type Engine, type ExamMode, type GoodInfo, type ProfileInfo } from '../lib/examcompile';
+import { insertionText, norm, sourcesAdd, sourcesForget, sourcesStatus, toSource, type SourceIn, type SourceItem, type SourceStatus } from '../lib/examsources';
+import type { Question } from '../lib/types';
 import {
   anyDirty, buildTree, draftClear, draftRead, draftWrite, externalState, fileCreate, fileImage, fileList, fileRead, fileStat, fileWrite, kindIcon, newFileProblem, saveBadge, savePlan,
   type Draft, type FileEntry, type ListOut, type TabInfo, type TreeNode,
@@ -35,7 +39,15 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   const [runs, setRuns] = useState(2);
   const [compiling, setCompiling] = useState(false);
   const [result, setResult] = useState<CompileOut | null>(null);
-  const [good, setGood] = useState<GoodInfo | null>(null);
+  const [goods, setGoods] = useState<GoodInfo[]>([]);
+  const [mode, setMode] = useState<ExamMode>('nguyen-van');
+  const [viewMode, setViewMode] = useState<ExamMode>('nguyen-van');
+  const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const [picker, setPicker] = useState(false);
+  const [srcOpen, setSrcOpen] = useState(false);
+  const [statuses, setStatuses] = useState<SourceStatus[] | null>(null);
+  const [srcErr, setSrcErr] = useState<string | null>(null);
+  const pend = useRef(new Map<string, { add: SourceIn[]; forget: SourceItem[] }>());
   const [leave, setLeave] = useState(false);
   const [pane, setPane] = useState<Pane>('edit');
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < NARROW);
@@ -59,8 +71,15 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
 
   useEffect(() => {
     void reloadList();
-    examCompileLast(id).then(setGood).catch(() => undefined);
+    examCompileAll(id).then((g) => { setGoods(g); const m = g.find((x) => x.mode === 'de') ?? g[0]; if (m) setViewMode(m.mode as ExamMode); }).catch(() => undefined);
   }, [id, reloadList]);
+
+  const refreshProfile = useCallback(() => {
+    examProfiles(id).then((p) => { setProfile(p); setMode((m) => (m !== 'nguyen-van' && !p.available ? 'nguyen-van' : m)); }).catch(() => setProfile(null));
+  }, [id]);
+  useEffect(() => {
+    examProfiles(id).then((p) => { setProfile(p); setMode(p.available ? 'de' : 'nguyen-van'); }).catch(() => setProfile(null));
+  }, [id]);
 
   // ---- mở tệp ----
   const openFile = useCallback(async (f: FileEntry) => {
@@ -136,6 +155,19 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
       window.clearTimeout(timers.current.get(rel));
       patch(rel, { sha: r.sha256 });
       ed.current?.markSaved(rel, text);
+      const pn = pend.current.get(rel);
+      if (pn) {
+        // chỉ ghi nguồn cho những đoạn thực sự còn nguyên văn trong tệp vừa lưu (người dùng có thể đã hoàn tác)
+        const nt = norm(text);
+        const add = pn.add.filter((x) => nt.includes(norm(x.latex)));
+        try {
+          for (const f of pn.forget) await sourcesForget(id, f.uid, f.rel, f.sha256);
+          if (add.length) await sourcesAdd(id, rel, add);
+          pend.current.delete(rel);
+          if (srcOpen) void loadSources();
+        } catch (e) { setNote(`Đã lưu “${rel}” nhưng chưa ghi được nguồn câu hỏi: ${msg(e)}`); }
+      }
+      refreshProfile();
       void draftClear(id, rel).catch(() => undefined);
       return true;
     } catch (e) { setNote(`Chưa lưu “${rel}”: ${msg(e)}`); return false; }
@@ -219,9 +251,10 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
     setCompiling(true); setResult(null);
     try {
       const st = getSettings();
-      const r = await examCompile(id, { engine, runs, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120) });
+      const r = await examCompile(id, { engine, runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120) });
       setResult(r);
-      if (r.lastGood) setGood(r.lastGood);
+      examCompileAll(id).then(setGoods).catch(() => undefined);
+      if (r.status === 'ok') setViewMode(mode);
       if (r.status === 'ok' && narrow) setPane('pdf'); else if (r.status !== 'ok') setPane('log');
     } catch (e) { setNote(msg(e)); } finally { setCompiling(false); }
   };
@@ -232,6 +265,37 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
     await openFile(f);
     setPane('edit');
     window.setTimeout(() => ed.current?.jump(file, line), 80);
+  };
+
+  async function loadSources() {
+    setSrcErr(null);
+    try { setStatuses(await sourcesStatus(id)); } catch (e) { setSrcErr(msg(e)); setStatuses([]); }
+  }
+  const openSources = () => { setSrcOpen(true); setStatuses(null); void loadSources(); };
+
+  const insertFromBank = (qs: Question[]) => {
+    const rel = active;
+    if (!rel || !tab || tab.kind !== 'text' || tab.readOnly) { setNote('Hãy mở một tệp .tex sửa được rồi đặt con trỏ nơi cần chèn.'); return; }
+    if (!ed.current?.insertAtCursor(rel, insertionText(qs))) { setNote('Không chèn được vào tệp đang mở.'); return; }
+    const cur = pend.current.get(rel) ?? { add: [], forget: [] };
+    cur.add.push(...qs.map(toSource));
+    pend.current.set(rel, cur);
+    setPicker(false);
+    toast(`Đã chèn ${qs.length} câu nguyên văn. Bấm Lưu để ghi vào đề (HEdu ghi nguồn khi lưu).`);
+  };
+
+  const replaceFromBank = (item: SourceItem, newLatex: string): boolean => {
+    const ok = ed.current?.replaceText(item.rel, item.latex, newLatex) ?? false;
+    if (!ok) return false;
+    const cur = pend.current.get(item.rel) ?? { add: [], forget: [] };
+    cur.add.push({ uid: item.uid, label: item.label, latex: newLatex });
+    cur.forget.push(item);
+    pend.current.set(item.rel, cur);
+    return true;
+  };
+
+  const forgetSource = async (item: SourceItem) => {
+    try { await sourcesForget(id, item.uid, item.rel, item.sha256); await loadSources(); } catch (e) { setSrcErr(msg(e)); }
   };
 
   const tree = useMemo(() => buildTree(list.files), [list.files]);
@@ -284,6 +348,9 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
         <span className="pv-grp">
           <button type="button" className="btn btn-sm" disabled={!tab || !tab.dirty || !!tab.readOnly || saving} onClick={() => active && void saveOne(active)}>Lưu</button>
           <button type="button" className="btn btn-sm" disabled={!anyDirty(tabs) || saving} onClick={() => void saveAll()}>Lưu tất cả</button>
+          <button type="button" className="btn btn-sm" disabled={!tab || tab.kind !== 'text' || !!tab.readOnly} onClick={() => setPicker(true)}>+ Câu từ Ngân hàng</button>
+          <button type="button" className="btn btn-sm" onClick={openSources}>Nguồn câu hỏi</button>
+          <label className="xl-meta">Bản <select className="xl-in" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch">{MODES.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !profile?.available} title={m.id !== 'nguyen-van' && !profile?.available ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select></label>
           <label className="xl-meta">Trình dịch <select className="xl-in" value={engine} disabled={compiling} onChange={(e) => setEngine(e.target.value as Engine)}>{ENGINES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
           <label className="xl-meta">Lượt <select className="xl-in" value={runs} disabled={compiling} onChange={(e) => setRuns(+e.target.value)}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
           {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch PDF</button> : <button type="button" className="btn btn-sm" onClick={() => void examCompileCancel(id)}>Dừng</button>}
@@ -296,6 +363,7 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
           ))}
         </div>
       )}
+      {profile && !profile.available && <div className="note warn ew-note" role="status"><div className="note-body"><b>Chưa có bản Đề / Lời giải riêng</b><span>{profile.reason} Bạn vẫn biên dịch được bản “nguyên văn” (chưa xác định đề hay lời giải, có thể chứa lời giải).</span></div></div>}
       {note && <div className="note bad ew-note" role="alert"><div className="note-body"><span>{note}</span></div><button type="button" className="btn btn-sm" onClick={() => setNote(null)}>Ẩn</button></div>}
       <div className={`ew-body${narrow ? ' narrow' : ''}`}>
         {showFiles && (
@@ -351,7 +419,18 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
         )}
         {showPdf && (
           <section className="ew-pdf" aria-label="PDF">
-            {good ? <PdfViewer key={good.fingerprint + good.at} embedded id={id} title={name} stale={stale} note={RAW_MODE_NOTE} /> : <p className="xl-meta ew-empty">Chưa có PDF. Bấm “Biên dịch PDF”.</p>}
+            {goods.length > 0 && (
+              <div className="ew-tabbar" role="tablist" aria-label="Bản PDF">
+                {MODES.filter((m) => goods.some((g) => g.mode === m.id)).map((m) => (
+                  <span key={m.id} className={`ew-tabitem${viewMode === m.id ? ' on' : ''}`}>
+                    <button type="button" role="tab" aria-selected={viewMode === m.id} className="ew-tabname" onClick={() => setViewMode(m.id)}>{m.label}</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {goods.find((g) => g.mode === viewMode)
+              ? <PdfViewer key={viewMode + goods.find((g) => g.mode === viewMode)!.fingerprint + goods.find((g) => g.mode === viewMode)!.at} embedded id={id} mode={viewMode} title={name} stale={stale && mode === viewMode} note={MODE_NOTE[viewMode]} />
+              : <p className="xl-meta ew-empty">Chưa có PDF {viewMode === 'nguyen-van' ? '' : `bản “${modeLabel(viewMode)}” `}cho đề này. Chọn bản và bấm “Biên dịch PDF”.</p>}
           </section>
         )}
       </div>
@@ -371,9 +450,16 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
               ))}</ul>
             </details>
           ))}
+          {result && result.profileChanges.length > 0 && (
+            <details open><summary>Bản dẫn xuất ({modeLabel(result.mode)}): HEdu đổi {result.profileChanges.length} dòng CHỈ trong thư mục build, tệp của bạn không đổi</summary>
+              <ul className="xl-lines">{result.profileChanges.map((c, i) => <li key={i}><code>{c.file}:{c.line}</code><pre className="xl-ctx">{'- ' + c.before + '\n+ ' + c.after}</pre></li>)}</ul>
+            </details>
+          )}
           {result?.rawLog && <details><summary>Nhật ký TeX (thô)</summary><pre className="xl-ctx">{result.rawLog}</pre></details>}
         </section>
       )}
+      {picker && <BankPicker onClose={() => setPicker(false)} onInsert={insertFromBank} />}
+      {srcOpen && <SourcesPanel statuses={statuses} error={srcErr} onClose={() => setSrcOpen(false)} onReplace={replaceFromBank} onForget={(i) => void forgetSource(i)} onGoto={(rel) => { const f = list.files.find((x) => x.rel === rel); if (f) { setSrcOpen(false); void openFile(f); } }} />}
       {leave && (
         <>
           <div className="cfm-scrim" onClick={() => setLeave(false)} />

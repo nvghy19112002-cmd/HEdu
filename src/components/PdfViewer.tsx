@@ -3,6 +3,7 @@
 // Vẽ từng trang theo yêu cầu (chỉ trang đang nhìn thấy ± đệm, tối đa vài trang cùng lúc) nên PDF dài không ngốn bộ nhớ.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '../lib/platform';
+import { pdfFileName, type ExamMode } from '../lib/examcompile';
 import { canvasShrink, clampZoom, currentPage, fitPage, fitWidth, layoutPages, matchPages, nextMatch, pagesToRelease, scrollTopFor, stepZoom, visibleRange } from '../lib/pdfview';
 
 interface PdfPage {
@@ -30,9 +31,9 @@ function loadLib(): Promise<PdfLib> {
 type Fit = 'width' | 'page' | number;
 const GAP = 12;
 
-interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; onClose?(): void; /** nhúng trong khung (không phủ toàn màn hình, không có nút Đóng) */ embedded?: boolean }
+interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; /** chế độ PDF cần xem (mặc định nguyên văn) */ mode?: ExamMode; onClose?(): void; /** nhúng trong khung (không phủ toàn màn hình, không có nút Đóng) */ embedded?: boolean }
 
-export function PdfViewer({ id, title, stale, note, onClose, embedded }: Props) {
+export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'nguyen-van' }: Props) {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded }: Props) 
     let d: PdfDoc | null = null;
     (async () => {
       try {
-        const [lib, buf] = await Promise.all([loadLib(), invoke<ArrayBuffer>('exam_pdf_read', { id })]);
+        const [lib, buf] = await Promise.all([loadLib(), invoke<ArrayBuffer>('exam_pdf_read', { id, mode })]);
         const task = lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useWorkerFetch: false, disableFontFace: true, verbosity: 0 });
         d = await task.promise;
         const dims: { w: number; h: number }[] = [];
@@ -67,7 +68,7 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded }: Props) 
       } catch (e) { if (live) setErr(e instanceof Error ? e.message : String(e)); }
     })();
     return () => { live = false; void d?.destroy(); };
-  }, [id]);
+  }, [id, mode]);
 
   useEffect(() => { if (!embedded) root.current?.focus(); }, [embedded]);
 
@@ -168,15 +169,15 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded }: Props) 
     setMsg(null);
     try {
       const dlg = window.__TAURI__?.dialog;
-      const dest = await dlg?.save({ title: 'Lưu bản sao PDF', defaultPath: `${title.replace(/[\\/:*?"<>|]/g, '-')}.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+      const dest = await dlg?.save({ title: 'Lưu bản sao PDF', defaultPath: pdfFileName(mode, title), filters: [{ name: 'PDF', extensions: ['pdf'] }] });
       if (!dest) return;
-      await invoke<void>('exam_pdf_export', { id, dest });
+      await invoke<void>('exam_pdf_export', { id, dest, mode });
       setMsg(`Đã lưu bản sao: ${dest}`);
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
   };
   const external = async () => {
     setMsg(null);
-    try { await invoke<void>('exam_pdf_open_external', { id }); } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
+    try { await invoke<void>('exam_pdf_open_external', { id, mode }); } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
   };
 
   const key = (e: React.KeyboardEvent) => {
