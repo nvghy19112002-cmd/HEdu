@@ -140,8 +140,14 @@ pub struct JobOut {
 /// giết mọi tiến trình con cháu còn sót, nên không còn TeX chạy ngầm. Tiến trình được gán vào job ngay sau khi sinh ra; trong
 /// khoảng cực ngắn đó nó chưa kịp sinh tiến trình con (TeX chỉ sinh tiến trình con sau khi đọc tệp).
 pub fn run_job(cmd: &mut Command, limit: Duration, cancel: &AtomicBool) -> io::Result<JobOut> {
+    run_job_notify(cmd, limit, cancel, |_| {})
+}
+
+/// Như `run_job`, và báo mã tiến trình (PID) của tiến trình vừa sinh ra ngay sau khi sinh (dùng để kiểm thử huỷ cả cây tiến trình).
+pub fn run_job_notify(cmd: &mut Command, limit: Duration, cancel: &AtomicBool, on_spawn: impl FnOnce(u32)) -> io::Result<JobOut> {
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
+    on_spawn(child.id());
     #[cfg(windows)]
     let job = job::Job::new().filter(|j| j.assign(&child));
     #[cfg(windows)]
@@ -301,79 +307,102 @@ mod tests {
         }
     }
 
-    /// Dựng lệnh PowerShell sinh ra MỘT tiến trình cháu (ping 120 giây), ghi PID của nó ra `pidfile`, rồi tự ngủ.
+    /// Tìm tiến trình con tên `name` của tiến trình `parent` (qua ảnh chụp danh sách tiến trình của Windows).
     #[cfg(windows)]
-    fn tree_cmd(pidfile: &std::path::Path) -> Command {
-        let script = format!(
-            "$p = Start-Process -PassThru -WindowStyle Hidden ping -ArgumentList '-n','120','127.0.0.1'; Set-Content -Path '{}' -Value $p.Id; Start-Sleep 120",
-            pidfile.display()
-        );
-        let mut c = Command::new("powershell");
-        c.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    fn child_named(parent: u32, name: &str) -> Option<u32> {
+        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+        use windows_sys::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+        unsafe {
+            let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snap == INVALID_HANDLE_VALUE {
+                return None;
+            }
+            let mut e: PROCESSENTRY32W = std::mem::zeroed();
+            e.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+            let mut found = None;
+            let mut ok = Process32FirstW(snap, &mut e);
+            while ok != 0 {
+                let len = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+                if e.th32ParentProcessID == parent && String::from_utf16_lossy(&e.szExeFile[..len]).eq_ignore_ascii_case(name) {
+                    found = Some(e.th32ProcessID);
+                    break;
+                }
+                ok = Process32NextW(snap, &mut e);
+            }
+            CloseHandle(snap);
+            found
+        }
+    }
+
+    /// Lệnh `cmd /C ping`: cmd.exe (tiến trình con) sinh ra ping.exe (tiến trình CHÁU) chạy 120 giây. Không phụ thuộc PowerShell nên khởi động tức thì.
+    #[cfg(windows)]
+    fn cmd_ping() -> Command {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "ping", "-n", "120", "127.0.0.1"]);
         c
     }
 
+    /// Chờ tiến trình cháu `ping.exe` của `parent` xuất hiện (tối đa 60 giây, chịu được máy đang quá tải).
     #[cfg(windows)]
-    fn wait_pid(pidfile: &std::path::Path) -> u32 {
-        for _ in 0..200 {
-            if let Ok(t) = std::fs::read_to_string(pidfile) {
-                if let Ok(n) = t.trim().parse::<u32>() {
-                    return n;
-                }
+    fn wait_grandchild(parent: u32) -> u32 {
+        for _ in 0..1200 {
+            if let Some(p) = child_named(parent, "ping.exe") {
+                return p;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        panic!("tiến trình cháu không khởi động");
+    }
+
+    #[cfg(windows)]
+    fn wait_dead(pid: u32) {
+        for _ in 0..100 {
+            if !pid_alive(pid) {
+                return;
             }
             thread::sleep(Duration::from_millis(100));
         }
-        panic!("tiến trình cháu không khởi động");
     }
 
     #[cfg(windows)]
     #[test]
     fn huy_dung_ca_cay_tien_trinh_that() {
         use std::sync::Arc;
-        let pidfile = std::env::temp_dir().join(format!("hedu-job-cancel-{}.pid", std::process::id()));
-        let _ = std::fs::remove_file(&pidfile);
         let cancel = Arc::new(AtomicBool::new(false));
-        let (c2, pf2) = (cancel.clone(), pidfile.clone());
-        let t = thread::spawn(move || {
-            let pid = wait_pid(&pf2);
-            assert!(pid_alive(pid), "tiến trình cháu phải đang chạy trước khi huỷ");
+        let (tx, rx) = std::sync::mpsc::channel::<u32>();
+        let c2 = cancel.clone();
+        let watcher = thread::spawn(move || {
+            let grand = wait_grandchild(rx.recv().unwrap());
+            assert!(pid_alive(grand), "tiến trình cháu phải đang chạy trước khi huỷ");
             c2.store(true, Ordering::SeqCst);
-            pid
+            grand
         });
         let t0 = Instant::now();
-        let r = run_job(&mut tree_cmd(&pidfile), Duration::from_secs(60), &cancel).unwrap();
-        let grand = t.join().unwrap();
+        let r = run_job_notify(&mut cmd_ping(), Duration::from_secs(90), &cancel, move |pid| {
+            let _ = tx.send(pid);
+        })
+        .unwrap();
+        let grand = watcher.join().unwrap();
         assert!(r.cancelled && !r.timed_out && !r.success && r.tree_guard);
-        assert!(t0.elapsed() < Duration::from_secs(30));
-        for _ in 0..50 {
-            if !pid_alive(grand) {
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        assert!(t0.elapsed() < Duration::from_secs(80));
+        wait_dead(grand);
         assert!(!pid_alive(grand), "tiến trình CHÁU phải bị giết cùng cây");
-        let _ = std::fs::remove_file(&pidfile);
     }
 
     #[cfg(windows)]
     #[test]
     fn het_gio_cung_dung_ca_cay_tien_trinh_that() {
-        let pidfile = std::env::temp_dir().join(format!("hedu-job-timeout-{}.pid", std::process::id()));
-        let _ = std::fs::remove_file(&pidfile);
         let cancel = AtomicBool::new(false);
-        let pf2 = pidfile.clone();
-        let watch = thread::spawn(move || wait_pid(&pf2));
-        let r = run_job(&mut tree_cmd(&pidfile), Duration::from_secs(6), &cancel).unwrap();
-        let grand = watch.join().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel::<u32>();
+        let watcher = thread::spawn(move || wait_grandchild(rx.recv().unwrap()));
+        let r = run_job_notify(&mut cmd_ping(), Duration::from_secs(6), &cancel, move |pid| {
+            let _ = tx.send(pid);
+        })
+        .unwrap();
+        let grand = watcher.join().unwrap();
         assert!(r.timed_out && !r.cancelled && !r.success && r.tree_guard, "timed_out={} tree_guard={}", r.timed_out, r.tree_guard);
-        for _ in 0..50 {
-            if !pid_alive(grand) {
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
+        wait_dead(grand);
         assert!(!pid_alive(grand), "tiến trình CHÁU phải bị giết khi hết giờ");
-        let _ = std::fs::remove_file(&pidfile);
     }
 
     #[cfg(windows)]
