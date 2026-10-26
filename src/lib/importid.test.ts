@@ -11,20 +11,23 @@ console.log('Phân loại ID khi nhập');
 {
   ok(idStateOf(ex('2D1H1-1')) === 'ok', 'ID đủ Dạng đúng cây ⇒ ok');
   ok(idStateOf(ex('0D0H2-2')) === 'ok', 'mã lớp "0" là Lớp 10 ⇒ ok (không phải lớp 0)');
-  ok(idStateOf(ex('2D1H1')) === 'thieu-dang', 'ID không ghi Dạng ⇒ báo "thiếu Dạng" (sẽ vào Dạng đầu tiên, phải xác nhận)');
-  ok(idStateOf(ex('9Z9H9-9')) === 'khong-hop-le' && idStateOf(ex('2D1H1-99')) === 'khong-hop-le' && idStateOf(ex('abc')) === 'khong-hop-le', 'sai mã lớp/phân môn, Dạng không tồn tại, chữ lạ ⇒ không hợp lệ');
+  ok(idStateOf(ex('2D1H1')) === 'thieu-dang', 'ID không ghi Dạng ⇒ báo "thiếu Dạng" (KHÔNG tự vào Dạng đầu tiên)');
+  ok(idStateOf(ex('9Z9H9-9')) === 'khong-hop-le' && idStateOf(ex('2D1H1-99')) === 'khong-hop-le' && idStateOf(ex('2D1X1-1')) === 'khong-hop-le', 'sai mã lớp/phân môn, Dạng không tồn tại, chữ mức độ lạ ⇒ không hợp lệ');
+  ok(idStateOf(ex('abc')) === 'khong-co', '%[abc] không có hình dạng mã ⇒ là nhãn, coi như chưa có ID');
+  ok(idStateOf(ex('2D1H1-1').replace('%[2D1H1-1]', '%[2D1H1-1]%[2D1V1-2]')) === 'khong-hop-le', 'hai ID mâu thuẫn ⇒ không hợp lệ (không chọn bừa một)');
   ok(idStateOf(ex(null)) === 'khong-co', 'không có %[…] ⇒ không có ID');
   const blocks = splitExBlocks([ex('2D1H1-1', 1), ex('2D1H1', 2), ex('9Z9H9-9', 3), ex(null, 4)].join('\n\n'));
-  ok(blocks.length === 4 && blocks.map(idStateOf).join() === 'ok,thieu-dang,khong-hop-le,khong-co', 'một file nhiều câu: phân loại đúng từng câu');
+  ok(blocks.length === 4 && blocks.map((b) => idStateOf(b)).join() === 'ok,thieu-dang,khong-hop-le,khong-co', 'một file nhiều câu: phân loại đúng từng câu');
 }
 
 console.log('Tổng hợp trước khi nhập');
 {
   const st = ['ok', 'ok', 'thieu-dang', 'khong-hop-le', 'khong-co', 'khong-co'] as const;
   const all = summarizeImportIds(st, () => true, () => false);
-  ok(all.total === 6 && all.ok === 2 && all.firstForm === 1 && all.needTeacher.invalid === 1 && all.needTeacher.missing === 2 && all.mustConfirm, 'đếm đúng từng loại; có câu cần xác nhận');
+  ok(all.total === 6 && all.ok === 2 && all.needTeacher.noForm === 1 && all.needTeacher.invalid === 1 && all.needTeacher.missing === 2 && all.mustConfirm, 'đếm đúng từng loại; có câu cần xác nhận');
   const chosen = summarizeImportIds(st, () => true, (i) => i >= 3);
-  ok(chosen.needTeacher.invalid === 0 && chosen.needTeacher.missing === 0 && chosen.firstForm === 1 && chosen.mustConfirm, 'giáo viên đã chọn Dạng cho câu thiếu/sai ID ⇒ không còn phải xác nhận phần đó; "thiếu Dạng" vẫn báo');
+  ok(chosen.needTeacher.invalid === 0 && chosen.needTeacher.missing === 0 && chosen.needTeacher.noForm === 1 && chosen.mustConfirm, 'giáo viên đã chọn Dạng cho câu thiếu/sai ID ⇒ không còn phải xác nhận phần đó; "thiếu Dạng" chưa chọn vẫn phải xác nhận');
+  ok(!summarizeImportIds(st, () => true, (i) => i >= 2).mustConfirm, 'chọn Dạng cho cả câu thiếu Dạng ⇒ không còn phải xác nhận');
   const skipped = summarizeImportIds(st, (i) => i < 2, () => false);
   ok(skipped.total === 2 && !skipped.mustConfirm, 'chỉ tính các câu sẽ nhập: toàn câu ID đúng ⇒ không phải xác nhận thêm');
   ok(!summarizeImportIds([], () => true, () => false).mustConfirm, 'rỗng không lỗi');

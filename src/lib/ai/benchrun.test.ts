@@ -2,7 +2,7 @@ import { buildDefault, indexOf } from '../taxonomy';
 import { questionCode } from '../id';
 import { locationOfForm } from '../taxpath';
 import { formsOfGrade } from './tasks/ganid';
-import { composition, GROUP_LABEL, MAX_CASES, parseBenchFile, reportOf, reportText, runBench } from './benchrun';
+import { compareText, composition, GROUP_LABEL, idReadScore, leakFreeBank, MAX_CASES, parseBenchFile, reportOf, reportText, runBench } from './benchrun';
 import type { Question } from '../types';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
@@ -86,6 +86,47 @@ let stop = false;
 const r4 = await runBench(tax, cases, 'm', bank, { onProgress: (d) => { if (d === 1) stop = true; }, shouldStop: () => stop });
 ok(r4.cancelled && r4.calls === 1 && sent.length === 1, 'bấm Dừng ⇒ không gửi thêm lượt nào');
 ok(r4.agreement === null || (r4.agreement >= 0 && r4.agreement <= 1), 'tỉ lệ đồng thuận hợp lệ hoặc không có mẫu');
+
+console.log('PR 3: nhãn ID6, chống rò nhãn, đọc ID, so sánh model');
+{
+  const c1 = cases.find((c) => c.id === 'c1')!;
+  ok(c1.truthCode === codeOf(F[1]) && c1.truthLevel === 'TH', 'nhãn giữ ID6 chuẩn + mức độ để chấm ID6 đầy đủ');
+  ok(parseBenchFile(JSON.stringify({ items: [{ id: 'x', latex: 'x', truth: '2D1H1' }] }), tax).cases.length === 0, 'nhãn thiếu Dạng không được nhận làm nhãn chuẩn');
+  const near = (uid: string, latex: string): Question => ({ uid, seq: 9, latex, type: 'tn', level: 'TH', tags: [], createdAt: 1, updatedAt: 1, review: 'approved', ...locationOfForm(ix, F[0])! });
+  const ca = '\\begin{ex}Cho hàm số $y=x^3-3x+2$. Tìm giá trị cực đại của hàm số đã cho.\n\\choice{\\True $4$}{$0$}{$2$}{$-1$}\n\\end{ex}';
+  const fam = near('fam', ca.replace('Tìm', '%ghi chú\nTìm'));
+  const other = near('khac', '\\begin{ex}Gieo một con xúc xắc cân đối, tính xác suất xuất hiện mặt sáu chấm.\n\\choice{\\True $1/6$}{$1/2$}{$1/3$}{$1$}\n\\end{ex}');
+  const lc = [{ id: 'k', latex: ca, grade: 12, truth: F[0], truthCode: codeOf(F[0]), truthLevel: 'TH' as const, groups: [] }];
+  const free = leakFreeBank(tax, lc, [fam, other, near('chinh', ca)]);
+  ok(!free.some((q) => q.uid === 'fam' || q.uid === 'chinh') && free.some((q) => q.uid === 'khac'), 'loại khỏi câu mẫu: chính câu đang đo + câu cùng họ gần trùng; câu khác vẫn giữ');
+  const withId = [{ ...lc[0], latex: ca.replace('\\begin{ex}', `\\begin{ex}%[${codeOf(F[0])}]`) }, { ...lc[0], id: 'k2', latex: ca.replace('\\begin{ex}', '\\begin{ex}%[2D1H1]') }, lc[0]];
+  const rd = idReadScore(withId, tax);
+  ok(rd.withId === 2 && rd.correct === 1, 'đo tỉ lệ đọc đúng ID có sẵn trong LaTeX (ID thiếu Dạng ⇒ không tính là đọc đúng)');
+  const rep = reportOf(run, cases);
+  ok(rep.ai.formAcc !== null && rep.ai.id6Acc !== null && rep.ai.chapterAcc !== null && rep.ai.lessonAcc !== null, 'báo cáo có Chương / Bài / Dạng / ID6');
+  ok(run.itemsHybrid.filter((x) => x.confident).length <= run.itemsAi.filter((x) => x.confident).length, 'nhóm tin cậy "AI + ngân hàng" không rộng hơn AI một mình (không tự nâng tin cậy)');
+  const cmp = compareText([run, r2], cases, false);
+  ok(cmp.includes('| gemini-3.8-flash |') && cmp.includes('| gemini-3.6-flash |') && cmp.includes('CHƯA được giáo viên xác minh') && !cmp.includes('| Có |') && !cmp.includes('CASE-'), 'bảng so sánh model: mỗi model một dòng, không chứa nội dung câu, nhãn chưa xác minh ⇒ không model nào "đạt"');
+}
+
+console.log('Bộ đo: nhãn chuẩn tách khỏi nội dung gửi AI (câu thử mang sẵn ID đúng hoặc cố tình sai)');
+{
+  sent.length = 0; mode = 'ok';
+  const wrongCode = codeOf(F[6]);
+  const items = Array.from({ length: 6 }, (_, i) => {
+    const truth = codeOf(F[i % 7]);
+    const head = i % 2 === 0 ? `%[${truth}]` : `%[Đề thử]%[${wrongCode}]`; // câu chẵn: ID ĐÚNG ngay trong LaTeX; câu lẻ: ID cố tình SAI
+    return { id: `L${i}`, latex: `\\begin{ex}${head}\nCASE-${i} nội dung ${i}\\loigiai{x}\\end{ex}`, truth, groups: ['tinh-toan'] };
+  });
+  const lc = parseBenchFile(JSON.stringify({ items }), tax).cases;
+  const before = lc.map((c) => c.latex);
+  const lr = await runBench(tax, lc, 'gemini-3.5-flash-lite', []);
+  const all = sent.join('\n');
+  ok(lr.itemsAi.length === 6 && sent.length === 1, 'đã chạy đủ 6 câu thử (AI giả lập)');
+  ok(lc.every((c) => !all.includes(c.truthCode!)) && !all.includes(wrongCode), 'model KHÔNG nhìn thấy ID đúng (nhãn) cũng như ID cố tình sai có sẵn trong câu thử');
+  ok(all.includes('Đề thử') && lc.every((_, i) => all.includes(`CASE-${i} nội dung ${i}`)), 'nội dung câu và nhãn nguồn vẫn gửi đủ');
+  ok(lc.every((c, i) => c.latex === before[i]) && lc.every((c) => c.truth && c.truthCode), 'nhãn chuẩn giữ riêng trong bộ đo (truth / truthCode), LaTeX câu thử không bị sửa');
+}
 
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
 console.log('\nbenchrun: đạt hết.');
