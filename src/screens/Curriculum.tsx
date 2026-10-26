@@ -4,7 +4,8 @@ import { useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { IcCheck, IcTrash, IcX } from '../components/Icons';
 import { useTaxonomy } from '../lib/curriculum';
-import { applyTaxonomy, useBank } from '../lib/store';
+import { affectedByTaxChange, codeClashes } from '../lib/idsync';
+import { applyTaxonomy, applyTaxonomyKeepIds, useBank } from '../lib/store';
 import {
   addChild, childKind, countNodes, fromJson, KIND_LABEL, moveNode, removeNode, renameNode,
   setNodeCode, shortName, toJson,
@@ -47,6 +48,14 @@ export function CurriculumScreen() {
   }, [questions]);
 
   const change = (next: Taxonomy, msg?: string) => { applyTaxonomy(next); if (msg) toast(msg); };
+  /** Mã đổi làm ID6 của câu đổi theo ⇒ hỏi trước, rồi đổi cây + ID trong LaTeX của câu đang khớp trong cùng một lần ghi. */
+  const [codeAsk, setCodeAsk] = useState<{ next: Taxonomy; n: number } | null>(null);
+  const changeCode = (next: Taxonomy) => {
+    if (next === tax) return;
+    const n = affectedByTaxChange(questions, tax, next);
+    if (n === 0) change(next); else setCodeAsk({ next, n });
+  };
+  const clashes = useMemo(() => codeClashes(tax), [tax]);
   const flip = (id: string) => setOpen((s) => { const x = new Set(s); x.has(id) ? x.delete(id) : x.add(id); return x; });
 
   const onLoadFile = async (f: File) => {
@@ -74,7 +83,7 @@ export function CurriculumScreen() {
           </button>
           {edit ? (
             <input className="ctcode" value={node.code} maxLength={1} aria-label={`Mã ${KIND_LABEL[kind]}`}
-              onChange={(e) => change(setNodeCode(tax, node.id, e.target.value))} />
+              onChange={(e) => changeCode(setNodeCode(tax, node.id, e.target.value))} />
           ) : (
             <span className="ctcode ro">{node.code}</span>
           )}
@@ -133,6 +142,21 @@ export function CurriculumScreen() {
         <div className="panel">
           <h2>Cây mục lục</h2>
           {edit && <span className="sys-hint">Bấm vào tên để sửa, vào ô mã để đổi mã (một ký tự). Nút + thêm mục con.</span>}
+          {codeAsk && (
+            <div className="qe-confirm" role="alertdialog" aria-label="Đổi mã">
+              <span><b>Đổi mã này làm ID6 của {codeAsk.n} câu thay đổi.</b> HEdu sẽ đổi cây và cập nhật ID trong LaTeX của các câu đang khớp ID trong cùng một lần lưu; câu có ID đang lệch/lỗi giữ nguyên để thầy/cô xử lý. Đổi tên không làm đổi ID.</span>
+              <span className="head-actions">
+                <button type="button" className="btn btn-sm btn-accent" autoFocus onClick={() => { const k = applyTaxonomyKeepIds(codeAsk.next); setCodeAsk(null); toast(`Đã đổi mã; cập nhật ID trong LaTeX cho ${k} câu.`); }}>Đổi mã</button>
+                <button type="button" className="btn btn-sm" onClick={() => setCodeAsk(null)}>Thôi</button>
+              </span>
+            </div>
+          )}
+          {clashes.length > 0 && (
+            <p className="aid-warn" role="alert">
+              Cây có mã trùng giữa các mục cùng cấp — câu trong các mục này KHÔNG tạo được ID6 (mã sẽ chỉ tới nhiều chỗ):{' '}
+              {clashes.slice(0, 5).map((c) => `${KIND_LABEL[c.kind]} mã “${c.code}” trong “${c.parentName}”: ${c.names.join(', ')}`).join('; ')}{clashes.length > 5 ? `; … (${clashes.length} nhóm)` : ''}. Hãy đổi mã cho khác nhau.
+            </p>
+          )}
           <ul className="cttree">
             {tax.grades.map((g) => <Node key={g.id} node={g} kind="grade" depth={0} />)}
           </ul>

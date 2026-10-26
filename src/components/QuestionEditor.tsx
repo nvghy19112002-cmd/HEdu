@@ -3,11 +3,13 @@
 // Bố cục: thanh ngữ cảnh gọn + bảng “Thuộc tính” gập được, hai khung (Mã LaTeX | Xem trước), dải trạng thái.
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useApp, type NewAt } from '../app-context';
-import { chapters, firstLocation, grades } from '../lib/curriculum';
+import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
 import { checkQuestion, type Issue } from '../lib/check';
 import { findDuplicates } from '../lib/dup';
 import { buildExTest, parseExTest, TEMPLATES, type ParsedQuestion } from '../lib/extest';
 import { questionCode, seqLabel } from '../lib/id';
+import { idStatus, LATEX_ID_LABEL, strictCode } from '../lib/idsync';
+import { sameCode, writeHeadId } from '../lib/idtex';
 import { saveQuestion, useBank } from '../lib/store';
 import { shortName } from '../lib/taxonomy';
 import { isTikzReady } from '../lib/tikz';
@@ -107,6 +109,27 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
   const dups = useMemo(() => findDuplicates(slow, questions, editing?.uid), [slow, questions, editing?.uid]);
   const code = questionCode(loc, level);
 
+  // ID trong LaTeX ↔ ID theo vị trí/mức độ đang chọn (bộ đọc chung idsync). Tính trên bản LaTeX đang gõ (không trễ) để nút lưu luôn đúng.
+  const ids = useMemo(() => idStatus({ latex, level, ...loc }, getTaxonomy()), [latex, level, loc]);
+  /** Câu đang sửa vốn KHỚP ID và giáo viên vừa đổi vị trí/mức độ trên giao diện ⇒ thao tác đó là căn cứ: thay ID khi lưu. */
+  const movedFromSynced = useMemo(() => {
+    if (!editing || ids.state !== 'lech') return false;
+    const before = strictCode(editing, editing.level, getTaxonomy());
+    const moved = loc.formId !== editing.formId || loc.lessonId !== editing.lessonId || loc.chapterId !== editing.chapterId || level !== editing.level;
+    return moved && before.ok && !!ids.latex.raw && sameCode(ids.latex.raw, before.code);
+  }, [editing, ids, loc, level]);
+  /** ID trong LaTeX khác vị trí mà không phải do vừa đổi vị trí ⇒ giáo viên phải chọn bên đúng trước khi lưu. */
+  const idConflict = ids.state === 'lech' && !movedFromSynced;
+  /** Mã LaTeX sẽ lưu: thêm ID cho câu chưa có, thay ID khi giáo viên vừa đổi vị trí; còn lại giữ nguyên từng ký tự. */
+  const latexToSave = (): string => {
+    if (!ids.meta.ok) return latex;
+    if (ids.state === 'chua-co-id') return writeHeadId(latex, ids.meta.code, 'them').latex;
+    if (ids.state === 'lech' && movedFromSynced) return writeHeadId(latex, ids.meta.code, 'thay').latex;
+    return latex;
+  };
+  const useLatexId = () => { const r = ids.latex.resolved; if (r) { setLoc(r.loc); setLevel(r.level); } };
+  const useMetaId = () => { if (ids.meta.ok) setLatex(writeHeadId(latex, ids.meta.code, 'thay').latex); };
+
   const dirty = editing
     ? latex !== editing.latex || level !== editing.level || loc.formId !== editing.formId || loc.lessonId !== editing.lessonId || tags.join('|') !== editing.tags.join('|')
     : false;
@@ -125,10 +148,12 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
     if (!parsed.stem) { toast('Đề bài đang trống — chưa lưu.'); return false; }
     const exact = dups.find((d) => d.score === 1);
     if (exact) { toast(`Câu này trùng hẳn với ${seqLabel(exact.question.seq)} — chưa lưu.`); return false; }
+    if (idConflict) { setAttrs(true); toast('ID trong LaTeX khác vị trí đang chọn — hãy chọn bên đúng (ngay dưới thanh vị trí) rồi lưu.'); return false; }
     const hadReview = editing?.review;
-    const q = saveQuestion({ latex, level, tags, ...loc }, editing?.uid);
+    const idWarn = ids.state === 'id-loi' ? ' — lưu ý: ID trong LaTeX đang lỗi, cần sửa' : ids.state === 'vi-tri-loi' ? ' — lưu ý: vị trí chưa ra được ID hợp lệ' : '';
+    const q = saveQuestion({ latex: latexToSave(), level, tags, ...loc }, editing?.uid);
     if (!editing) saveDraft(null);
-    toast(editing ? `Đã cập nhật ${questionCode(q, q.level)} · ${seqLabel(q.seq)}${hadReview && !q.review ? ' — nội dung đổi nên trạng thái về “Chưa kiểm tra”' : ''}` : `Đã lưu vào ngân hàng: ${questionCode(q, q.level)} · ${seqLabel(q.seq)}`);
+    toast((editing ? `Đã cập nhật ${questionCode(q, q.level)} · ${seqLabel(q.seq)}${hadReview && !q.review ? ' — nội dung đổi nên trạng thái về “Chưa kiểm tra”' : ''}` : `Đã lưu vào ngân hàng: ${questionCode(q, q.level)} · ${seqLabel(q.seq)}`) + idWarn);
     onSaved?.(q);
     return true;
   };
@@ -241,6 +266,29 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
         <span className="qe-chip">{LEVEL_LABEL[level]}</span>
         <button type="button" className="btn btn-sm qe-attrbtn" aria-expanded={attrs} onClick={() => setAttrs(!attrs)}>Thuộc tính {attrs ? '▴' : '▾'}</button>
       </div>
+
+      {ids.state !== 'khop' && (
+        <div className={ids.state === 'chua-co-id' || movedFromSynced ? 'qe-idbar sys-hint' : 'qe-idbar qe-confirm'} role={idConflict ? 'alert' : 'status'} aria-label="ID trong LaTeX">
+          {ids.state === 'chua-co-id' && ids.meta.ok && <span>LaTeX chưa có ID — khi lưu, HEdu ghi <b className="mono">%[{ids.meta.code}]</b> ngay sau <span className="mono">{'\\begin{ex}'}</span> (không đổi gì khác).</span>}
+          {movedFromSynced && ids.meta.ok && <span>Thầy/cô vừa đổi vị trí/mức độ: khi lưu, ID trong LaTeX đổi <b className="mono">{ids.latex.raw}</b> → <b className="mono">{ids.meta.code}</b>.</span>}
+          {idConflict && ids.meta.ok && (
+            <>
+              <span>ID trong LaTeX <b className="mono">{ids.latex.raw}</b> khác ID theo vị trí đang chọn <b className="mono">{ids.meta.code}</b>. Bên nào đúng?</span>
+              <span className="head-actions">
+                <button type="button" className="btn btn-sm" onClick={useLatexId}>Theo ID trong LaTeX (đổi vị trí)</button>
+                <button type="button" className="btn btn-sm" onClick={useMetaId}>Theo vị trí (thay ID trong LaTeX)</button>
+              </span>
+            </>
+          )}
+          {ids.state === 'id-loi' && (
+            <>
+              <span>ID trong LaTeX{ids.latex.raw ? <> <b className="mono">{ids.latex.raw}</b></> : null}: {LATEX_ID_LABEL[ids.latex.state]}. HEdu không tự sửa.</span>
+              {ids.meta.ok && ids.latex.head.ids.length === 1 && <button type="button" className="btn btn-sm" onClick={useMetaId}>Thay bằng {ids.meta.code} (theo vị trí)</button>}
+            </>
+          )}
+          {ids.state === 'vi-tri-loi' && <span>Vị trí đang chọn chưa ra được ID hợp lệ (thiếu Dạng hoặc cây có mã trùng) — chọn đủ Lớp → Chương → Bài → Dạng.</span>}
+        </div>
+      )}
 
       {attrs && (
         <div className="qe-attrs" role="group" aria-label="Thuộc tính câu hỏi">

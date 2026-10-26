@@ -224,6 +224,8 @@ const isNum = (t: string) => /^\d+(?:\.\d+)?$/.test(t);
 const isOp = (t: string) => !isNum(t) && !/^\p{L}$/u.test(t) && t !== '{' && t !== '}' && t !== '(' && t !== ')' && t !== ',';
 
 function norm(s: string | null | undefined): string { return (s ?? '').replace(/\r\n?/g, '\n').trim(); }
+/** Dấu của mã nguồn (giống `rawKey` trong dấu vân), không phải dựng cả dấu vân. */
+export const rawKeyOf = (latex: string): string => { const raw = norm(latex); return hashKey(raw) + ':' + raw.length; };
 
 // ---------- dấu vân tay ----------
 const fpCache = new Map<string, Fingerprint>();
@@ -280,7 +282,7 @@ function build(latex: string): Fingerprint {
 
   return {
     v: FP_VERSION,
-    rawKey: hashKey(raw) + ':' + raw.length,
+    rawKey: rawKeyOf(latex),
     raw,
     type: p.type,
     complete: p.issues.length === 0,
