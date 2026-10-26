@@ -38,3 +38,15 @@ Mỗi PR: test, build, CI Windows xanh, chạy thử bằng `vn.hedu.app.thu`, c
 
 ## 5. Rủi ro còn lại ghi nhận cho E4 (từ review PR #113)
 E1 đã chặn đi theo liên kết/junction bằng `open_inside` (kiểm từng thành phần, mở không-đi-theo, kiểm tay cầm, so đường dẫn thật với thư mục gốc) và mở lại mỗi tệp lúc chép. Còn một khoảng cực hẹp: giữa lần kiểm đường dẫn cuối và lúc mở tệp, thư mục cha vẫn có thể bị hoán thành junction. Cách chặn trọn vẹn là mở theo tay cầm thư mục gốc của Windows (NtCreateFile/`openat` tương đối, không đi theo điểm phân tích) và kiểm đường dẫn cuối của tay cầm đã mở (GetFinalPathNameByHandle). Làm ở E4 (sao lưu/khôi phục cần đúng cơ chế này), kèm test hoán đổi thư mục cha đúng lúc mở.
+
+## 6. Trạng thái triển khai (26/10/2026) và điểm khác thiết kế ban đầu
+Đã làm đủ E1–E5 theo từng PR (xem `claude/nghiem-thu-de-thi.md`); E6 = kiểm thử hiệu năng + tài liệu nghiệm thu. Chưa phát hành, chưa nghiệm thu máy Windows thật.
+- **Lưu trữ**: phương án A đúng như duyệt. Thêm trường `folder` (thư mục ảo, tương thích ngược: vắng = chưa xếp) trong manifest; không đổi `manifestVersion`.
+- **Biên dịch (E2a)**: thư mục build `cache/exam-build/<id>/work` giữ giữa các lần dịch (chép tệp đổi, xoá tệp đã xoá khỏi nguồn). Thành công = mã thoát 0 + không có lỗi nghiêm trọng + có PDF; có PDF mà lỗi thì bỏ, giữ bản tốt cũ. Dừng cả cây tiến trình bằng Job Object (không dùng taskkill); kiểm bằng tiến trình cháu thật.
+- **Xem PDF (E2b)**: pdf.js 4.10.38 bản legacy đã nén, chép vào `dist/` lúc build, nạp bằng `import()`; `isEvalSupported:false`, `useWorkerFetch:false`, `disableFontFace:true` để hợp CSP hiện có (không nới CSP). PDF chuyển qua IPC nhị phân.
+- **Soạn (E3)**: CodeMirror 6 (một khung nhìn, mỗi tệp một trạng thái riêng kể cả hoàn tác). Mã hoá byte nằm ở Rust: nhớ BOM/CRLF; tệp UTF-16/không UTF-8/trộn xuống dòng chỉ xem. Lưu = so dấu vân → chụp bản cũ (`.hedu/versions`, tối đa 10) → ghi tạm → đổi tên → cập nhật sổ.
+- **Thư viện (E4)**: sao lưu giữ 5 bản, tên theo thời gian (đến mili-giây), chỉ dọn bản cũ sau khi bản mới thành công; khôi phục luôn ra dự án mới và đối chiếu hash. Chốt đề cần PDF còn khớp (`files_hash`).
+- **TOCTOU**: `open_inside` kiểm bằng tay cầm đã mở (`GetFinalPathNameByHandleW`); tệp tạm/tệp mới kiểm tay cầm trước khi ghi. Khe còn lại: bước đổi tên tệp tạm → tệp đích vẫn theo đường dẫn (xem tài liệu nghiệm thu).
+- **Hai chế độ (E5)**: KHÁC phương án ban đầu "thêm `\PassOptionsToPackage`": vì `loigiai` và `dethi` loại trừ nhau, HEdu sửa đúng MỘT lệnh `\usepackage[...]{ex_test}` trong BẢN DẪN XUẤT ở thư mục build và hiện dòng đã đổi. Chỉ làm khi nhận diện chắc (đúng một lệnh đang hoạt động); nếu không thì chỉ có "nguyên văn". Bản Lời giải còn tắt `\anloigiai` đang bật. Đã chứng minh với `ex_test` thật.
+- **Nguồn UID**: sổ `.hedu/sources.json` lưu cả bản LaTeX đã chép (để nhận ra "có thể đã thay đổi" mà không cần đoán). Ghi nguồn khi LƯU, chỉ cho đoạn còn nguyên văn trong tệp.
+- **Chưa làm** (đưa vào backlog): đổi tên/xoá/di chuyển từng tệp trong cây tệp; BibTeX/Biber; tô sáng chữ tìm trong PDF; bật lại màn Tạo đề (cần kiểm cấu trúc trước khi trộn mã).

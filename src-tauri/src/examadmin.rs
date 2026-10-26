@@ -11,7 +11,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use crate::examcompile::{self, files_hash, is_running, last_good};
+use crate::examcompile::{files_hash, is_running, last_good};
 use crate::examfiles::{list_files, WRITE_GATE};
 use crate::examlib::{self, bad_component, copy_scanned, fingerprint, index_remove, index_upsert, is_link, iso_now, new_id, open_inside, projects_dir, read_manifest, sha256_reader, summary_of, valid_id, write_manifest, FileRec, Manifest, Meta, ScanFile, Skip, Source, Summary};
 
@@ -883,7 +883,7 @@ mod tests {
     #[test]
     fn khong_chuyen_thung_rac_khi_dang_bien_dich() {
         let (d, root, id) = proj("trashrun", "Đề", &[("main.tex", b"a\n")]);
-        let (_g, _f) = examcompile::register(&id).unwrap();
+        let (_g, _f) = crate::examcompile::register(&id).unwrap();
         assert!(trash_project(&root, &id).is_err());
         assert!(projects_dir(&root.join("exam-library")).join(&id).exists());
         drop(_g);
