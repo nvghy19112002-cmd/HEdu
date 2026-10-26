@@ -192,6 +192,18 @@ function skipBack(s: string, i: number): number {
 export const sameExceptId = (a: string, b: string): boolean => a === b || withoutHeadId(a) === withoutHeadId(b);
 
 /**
+ * Bản sao LaTeX CHỈ để gửi AI phân loại: xoá chữ mã của mọi ứng viên ID trong vùng ID chính (`%[2D1H1-1]` → `%[]`), giữ nguyên
+ * cấu trúc chú thích, nhãn nguồn và mọi ký tự khác — để model không "đọc đáp án" từ ID có sẵn (đúng hay cố tình sai).
+ * Không bao giờ ghi kết quả này vào ngân hàng.
+ */
+export function latexForAi(latex: string): string {
+  const h = readHead(latex);
+  let s = latex;
+  for (const c of [...h.ids].reverse()) s = s.slice(0, c.start) + s.slice(c.end);
+  return s;
+}
+
+/**
  * Các bản "chưa từng có ID" của câu, đúng như trước khi writeHeadId chèn/thay mã: bỏ nguyên văn mỗi `%[mã]` trong chú thích đầu,
  * và (nếu ngay sau đó là xuống dòng) thêm bản bỏ luôn xuống dòng đó. Dùng để quyết định trùng / nhãn chuẩn đã lưu
  * không bị coi là "câu đã sửa" chỉ vì HEdu thêm hay đổi ID. Không bao giờ ghi kết quả này.

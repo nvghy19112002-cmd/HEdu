@@ -1,3 +1,4 @@
+import { latexForAi } from '../../idtex';
 import { buildDefault, indexOf } from '../../taxonomy';
 import { checkLocation } from '../../taxpath';
 import { buildGanIdRequest, compactInfo, compactLatex, formsOfGrade, GAN_ID_BATCH, GAN_ID_SYSTEM, GAN_ID_TASK, parseGanIdReply } from './ganid';
@@ -89,6 +90,22 @@ console.log('Prompt v3 (đặc tả Gán ID mục VIII) + đọc kết quả AI 
   ok(bad.results.get('q1')!.best === null && bad.problems.length >= 1, 'JSON bị cắt ⇒ không gán bừa');
   const wrongGrade = parseGanIdReply(JSON.stringify({ results: [{ id: 'q1', form_id: f10[0].formId, confidence: 'high', reason: '' }] }), tax, g12, ['q1']);
   ok(wrongGrade.results.get('q1')!.best === null, 'Dạng của lớp khác bị loại');
+}
+
+console.log('Không gửi ID chính của câu cho Gemini (bản sao riêng cho AI, LaTeX gốc không đổi)');
+{
+  const body = '\n  Cho cấp số cộng $(u_n)$ có $u_1=2$, $d=3$. Tìm $u_{20}$.\n  \\choice{\\True $59$}{$62$}{$56$}{$60$}\n  \\loigiai{$u_{20}=u_1+19d=59$.}\n\\end{ex}';
+  const right = `\\begin{ex}%[1D3H2-1]${body}`;
+  const wrong = `\\begin{ex}%[Đề Sở HN 2025]%[0H1N1-1]${body}`;
+  const nextLine = `\\begin{ex}\n%[2D1V3-2]${body}`;
+  const items = [right, wrong, nextLine].map((latex, i) => ({ id: `q${i + 1}`, latex, examples: [{ formId: f12[0].formId, latex: '\\begin{ex}%[2D4H1-1]\n Mẫu\n\\end{ex}' }] }));
+  const before = items.map((x) => x.latex);
+  const u = buildGanIdRequest(tax, g12, items, 'gemini-3.5-flash-lite').user;
+  ok(!u.includes('1D3H2-1') && !u.includes('0H1N1-1') && !u.includes('2D1V3-2'), 'ID đúng, ID cố tình sai, ID ở dòng sau \\begin{ex}: model đều KHÔNG nhìn thấy');
+  ok(!u.includes('2D4H1-1'), 'ID của câu mẫu cũng không gửi (câu mẫu đã có form_id riêng)');
+  ok(u.includes('Đề Sở HN 2025') && u.includes('Tìm $u_{20}$') && u.includes('u_1+19d=59'), 'nhãn nguồn, đề, đáp án, lời giải vẫn được gửi đủ');
+  ok(items.every((x, i) => x.latex === before[i]), 'LaTeX gốc của câu không bị sửa');
+  ok(latexForAi(right) === right.replace('1D3H2-1', '') && latexForAi(body) === body, 'bản sao cho AI chỉ xoá chữ mã trong vùng ID chính; câu không có ID giữ nguyên');
 }
 
 if (fail) process.exit(1);

@@ -6,6 +6,7 @@
 import type { AiRequest } from '../client';
 import { FORM_RULES, ruleLine, type FormRule } from '../formrules';
 import { thinkingFor } from '../prefs';
+import { latexForAi } from '../../idtex';
 import { indexOf, type TaxIndex } from '../../taxonomy';
 import { checkLocation, locationOfForm } from '../../taxpath';
 import { LEVELS, type Level, type Location, type Taxonomy } from '../../types';
@@ -114,8 +115,9 @@ export function buildGanIdRequest(tax: Taxonomy, grade: number, items: readonly 
   const gradeName = tax.grades.find((g) => g.grade === grade)?.name ?? `Lớp ${grade}`;
   const tree = forms.map((f) => f.line).join('\n');
   const qs = items.map((it) => {
-    const ex = it.examples.slice(0, 5).map((e) => `  <cau_mau form_id="${e.formId}">\n${compactLatex(e.latex, MAX_EXAMPLE_CHARS)}\n  </cau_mau>`).join('\n');
-    return `<cau_hoi id="${it.id}">\n${compactLatex(it.latex)}\n${ex ? `<cac_cau_mau_da_phan_loai>\n${ex}\n</cac_cau_mau_da_phan_loai>\n` : ''}</cau_hoi>`;
+    // ID chính của câu (và của câu mẫu) bị xoá trong BẢN SAO gửi AI: model phải phân loại từ nội dung, không đọc lại ID có sẵn
+    const ex = it.examples.slice(0, 5).map((e) => `  <cau_mau form_id="${e.formId}">\n${compactLatex(latexForAi(e.latex), MAX_EXAMPLE_CHARS)}\n  </cau_mau>`).join('\n');
+    return `<cau_hoi id="${it.id}">\n${compactLatex(latexForAi(it.latex))}\n${ex ? `<cac_cau_mau_da_phan_loai>\n${ex}\n</cac_cau_mau_da_phan_loai>\n` : ''}</cau_hoi>`;
   }).join('\n\n');
   const user = `<cay_chuong_trinh lop="${gradeName}" dinh_dang="form_id | Phân môn | Chương › Bài › Dạng | quy tắc">\n${tree}\n</cay_chuong_trinh>\n\nPhân loại ${items.length} câu hỏi sau (mỗi id một kết quả):\n\n${qs}`;
   // token ra gồm cả phần "suy nghĩ" ⇒ để dư; 10 câu đo được ~15–300 s với 3.8 Flash ⇒ chờ tối đa 300 s
