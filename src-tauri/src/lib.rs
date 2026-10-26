@@ -4,6 +4,7 @@ mod ai;
 mod db;
 mod dbbackup;
 mod dbcmd;
+mod examcompile;
 mod examlib;
 mod importfs;
 mod jsonmig;
@@ -449,7 +450,10 @@ pub fn run() {
             examlib::exam_lib_create,
             examlib::exam_lib_list,
             examlib::exam_lib_get,
-            examlib::exam_lib_verify
+            examlib::exam_lib_verify,
+            examcompile::exam_compile,
+            examcompile::exam_compile_cancel,
+            examcompile::exam_compile_last
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");

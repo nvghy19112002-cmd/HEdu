@@ -1222,3 +1222,6 @@ a { color: var(--accent); }
 .aid-st.st-khong-du { background: var(--chip); color: var(--ink-3); border-color: var(--line); }
 .aid-st.st-loi { background: var(--danger-soft); color: var(--danger-ink); border-color: var(--danger-line); }
 .aid-why { max-width: 260px; }
+.xl-compile { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-2); }
+.xl-compile h3 { margin: 0; font-size: 14px; }
+.xl-ctx { margin: 4px 0 0; padding: 6px 8px; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--f-code); font-size: 12px; background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px; }
