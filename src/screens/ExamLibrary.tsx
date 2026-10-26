@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { PdfViewer } from '../components/PdfViewer';
+import { ExamWorkspace } from './ExamWorkspace';
 import { canJump, ENGINES, examCompile, examCompileCancel, examCompileLast, groupDiagnostics, RAW_MODE_NOTE, summarize, type CompileOut, type Engine, type GoodInfo } from '../lib/examcompile';
 import { getSettings } from '../lib/tikz';
 import { isDesktop } from '../lib/platform';
@@ -34,6 +35,7 @@ export function ExamLibraryScreen() {
   const [result, setResult] = useState<CompileOut | null>(null);
   const [good, setGood] = useState<GoodInfo | null>(null);
   const [viewing, setViewing] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -46,7 +48,7 @@ export function ExamLibraryScreen() {
   useEffect(() => { if (desktop) void reload(); }, [desktop, reload]);
 
   useEffect(() => {
-    setDetail(null); setCheck(null); setResult(null); setGood(null); setViewing(false);
+    setDetail(null); setCheck(null); setResult(null); setGood(null); setViewing(false); setEditing(false);
     if (activeId) examCompileLast(activeId).then(setGood).catch(() => undefined);
     if (!activeId) return;
     let live = true;
@@ -201,6 +203,7 @@ export function ExamLibraryScreen() {
                       <ul className="xl-lines">{detail.files.slice(0, 300).map((f) => <li key={f.rel}><code>{f.rel}</code> <span className="xl-meta">{formatBytes(f.bytes)}</span></li>)}{detail.files.length > 300 && <li>…và {detail.files.length - 300} tệp khác.</li>}</ul>
                     </details>
                     <button type="button" className="btn btn-sm" disabled={busy} onClick={verify}>Kiểm tra tệp trong thư viện</button>
+                    <button type="button" className="btn btn-sm btn-primary" disabled={!desktop || !detail.mainFile} onClick={() => setEditing(true)}>Biên tập</button>
                     <section className="xl-compile" aria-label="Biên dịch PDF">
                       <h3>Biên dịch PDF</h3>
                       {!detail.mainFile ? <p className="xl-meta">Dự án chưa có tệp chính nên chưa biên dịch được.</p> : (
@@ -253,6 +256,7 @@ export function ExamLibraryScreen() {
         )}
       </div>
       {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={!!result && result.status !== 'ok'} note={RAW_MODE_NOTE} onClose={() => setViewing(false)} />}
+      {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={() => { setEditing(false); void reload(); examCompileLast(activeId).then(setGood).catch(() => undefined); }} />}
     </>
   );
 }

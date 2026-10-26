@@ -30,9 +30,9 @@ function loadLib(): Promise<PdfLib> {
 type Fit = 'width' | 'page' | number;
 const GAP = 12;
 
-interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; onClose(): void }
+interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; onClose?(): void; /** nhúng trong khung (không phủ toàn màn hình, không có nút Đóng) */ embedded?: boolean }
 
-export function PdfViewer({ id, title, stale, note, onClose }: Props) {
+export function PdfViewer({ id, title, stale, note, onClose, embedded }: Props) {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export function PdfViewer({ id, title, stale, note, onClose }: Props) {
     return () => { live = false; void d?.destroy(); };
   }, [id]);
 
-  useEffect(() => { root.current?.focus(); }, []);
+  useEffect(() => { if (!embedded) root.current?.focus(); }, [embedded]);
 
   // đo khung
   useEffect(() => {
@@ -180,14 +180,14 @@ export function PdfViewer({ id, title, stale, note, onClose }: Props) {
   };
 
   const key = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+    if (e.key === 'Escape' && onClose) { e.stopPropagation(); onClose(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) { e.preventDefault(); setFit(stepZoom(scale, 1)); }
     else if ((e.ctrlKey || e.metaKey) && e.key === '-') { e.preventDefault(); setFit(stepZoom(scale, -1)); }
   };
   const n = sizes.length;
 
   return (
-    <div className="pv" role="dialog" aria-modal="true" aria-label={`Xem PDF: ${title}`} ref={root} tabIndex={-1} onKeyDown={key}>
+    <div className={embedded ? 'pv pv-embedded' : 'pv'} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-label={`Xem PDF: ${title}`} ref={root} tabIndex={-1} onKeyDown={key}>
       <div className="pv-bar">
         <b className="pv-title">{title}</b>
         <span className="pv-grp">
@@ -217,7 +217,7 @@ export function PdfViewer({ id, title, stale, note, onClose }: Props) {
         <span className="pv-grp pv-right">
           <button type="button" className="btn btn-sm" onClick={save}>Lưu bản sao…</button>
           <button type="button" className="btn btn-sm" onClick={external}>Mở bằng ứng dụng khác</button>
-          <button type="button" className="btn btn-sm btn-primary" onClick={onClose}>Đóng</button>
+          {onClose && <button type="button" className="btn btn-sm btn-primary" onClick={onClose}>Đóng</button>}
         </span>
       </div>
       {stale && <div className="note warn pv-note" role="status"><div className="note-body"><b>BẢN CŨ</b><span>Lần biên dịch gần nhất không thành công; đây là PDF tốt gần nhất trước đó.</span></div></div>}

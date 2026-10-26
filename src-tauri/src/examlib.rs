@@ -513,7 +513,7 @@ fn default_compile() -> Compile {
     Compile { engine: "pdflatex".into(), timeout_secs: 120, runs: 2 }
 }
 
-fn write_manifest(dir: &Path, m: &Manifest) -> Result<(), String> {
+pub(crate) fn write_manifest(dir: &Path, m: &Manifest) -> Result<(), String> {
     let hd = dir.join(HEDU_DIR);
     fs::create_dir_all(&hd).map_err(|e| format!("Không tạo được thư mục .hedu: {e}"))?;
     let json = serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?;

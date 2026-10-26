@@ -5,6 +5,7 @@ mod db;
 mod dbbackup;
 mod dbcmd;
 mod examcompile;
+mod examfiles;
 mod examlib;
 mod importfs;
 mod jsonmig;
@@ -456,7 +457,16 @@ pub fn run() {
             examcompile::exam_compile_last,
             examcompile::exam_pdf_read,
             examcompile::exam_pdf_export,
-            examcompile::exam_pdf_open_external
+            examcompile::exam_pdf_open_external,
+            examfiles::exam_file_list,
+            examfiles::exam_file_read,
+            examfiles::exam_file_write,
+            examfiles::exam_file_create,
+            examfiles::exam_file_stat,
+            examfiles::exam_file_image,
+            examfiles::exam_draft_write,
+            examfiles::exam_draft_read,
+            examfiles::exam_draft_clear
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
