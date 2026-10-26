@@ -1,5 +1,7 @@
 import { applyAutoId, AUTO_ID_MAX, buildRows, defaultChoice, getAutoIdUndo, levelTarget, planApply, summarize, undoAutoId, undoConflicts, withAutoId, type RowChoice } from './idapply';
 import { IdSuggester } from './idsuggest';
+import { idStatus, strictCode } from './idsync';
+import { sameExceptId, writeHeadId } from './idtex';
 import { addMany, getState, initStore, updateMany } from './store';
 import { buildDefault, indexOf } from './taxonomy';
 import { checkLocation } from './taxpath';
@@ -82,8 +84,15 @@ const r1 = await updateMany(plan.edits.keys(), withAutoId(plan.edits));
 const nw = all().get(rw.uid)!, nb = all().get(rb.uid)!;
 ok(r1.ok && r1.changed === 2, 'ghi 2 câu, báo đúng số');
 ok(nw.formId === A.formId && nw.lessonId === A.lessonId && nw.chapterId === A.chapterId && checkLocation(ix, nw).ok && checkLocation(ix, nb).ok, 'vị trí mới đúng đủ đường dẫn');
-ok(nw.uid === oldW.uid && nw.seq === oldW.seq && nw.latex === oldW.latex && nw.type === oldW.type && nw.tags.join() === oldW.tags.join()
-  && nw.review === 'approved' && nw.createdAt === oldW.createdAt && nw.updatedAt === oldW.updatedAt && nw.level === oldW.level, 'giữ nguyên uid, seq, latex, loại, nhãn, kiểm duyệt, ngày tạo/sửa, mức độ');
+ok(nw.uid === oldW.uid && nw.seq === oldW.seq && sameExceptId(nw.latex, oldW.latex) && nw.type === oldW.type && nw.tags.join() === oldW.tags.join()
+  && nw.review === 'approved' && nw.createdAt === oldW.createdAt && nw.updatedAt === oldW.updatedAt && nw.level === oldW.level, 'giữ nguyên uid, seq, nội dung LaTeX (ngoài vùng ID), loại, nhãn, kiểm duyệt, ngày tạo/sửa, mức độ');
+ok(idStatus(nw, tax).state === 'khop' && idStatus(nb, tax).state === 'khop' && nw.latex === writeHeadId(oldW.latex, (strictCode(nw, nw.level, tax) as { code: string }).code, 'them').latex, 'ID6 mới được ghi vào LaTeX đúng chỗ, khớp vị trí + mức độ');
+{
+  const two = { ...rows[0], snap: { ...rows[0].snap, latex: rows[0].snap.latex.replace('\\begin{ex}', '\\begin{ex}%[2D1H1-1]%[2D1V1-2]') } };
+  const cur = all(); cur.set(rw.uid, { ...cur.get(rw.uid)!, ...two.snap });
+  const pb = planApply([two], choices, cur, ix, false, tax);
+  ok(pb.idBlocked.includes(rw.uid) && !pb.edits.has(rw.uid), 'LaTeX có nhiều ID mâu thuẫn ⇒ KHÔNG ghi vị trí (không để vị trí và ID lệch nhau)');
+}
 ok(JSON.parse(disk.json!).questions.find((q: Question) => q.uid === rw.uid).formId === A.formId, 'đã ghi xuống đĩa');
 const r2 = await updateMany(plan.edits.keys(), withAutoId(plan.edits));
 ok(r2.ok && r2.changed === 0, 'bấm Áp dụng lần hai ⇒ không đổi gì thêm');
