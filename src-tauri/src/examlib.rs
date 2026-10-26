@@ -177,7 +177,7 @@ pub fn bad_rel(rel: &str) -> Option<String> {
 }
 
 /// Liên kết, junction hay điểm phân tích (reparse point) của Windows — không đi theo.
-fn is_link(md: &fs::Metadata) -> bool {
+pub(crate) fn is_link(md: &fs::Metadata) -> bool {
     if md.file_type().is_symlink() {
         return true;
     }
@@ -401,7 +401,7 @@ fn file_warnings(files: &[ScanFile]) -> Vec<String> {
 
 // ---------- thời gian, mã định danh ----------
 
-fn iso_now() -> String {
+pub(crate) fn iso_now() -> String {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) as i64;
     let (days, rem) = (secs.div_euclid(86400), secs.rem_euclid(86400));
     // Howard Hinnant, civil_from_days
@@ -472,7 +472,7 @@ fn fingerprint(files: &[FileRec]) -> String {
 
 // ---------- thư viện ----------
 
-fn projects_dir(lib: &Path) -> PathBuf {
+pub(crate) fn projects_dir(lib: &Path) -> PathBuf {
     lib.join("projects")
 }
 

@@ -193,7 +193,7 @@ fn first_error_line(log: &str) -> String {
         .unwrap_or_else(|| String::from("TeX Live báo lỗi khi dịch hình."))
 }
 
-fn missing_tool(name: &str) -> TikzErr {
+pub(crate) fn missing_tool(name: &str) -> TikzErr {
     TikzErr {
         message: format!(
             "Không chạy được {name}. Nếu TeX Live đã cài nhưng không nằm trong PATH, hãy điền thư mục bin của nó ở mục Hệ thống (ví dụ D:\\texlive\\2025\\bin\\windows), hoặc bấm nút Tìm tự động."
