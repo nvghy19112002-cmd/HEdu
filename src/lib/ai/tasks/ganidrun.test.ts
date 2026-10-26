@@ -55,7 +55,10 @@ console.log('Trộn kết quả AI với ngân hàng');
 const local = (best: string | null, confidence: Suggestion['confidence'], alts: string[] = []): Suggestion => ({ key: 'k', best: best ? o(best) : null, alternatives: alts.map(o), confidence, levelHint: 'NB', evidence: [], notes: ['ghi chú cũ'], taxRev: taxRevision(tax) });
 const ai = (best: string | null, confidence: 'high' | 'medium' | 'low' = 'high', alts: string[] = []) => ({ id: 'k', best: best ? { ...o(best), reason: '' } : null, alternatives: alts.map((a) => ({ ...o(a), reason: '' })), levelHint: 'VD' as const, confidence, reason: 'tích phân cơ bản' });
 const m1 = mergeAi(local(F[0], 'vua', [F[1]]), ai(F[0], 'high', [F[2]]));
-ok(m1.verdict === 'dong-thuan' && m1.suggestion.confidence === 'cao' && m1.suggestion.best?.formId === F[0] && m1.suggestion.levelHint === 'VD', 'cùng chọn ⇒ nhãn cao; mức độ gợi ý lấy của AI (vẫn chỉ tham khảo)');
+ok(m1.verdict === 'dong-thuan' && m1.suggestion.confidence === 'vua' && m1.suggestion.best?.formId === F[0] && m1.suggestion.levelHint === 'VD', 'AI và ngân hàng cùng chọn ⇒ KHÔNG tự nâng lên "cao" (chỉ "vừa" theo lời tự đánh giá của AI); mức độ gợi ý lấy của AI');
+ok(!useByDefault(m1.suggestion.confidence), '… và không được tự dùng làm mặc định');
+const mc = mergeAi(local(F[0], 'cao'), { ...ai(F[0], 'high'), cut: true });
+ok(mc.suggestion.confidence === 'thap' && mc.suggestion.notes.some((x) => /đã lược/.test(x)), 'câu bị lược hình/đề khi gửi AI ⇒ chỉ "thấp", có ghi chú kiểm tra kỹ');
 ok(m1.suggestion.alternatives.length <= 2 && !m1.suggestion.alternatives.some((a) => a.formId === F[0]), 'phương án khác không trùng gợi ý chính, tối đa 2');
 const m2 = mergeAi(local(F[5], 'thap'), ai(F[0], 'high'));
 ok(m2.verdict === 'ai-moi' && m2.suggestion.best?.formId === F[0] && m2.suggestion.confidence === 'vua' && m2.suggestion.alternatives[0]?.formId === F[5], 'ngân hàng chưa chắc + AI chắc ⇒ theo AI (vừa), phương án ngân hàng đứng sau');
@@ -70,10 +73,14 @@ const m4d = mergeAi(local(F[5], 'vua', [F[6]]), ai(null, 'low', [F[7], F[6]]));
 ok(m4d.suggestion.alternatives.length <= 2 && m4d.suggestion.alternatives[0].formId === F[7] && !m4d.suggestion.alternatives.some((a) => a.formId === m4d.suggestion.best?.formId), 'phương án phụ của AI đứng trước; không tự thăng phương án phụ lên làm chính; tối đa 2');
 const m5 = mergeAi(local(null, 'khong'), ai(F[0], 'medium'));
 ok(m5.verdict === 'ai-moi' && m5.suggestion.confidence === 'thap', 'AI không chắc lắm ⇒ chỉ "thấp"');
+ok(['cao'].every((c) => ![m1, m2, m3, m5, mc].some((m) => m.suggestion.confidence === c)), 'không kết quả trộn nào có nhãn "cao"');
 ok(m1.suggestion.taxRev === taxRevision(tax), 'giữ dấu phiên bản cây để kiểm lại trước khi ghi');
 
-const bank = new Map([['a', { uid: 'a', seq: 1, latex: 'L', type: 'tn' as const, level: 'TH' as const, tags: [], createdAt: 1, updatedAt: 1, ...o(F[0]).location }]]);
-ok(examplesFor({ ...local(F[0], 'vua'), evidence: [{ uid: 'a', formId: F[0], score: 0.5, kind: 'near' }, { uid: 'mat', formId: F[0], score: 0.4, kind: 'near' }] }, bank).length === 1, 'câu mẫu lấy từ dẫn chứng còn trong ngân hàng');
+const qa = (uid: string, review?: 'approved' | 'needs_fix') => ({ uid, seq: 1, latex: 'L', type: 'tn' as const, level: 'TH' as const, tags: [], createdAt: 1, updatedAt: 1, ...(review ? { review } : {}), ...o(F[0]).location });
+const bank = new Map([['a', qa('a', 'approved')], ['b', qa('b')], ['c', qa('c', 'needs_fix')], ['d', qa('d', 'approved')]]);
+const evd = { ...local(F[0], 'vua'), evidence: ['a', 'b', 'c', 'mat', 'd'].map((uid) => ({ uid, formId: F[0], score: 0.5, kind: 'near' as const })) };
+ok(examplesFor(evd, bank).length === 2, 'câu mẫu CHỈ lấy câu giáo viên đã duyệt (bỏ câu chưa kiểm tra / cần sửa / đã mất)');
+ok(examplesFor(evd, bank, new Set(['a'])).length === 1, 'loại được câu đang hỏi / đang đo khỏi câu mẫu');
 
 console.log('Luồng Nhập liệu khi AI từ chối chọn Dạng');
 {

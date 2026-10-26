@@ -1,7 +1,7 @@
 // Lô nhập nhiều nguồn (PR N2; phương án: claude/thiet-ke-nhap-nhieu-tep.md). Phần THUẦN: gộp câu từ nhiều tệp, thống kê theo tệp, dựng nhãn nguồn.
 // Mỗi câu nhớ tệp + số dòng TRONG tệp đó; các chỗ khác của màn Nhập liệu vẫn đánh theo thứ tự câu toàn lô.
 import { splitExBlocksAt, parseExTest, type ParsedQuestion } from './extest';
-import { parseCode } from './id';
+import { idFromLatex, idStateOf } from './importid';
 
 /** Giới hạn tạm một lô (đến khi dò trùng nhẹ hơn): rà trùng tốn ~40 KB RAM mỗi câu nhập mới. */
 export const BATCH_MAX = 5000;
@@ -17,7 +17,8 @@ export interface BatchRow {
   rel: string;
   srcIdx: number;
   p: ParsedQuestion;
-  fromId: ReturnType<typeof parseCode>;
+  /** vị trí + mức độ theo ID trong LaTeX (chỉ khi đúng một ID hợp lệ đủ Dạng) */
+  fromId: ReturnType<typeof idFromLatex>;
 }
 
 /** Gộp câu của các nguồn theo thứ tự nguồn rồi thứ tự trong tệp. */
@@ -26,7 +27,7 @@ export function buildRows(sources: readonly ImportSource[]): BatchRow[] {
   sources.forEach((s, srcIdx) => {
     for (const { text: latex, line } of splitExBlocksAt(s.text)) {
       const p = parseExTest(latex);
-      out.push({ latex, line, file: s.name, rel: s.rel, srcIdx, p, fromId: p.idComment ? parseCode(p.idComment) : null });
+      out.push({ latex, line, file: s.name, rel: s.rel, srcIdx, p, fromId: idFromLatex(latex) });
     }
   });
   return out;
@@ -41,8 +42,10 @@ export function perFile(rows: readonly BatchRow[], sources: readonly ImportSourc
     const f = st[r.srcIdx];
     if (!f) continue;
     f.blocks++;
-    if (r.fromId) { if (/-/.test(r.p.idComment ?? '')) f.idOk++; else f.idNoForm++; }
-    else if (r.p.idComment) f.idInvalid++;
+    const id = r.fromId ? 'ok' : idStateOf(r.latex);
+    if (id === 'ok') f.idOk++;
+    else if (id === 'thieu-dang') f.idNoForm++;
+    else if (id === 'khong-hop-le') f.idInvalid++;
     else f.idMissing++;
   }
   return st;

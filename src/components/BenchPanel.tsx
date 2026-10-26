@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { getTaxonomy } from '../lib/curriculum';
 import { getCurrentProfile } from '../lib/ai/client';
-import { composition, GROUP_LABEL, parseBenchFile, reportText, runBench, type BenchCase, type BenchRun } from '../lib/ai/benchrun';
+import { compareText, composition, GROUP_LABEL, parseBenchFile, reportText, runBench, type BenchCase, type BenchRun } from '../lib/ai/benchrun';
 import { currentProfiles } from '../lib/ai/profiles';
 import { AI_MODELS, loadAiPrefs, validModelId } from '../lib/ai/prefs';
 import { getState } from '../lib/store';
@@ -25,7 +25,7 @@ export function BenchPanel() {
   const [queue, setQueue] = useState<string[]>([]);
   const [asking, setAsking] = useState(false);
   const [prog, setProg] = useState<{ done: number; total: number } | null>(null);
-  const [reports, setReports] = useState<{ model: string; text: string }[]>([]);
+  const [reports, setReports] = useState<{ model: string; text: string; run: BenchRun }[]>([]);
   const stop = useRef(false);
   const prefs = loadAiPrefs();
   const comp = composition(cases);
@@ -47,7 +47,7 @@ export function BenchPanel() {
     setProg({ done: 0, total: calls });
     const run: BenchRun = await runBench(getTaxonomy(), cases, model, getState().questions, { onProgress: (done, total) => setProg({ done, total }), shouldStop: () => stop.current });
     setProg(null);
-    setReports((r) => [...r, { model, text: reportText(run, cases, verified) }]);
+    setReports((r) => [...r, { model, text: reportText(run, cases, verified, getTaxonomy()), run }]);
     const rest = queue.slice(1);
     setQueue(rest);
     if (rest.length && !run.error && !run.cancelled) setAsking(true); else setQueue([]);
@@ -87,6 +87,12 @@ export function BenchPanel() {
           </div>
         </>
       )}
+      {reports.length > 1 && (() => { const t = compareText(reports.map((r) => r.run), cases, verified); return (
+        <div className="bench-rep">
+          <pre className="tr-pre" tabIndex={0} aria-label="So sánh model">{t}</pre>
+          <button type="button" className="btn btn-sm" onClick={() => showFile({ title: 'So sánh model', name: 'so-sanh-model.md', text: t, mime: 'text/markdown' })}>Lưu bảng so sánh (.md)</button>
+        </div>
+      ); })()}
       {reports.map((r) => (
         <div key={r.model} className="bench-rep">
           <pre className="tr-pre" tabIndex={0} aria-label={`Báo cáo ${r.model}`}>{r.text}</pre>

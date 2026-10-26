@@ -5,7 +5,8 @@
 // Không dùng #seq hay ID6 (chúng là nhãn hiển thị, không phải danh tính bền vững).
 // Câu bị sửa nội dung ⇒ quyết định cũ HẾT HIỆU LỰC (cặp quay lại "Chưa xử lý"), không áp dụng mù quáng.
 import { useSyncExternalStore } from 'react';
-import { fingerprint } from './dup2';
+import { rawKeyOf } from './dup2';
+import { idlessVariants } from './idtex';
 import { invoke, isDesktop } from './platform';
 import { getStorageMode, sqliteSidecar } from './storage';
 import type { Question } from './types';
@@ -20,7 +21,8 @@ export const DECISION_LABEL: Record<PairDecision, string> = {
 };
 export const WHY_CHOICES = ['Khác điều kiện', 'Khác số liệu', 'Khác hình', 'Cố ý giữ (đề/bài khác nhau)', 'Lý do khác'];
 
-export interface DecisionRec { a: string; b: string; fa: string; fb: string; algo: number; d: PairDecision; why?: string; at: number }
+/** `ia`/`ib` (thêm sau, bản cũ bỏ qua): dấu mã nguồn đã bỏ vùng ID — để thêm/đổi `%[ID]` không làm quyết định thành "câu đã sửa". */
+export interface DecisionRec { a: string; b: string; fa: string; fb: string; ia?: string; ib?: string; algo: number; d: PairDecision; why?: string; at: number }
 /** Câu đã chuyển vào thùng rác (còn nguyên để khôi phục). */
 export interface TrashRec { q: Question; at: number }
 export type GoldLabel = 'true_dup' | 'keep_both' | 'different' | 'unsure';
@@ -31,7 +33,7 @@ export const GOLD_LABEL: Record<GoldLabel, string> = {
   unsure: 'Chưa chắc',
 };
 /** Nhãn chuẩn do giáo viên gắn: dùng để đo độ chính xác của bộ dò trên ngân hàng thật. `kind` = nhãn của bộ dò lúc gắn ('none' = bộ dò không báo cặp này). */
-export interface GoldRec { a: string; b: string; fa: string; fb: string; label: GoldLabel; kind: string; at: number }
+export interface GoldRec { a: string; b: string; fa: string; fb: string; ia?: string; ib?: string; label: GoldLabel; kind: string; at: number }
 /** Tệp phụ: `recs` giữ nguyên như bản beta.18 (bản cũ đọc được); `trash` và `gold` là phần thêm, bản cũ bỏ qua. */
 export interface DecisionFile { v: 1; recs: DecisionRec[]; trash?: TrashRec[]; gold?: GoldRec[] }
 export const TRASH_CAP = 1000;
@@ -106,19 +108,34 @@ function persist(): Promise<boolean> {
   return p;
 }
 
-/** Trạng thái của quyết định đang lưu cho một cặp, đối chiếu với nội dung HIỆN TẠI của hai câu. */
+/** Các dấu chấp nhận được cho nội dung HIỆN TẠI của một câu: chính nó, và các bản trước khi HEdu thêm/đổi `%[ID]`. */
+function keysNow(latex: string): string[] {
+  return [rawKeyOf(latex), ...idlessVariants(latex).map(rawKeyOf)];
+}
+/** Dấu lưu kèm quyết định: `f` = mã nguồn như cũ (bản cũ đọc được), `i` = đã bỏ vùng ID. */
+const keysToStore = (latex: string): { f: string; i: string } => ({ f: rawKeyOf(latex), i: rawKeyOf(idlessVariants(latex)[0] ?? latex) });
+/** Câu còn đúng nội dung lúc lưu bản ghi (chỉ khác vùng ID cũng tính là còn đúng). */
+function sameContent(latex: string, f: string, i: string | undefined): boolean {
+  const now = keysNow(latex);
+  return now.includes(f) || (!!i && now.includes(i));
+}
+const recMatches = (r: { a: string; b: string; fa: string; fb: string; ia?: string; ib?: string }, a: Question, b: Question): boolean => {
+  const [x, y] = a.uid === r.a ? [a, b] : [b, a];
+  return sameContent(x.latex, r.fa, r.ia) && sameContent(y.latex, r.fb, r.ib);
+};
+
+/** Trạng thái của quyết định đang lưu cho một cặp, đối chiếu với nội dung HIỆN TẠI của hai câu (bỏ qua vùng ID). */
 export function statusOf(a: Question, b: Question): { status: DecisionStatus; rec?: DecisionRec } {
   const rec = recs.get(pairKey(a.uid, b.uid));
   if (!rec) return { status: 'none' };
-  const [fa, fb] = a.uid <= b.uid ? [fingerprint(a.latex).rawKey, fingerprint(b.latex).rawKey] : [fingerprint(b.latex).rawKey, fingerprint(a.latex).rawKey];
-  const [ra, rb] = rec.a <= rec.b ? [rec.fa, rec.fb] : [rec.fb, rec.fa];
-  return fa === ra && fb === rb && rec.algo === DUP_ALGO_VERSION ? { status: 'valid', rec } : { status: 'stale', rec };
+  return recMatches(rec, a, b) && rec.algo === DUP_ALGO_VERSION ? { status: 'valid', rec } : { status: 'stale', rec };
 }
 
 /** true nếu đã ghi bền vững; false nếu chỉ giữ trong bộ nhớ (ghi lỗi hoặc tệp không đọc được). */
 export async function setDecision(a: Question, b: Question, d: PairDecision, why?: string): Promise<boolean> {
   const [x, y] = a.uid <= b.uid ? [a, b] : [b, a];
-  recs.set(pairKey(a.uid, b.uid), { a: x.uid, b: y.uid, fa: fingerprint(x.latex).rawKey, fb: fingerprint(y.latex).rawKey, algo: DUP_ALGO_VERSION, d, ...(why ? { why } : {}), at: Date.now() });
+  const kx = keysToStore(x.latex), ky = keysToStore(y.latex);
+  recs.set(pairKey(a.uid, b.uid), { a: x.uid, b: y.uid, fa: kx.f, fb: ky.f, ia: kx.i, ib: ky.i, algo: DUP_ALGO_VERSION, d, ...(why ? { why } : {}), at: Date.now() });
   emit();
   return persist();
 }
@@ -241,12 +258,12 @@ export const goldList = (): GoldRec[] => [...gold.values()].sort((x, y) => x.at 
 export const goldOf = (a: Question, b: Question): GoldRec | undefined => {
   const g = gold.get(pairKey(a.uid, b.uid));
   if (!g) return undefined;
-  const [fa, fb] = a.uid <= b.uid ? [fingerprint(a.latex).rawKey, fingerprint(b.latex).rawKey] : [fingerprint(b.latex).rawKey, fingerprint(a.latex).rawKey];
-  return g.fa === fa && g.fb === fb ? g : undefined; // câu đã sửa ⇒ nhãn cũ không còn dùng để đo
+  return recMatches(g, a, b) ? g : undefined; // câu đã sửa ⇒ nhãn cũ không còn dùng để đo (chỉ đổi ID thì vẫn dùng)
 };
 export async function goldSet(a: Question, b: Question, label: GoldLabel, kind: string): Promise<boolean> {
   const [x, y] = a.uid <= b.uid ? [a, b] : [b, a];
-  gold.set(pairKey(a.uid, b.uid), { a: x.uid, b: y.uid, fa: fingerprint(x.latex).rawKey, fb: fingerprint(y.latex).rawKey, label, kind, at: Date.now() });
+  const kx = keysToStore(x.latex), ky = keysToStore(y.latex);
+  gold.set(pairKey(a.uid, b.uid), { a: x.uid, b: y.uid, fa: kx.f, fb: ky.f, ia: kx.i, ib: ky.i, label, kind, at: Date.now() });
   emit();
   return persist();
 }

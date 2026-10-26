@@ -7,6 +7,7 @@
 //     \loigiai{ ... }
 //   \end{ex}
 import type { QType } from './types';
+import { readHead } from './idtex';
 
 export interface Option { text: string; correct: boolean }
 
@@ -28,20 +29,15 @@ export interface ParsedQuestion {
   issues: string[];
 }
 
-/** Bỏ chú thích LaTeX (%), giữ \% . Trả về cả ID nếu có dạng %[...] */
-export function stripComments(src: string): { text: string; id: string | null } {
-  let id: string | null = null;
+/** Bỏ chú thích LaTeX (%), giữ \% . ID của câu KHÔNG đọc ở đây (một `%[…]` bất kỳ trong câu không phải ID) — xem idtex.readHead. */
+export function stripComments(src: string): { text: string } {
   const lines = src.split('\n').map((line) => {
     for (let i = 0; i < line.length; i++) {
-      if (line[i] === '%' && (i === 0 || line[i - 1] !== '\\')) {
-        const m = /^%\s*\[([^\]]+)\]/.exec(line.slice(i));
-        if (m && !id) id = m[1].trim();
-        return line.slice(0, i);
-      }
+      if (line[i] === '%' && (i === 0 || line[i - 1] !== '\\')) return line.slice(0, i);
     }
     return line;
   });
-  return { text: lines.join('\n'), id };
+  return { text: lines.join('\n') };
 }
 
 const TIKZ_BLOCK = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
@@ -217,7 +213,8 @@ function markCorrect(raw: string): Option {
 }
 
 export function parseExTest(src: string): ParsedQuestion {
-  const { text: noComment, id } = stripComments(src);
+  const { text: noComment } = stripComments(src);
+  const id = readHead(src).ids[0]?.code ?? null;
   let body = noComment;
   const b = body.indexOf('\\begin{ex}');
   const e = body.lastIndexOf('\\end{ex}');

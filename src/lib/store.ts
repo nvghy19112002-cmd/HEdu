@@ -5,11 +5,13 @@
 // Phần giao diện chỉ làm việc với useBank() và các hàm bên dưới, không biết dữ liệu nằm ở đâu.
 import { useSyncExternalStore } from 'react';
 import { parseExTest } from './extest';
+import { sameExceptId, writeHeadId } from './idtex';
 import { CURRENT_SCHEMA, migrate, SchemaNewerError } from './migrate';
 import { invoke, isDesktop } from './platform';
 import { seedQuestions } from './seed';
 import type { Level, ReviewStatus, Location, Question, Taxonomy } from './types';
-import { resetTaxonomy, setTaxonomy } from './curriculum';
+import { getTaxonomy, resetTaxonomy, setTaxonomy } from './curriculum';
+import { idStatus, strictCode } from './idsync';
 import { restoreSidecar, sidecarForBackup } from './dupdecisions';
 import { getStorageMode, sqlitePersistence, storageBootError } from './storage';
 
@@ -217,7 +219,8 @@ export function saveQuestion(draft: Draft, existingUid?: string): Question {
     if (old) {
       const q: Question = { ...old, ...draft, type, updatedAt: now };
       // Nội dung đã được duyệt/đánh dấu nhưng LaTeX hoặc loại câu đổi → phải kiểm tra lại.
-      if (old.review && (draft.latex !== old.latex || type !== old.type)) delete q.review;
+      // Chỉ thêm/đổi ID trong vùng `%[ID]` (đổi vị trí, mức độ) KHÔNG phải sửa nội dung ⇒ giữ trạng thái kiểm duyệt.
+      if (old.review && (!sameExceptId(draft.latex, old.latex) || type !== old.type)) delete q.review;
       set({ ...state, questions: state.questions.map((x) => (x.uid === q.uid ? q : x)) });
       return q;
     }
@@ -396,6 +399,28 @@ export function importBackup(json: string): number {
 export function applyTaxonomy(tax: Taxonomy | null) {
   if (tax) setTaxonomy(tax); else resetTaxonomy();
   set({ ...state, taxonomy: tax });
+}
+
+/**
+ * Đổi cây (đổi mã một nút…) và giữ ID trong LaTeX nhất quán, trong CÙNG một lần cập nhật: câu đang KHỚP ID theo cây cũ mà ID6 đổi theo
+ * cây mới ⇒ thay đúng chữ mã trong vùng `%[ID]`. Câu đang lệch/lỗi giữ nguyên LaTeX (vẫn hiện là cần xử lý). Trả số câu đã cập nhật.
+ */
+export function applyTaxonomyKeepIds(next: Taxonomy): number {
+  const before = getTaxonomy();
+  let n = 0;
+  const questions = state.questions.map((q) => {
+    const st = idStatus(q, before);
+    if (st.state !== 'khop' || !st.meta.ok) return q;
+    const sc = strictCode(q, q.level, next);
+    if (!sc.ok || sc.code === st.meta.code) return q;
+    const w = writeHeadId(q.latex, sc.code, 'thay');
+    if (w.action !== 'thay') return q;
+    n++;
+    return { ...q, latex: w.latex };
+  });
+  setTaxonomy(next);
+  set({ ...state, taxonomy: next, questions: n ? questions : state.questions });
+  return n;
 }
 
 export function resetToSample() {

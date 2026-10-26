@@ -1,4 +1,6 @@
 // Chấm điểm một lượt đo AI gán Dạng trên bộ câu CÓ NHÃN do giáo viên xác minh. Chỉ tính toán, KHÔNG gọi AI, KHÔNG đọc dữ liệu thật.
+// Báo RIÊNG từng tầng: Chương, Bài, Dạng, mức độ và ID6 đầy đủ (Dạng + mức độ) — không dùng độ đúng Dạng thay cho độ đúng ID6.
+import type { Level } from '../types';
 // Mục tiêu chất lượng: ≥ 95% đúng Dạng trong nhóm "đủ tin cậy" (precision) và luôn báo kèm độ bao phủ. Đây là mục tiêu ĐO KIỂM:
 // chỉ được nói "đạt" khi bộ nhãn là nhãn chuẩn của giáo viên và đủ mẫu (xem MIN_SAMPLE); nhãn chưa xác minh ⇒ chỉ là ước lượng.
 
@@ -14,6 +16,15 @@ export interface BenchItem {
   jsonOk: boolean;
   /** thời gian của lượt chia đều cho các câu trong lượt (ms) */
   ms: number;
+  /** đúng Chương / đúng Bài (null = câu không có Dạng phù hợp hoặc AI không chọn) */
+  chapterHit?: boolean | null;
+  lessonHit?: boolean | null;
+  /** mức độ theo nhãn (chữ N/H/V/C của ID6 đúng) và mức độ AI gợi ý */
+  truthLevel?: Level | null;
+  predLevel?: Level | null;
+  /** lượt của câu này quá giờ / lỗi API khác (không tính lỗi JSON) */
+  timeout?: boolean;
+  apiError?: boolean;
 }
 
 export interface BenchScore {
@@ -31,6 +42,18 @@ export interface BenchScore {
   /** trong câu CÓ Dạng phù hợp: tỉ lệ AI từ chối nhầm */
   falseRefusalRate: number | null;
   jsonErrorRate: number;
+  timeoutRate: number;
+  apiErrorRate: number;
+  /** trên câu CÓ Dạng phù hợp: đúng Chương / Bài / Dạng (AI từ chối ⇒ tính là chưa đúng) */
+  chapterAcc: number | null;
+  lessonAcc: number | null;
+  formAcc: number | null;
+  /** trên câu có mức độ trong nhãn: mức độ gợi ý đúng */
+  levelAcc: number | null;
+  /** trên câu có Dạng + mức độ trong nhãn: đúng CẢ Dạng lẫn mức độ = ID6 đúng hoàn toàn */
+  id6Acc: number | null;
+  /** tỉ lệ gán SAI trong nhóm đủ tin cậy (= 1 − precision) */
+  wrongInConfident: number | null;
   avgMs: number;
   /** đủ mẫu để kết luận chưa */
   enoughSample: boolean;
@@ -48,6 +71,8 @@ export function scoreRun(items: readonly BenchItem[]): BenchScore {
   const conf = items.filter((x) => x.confident && x.predicted !== null);
   const noForm = items.filter((x) => x.truth === null);
   const hasForm = items.filter((x) => x.truth !== null);
+  const withLevel = items.filter((x) => !!x.truthLevel);
+  const withId6 = hasForm.filter((x) => !!x.truthLevel);
   return {
     total,
     confidentN: conf.length,
@@ -57,7 +82,15 @@ export function scoreRun(items: readonly BenchItem[]): BenchScore {
     wrongFillRate: rate(noForm.filter((x) => x.predicted !== null).length, noForm.length),
     correctRefusalRate: rate(noForm.filter((x) => x.predicted === null).length, noForm.length),
     falseRefusalRate: rate(hasForm.filter((x) => x.predicted === null).length, hasForm.length),
-    jsonErrorRate: total ? items.filter((x) => !x.jsonOk).length / total : 0,
+    jsonErrorRate: total ? items.filter((x) => !x.jsonOk && !x.timeout && !x.apiError).length / total : 0,
+    timeoutRate: total ? items.filter((x) => x.timeout).length / total : 0,
+    apiErrorRate: total ? items.filter((x) => x.apiError).length / total : 0,
+    chapterAcc: rate(hasForm.filter((x) => x.chapterHit === true).length, hasForm.length),
+    lessonAcc: rate(hasForm.filter((x) => x.lessonHit === true).length, hasForm.length),
+    formAcc: rate(hasForm.filter(hit).length, hasForm.length),
+    levelAcc: rate(withLevel.filter((x) => x.predLevel === x.truthLevel).length, withLevel.length),
+    id6Acc: rate(withId6.filter((x) => hit(x) && x.predLevel === x.truthLevel).length, withId6.length),
+    wrongInConfident: conf.length ? conf.filter((x) => !hit(x)).length / conf.length : null,
     avgMs: total ? items.reduce((a, x) => a + x.ms, 0) / total : 0,
     enoughSample: total >= MIN_SAMPLE,
   };
@@ -71,7 +104,9 @@ export function describeScore(s: BenchScore, verifiedLabels: boolean): string {
     `Mẫu: ${s.total} câu${s.enoughSample ? '' : ` (chưa đủ ${MIN_SAMPLE} — chỉ tham khảo)`}.`,
     `Nhóm đủ tin cậy: ${s.confidentN} câu (bao phủ ${pct(s.coverage)}); đúng Dạng trong nhóm này: ${pct(s.precision)} (mục tiêu ≥ ${TARGET_PRECISION * 100}%).`,
     `Độ đúng toàn tập: ${pct(s.accuracyAll)}. Câu không có Dạng: từ chối đúng ${pct(s.correctRefusalRate)}, gán bừa ${pct(s.wrongFillRate)}. Câu có Dạng: từ chối nhầm ${pct(s.falseRefusalRate)}.`,
-    `Lỗi JSON: ${pct(s.jsonErrorRate)}; thời gian trung bình ${(s.avgMs / 1000).toFixed(1)} giây/câu.`,
+    `Câu có Dạng phù hợp — đúng Chương ${pct(s.chapterAcc)} · đúng Bài ${pct(s.lessonAcc)} · đúng Dạng ${pct(s.formAcc)}. Mức độ đúng ${pct(s.levelAcc)}. ID6 đúng hoàn toàn (Dạng + mức độ) ${pct(s.id6Acc)}.`,
+    `Gán sai trong nhóm đủ tin cậy: ${pct(s.wrongInConfident)}.`,
+    `Lỗi JSON ${pct(s.jsonErrorRate)} · quá giờ ${pct(s.timeoutRate)} · lỗi API ${pct(s.apiErrorRate)}; thời gian trung bình ${(s.avgMs / 1000).toFixed(1)} giây/câu.`,
   ];
   const reached = s.precision !== null && s.precision >= TARGET_PRECISION;
   const lowCoverage = s.coverage < MIN_COVERAGE;
