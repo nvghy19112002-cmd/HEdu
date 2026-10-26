@@ -1,4 +1,5 @@
 import { latexForAi } from '../../idtex';
+import { ruleLine } from '../formrules';
 import { buildDefault, indexOf } from '../../taxonomy';
 import { checkLocation } from '../../taxpath';
 import { buildGanIdRequest, compactInfo, compactLatex, formsOfGrade, GAN_ID_BATCH, GAN_ID_SYSTEM, GAN_ID_TASK, parseGanIdReply } from './ganid';
@@ -59,15 +60,25 @@ ok(missing.results.get('q1')!.best === null && missing.problems.some((x) => x.in
 const fake = parseGanIdReply(JSON.stringify({ results: [{ id: 'q1', form_id: 'f-bia', confidence: 'high', reason: 'x' }] }), tax, g12, ['q1']);
 ok(fake.results.get('q1')!.best === null, 'Dạng bịa (không có trong cây) ⇒ bị bỏ');
 
-console.log('Prompt v3 (đặc tả Gán ID mục VIII) + đọc kết quả AI từ chối');
+console.log('Prompt v4 (đặc tả Gán ID mục VIII) + đọc kết quả AI từ chối');
 {
-  ok(GAN_ID_TASK.version === 3, 'đổi prompt ⇒ phiên bản nhiệm vụ 3');
+  ok(GAN_ID_TASK.version === 4, 'đổi prompt ⇒ phiên bản nhiệm vụ 4');
   ok(/Không tạo mã ID6, không sửa câu hỏi/.test(GAN_ID_SYSTEM) && /Không suy ra vị trí từ số chương của sách giáo khoa/.test(GAN_ID_SYSTEM), 'AI chỉ chọn Dạng; không tạo ID6; không theo số chương sách');
   ok(/công cụ phụ/.test(GAN_ID_SYSTEM) && /u20/.test(GAN_ID_SYSTEM), 'không lấy phương pháp phụ trong lời giải làm căn cứ tuyệt đối (ví dụ cấp số cộng)');
   ok(/không chỉ theo các từ "công thức", "định lý", "mệnh đề", "đúng\/sai"/.test(GAN_ID_SYSTEM) && /không mặc định Dạng đầu tiên/.test(GAN_ID_SYSTEM), 'câu lý thuyết: theo nội dung, không mặc định Dạng đầu');
+  ok(/chọn Dạng lý thuyết của đúng Bài đó nếu có; Bài không có Dạng lý thuyết thì form_id = null/.test(GAN_ID_SYSTEM) && /câu phải tính hay chứng minh thì chọn Dạng tính/.test(GAN_ID_SYSTEM), 'E3: lý thuyết thuần ⇒ Dạng lý thuyết của Bài nếu có, không có thì để trống; câu tính ⇒ Dạng tính');
   ok(/form_id = null/.test(GAN_ID_SYSTEM) && /Không chọn Dạng "gần nhất"/.test(GAN_ID_SYSTEM) && /nhiều Dạng ngang nhau thì từ chối/.test(GAN_ID_SYSTEM), 'không rõ ⇒ null; nhiều Dạng ngang nhau ⇒ từ chối');
   ok(/hình bị lược làm thiếu căn cứ/.test(GAN_ID_SYSTEM) && /mức tự đánh giá/.test(GAN_ID_SYSTEM), 'câu có hình bị lược ⇒ không tự tin; confidence chỉ là tự đánh giá');
   ok(/độc lập với tên Dạng/.test(GAN_ID_SYSTEM) && /level = null/.test(GAN_ID_SYSTEM) && !/tạo Dạng mới/.test(GAN_ID_SYSTEM), 'mức độ độc lập, cho phép null');
+  {
+    const lines = formsOfGrade(tax, g12);
+    const theory = lines.filter((f) => /l[ýí] thuyết/i.test(f.path));
+    ok(theory.length > 0 && theory.every((f) => /chọn khi: câu lý thuyết thuần/.test(f.line) && /không chọn khi: câu phải tính hoặc chứng minh/.test(f.line)), 'E3: mọi Dạng lý thuyết gửi kèm quy tắc "chọn khi / không chọn khi"');
+    ok(lines.filter((f) => !/l[ýí] thuyết/i.test(f.path)).every((f) => !/chọn khi:/.test(f.line)), 'Dạng không phải lý thuyết: chưa có quy tắc riêng');
+    const f0 = lines[0].formId;
+    ok(ruleLine(f0, { [f0]: { when: 'A', not: 'B' } }, 'Dạng 1. Câu hỏi lý thuyết') === 'chọn khi: A; không chọn khi: B', 'quy tắc ghi tay ưu tiên hơn quy tắc lý thuyết tự suy');
+    ok(ruleLine('x', {}, 'Dạng 2. Tính giá trị') === '', 'Dạng thường không có quy tắc');
+  }
   ok(GAN_ID_SYSTEM.length < 3800, 'prompt gọn (dưới 3.800 ký tự) cho model nhẹ như Flash-Lite');
   const sch = (buildGanIdRequest(tax, g12, [{ id: 'q1', latex: 'x', examples: [] }], 'gemini-3.5-flash-lite').schema as { properties: { results: { items: { properties: Record<string, unknown>; required: string[] } } } }).properties.results.items;
   ok('theory' in sch.properties && !sch.required.includes('theory') && sch.required.includes('form_id'), 'khuôn JSON có cờ theory (không bắt buộc); form_id vẫn bắt buộc và cho phép null');
