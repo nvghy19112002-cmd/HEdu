@@ -35,7 +35,7 @@ Quy ước tại thời điểm nhập: ID khớp ngân hàng ⇒ Dạng "máy";
 6. **Nghiệm thu thực tế**: bản sao dữ liệu thật, thao tác Windows, kiểm tra khôi phục.
 
 ## 5. Rủi ro đã nhận diện
-- Tạm dùng "Đã duyệt" làm căn cứ có thể đưa Dạng chưa được xác nhận vào căn cứ nếu giáo viên duyệt nội dung mà không để ý Dạng ⇒ giai đoạn 2 sẽ tách hẳn.
+- "Đã duyệt" nội dung đã được TÁCH HẲN khỏi căn cứ (chốt 28/10/2026): chỉ Dạng giáo viên xác minh là căn cứ. Hệ quả cần biết: ngân hàng hiện có chưa có câu nào làm căn cứ cho tới khi giáo viên xác nhận Dạng (hàng đợi xác minh, PR #131). Ví dụ gửi cho AI trong app vẫn lấy câu nội dung "Đã duyệt" làm THAM KHẢO (chưa đổi hành vi; đề nghị chủ dự án quyết có chuyển sang Dạng giáo viên xác minh không).
 - Tệp phụ không nằm trong cùng giao dịch với câu hỏi ⇒ mất đồng bộ chỉ làm câu thành "chưa xác minh", không làm sai Dạng.
 - Chuyển câu "vị trí chung" sang không ghi ID đổi hành vi cũ: báo cáo nhập và hộp xác nhận phải ghi rõ.
 

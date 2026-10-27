@@ -1,8 +1,8 @@
 // Kiểm chứng ID có sẵn trong LaTeX khi nhập (quy tắc 15a, claude/thiet-ke-dot1-cung-co-ngan-hang.md mục 3.1).
 // ID đọc từ tệp nguồn là bằng chứng CẦN kiểm chứng: mã đúng cú pháp và còn trong cây chưa chứng minh đúng Dạng.
-// Bằng chứng độc lập = IdSuggester dựng CHỈ trên câu ĐÃ DUYỆT của ngân hàng (câu chưa kiểm tra / cần sửa không làm căn cứ).
+// Bằng chứng độc lập = IdSuggester dựng CHỈ trên câu có Dạng do GIÁO VIÊN XÁC MINH (còn hiệu lực). Nội dung "Đã duyệt", gợi ý máy/AI và Dạng "máy phân loại" KHÔNG phải căn cứ.
 //   khop             gợi ý tin cậy "cao/vừa" trùng đúng Dạng của ID ⇒ vào bình thường.
-//   chua-kiem-chung  không đủ căn cứ (kho chưa có câu đã duyệt đủ gần, gợi ý thấp) ⇒ vào, nhưng KHÔNG gọi là đã kiểm chứng.
+//   chua-kiem-chung  không đủ căn cứ (kho chưa có câu được giáo viên xác minh Dạng đủ gần, gợi ý thấp) ⇒ vào, nhưng KHÔNG gọi là đã kiểm chứng.
 //   bat-dong         gợi ý tin cậy "cao" chỉ Dạng khác ID ⇒ KHÔNG nhập lặng lẽ: giáo viên chọn.
 // Mức độ (N/H/V/C) không bao giờ tự đổi: đổi Dạng/vị trí vẫn giữ mức độ gốc của ID; muốn đổi mức độ phải chọn riêng.
 // Quyết định của giáo viên gắn với đúng kết quả kiểm đã xem (`verificationSig`): gợi ý/cây/câu đổi ⇒ phải chọn lại.
@@ -42,8 +42,8 @@ export interface IdVerification {
 const NO_STATE: Effective = { form: 'chua', level: 'chua', unclassified: false };
 
 /**
- * Câu làm căn cứ kiểm chứng: Dạng "giáo viên xác minh" hoặc nội dung "Đã duyệt" (tạm thời, đến khi có hàng đợi xác nhận Dạng),
- * trừ câu "cần xem lại" và câu "chưa phân loại". Câu chưa duyệt / cần sửa / "máy phân loại" không bao giờ là căn cứ.
+ * Câu làm căn cứ kiểm chứng: CHỈ câu có Dạng "giáo viên xác minh" còn hiệu lực (không phải "cần xem lại" hay "chưa phân loại").
+ * Nội dung "Đã duyệt" (đề, đáp án, lời giải, hình) là việc khác và KHÔNG tự thành nhãn ID chuẩn; Dạng "máy phân loại" cũng không phải căn cứ.
  */
 export const evidenceQuestions = (questions: readonly Question[], effOf: (q: Question) => Effective = () => NO_STATE): Question[] =>
   questions.filter((q) => isEvidence(q, effOf(q)));

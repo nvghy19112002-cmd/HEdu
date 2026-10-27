@@ -126,7 +126,7 @@ export function AutoIdDialog({ qs: picked, onClose, onDone }: { qs: readonly Que
     onDone(`Đã ghi ID (vị trí + LaTeX) cho ${nf.format(r.changed)}/${nf.format(plan.edits.size)} câu${skipped ? `. ${skipped}` : ''}.`);
   };
 
-  /** Hỏi AI cho MỌI câu trong bảng (kể cả câu đã có ID hợp lệ: "Kiểm tra lại bằng AI"). Câu mẫu chỉ lấy câu đã duyệt, trừ chính nó. */
+  /** Hỏi AI cho MỌI câu trong bảng (kể cả câu đã có ID hợp lệ: "Kiểm tra lại bằng AI"). Câu mẫu gửi AI chỉ lấy câu có nội dung đã duyệt (ví dụ tham khảo, không phải căn cứ xác minh ID), trừ chính nó. */
   const aiJobs = () => {
     const bank = new Map(getState().questions.map((q) => [q.uid, q]));
     return (rows ?? []).map((r) => ({ key: r.uid, latex: r.snap.latex, grade: r.snap.grade, examples: examplesFor(localRef.current.get(r.uid) ?? r.suggestion, bank, new Set([r.uid])) }));
