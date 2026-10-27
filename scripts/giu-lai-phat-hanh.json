@@ -1,0 +1,4 @@
+{
+  "ghi_chu": "Các bản phát hành được GHIM: scripts/prune-releases.mjs không bao giờ xóa chúng. Bản beta.34 là bản quay lại gần nhất còn tốt cho tới khi chủ dự án duyệt chính sách khác. Muốn bỏ ghim phải sửa tệp này qua PR được duyệt.",
+  "tags": ["v0.1.0-beta.34"]
+}
