@@ -5,7 +5,8 @@ import { getStorageMode } from './storage';
 import type { IdState } from './importid';
 
 export type RowDecision = 'import' | 'skip-dup' | 'skip-user';
-export type IdPlace = 'dung-ma' | 'dang-dau' | 'ai' | 'vi-tri-chung';
+/** 'dung-ma' là giá trị cũ (nhật ký trước PR 1B): ID theo tệp, chưa được kiểm chứng. */
+export type IdPlace = 'dung-ma' | 'ma-khop' | 'ma-chua-kiem-chung' | 'ma-giu-tay' | 'dang-dau' | 'ai' | 'vi-tri-chung';
 
 export interface ReportRow {
   file: string;
@@ -25,7 +26,8 @@ export interface ReportRow {
 }
 
 export interface FileStat { file: string; rel: string; found: number; imported: number; skipped: number }
-export interface IdStat { ok: number; firstForm: number; ai: number; general: number }
+/** `unverified`/`kept` có từ PR 1B (vắng ở nhật ký cũ): trong số `ok`, bao nhiêu câu ID chưa kiểm chứng / bao nhiêu câu bất đồng mà giáo viên giữ ID. */
+export interface IdStat { ok: number; firstForm: number; ai: number; general: number; unverified?: number; kept?: number }
 export interface ImportReport {
   v: 1;
   at: number;
@@ -52,7 +54,7 @@ export interface ImportReport {
 
 export const DECISION_TEXT: Record<RowDecision, string> = { import: 'Đã nhập', 'skip-dup': 'Bỏ qua (nghi trùng)', 'skip-user': 'Bỏ qua (bạn chọn)' };
 export const ID_STATE_TEXT: Record<IdState, string> = { ok: 'Có ID đủ', 'thieu-dang': 'ID thiếu Dạng', 'khong-hop-le': 'ID không hợp lệ', 'khong-co': 'Không có ID' };
-export const ID_PLACE_TEXT: Record<IdPlace, string> = { 'dung-ma': 'Theo mã ID', 'dang-dau': 'Dạng đầu của Bài', ai: 'Gợi ý đã chọn', 'vi-tri-chung': 'Vị trí chung' };
+export const ID_PLACE_TEXT: Record<IdPlace, string> = { 'dung-ma': 'Theo mã ID', 'ma-khop': 'Theo mã ID (khớp ngân hàng)', 'ma-chua-kiem-chung': 'Theo mã ID (chưa kiểm chứng)', 'ma-giu-tay': 'Giữ mã ID (bạn chọn, bất đồng ngân hàng)', 'dang-dau': 'Dạng đầu của Bài', ai: 'Gợi ý đã chọn', 'vi-tri-chung': 'Vị trí chung' };
 
 export function buildReport(input: { at: number; name: string; batchTag?: string; paste: boolean; restorePoint: boolean; rows: ReportRow[]; warnings?: string[] }): ImportReport {
   const rows = input.rows;
@@ -64,13 +66,13 @@ export function buildReport(input: { at: number; name: string; batchTag?: string
     if (r.decision === 'import') s.imported++; else s.skipped++;
     byFile.set(k, s);
   }
-  const ids: IdStat = { ok: 0, firstForm: 0, ai: 0, general: 0 };
+  const ids: IdStat = { ok: 0, firstForm: 0, ai: 0, general: 0, unverified: 0, kept: 0 };
   for (const r of rows) {
     if (r.decision !== 'import') continue;
     if (r.idPlace === 'vi-tri-chung') ids.general++;
     else if (r.idPlace === 'ai') ids.ai++;
     else if (r.idPlace === 'dang-dau') ids.firstForm++;
-    else ids.ok++;
+    else { ids.ok++; if (r.idPlace === 'ma-chua-kiem-chung') ids.unverified!++; else if (r.idPlace === 'ma-giu-tay') ids.kept!++; }
   }
   const imp = rows.filter((r) => r.decision === 'import');
   return {
@@ -134,7 +136,7 @@ export function reportMd(r: ImportReport): string {
   L.push(`- Tìm thấy: ${r.found} câu`, `- Đã nhập: ${r.imported} câu`, `- Bỏ qua vì nghi trùng: ${r.skippedDup} câu`, `- Bỏ qua theo lựa chọn của bạn: ${r.skippedUser} câu`);
   L.push(`- Điểm khôi phục trước khi nhập: ${r.restorePoint ? 'đã chụp' : 'không áp dụng (chế độ lưu cũ hoặc lô nhỏ)'}`, '');
   L.push('## Vị trí của các câu đã nhập', '');
-  L.push(`- Theo mã ID đủ: ${r.ids.ok}`, `- ID thiếu Dạng (vào Dạng đầu của Bài): ${r.ids.firstForm}`, `- Theo gợi ý bạn đã chọn: ${r.ids.ai}`, `- Vào vị trí chung (cần xếp lại sau): ${r.ids.general}`, '');
+  L.push(`- Theo mã ID đủ: ${r.ids.ok}${r.ids.unverified ? ` (chưa kiểm chứng: ${r.ids.unverified})` : ''}${r.ids.kept ? ` (bất đồng ngân hàng, bạn giữ ID: ${r.ids.kept})` : ''}`, `- ID thiếu Dạng (vào Dạng đầu của Bài): ${r.ids.firstForm}`, `- Theo gợi ý bạn đã chọn: ${r.ids.ai}`, `- Vào vị trí chung (cần xếp lại sau): ${r.ids.general}`, '');
   L.push('## Kiểm tra', '');
   L.push(`- Lỗi xem trước: ${r.previewErrors} câu; cảnh báo: ${r.previewWarnings} câu`);
   L.push(r.texChecked ? `- Biên dịch TeX Live: ${r.texChecked} câu đã thử, ${r.texFailed} câu lỗi` : '- Biên dịch TeX Live: chưa chạy', '');
