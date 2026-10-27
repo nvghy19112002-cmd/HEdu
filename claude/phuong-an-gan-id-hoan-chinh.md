@@ -56,3 +56,11 @@ Ba loại "bản sao" khác nhau, đã ghi rõ trên giao diện:
 | **File sao lưu JSON** ("Sao lưu thủ công") | **Có** (`idReview`; file cũ không có thì mọi câu là "chưa xác minh") | Mang ngân hàng sang máy khác. Khôi phục THAY câu hỏi, GỘP tệp phụ (bản mới hơn thắng, không xoá bản ghi chỉ có ở máy hiện tại). Không gồm điểm khôi phục. |
 | **Xuất ra JSON (cấu trúc cũ)** | **Có**, ở `id-review.json` cạnh `hedu.json` và `dup-decisions.json` (bản HEdu cũ bỏ qua tệp lạ) | Trao đổi / quay về bản HEdu cũ. KHÔNG phải sao lưu đầy đủ (không có điểm khôi phục, nhật ký). Chuyển ngược JSON → SQLite mang theo `id-review.json`; tệp hỏng bị bỏ qua kèm cảnh báo (mọi câu thành "chưa xác minh"), không chặn chuyển. |
 Quy tắc an toàn khi thay cả tệp dữ liệu (khôi phục `.db`, khôi phục sau cập nhật): ghi nốt trạng thái hiện tại, rồi KHOÁ ghi để bản trong bộ nhớ không đè lên bản vừa khôi phục; sau khôi phục app tải lại. Cập nhật/khôi phục không bị chặn vô cớ khi không có gì chưa ghi.
+
+## 9. Hàng đợi xác minh từng câu (PR 1E, 28/10/2026)
+Nút "Hàng đợi xác minh (N)" trong Ngân hàng, xử lý các câu của DANH SÁCH ĐANG LỌC chưa được giáo viên xác minh Dạng. Nhóm theo thứ tự: cần xem lại → chưa phân loại → máy phân loại → chưa xác minh.
+- Phím: `Y`/Enter xác nhận Dạng · `M` xác nhận mức độ · `N` cần xem lại · `1`-`3` đổi sang Dạng gợi ý (rồi xác nhận) · `D` chọn Dạng khác · `U` hoàn tác · `S`/`→` bỏ qua · `←` về trước · `L` lời giải · `?` bảng phím · `Esc` đóng.
+- Đổi Dạng = đổi vị trí và ghi ID6 mới vào `%[ID]` cùng lúc, mức độ giữ nguyên; không ghi được thì không đổi gì. Hoàn tác trả lại ĐÚNG vị trí và LaTeX cũ nếu câu chưa bị sửa tiếp; hoàn tác cũng là một bước trong lịch sử.
+- Duyệt NỘI DUNG là ô riêng trong hàng đợi, không bị các phím trên đổi; không tự thành xác minh Dạng.
+- Gợi ý chỉ để tham khảo (dựa trên câu trong ngân hàng), không phải căn cứ kiểm chứng. Mỗi lần giáo viên xác nhận tạo thêm căn cứ kiểm chứng cho câu nhập sau.
+- Chưa làm: hàng đợi chạy nền cho lô rất lớn, phím tắt tuỳ biến, lưu vị trí đang xem giữa các phiên.

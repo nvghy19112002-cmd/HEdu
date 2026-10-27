@@ -1313,3 +1313,25 @@ a { color: var(--accent); }
 .sp-del { color: var(--danger-ink); background: var(--danger-soft); display: block; }
 .sp-add { color: var(--ok-ink); background: var(--ok-bg); display: block; }
 .sp-same { display: block; }
+
+/* Hàng đợi xác minh từng câu (PR 1E) */
+.vq-overlay { position: fixed; inset: 0; z-index: 70; background: var(--paper); overflow: auto; padding: 16px; }
+.vq { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.vq-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.vq-head h2 { margin: 0; font-size: 18px; }
+.vq-acts { margin-left: auto; display: inline-flex; gap: 8px; }
+.vq-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; list-style: none; margin: 0; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 8px; font-size: 13px; }
+.vq-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+.vq-q { border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; background: var(--paper); min-width: 0; }
+.vq-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.vq-side { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 8px; }
+.vq-card { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.vq-actions { display: flex; flex-direction: column; gap: 6px; }
+.vq-actions .btn { justify-content: flex-start; }
+.vq-opt { justify-content: flex-start; text-align: left; white-space: normal; height: auto; padding: 6px 10px; }
+.vq kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; margin-right: 4px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; font: 600 12px/1.6 var(--mono, monospace); text-align: center; background: var(--chip); color: var(--ink-2); }
+@media (max-width: 900px) { .vq-body { grid-template-columns: 1fr; } .vq-side { position: static; } }
+/* Hàng đợi xác minh: ô chọn Dạng khác có nhãn rất dài — không được làm tràn khung */
+.vq-card .qsel { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
+.vq-card select { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.vq-body > * { min-width: 0; }

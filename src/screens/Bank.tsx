@@ -36,6 +36,8 @@ import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, e
 import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
 import { IdReviewControl, IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
+import { VerifyQueue } from '../components/VerifyQueue';
+import { scopeCounts } from '../lib/verifyqueue';
 import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 
 function fold(s: string) {
@@ -129,6 +131,8 @@ export function BankScreen() {
   const [idF, setIdF] = useState<'all' | 'chua' | 'may' | 'gv' | 'xem-lai' | 'chua-phan-loai'>('all');
   const list = useMemo(() => (idF === 'all' ? facets.list : facets.list.filter((q) => { const e = effOf(q); return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF; })), [facets.list, idF, effOf]);
   const resultUids = useMemo(() => new Set(list.map((q) => q.uid)), [list]);
+  const [vqOpen, setVqOpen] = useState(false); // hàng đợi xác minh từng câu (PR 1E)
+  const vqCount = useMemo(() => scopeCounts(list, effOf)['tat-ca'], [list, effOf]);
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
@@ -526,6 +530,7 @@ export function BankScreen() {
                 )}
               </span>
               <span className="qtools-r">
+                <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Hàng đợi xác minh ({nf.format(vqCount)})</button>
                 <label className="qsel">Dạng
                   <select value={idF} onChange={(e) => { setPage(0); setIdF(e.target.value as typeof idF); }} aria-label="Lọc theo trạng thái xác minh Dạng">
                     <option value="all">Tất cả</option>
@@ -595,6 +600,7 @@ export function BankScreen() {
           <BankSidebar variant="drawer" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
         </>
       )}
+      {vqOpen && <VerifyQueue pool={list} onClose={() => setVqOpen(false)} />}
       {dupOpen && <DupCheck questions={questions} selected={sel} initialSelection={dupSel} onClose={() => { setDupOpen(false); setDupSel(false); }} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
       {undo && (
         <div className="undo-bar" role="status">
