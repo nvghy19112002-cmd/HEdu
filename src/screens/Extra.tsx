@@ -20,7 +20,7 @@ import { CONFIDENCE_LABEL, IdSuggester } from '../lib/idsuggest';
 import { taxRevision } from '../lib/taxpath';
 import { idRowsOf, planDrafts, readIds } from '../lib/importplan';
 import { effectiveOf, flushIdReview, getRec, makeRec, putRecs, useIdReview } from '../lib/idreview';
-import { decide, isFresh, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
+import { decide, effectiveDecision, isFresh, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
@@ -251,8 +251,8 @@ export function ImportScreen() {
   const [onlyIdBD, setOnlyIdBD] = useState(false);
   const verifOf = (i: number): IdVerification | undefined => { const v = verifs.get(i); return v && isFresh(v, latexOf(i), taxRevNow) ? v : undefined; };
   /** Quyết định của giáo viên còn hiệu lực: đúng câu, đúng kết quả kiểm (gợi ý + cây) đã xem; không thì phải chọn lại. */
-  const idDecOf = (i: number): IdDecision | undefined => usableDecision(verifOf(i), idDecs[i]);
-  const setChoice = (i: number, choice: IdChoice | '') => setIdDecs((m) => { const n = { ...m }; const v = verifOf(i); if (choice && v) n[i] = decide(v, choice, m[i] && usableDecision(v, m[i]) ? m[i].level : 'giu'); else delete n[i]; return n; });
+  const idDecOf = (i: number): IdDecision | undefined => effectiveDecision(verifOf(i), idDecs[i]);
+  const setChoice = (i: number, choice: IdChoice) => setIdDecs((m) => { const n = { ...m }; const v = verifOf(i); if (v) n[i] = decide(v, choice, m[i] && usableDecision(v, m[i]) ? m[i].level : 'giu'); else delete n[i]; return n; });
   const setLevelChoice = (i: number, lv: LevelChoice) => setIdDecs((m) => { const v = verifOf(i); const d = m[i]; if (!v || !d || !usableDecision(v, d)) return m; return { ...m, [i]: { ...d, level: lv } }; });
   const shownRows = rows
     .map((r, i) => ({ r, i }))
@@ -301,7 +301,7 @@ export function ImportScreen() {
     return () => { stop = true; clearTimeout(t); };
   }, [idRows, questions, taxNow, reviewVer]); // eslint-disable-line react-hooks/exhaustive-deps
   const vsum = summarizeVerify(idRows, verifOf, idDecOf, (i) => decOf(i) === 'import');
-  const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0 && vsum.pending === 0;
+  const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0;
   /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
   const headIdNote = (latex: string): string | null => {
     const r = readLatexId(latex, getTaxonomy());
@@ -330,7 +330,7 @@ export function ImportScreen() {
       const st = idStateOf(latexOf(i));
       const key = statusOf(i).key;
       const vv = st === 'ok' ? verifOf(i) : undefined;
-      const idPlaceOk: IdPlace = vv?.verdict === 'khop' ? 'ma-khop' : vv?.verdict === 'bat-dong' ? (idDecOf(i)?.choice === 'giu' ? 'ma-giu-tay' : idDecOf(i)?.choice === 'goi-y' ? 'ai' : 'vi-tri-chung') : 'ma-chua-kiem-chung';
+      const idPlaceOk: IdPlace = vv?.verdict === 'khop' ? 'ma-khop' : vv?.verdict === 'bat-dong' ? (idDecOf(i)?.choice === 'goi-y' ? 'ai' : idDecOf(i)?.choice === 'chung' ? 'vi-tri-chung' : idDecOf(i)?.choice === 'giu' ? 'ma-giu-tay' : 'ma-cho') : 'ma-chua-kiem-chung';
       const place: IdPlace | undefined = dec !== 'import' ? undefined : st === 'ok' ? idPlaceOk : draftLocOf(i).suggested ? 'ai' : 'vi-tri-chung';
       const q = dec === 'import' ? added[k++] : undefined;
       const w = issues[i] ? worstLevel(issues[i]!) : null;
@@ -353,7 +353,7 @@ export function ImportScreen() {
   /** Bước cuối: rà soát LẠI theo kho hiện hành (chống kho đổi sau lúc xem), rồi mới ghi. */
   const commit = async () => {
     setConfirm(false);
-    if (!ana || vsum.pending > 0 || vsum.unchecked > 0) return;
+    if (!ana || vsum.unchecked > 0) return;
     if (taxRevision(getTaxonomy()) !== taxRevNow) { toast('Cây chương trình vừa đổi nên HEdu đã đọc lại ID theo cây mới. Xem lại rồi bấm Nhập một lần nữa.'); return; }
     const fresh = await analyzeDrafts(drafts, getState().questions);
     if (!fresh.complete || bankHitSignature(fresh.rows) !== bankHitSignature(ana.rows)) {
@@ -379,7 +379,7 @@ export function ImportScreen() {
     if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
     const added = addMany(built.drafts);
     // Trạng thái xác minh (tệp phụ). Thiếu/ghi lỗi chỉ làm câu thành "chưa xác minh" (an toàn), không làm sai dữ liệu câu.
-    putRecs(added.map((qq, k) => [qq.uid, makeRec(qq, { form: built.meta[k].form, src: built.meta[k].src, taxRev: taxRevNow, unclassified: built.meta[k].unclassified, ...(built.meta[k].why ? { why: built.meta[k].why } : {}) })] as const));
+    putRecs(added.map((qq, k) => [qq.uid, makeRec(qq, { form: built.meta[k].form, src: built.meta[k].src, taxRev: taxRevNow, unclassified: built.meta[k].unclassified, ...(built.meta[k].why ? { why: built.meta[k].why } : {}), ...(built.meta[k].orig ? { orig: built.meta[k].orig } : {}), ...(built.meta[k].prop ? { prop: built.meta[k].prop } : {}) })] as const));
     const report = makeReport(added, rp.taken);
     await flushSave();
     const reviewSaved = await flushIdReview();
@@ -626,14 +626,14 @@ export function ImportScreen() {
                     <>
                       <label className="dec-sel">
                         <span className="sr-only">Cách xử lý ID bất đồng của câu {i + 1}</span>
-                        <select value={idDecOf(i)?.choice ?? ''} onChange={(e) => setChoice(i, e.target.value as IdChoice | '')} aria-label={`Cách xử lý ID bất đồng của câu ${i + 1}`}>
-                          <option value="" disabled>Chọn cách xử lý ID…</option>
+                        <select value={idDecOf(i)?.choice ?? 'cho'} onChange={(e) => setChoice(i, e.target.value as IdChoice)} aria-label={`Cách xử lý ID bất đồng của câu ${i + 1}`}>
+                          <option value="cho">Chờ xác minh (hàng đợi, mặc định)</option>
                           <option value="giu">Giữ ID trong tệp ({questionCode(fromIdOf(i)!.loc, fromIdOf(i)!.level)})</option>
                           <option value="goi-y" disabled={!verifOf(i)!.suggested}>Theo gợi ý ({verifOf(i)!.suggested ? questionCode(verifOf(i)!.suggested!.location, fromIdOf(i)!.level) : '—'})</option>
                           <option value="chung">Chưa phân loại (vị trí chung, không ghi ID)</option>
                         </select>
                       </label>
-                      {idDecOf(i) && idDecOf(i)!.choice !== 'giu' && (
+                      {idDecOf(i) && (idDecOf(i)!.choice === 'goi-y' || idDecOf(i)!.choice === 'chung') && (
                         <label className="dec-sel">
                           <span className="sr-only">Mức độ của câu {i + 1} khi đổi vị trí</span>
                           <select value={idDecOf(i)!.level} onChange={(e) => setLevelChoice(i, e.target.value as LevelChoice)} aria-label={`Mức độ của câu ${i + 1} khi đổi vị trí`}>
@@ -729,12 +729,12 @@ export function ImportScreen() {
             )}
             {vsum.total > 0 && (
               <p className="sys-hint" role="status">
-                ID trong tệp (đối chiếu với ngân hàng, không tin tuyệt đối): {vsum.khop} khớp · {vsum.chua} chưa kiểm chứng{vsum.unchecked > 0 ? ` · ${vsum.unchecked} đang kiểm` : ''} · {vsum.batDong} bất đồng{vsum.pending > 0 ? ` (còn ${vsum.pending} chưa chọn cách xử lý)` : ''}.
+                ID trong tệp (đối chiếu với ngân hàng, không tin tuyệt đối): {vsum.khop} khớp · {vsum.chua} chưa kiểm chứng{vsum.unchecked > 0 ? ` · ${vsum.unchecked} đang kiểm` : ''} · {vsum.batDong} bất đồng{vsum.queued > 0 ? ` (${vsum.queued} vào hàng đợi xác minh: giữ ID gốc, đánh dấu cần xem lại)` : ''}.
               </p>
             )}
             <div className="head-actions imp-bar">
               <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => { setAckRefused(false); setConfirm(true); }}>
-                {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : vsum.unchecked > 0 ? 'Đang kiểm chứng ID…' : vsum.pending > 0 ? `Còn ${vsum.pending} câu ID bất đồng cần chọn` : `Nhập ${importCount} câu vào ngân hàng`}
+                {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : vsum.unchecked > 0 ? 'Đang kiểm chứng ID…' : `Nhập ${importCount} câu vào ngân hàng`}
               </button>
               {anaDone && sum.holdN > 0 && <button type="button" className="btn btn-sm" onClick={() => setStatusF('hold')}>Xem các câu chưa quyết định</button>}
               {vsum.batDong > 0 && <button type="button" className="btn btn-sm" onClick={() => setOnlyIdBD((x) => !x)}>{onlyIdBD ? 'Hiện tất cả câu' : `Xem ${vsum.batDong} câu ID bất đồng`}</button>}

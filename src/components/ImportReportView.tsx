@@ -32,7 +32,7 @@ export function ImportReportView({ report, full, onBank, onShowBatch, onClose, l
         <li><b>{r.skippedUser}</b> bỏ qua theo lựa chọn của bạn</li>
       </ul>
       <span className="sys-hint">
-        Vị trí các câu đã nhập: {r.ids.ok} theo mã ID{r.ids.unverified ? ` (${r.ids.unverified} chưa kiểm chứng)` : ''}{r.ids.kept ? ` (${r.ids.kept} bất đồng ngân hàng, bạn giữ ID)` : ''} · {r.ids.firstForm} thiếu Dạng (vào Dạng đầu của Bài) · {r.ids.ai} theo gợi ý bạn chọn · {r.ids.general} vào vị trí chung{r.ids.general ? ' (nên xếp lại sau)' : ''}.
+        Vị trí các câu đã nhập: {r.ids.ok} theo mã ID{r.ids.unverified ? ` (${r.ids.unverified} chưa kiểm chứng)` : ''}{r.ids.kept ? ` (${r.ids.kept} bất đồng ngân hàng, bạn giữ ID)` : ''}{r.ids.queued ? ` (${r.ids.queued} bất đồng ngân hàng, chờ xác minh)` : ''} · {r.ids.firstForm} thiếu Dạng (vào Dạng đầu của Bài) · {r.ids.ai} theo gợi ý bạn chọn · {r.ids.general} vào vị trí chung{r.ids.general ? ' (nên xếp lại sau)' : ''}.
       </span>
       <span className="sys-hint">
         Kiểm tra: {r.previewErrors} câu lỗi và {r.previewWarnings} câu cảnh báo khi xem trước{r.texChecked ? `; TeX Live đã thử ${r.texChecked} câu, ${r.texFailed} lỗi` : '; chưa biên dịch bằng TeX Live'}.

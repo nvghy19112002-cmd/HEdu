@@ -38,7 +38,17 @@ export interface ReviewRec {
   /** câu chưa phân loại: vào vị trí chung, không ghi ID giả, không làm căn cứ cho câu khác */
   unclassified?: boolean;
   why?: string;
+  /** mã ID NGUYÊN BẢN trong tệp nguồn lúc nhập (giữ để truy ngược khi LaTeX đã đổi ID) */
+  orig?: string;
+  /** Dạng (formId) mà máy đề xuất lúc nhập/soát, khác Dạng đang lưu (câu bất đồng chờ xác minh) */
+  prop?: string;
+  /** lịch sử quyết định, mới nhất trước (tối đa HIST_MAX); không bao giờ bị xoá khi đổi trạng thái */
+  hist?: HistEntry[];
 }
+
+/** Trạng thái TRƯỚC khi bản ghi bị thay: để truy ngược "ai quyết định gì, lúc nào". */
+export interface HistEntry { at: number; form: FormState; level: LevelState; src: IdSource; formId: string; why?: string }
+export const HIST_MAX = 30;
 
 export interface Effective { form: FormState; level: LevelState; unclassified: boolean; src?: IdSource; why?: string; rec?: ReviewRec }
 const NONE: Effective = { form: 'chua', level: 'chua', unclassified: false };
@@ -64,14 +74,16 @@ export function effectiveOf(q: Question, rec: ReviewRec | undefined, ctx: EffCtx
   return { form, level, unclassified: !!rec.unclassified && form !== 'gv', src: rec.src, ...(rec.why ? { why: rec.why } : {}), rec };
 }
 
-/** Câu có thể làm căn cứ kiểm chứng cho câu khác: Dạng "giáo viên xác minh" hoặc nội dung "Đã duyệt" (tạm thời), trừ câu cần xem lại / chưa phân loại. */
-export const isEvidence = (q: Question, eff: Effective): boolean =>
-  !eff.unclassified && eff.form !== 'xem-lai' && (eff.form === 'gv' || q.review === 'approved');
+/**
+ * Câu có thể làm căn cứ kiểm chứng cho câu khác: CHỈ câu có Dạng "giáo viên xác minh" (và không chưa phân loại / cần xem lại).
+ * Nội dung "Đã duyệt" là việc khác (đề, đáp án, lời giải, hình): chỉ để tham khảo, KHÔNG tự thành nhãn ID chuẩn.
+ */
+export const isEvidence = (_q: Question, eff: Effective): boolean => !eff.unclassified && eff.form === 'gv';
 
 /** Bản ghi mới cho một câu (đọc `q` ở thời điểm ghi). */
-export function makeRec(q: Question, o: { form: FormState; level?: LevelState; src: IdSource; taxRev: string; unclassified?: boolean; why?: string; at?: number }): ReviewRec {
+export function makeRec(q: Question, o: { form: FormState; level?: LevelState; src: IdSource; taxRev: string; unclassified?: boolean; why?: string; at?: number; orig?: string; prop?: string }): ReviewRec {
   const k = contentKeys(q.latex);
-  return { form: o.form, level: o.level ?? 'chua', src: o.src, formId: q.formId, level0: q.level, f: k.f, i: k.i, taxRev: o.taxRev, at: o.at ?? Date.now(), ...(o.unclassified ? { unclassified: true } : {}), ...(o.why ? { why: o.why } : {}) };
+  return { form: o.form, level: o.level ?? 'chua', src: o.src, formId: q.formId, level0: q.level, f: k.f, i: k.i, taxRev: o.taxRev, at: o.at ?? Date.now(), ...(o.unclassified ? { unclassified: true } : {}), ...(o.why ? { why: o.why } : {}), ...(o.orig ? { orig: o.orig } : {}), ...(o.prop ? { prop: o.prop } : {}) };
 }
 
 // ---------- kho trong bộ nhớ + tệp phụ ----------
@@ -98,10 +110,12 @@ const subscribe = (f: () => void) => { subs.add(f); return () => subs.delete(f);
 const FORMS: readonly string[] = ['chua', 'may', 'gv', 'xem-lai'];
 const LEVELS_: readonly string[] = ['chua', 'may', 'gv'];
 const SRC: readonly string[] = ['tep', 'ai-ngoai', 'goi-y', 'ai', 'tay', 'soat'];
+const isHist = (h: unknown): h is HistEntry => { const x = h as HistEntry; return !!x && typeof x.at === 'number' && FORMS.includes(x.form) && LEVELS_.includes(x.level) && SRC.includes(x.src) && typeof x.formId === 'string'; };
 const isRec = (r: unknown): r is ReviewRec => {
   const x = r as ReviewRec;
   return !!x && FORMS.includes(x.form) && LEVELS_.includes(x.level) && SRC.includes(x.src) && typeof x.formId === 'string' && typeof x.level0 === 'string'
-    && typeof x.f === 'string' && typeof x.i === 'string' && typeof x.taxRev === 'string' && typeof x.at === 'number';
+    && typeof x.f === 'string' && typeof x.i === 'string' && typeof x.taxRev === 'string' && typeof x.at === 'number'
+    && (x.orig === undefined || typeof x.orig === 'string') && (x.prop === undefined || typeof x.prop === 'string') && (x.hist === undefined || (Array.isArray(x.hist) && x.hist.every(isHist)));
 };
 export const parseReview = (json: string | null): Map<string, ReviewRec> => {
   const m = new Map<string, ReviewRec>();
@@ -114,27 +128,30 @@ export const parseReview = (json: string | null): Map<string, ReviewRec> => {
 const dump = (): string => JSON.stringify({ v: 1, recs: Object.fromEntries(recs) });
 
 /** Chỉ dùng trong kiểm thử. */
-export function _resetReview(b: Backend | null) { backend = b; recs = new Map(); writable = true; version = 0; chain = Promise.resolve(); timer = null; }
+export function _resetReview(b: Backend | null) { backend = b; recs = new Map(); writable = true; loadedOnce = false; dirty = false; version = 0; chain = Promise.resolve(); timer = null; }
 
 export async function loadIdReview(): Promise<{ ok: boolean; error?: string }> {
   backend = backend ?? (isDesktop() ? (getStorageMode() === 'sqlite' ? sqlite : none) : web);
   try {
     recs = parseReview(await backend.load());
-    writable = true; emit();
+    writable = true; loadedOnce = true; dirty = false; emit();
     return { ok: true };
   } catch (e) {
     // không ghi đè một tệp mình không đọc được
-    recs = new Map(); writable = false; emit();
+    recs = new Map(); writable = false; loadedOnce = true; dirty = false; emit();
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 let chain: Promise<unknown> = Promise.resolve();
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** Có thay đổi chưa ghi. Không có gì để ghi ⇒ "đã ghi" (kể cả khi tệp phụ hỏng/bị chặn ghi: không chặn việc cập nhật/khôi phục vô cớ). */
+let dirty = false;
 function persist(): Promise<boolean> {
   const run = async (): Promise<boolean> => {
+    if (!dirty) return true;
     if (!writable || !backend) return false;
-    try { await backend.save(dump()); return true; } catch { return false; }
+    try { dirty = false; await backend.save(dump()); return true; } catch { dirty = true; return false; }
   };
   const p = chain.then(run, run);
   chain = p;
@@ -149,10 +166,47 @@ export const reviewCount = (): number => recs.size;
 /** Đặt (hoặc thay) bản ghi cho nhiều câu. Ghi tệp trễ ~0,4 giây (gộp nhiều thay đổi); gọi `flushIdReview` để ghi ngay. */
 export function putRecs(list: readonly (readonly [string, ReviewRec])[]): void {
   if (!list.length) return;
-  for (const [uid, r] of list) recs.set(uid, r);
+  for (const [uid, r] of list) {
+    const prev = recs.get(uid);
+    // lịch sử quyết định: trạng thái cũ được đẩy vào `hist`, không bao giờ bị mất khi đổi (kể cả "Bỏ xác nhận")
+    const hist = prev ? [{ at: prev.at, form: prev.form, level: prev.level, src: prev.src, formId: prev.formId, ...(prev.why ? { why: prev.why } : {}) }, ...(prev.hist ?? [])].slice(0, HIST_MAX) : r.hist;
+    recs.set(uid, { ...r, ...(r.orig === undefined && prev?.orig ? { orig: prev.orig } : {}), ...(hist && hist.length ? { hist } : {}) });
+  }
+  dirty = true;
   emit(); schedule();
 }
-export function dropRec(uid: string): void { if (recs.delete(uid)) { emit(); schedule(); } }
+/** Đặt lại NGUYÊN bản ghi (hoặc xoá nếu undefined) — chỉ cho "Hoàn tác" trong hàng đợi; không thêm vào lịch sử. */
+export function setRecRaw(uid: string, rec: ReviewRec | undefined): void {
+  if (rec) recs.set(uid, rec); else recs.delete(uid);
+  dirty = true;
+  emit(); schedule();
+}
+export function dropRec(uid: string): void { if (recs.delete(uid)) { dirty = true; emit(); schedule(); } }
 export const isWritable = (): boolean => writable;
+let loadedOnce = false;
+export const idReviewLoaded = (): boolean => loadedOnce;
+/** Chặn mọi ghi tiếp theo (dùng ngay trước khi thay cả tệp dữ liệu): bản ghi cũ trong bộ nhớ không được đè lên bản vừa khôi phục. */
+export function freezeIdReview(): void { writable = false; dirty = false; if (timer) { clearTimeout(timer); timer = null; } }
+
+// ---------- sao lưu thủ công (file JSON) ----------
+/** Phần trạng thái xác minh đưa vào file sao lưu JSON. */
+export const idReviewForBackup = (): { v: 1; recs: Record<string, ReviewRec> } => ({ v: 1, recs: Object.fromEntries(recs) });
+/**
+ * Khôi phục từ file sao lưu JSON: GỘP (không xoá thứ đang có); trùng khoá thì giữ bản MỚI hơn theo thời điểm. Bản ghi vẫn phải qua `effectiveOf`
+ * (khớp nội dung/Dạng/mức độ của câu) nên bản ghi không còn khớp câu nào chỉ nằm đó, không gây hại.
+ */
+export async function restoreIdReview(f: unknown): Promise<{ added: number; saved: boolean }> {
+  const x = f as { v?: number; recs?: Record<string, unknown> } | undefined;
+  if (!x || x.v !== 1 || !x.recs || typeof x.recs !== 'object') return { added: 0, saved: true };
+  if (!loadedOnce) await loadIdReview();
+  let added = 0;
+  for (const [uid, r] of Object.entries(x.recs)) {
+    if (!isRec(r)) continue;
+    const cur = recs.get(uid);
+    if (!cur || r.at > cur.at) { recs.set(uid, r); dirty = true; if (!cur) added++; }
+  }
+  emit();
+  return { added, saved: await flushIdReview() };
+}
 /** Vẽ lại khi kho trạng thái đổi. */
 export const useIdReview = (): number => useSyncExternalStore(subscribe, () => version, () => version);

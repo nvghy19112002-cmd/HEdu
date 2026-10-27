@@ -90,7 +90,7 @@ export function SqlitePanel() {
           ))}
         </ul>
       )}
-      <span className="sys-hint">“Xuất ra JSON” tạo <span className="mono">hedu.json</span> (cấu trúc cũ) trong thư mục bạn chọn — dùng khi cần quay về bản HEdu cũ. HEdu không ghi đè tệp có sẵn và đối chiếu lại sau khi xuất.</span>
+      <span className="sys-hint">“Xuất ra JSON” tạo <span className="mono">hedu.json</span> (cấu trúc cũ) cùng <span className="mono">dup-decisions.json</span> và <span className="mono">id-review.json</span> (trạng thái xác minh ID) trong thư mục bạn chọn — là <b>JSON để trao đổi hoặc quay về bản HEdu cũ</b>, KHÔNG phải bản sao lưu đầy đủ (không có điểm khôi phục, không có nhật ký). Bản sao lưu đầy đủ là “Lưu bản chụp .db” hoặc các điểm khôi phục ở trên; mọi thứ, kể cả trạng thái xác minh ID, nằm trong tệp .db. HEdu không ghi đè tệp có sẵn và đối chiếu lại sau khi xuất.</span>
 
       {ask && (
         <ConfirmDialog

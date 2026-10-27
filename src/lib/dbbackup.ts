@@ -1,6 +1,7 @@
 // Sao lưu / khôi phục cho nguồn SQLite (Rust: src-tauri/src/dbbackup.rs + dbcmd.rs). Chỉ có tác dụng ở chế độ SQLite của bản cài Windows.
 import { invoke } from './platform';
 import { getStorageMode } from './storage';
+import { flushIdReview, freezeIdReview } from './idreview';
 import { flushSave, isLastSaveOk } from './store';
 
 export type PointReason = 'nhap-hang-loat' | 'xoa-hang-loat' | 'don-sach-thung-rac' | 'khoi-phuc-tu-tep' | 'truoc-khoi-phuc' | 'thu-cong';
@@ -48,6 +49,9 @@ export const exportJsonTo = (dir: string): Promise<{ questions: number; jsonPath
 export async function restoreFrom(s: Source): Promise<void> {
   await flushSave();
   if (!isLastSaveOk()) throw new Error('Chưa ghi được dữ liệu hiện tại nên chưa khôi phục.');
+  // Trạng thái xác minh ID nằm trong tệp phụ của CHÍNH tệp .db: ghi nốt vào tệp hiện tại rồi KHOÁ ghi, để bản trong bộ nhớ không đè lên bản vừa khôi phục.
+  if (!(await flushIdReview())) throw new Error('Chưa ghi được trạng thái xác minh ID hiện tại nên chưa khôi phục.');
+  freezeIdReview();
   await invoke('backup_restore', { path: s.path ?? null, point: s.point ?? null });
   window.location.reload();
 }

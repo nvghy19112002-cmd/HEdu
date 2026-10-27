@@ -14,9 +14,9 @@ Bất biến: không đổi schema (3), định dạng ID6, UID, LaTeX/TikZ gố
 
 ## 2. Chỉnh sửa so với bản của GPT
 1. **"Chưa phân loại" không được mang ID giả.** Hiện câu vào "vị trí chung" bị HEdu ghi ID6 của Dạng đầu vào LaTeX, nhìn như đã phân loại. Sửa: câu chưa phân loại GIỮ LaTeX nguyên văn (không ghi `%[ID]`), có cờ `chưa phân loại` ở tệp phụ, không bao giờ làm căn cứ cho câu khác. (Vị trí vẫn phải có vì schema 3 bắt buộc; không đổi schema.)
-2. **Nguồn bằng chứng.** Căn cứ kiểm chứng = câu có Dạng "giáo viên xác minh" HOẶC nội dung "Đã duyệt" (tạm thời, vì chưa có hàng đợi xác nhận Dạng), trừ câu "cần xem lại" hoặc "chưa phân loại". Khi hàng đợi duyệt (giai đoạn 2) có đủ nhãn thì chỉ còn "Dạng giáo viên xác minh". Trạng thái "máy phân loại" KHÔNG phải căn cứ.
+2. **Nguồn bằng chứng (đã chốt 28/10/2026).** Căn cứ kiểm chứng = CHỈ câu có Dạng "giáo viên xác minh" (trừ "cần xem lại" / "chưa phân loại"). **Duyệt nội dung ("Đã duyệt") tách hẳn khỏi xác minh Dạng/mức độ**: chỉ để tham khảo, KHÔNG tự thành nhãn ID chuẩn. Trạng thái "máy phân loại" cũng KHÔNG phải căn cứ. Hệ quả: ngân hàng hiện có chưa có câu nào làm căn cứ cho tới khi giáo viên xác nhận Dạng (hàng đợi xác minh, PR 1E).
 3. **Điều kiện hết hiệu lực.** "Máy phân loại" hết hiệu lực khi cây đổi, nội dung đổi (không tính vùng `%[ID]`) hoặc Dạng/mức độ của câu bị đổi. "Giáo viên xác minh" chỉ mất hiệu lực khi nội dung hoặc Dạng đổi, hoặc đường dẫn không còn đúng trong cây; cây đổi chỉ tạo cảnh báo.
-4. **Câu có ID bất đồng khi nhập lô lớn.** Không bắt giáo viên chọn từng câu trước khi nhập: lô lớn được phép đưa các câu bất đồng vào hàng chờ (giữ ID gốc trong tệp phụ, đánh dấu cần xem lại) rồi xử lý sau. Chọn từng câu trước khi nhập vẫn giữ cho lô nhỏ. Cần anh duyệt riêng trước khi triển khai (mục 6).
+4. **Câu có ID bất đồng (đã chốt 28/10/2026): vào hàng đợi, không chặn nhập.** Mặc định "chờ xác minh": giữ ID gốc ở đúng vị trí tệp ghi, LaTeX nguyên văn, Dạng "cần xem lại", Dạng máy đề xuất lưu ở tệp phụ (`prop`), ID nguyên bản lưu ở `orig`. Giáo viên vẫn chọn ngay từng câu được (giữ ID / theo gợi ý / chưa phân loại). Quyết định cũ mất hiệu lực (gợi ý, cây hoặc câu đổi) thì quay về "chờ xác minh", không ghi vị trí mới.
 5. **Thống kê mục tiêu 99%.** Muốn kết luận "≥ 99% với tin cậy 95%" cho một nhóm cần xấp xỉ ≥ 300 câu đúng liên tiếp (không sai câu nào); với hàng trăm Dạng, không thể đòi mẫu như vậy cho TỪNG Dạng. Mở tự gán theo NHÓM (tầng bằng chứng × loại quy tắc × nhóm Dạng/Chương); Dạng thiếu mẫu chỉ được đề xuất, không tự gán. Thực tế gần nhất: chỉ câu trùng NGUYÊN VĂN với câu đã xác minh đo được độ đúng cao; các tầng còn lại bắt đầu ở mức "đề xuất".
 6. **Giao dịch lô lớn.** Đo thật: 60.000 câu trong một giao dịch SQLite ≈ 4 giây. Giữ đơn vị ghi nhất quán ≤ 5.000 câu (đang dùng), không ép 60.000 câu vào một giao dịch; tiến độ và tiếp tục sau gián đoạn là việc riêng (giai đoạn 3, cần đặc tả L riêng).
 7. **Một lần xác nhận AI cho một công việc.** Đúng hướng nhưng đổi quy tắc "xin phép từng lượt" (quy tắc 20): KHÔNG làm cho tới khi anh duyệt riêng. Đến lúc đó giữ nguyên: mặc định tắt, xin phép từng lượt.
@@ -40,12 +40,21 @@ Quy ước tại thời điểm nhập: ID khớp ngân hàng ⇒ Dạng "máy";
 - Chuyển câu "vị trí chung" sang không ghi ID đổi hành vi cũ: báo cáo nhập và hộp xác nhận phải ghi rõ.
 
 ## 6. Điều cần anh quyết (đề xuất của Claude in đậm)
-1. Căn cứ tạm thời gồm "Đã duyệt" cho tới khi có hàng đợi xác nhận Dạng: **đồng ý** / chỉ "Dạng giáo viên xác minh".
-2. Câu chưa phân loại **không ghi `%[ID]`** vào LaTeX / vẫn ghi ID vị trí chung như cũ.
-3. Lô lớn: câu ID bất đồng **vào hàng chờ, xử lý sau** / vẫn bắt chọn trước khi nhập (chỉ áp dụng cho lô lớn, ngưỡng đề xuất 50 câu bất đồng).
-4. Xác nhận AI **một lần cho một công việc** (vẫn mặc định tắt) / giữ xin phép từng lượt.
+1. ~~Căn cứ tạm gồm "Đã duyệt"~~ — **ĐÃ CHỐT (28/10/2026): chỉ "Dạng giáo viên xác minh"**; duyệt nội dung tách riêng.
+2. Câu chưa phân loại không ghi `%[ID]` — **ĐÃ CHỐT**.
+3. Câu ID bất đồng vào hàng đợi, không chặn nhập — **ĐÃ CHỐT**.
+4. Xác nhận AI **một lần cho một công việc** (vẫn mặc định tắt) / giữ xin phép từng lượt — **CHƯA quyết, chưa làm**.
 
 ## 7. Quy tắc 15b–15d (chuyển vào `quy-tac-gan-id-chuan.md` mục D sau khi #128 được gộp, để không xung đột với 15a)
 - **15b.** Dạng và mức độ có trạng thái xác minh riêng (tệp phụ `id-review`). Dạng: chưa xác minh / máy phân loại / giáo viên xác minh / cần xem lại. Mức độ: chưa / máy / giáo viên. "Máy phân loại" KHÔNG BAO GIỜ tự thành "giáo viên xác minh"; chỉ hành động xác nhận của giáo viên tạo trạng thái đó. Trạng thái hết hiệu lực khi nội dung (không tính vùng ID) hoặc Dạng/mức độ của câu đổi; riêng "máy phân loại" còn hết hiệu lực khi cây đổi.
 - **15c.** Căn cứ kiểm chứng chỉ gồm câu có Dạng "giáo viên xác minh" hoặc nội dung "Đã duyệt" (tạm thời), trừ câu "cần xem lại" và "chưa phân loại". Câu chưa duyệt, cần sửa hoặc chỉ "máy phân loại" không bao giờ là căn cứ.
 - **15d.** Câu "chưa phân loại" vào vị trí chung KHÔNG được HEdu ghi ID6 giả vào LaTeX; giữ nguyên LaTeX, có cờ ở tệp phụ, không làm căn cứ cho câu khác. Thiếu bản ghi trạng thái luôn hiểu là "chưa xác minh".
+
+## 8. Sao lưu và khôi phục trạng thái xác minh (PR 1C, bổ sung 28/10/2026)
+Ba loại "bản sao" khác nhau, đã ghi rõ trên giao diện:
+| Loại | Gồm trạng thái xác minh ID? | Dùng để |
+|---|---|---|
+| **Bản chụp `.db`, điểm khôi phục, bản trước cập nhật** (SQLite) | **Có, nguyên trạng** (cả bảng tệp phụ nằm trong tệp .db) | Sao lưu ĐẦY ĐỦ và khôi phục. Có kiểm toàn vẹn. Kiểm thử: `dbbackup::tests::ban_chup_diem_khoi_phuc_va_truoc_cap_nhat_deu_giu_trang_thai_xac_minh`. |
+| **File sao lưu JSON** ("Sao lưu thủ công") | **Có** (`idReview`; file cũ không có thì mọi câu là "chưa xác minh") | Mang ngân hàng sang máy khác. Khôi phục THAY câu hỏi, GỘP tệp phụ (bản mới hơn thắng, không xoá bản ghi chỉ có ở máy hiện tại). Không gồm điểm khôi phục. |
+| **Xuất ra JSON (cấu trúc cũ)** | **Có**, ở `id-review.json` cạnh `hedu.json` và `dup-decisions.json` (bản HEdu cũ bỏ qua tệp lạ) | Trao đổi / quay về bản HEdu cũ. KHÔNG phải sao lưu đầy đủ (không có điểm khôi phục, nhật ký). Chuyển ngược JSON → SQLite mang theo `id-review.json`; tệp hỏng bị bỏ qua kèm cảnh báo (mọi câu thành "chưa xác minh"), không chặn chuyển. |
+Quy tắc an toàn khi thay cả tệp dữ liệu (khôi phục `.db`, khôi phục sau cập nhật): ghi nốt trạng thái hiện tại, rồi KHOÁ ghi để bản trong bộ nhớ không đè lên bản vừa khôi phục; sau khôi phục app tải lại. Cập nhật/khôi phục không bị chặn vô cớ khi không có gì chưa ghi.

@@ -8,6 +8,7 @@ import { getStorageMode, storageSummary } from '../lib/storage';
 import { clearTikzCache, defaultPreamble, findTeX, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
 import { asTikzErr } from '../lib/tikz';
 import { addSamples, exportBackup, importBackup, resetToSample, useBank } from '../lib/store';
+import { idReviewLoaded, loadIdReview } from '../lib/idreview';
 import { decisionsLoaded, loadDecisions, trashCount, useDecisions } from '../lib/dupdecisions';
 import {
   backupInfo, checkUpdate, CHANNEL_LABEL, formatBytes, friendlyError, installUpdate, restoreBackup,
@@ -368,9 +369,9 @@ export function SystemScreen() {
 
         <section className="panel" aria-label="Sao lưu thủ công">
           <h2>Sao lưu thủ công</h2>
-          <span className="sys-hint">Ngân hàng hiện có <b style={{ color: 'var(--ink)' }}>{questions.length} câu</b>. Bản sao lưu là một file duy nhất, cất ở USB hoặc Google Drive là đủ.</span>
+          <span className="sys-hint">Ngân hàng hiện có <b style={{ color: 'var(--ink)' }}>{questions.length} câu</b>. File sao lưu JSON gồm câu hỏi, cây mục lục, quyết định dò trùng, Thùng rác, nhãn chuẩn và <b>trạng thái xác minh ID</b> (Dạng, mức độ). Khôi phục sẽ <b>thay</b> ngân hàng và <b>gộp</b> các phần phụ; file không gồm các điểm khôi phục. Muốn sao lưu <b>nguyên trạng đầy đủ</b> (kèm kiểm toàn vẹn), dùng “Lưu bản chụp .db” ở mục Lưu trữ SQLite.</span>
           <div className="head-actions">
-            <button type="button" className="btn btn-dark btn-sm" onClick={async () => { if (!decisionsLoaded()) await loadDecisions(); showFile({ title: 'Bản sao lưu ngân hàng', name: `hedu-sao-luu-${today}.json`, text: exportBackup(), mime: 'application/json' }); }}>Tạo file sao lưu</button>
+            <button type="button" className="btn btn-dark btn-sm" onClick={async () => { if (!decisionsLoaded()) await loadDecisions(); if (!idReviewLoaded()) await loadIdReview(); showFile({ title: 'Bản sao lưu ngân hàng', name: `hedu-sao-luu-${today}.json`, text: exportBackup(), mime: 'application/json' }); }}>Tạo file sao lưu</button>
             <button type="button" className="btn btn-outline btn-sm" onClick={() => file.current?.click()}>Khôi phục từ file…</button>
             <input ref={file} type="file" accept=".json" hidden onChange={async (e) => {
               const f = e.target.files?.[0];

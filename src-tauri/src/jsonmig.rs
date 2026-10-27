@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 pub const SIDECAR_KEY: &str = "dup-decisions";
+/// Trạng thái xác minh ID (Dạng/mức độ): tệp phụ riêng. Trong JSON trao đổi nằm ở `id-review.json` (tệp tuỳ chọn; bản HEdu cũ bỏ qua).
+pub const IDREVIEW_KEY: &str = "id-review";
 const SUPPORTED_SCHEMA: u64 = 3;
 const KNOWN_TOP: [&str; 4] = ["schema", "questions", "nextSeq", "taxonomy"];
 const IMPORT_BATCH: usize = 2000;
@@ -80,13 +82,14 @@ pub struct SourceFiles {
     pub json_bak: PathBuf,
     pub sidecar: PathBuf,
     pub sidecar_bak: PathBuf,
+    pub idreview: PathBuf,
 }
 impl SourceFiles {
     pub fn in_data_dir(dir: &Path) -> Self {
-        SourceFiles { json: dir.join("hedu.json"), json_bak: dir.join("hedu.json.bak"), sidecar: dir.join("dup-decisions.json"), sidecar_bak: dir.join("dup-decisions.json.bak") }
+        SourceFiles { json: dir.join("hedu.json"), json_bak: dir.join("hedu.json.bak"), sidecar: dir.join("dup-decisions.json"), sidecar_bak: dir.join("dup-decisions.json.bak"), idreview: dir.join("id-review.json") }
     }
-    fn all(&self) -> [&PathBuf; 4] {
-        [&self.json, &self.json_bak, &self.sidecar, &self.sidecar_bak]
+    fn all(&self) -> [&PathBuf; 5] {
+        [&self.json, &self.json_bak, &self.sidecar, &self.sidecar_bak, &self.idreview]
     }
 }
 
@@ -99,6 +102,9 @@ struct Source {
     /// các khoá cấp cao khác ngoài schema/questions/nextSeq/taxonomy (giữ để xuất ngược không mất)
     extra: Vec<(String, String)>,
     sidecar: Option<String>,
+    /// trạng thái xác minh ID (tuỳ chọn); có tệp mà không đọc được ⇒ bỏ qua và báo (đó là dữ liệu suy ra được, thiếu thì mọi câu là "chưa xác minh")
+    idreview: Option<String>,
+    idreview_bad: bool,
     used_json_bak: bool,
     used_sidecar_bak: bool,
 }
@@ -134,6 +140,10 @@ fn parse_main(text: &str) -> Result<(u64, Vec<String>, String, String, Vec<(Stri
 
 fn sidecar_ok(text: &str) -> bool {
     serde_json::from_str::<Value>(text).map(|v| v.get("v").map(Value::is_number).unwrap_or(false) && v.get("recs").map(Value::is_array).unwrap_or(false)).unwrap_or(false)
+}
+
+fn idreview_ok(text: &str) -> bool {
+    serde_json::from_str::<Value>(text).map(|v| v.get("v").map(Value::is_number).unwrap_or(false) && v.get("recs").map(Value::is_object).unwrap_or(false)).unwrap_or(false)
 }
 
 fn read_text(p: &Path) -> R<Option<String>> {
@@ -174,7 +184,12 @@ fn read_source(f: &SourceFiles) -> R<Source> {
         (None, None) => (None, false),
         _ => return Err(MigError::Source("tệp quyết định trùng / Thùng rác hiện có nhưng không đọc được".into())),
     };
-    Ok(Source { schema, questions, next_seq, taxonomy, extra, sidecar, used_json_bak: used_bak, used_sidecar_bak })
+    let (idreview, idreview_bad) = match read_text(&f.idreview) {
+        Ok(Some(t)) if idreview_ok(&t) => (Some(t), false),
+        Ok(None) => (None, false),
+        _ => (None, true),
+    };
+    Ok(Source { schema, questions, next_seq, taxonomy, extra, sidecar, idreview, idreview_bad, used_json_bak: used_bak, used_sidecar_bak })
 }
 
 fn count_in(sidecar: &Option<String>, key: &str) -> usize {
@@ -207,6 +222,9 @@ fn preflight_of(src: &Source, files: &SourceFiles) -> R<Preflight> {
     }
     if src.used_sidecar_bak {
         warnings.push("Tệp quyết định trùng chính bị hỏng nên đã lấy từ bản dự phòng (.bak).".to_string());
+    }
+    if src.idreview_bad {
+        warnings.push("Tệp trạng thái xác minh ID (id-review.json) không đọc được nên bị bỏ qua: các câu sẽ hiện là \"chưa xác minh\".".to_string());
     }
     if dup_rows > 0 {
         warnings.push(format!("{dup_rows} câu có số thứ tự trùng nhau — vẫn chuyển đủ, chỉ báo để biết."));
@@ -333,6 +351,9 @@ pub fn migrate_with(files: &SourceFiles, target_db: &Path, backup_root: &Path, h
                 if let Some(sc) = &src.sidecar {
                     b.sidecar.push((SIDECAR_KEY.into(), sc.clone()));
                 }
+                if let Some(ir) = &src.idreview {
+                    b.sidecar.push((IDREVIEW_KEY.into(), ir.clone()));
+                }
             }
             db.apply(&b)?;
         }
@@ -350,6 +371,9 @@ pub fn migrate_with(files: &SourceFiles, target_db: &Path, backup_root: &Path, h
             }
             if let Some(sc) = &src.sidecar {
                 b.sidecar.push((SIDECAR_KEY.into(), sc.clone()));
+            }
+            if let Some(ir) = &src.idreview {
+                b.sidecar.push((IDREVIEW_KEY.into(), ir.clone()));
             }
             db.apply(&b)?;
         }
@@ -456,6 +480,9 @@ fn verify_against(db: &Db, src: &Source) -> R<()> {
     if db.sidecar_get(SIDECAR_KEY)? != src.sidecar {
         return Err(MigError::Verify("tệp phụ (quyết định trùng, Thùng rác, nhãn chuẩn) khác bản gốc".into()));
     }
+    if db.sidecar_get(IDREVIEW_KEY)? != src.idreview {
+        return Err(MigError::Verify("trạng thái xác minh ID khác bản gốc".into()));
+    }
     Ok(())
 }
 
@@ -473,6 +500,11 @@ pub fn export_json(db: &Db, out_dir: &Path) -> R<ExportReport> {
     let json_path = out_dir.join("hedu.json");
     let sidecar_path = out_dir.join("dup-decisions.json");
     let sidecar = db.sidecar_get(SIDECAR_KEY)?;
+    let idreview_path = out_dir.join("id-review.json");
+    let idreview = db.sidecar_get(IDREVIEW_KEY)?;
+    if idreview.is_some() && idreview_path.exists() {
+        return Err(MigError::TargetExists(idreview_path));
+    }
     if json_path.exists() {
         return Err(MigError::TargetExists(json_path));
     }
@@ -516,6 +548,9 @@ pub fn export_json(db: &Db, out_dir: &Path) -> R<ExportReport> {
     if let Some(sc) = &sidecar {
         write_new(&sidecar_path, sc)?;
     }
+    if let Some(ir) = &idreview {
+        write_new(&idreview_path, ir)?;
+    }
     // đọc lại tệp vừa xuất và đối chiếu với SQLite
     let files = SourceFiles::in_data_dir(out_dir);
     let back = read_source(&files).and_then(|s| {
@@ -527,6 +562,7 @@ pub fn export_json(db: &Db, out_dir: &Path) -> R<ExportReport> {
     if let Err(e) = back {
         let _ = fs::remove_file(&json_path);
         let _ = fs::remove_file(&sidecar_path);
+        let _ = fs::remove_file(&idreview_path);
         return Err(e);
     }
     Ok(ExportReport { json_path, sidecar_path: sidecar.map(|_| sidecar_path), questions: qs.len(), sha_json: sha256_hex(text.as_bytes()) })
@@ -803,4 +839,40 @@ mod tests {
         let rep = migrate(&f, &d.join("db").join("hedu.db"), &d.join("backups")).unwrap();
         println!("60.000 câu: chuyển+đối chiếu {:?} (báo cáo {} ms)", t0.elapsed(), rep.millis);
     }
+
+    #[test]
+    fn trang_thai_xac_minh_di_cung_json_trao_doi() {
+        const IDR: &str = "{\"v\":1,\"recs\":{\"u00000001\":{\"form\":\"gv\",\"level\":\"chua\",\"src\":\"tay\",\"formId\":\"f\",\"level0\":\"TH\",\"f\":\"a\",\"i\":\"b\",\"taxRev\":\"r\",\"at\":1}}}";
+        let (d, files) = setup("idreview", 3, true);
+        fs::write(&files.idreview, IDR).unwrap();
+        // JSON → SQLite: mang theo trạng thái xác minh
+        let db_path = d.join("hedu.db");
+        let rep = migrate(&files, &db_path, &d.join("backups")).unwrap();
+        assert!(rep.pre.warnings.iter().all(|w| !w.contains("id-review")));
+        let db = Db::open(&db_path).unwrap();
+        assert_eq!(db.sidecar_get(IDREVIEW_KEY).unwrap().as_deref(), Some(IDR), "id-review vào tệp phụ SQLite");
+        // SQLite → JSON trao đổi: xuất ra id-review.json giống hệt và đối chiếu lại
+        let out = d.join("xuat");
+        let r = export_json(&db, &out).unwrap();
+        assert!(r.json_path.exists());
+        assert_eq!(fs::read_to_string(out.join("id-review.json")).unwrap(), IDR);
+        // không ghi đè tệp có sẵn
+        assert!(matches!(export_json(&db, &out), Err(MigError::TargetExists(_))));
+        // bản sao lưu trước khi chuyển có giữ cả id-review.json
+        let bk = fs::read_dir(d.join("backups")).unwrap().next().unwrap().unwrap().path();
+        assert!(bk.join("id-review.json").exists(), "bản chụp nguyên trạng gồm id-review.json");
+    }
+
+    #[test]
+    fn id_review_hong_khong_chan_chuyen_doi_nhung_co_canh_bao() {
+        let (d, files) = setup("idreview_bad", 2, false);
+        fs::write(&files.idreview, "{khong phai json").unwrap();
+        let pre = preflight(&files).unwrap();
+        assert!(pre.warnings.iter().any(|w| w.contains("id-review")), "báo tệp trạng thái hỏng");
+        let db_path = d.join("hedu.db");
+        migrate(&files, &db_path, &d.join("backups")).unwrap();
+        let db = Db::open(&db_path).unwrap();
+        assert_eq!(db.sidecar_get(IDREVIEW_KEY).unwrap(), None, "tệp hỏng bị bỏ qua, mọi câu là chưa xác minh");
+    }
+
 }

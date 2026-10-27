@@ -5,11 +5,13 @@ import { getTaxonomy, resetTaxonomy, setTaxonomy } from './curriculum';
 import { idRowsOf, planDrafts, readIds } from './importplan';
 import { strictCode } from './idsync';
 import { addMany, getState, initStore } from './store';
+import type { Effective } from './idreview';
 import { decide, summarizeVerify, verifierFor, verifyId, type IdVerification } from './idverify';
 import { buildDefault } from './taxonomy';
 import { taxRevision } from './taxpath';
 import type { Level, Location, Question } from './types';
 let fail = 0;
+const gv = (): Effective => ({ form: 'gv', level: 'chua', unclassified: false });
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 
 resetTaxonomy();
@@ -42,12 +44,12 @@ const rows = buildRows([{ name: 'de.tex', rel: '', text: file }]);
 const latexes = rows.map((r) => r.latex);
 const idsA = readIds(latexes, taxA);
 ok(rows.length === 3 && idsA.every(Boolean) && idRowsOf(idsA).join() === '0,1,2', 'ba câu đều có ID dùng được theo cây hiện tại');
-const sgA = verifierFor(taxA, bank);
+const sgA = verifierFor(taxA, bank, gv);
 const verA = new Map<number, IdVerification>();
 for (const i of idRowsOf(idsA)) verA.set(i, verifyId(latexes[i], idsA[i]!.loc, sgA, `d${i}`));
 ok(verA.get(0)!.verdict === 'khop' && verA.get(1)!.verdict === 'bat-dong' && verA.get(2)!.verdict === 'khop', 'kiểm chứng: khớp / bất đồng / khớp');
 const sumA = summarizeVerify(idRowsOf(idsA), (i) => verA.get(i), () => undefined, () => true);
-ok(sumA.unchecked === 0 && sumA.pending === 1, 'không treo; một câu bất đồng chờ quyết định');
+ok(sumA.unchecked === 0 && sumA.queued === 1, 'không treo; một câu bất đồng vào hàng đợi xác minh (mặc định)');
 
 console.log('Cây đổi: ID từng hợp lệ thành không hợp lệ');
 // bản sao cây: Dạng của câu 1 (Dạng B) và của câu 2 (Dạng C) đổi mã ⇒ ID cũ "không còn trong cây"
@@ -66,18 +68,18 @@ ok(idRowsOf(idsB).join() === '0', 'danh sách cần kiểm chứng chỉ còn c�
 // mô phỏng lỗi cũ: danh sách lấy từ kết quả đọc cũ nhưng lượt kiểm bỏ qua ID không còn hợp lệ ⇒ "đang kiểm" treo
 {
   const oldRows = rows.map((r, i) => (r.fromId ? i : -1)).filter((i) => i >= 0);
-  const sgB0 = verifierFor(taxB, bank);
+  const sgB0 = verifierFor(taxB, bank, gv);
   const verOld = new Map<number, IdVerification>();
   for (const i of oldRows) { const id = idsB[i]; if (id) verOld.set(i, verifyId(latexes[i], id.loc, sgB0, `d${i}`)); }
   ok(summarizeVerify(oldRows, (i) => verOld.get(i), () => undefined, () => true).unchecked === 2, 'đường cũ (đọc cũ + lượt kiểm bỏ qua) ⇒ 2 câu "đang kiểm" mãi mãi (lỗi cần chặn)');
 }
 
 const idRowsB = idRowsOf(idsB);
-const sgB = verifierFor(taxB, bank);
+const sgB = verifierFor(taxB, bank, gv);
 const verB = new Map<number, IdVerification>();
 for (const i of idRowsB) verB.set(i, verifyId(latexes[i], idsB[i]!.loc, sgB, `d${i}`));
 const sumB = summarizeVerify(idRowsB, (i) => verB.get(i), () => undefined, () => true);
-ok(sumB.unchecked === 0 && sumB.pending === 0, 'đồng bộ theo cây hiện tại: không câu nào "đang kiểm" treo, không câu bất đồng nào còn chờ');
+ok(sumB.unchecked === 0 && sumB.queued === 0, 'đồng bộ theo cây hiện tại: không câu nào "đang kiểm" treo, không câu bất đồng nào còn trong hàng đợi');
 
 // quyết định cũ gắn với kết quả kiểm theo cây cũ: không dùng được
 const oldDecision = decide(verA.get(1)!, 'goi-y');
@@ -108,10 +110,12 @@ console.log('Đường cũ trước khi đổi cây vẫn đúng (không hồi q
   const p = planDrafts({ latexes, importing: () => true, ids, ver: (i) => verA.get(i), decision: (i) => (i === 1 ? dec : undefined), noId: () => ({ loc: common, suggested: false }), commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxA });
   if ('error' in p) throw new Error(p.error);
   ok(p.drafts[0].formId === A.formId && p.drafts[1].formId === A.formId && p.drafts[1].level === lvl && p.drafts[2].formId === C.formId, 'cây chưa đổi: khớp theo ID; bất đồng theo gợi ý và giữ mức độ gốc; khớp theo ID');
-  // quyết định cũ (cây A) áp vào kết quả kiểm theo cây B ⇒ không ghi, báo lỗi
+  // quyết định cũ (cây A) áp vào kết quả kiểm theo cây B ⇒ KHÔNG theo quyết định cũ: câu vào hàng đợi (giữ ID gốc ở vị trí tệp, cần xem lại)
   const verStale = { ...verA.get(1)!, taxRev: taxRevision(taxB) };
   const bad = planDrafts({ latexes, importing: (i) => i === 1, ids, ver: () => verStale, decision: () => dec, noId: () => ({ loc: common, suggested: false }), commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxA });
-  ok('error' in bad, 'quyết định gắn với phiên bản cây khác ⇒ không dựng bản ghi (không ghi gì)');
+  ok(!('error' in bad) && bad.drafts.length === 1 && bad.drafts[0].formId === B.formId && bad.meta[0].form === 'xem-lai' && bad.meta[0].prop === verStale.suggested?.formId,
+    'quyết định gắn với phiên bản cây khác ⇒ không theo quyết định cũ (không ghi vị trí gợi ý); câu chờ xác minh tại vị trí ID gốc, lưu Dạng máy đề xuất');
+  ok(!('error' in bad) && bad.meta[0].orig === code(B), 'ID nguyên bản trong tệp được giữ ở bản ghi trạng thái');
 }
 
 resetTaxonomy();

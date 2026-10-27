@@ -12,8 +12,11 @@ import { placeWithId, strictCode } from './idsync';
 import type { Level, Location, Question, Taxonomy } from './types';
 
 export type IdVerdict = 'khop' | 'chua-kiem-chung' | 'bat-dong';
-/** Lựa chọn của giáo viên cho câu Bất đồng: giữ ID trong tệp / theo gợi ý / vị trí chung đang chọn. */
-export type IdChoice = 'giu' | 'goi-y' | 'chung';
+/**
+ * Lựa chọn của giáo viên cho câu Bất đồng: chờ xác minh (hàng đợi, MẶC ĐỊNH) / giữ ID trong tệp / theo gợi ý / chưa phân loại (vị trí chung).
+ * Mặc định "chờ xác minh" giữ ID gốc ở đúng vị trí tệp ghi, đánh dấu cần xem lại (không làm căn cứ), để lô lớn không bị chặn bởi vài câu khó.
+ */
+export type IdChoice = 'cho' | 'giu' | 'goi-y' | 'chung';
 /** Mức độ khi đổi vị trí: giữ mức độ gốc của ID (mặc định) hoặc đổi theo ô Mức độ chung — lựa chọn riêng, rõ ràng. */
 export type LevelChoice = 'giu' | 'chung';
 
@@ -78,16 +81,25 @@ export function usableDecision(v: IdVerification | undefined, d: IdDecision | un
   return d;
 }
 
-export interface VerifySummary { total: number; khop: number; chua: number; batDong: number; pending: number; unchecked: number }
+/**
+ * Quyết định áp dụng thật cho một câu: quyết định của giáo viên nếu còn hiệu lực (đúng câu, đúng gợi ý, đúng cây đã xem),
+ * nếu không (chưa chọn, hoặc gợi ý/cây/câu đã đổi) ⇒ mặc định "chờ xác minh". Câu không bất đồng ⇒ undefined.
+ */
+export function effectiveDecision(v: IdVerification | undefined, d: IdDecision | undefined): IdDecision | undefined {
+  if (!v || v.verdict !== 'bat-dong') return undefined;
+  return usableDecision(v, d) ?? decide(v, 'cho');
+}
 
-/** Tổng hợp cho các câu SẼ NHẬP có ID hợp lệ. `unchecked` = chưa kiểm xong (phải đợi). `pending` = Bất đồng chưa có quyết định còn hiệu lực. */
+export interface VerifySummary { total: number; khop: number; chua: number; batDong: number; /** trong số bất đồng: bao nhiêu câu vào hàng đợi (chờ xác minh) */ queued: number; unchecked: number }
+
+/** Tổng hợp cho các câu SẼ NHẬP có ID hợp lệ. `unchecked` = chưa kiểm xong (phải đợi). */
 export function summarizeVerify(
   withId: readonly number[],
   verOf: (i: number) => IdVerification | undefined,
   decOf: (i: number) => IdDecision | undefined,
   importing: (i: number) => boolean,
 ): VerifySummary {
-  const s: VerifySummary = { total: 0, khop: 0, chua: 0, batDong: 0, pending: 0, unchecked: 0 };
+  const s: VerifySummary = { total: 0, khop: 0, chua: 0, batDong: 0, queued: 0, unchecked: 0 };
   for (const i of withId) {
     if (!importing(i)) continue;
     s.total++;
@@ -95,13 +107,13 @@ export function summarizeVerify(
     if (!v) { s.unchecked++; continue; }
     if (v.verdict === 'khop') s.khop++;
     else if (v.verdict === 'chua-kiem-chung') s.chua++;
-    else { s.batDong++; if (!usableDecision(v, decOf(i))) s.pending++; }
+    else { s.batDong++; if (effectiveDecision(v, decOf(i))?.choice === 'cho') s.queued++; }
   }
   return s;
 }
 
 /** Trạng thái xác minh sẽ lưu kèm (tệp phụ id-review). */
-export interface PlacedMeta { form: FormState; src: IdSource; unclassified: boolean; why?: string }
+export interface PlacedMeta { form: FormState; src: IdSource; unclassified: boolean; why?: string; /** ID nguyên bản trong tệp */ orig?: string; /** Dạng máy đề xuất (câu chờ xác minh) */ prop?: string }
 export type Placed = ({ ok: true; latex: string; level: Level; loc: Location } & PlacedMeta) | { ok: false; reason: string };
 
 export interface PlaceInput {
@@ -120,12 +132,19 @@ export interface PlaceInput {
 /**
  * Vị trí, mức độ và LaTeX sẽ GHI cho một câu có ID nhưng BẤT ĐỒNG với ngân hàng. Không có quyết định còn hiệu lực ⇒ KHÔNG ghi.
  * Giữ ID ⇒ LaTeX nguyên văn. Theo gợi ý ⇒ ghi ID mới vào `%[ID]` cùng lúc với vị trí (quy tắc 10: cả hai hoặc không gì); không ghi được ⇒ lỗi, KHÔNG lưu nửa vời.
- * Vị trí chung ⇒ Chưa phân loại: LaTeX nguyên văn, không ghi ID.
+ * Vị trí chung ⇒ Chưa phân loại: LaTeX nguyên văn, không ghi ID. Chờ xác minh (mặc định) ⇒ giữ ID gốc, cần xem lại, vào hàng đợi.
  * Mức độ: giữ mức độ gốc của ID, trừ khi giáo viên chọn riêng "đổi theo ô Mức độ chung".
  */
 export function placeDisputed(p: PlaceInput): Placed {
-  const d = usableDecision(p.ver, p.decision);
-  if (!d) return { ok: false, reason: 'Chưa có quyết định còn hiệu lực cho ID bất đồng (gợi ý, cây hoặc câu đã đổi sau khi bạn chọn).' };
+  const d = effectiveDecision(p.ver, p.decision);
+  if (!d) return { ok: false, reason: 'Câu này không ở trạng thái ID bất đồng.' };
+  if (d.choice === 'cho') {
+    // Chờ xác minh (mặc định): giữ ID gốc ở đúng vị trí tệp ghi, LaTeX nguyên văn, đánh dấu cần xem lại; Dạng máy đề xuất lưu ở tệp phụ.
+    const sc = strictCode(p.id.loc, p.id.level, p.tax);
+    return sc.ok
+      ? { ok: true, latex: p.text, level: p.id.level, loc: p.id.loc, form: 'xem-lai', src: 'tep', unclassified: false, why: 'ID bất đồng với ngân hàng; chờ xác minh', ...(p.ver.suggested ? { prop: p.ver.suggested.formId } : {}) }
+      : { ok: false, reason: `Vị trí của ID trong tệp không còn đúng đường dẫn cây (${sc.problem}).` };
+  }
   if (d.choice === 'giu') {
     const sc = strictCode(p.id.loc, p.id.level, p.tax);
     return sc.ok

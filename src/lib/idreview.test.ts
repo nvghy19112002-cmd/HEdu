@@ -1,4 +1,5 @@
-import { _resetReview, dropRec, effectiveOf, flushIdReview, getRec, isEvidence, loadIdReview, makeRec, parseReview, putRecs, reviewCount, type Backend, type ReviewRec } from './idreview';
+import { _resetReview, dropRec, effectiveOf, freezeIdReview, idReviewForBackup, restoreIdReview, setRecRaw, type Effective, flushIdReview, getRec, isEvidence, loadIdReview, makeRec, parseReview, putRecs, reviewCount, type Backend, type ReviewRec } from './idreview';
+import { addMany, exportBackup, getState, importBackup, initStore } from './store';
 import { planDrafts } from './importplan';
 import { strictCode } from './idsync';
 import { writeHeadId } from './idtex';
@@ -72,7 +73,9 @@ console.log('Căn cứ kiểm chứng');
   ok(evidenceQuestions(all, eff).length === all.length - 2, 'câu cần xem lại và câu chưa phân loại bị loại khỏi căn cứ');
   const approvedUnclassified = { ...a[2], review: 'approved' as ReviewStatus };
   ok(!isEvidence(approvedUnclassified, { form: 'chua', level: 'chua', unclassified: true }), 'Đã duyệt nhưng chưa phân loại ⇒ không phải căn cứ');
-  ok(isEvidence({ ...a[2], review: 'approved' }, { form: 'chua', level: 'chua', unclassified: false }), 'Đã duyệt (tạm thời) vẫn là căn cứ');
+  ok(!isEvidence({ ...a[2], review: 'approved' }, { form: 'chua', level: 'chua', unclassified: false }), 'Đã duyệt (nội dung) mà Dạng chưa xác minh ⇒ KHÔNG phải căn cứ (chỉ để tham khảo)');
+  ok(!isEvidence({ ...a[2], review: 'approved' }, { form: 'may', level: 'may', unclassified: false }), 'Đã duyệt + máy phân loại ⇒ vẫn không phải căn cứ');
+  ok(isEvidence({ ...a[2], review: 'needs_fix' }, { form: 'gv', level: 'chua', unclassified: false }), 'Dạng giáo viên xác minh là căn cứ dù nội dung đang cần sửa (hai việc riêng)');
   // kết luận kiểm chứng đi theo đúng căn cứ
   const sg = verifierFor(tax, all, eff);
   const nA = ex('Tìm tập xác định của hàm số $y=\\sqrt{x-9}$.');
@@ -85,10 +88,11 @@ console.log('Trạng thái ghi lúc nhập (planDrafts)');
 {
   const code = (loc: Location, lv: Level) => { const s = strictCode(loc, lv, tax); if (!s.ok) throw new Error('mã'); return s.code; };
   const mkBank = (loc: Location, texts: string[]) => texts.flatMap((t) => [3, 4, 7].map((k) => q(loc, ex(t.replace('#', String(k))), 'approved')));
+  const gvE = (): Effective => ({ form: 'gv', level: 'chua', unclassified: false });
   const TA = ['Tìm tập xác định của hàm số $y=\\sqrt{x-#}$.', 'Hàm số $y=\\dfrac{1}{x-#}$ xác định khi nào? Chọn tập xác định đúng.', 'Tập xác định $D$ của hàm số $y=\\sqrt{#-x}+\\dfrac{1}{x}$ là'];
   const TB = ['Gieo một con xúc xắc cân đối, tính xác suất xuất hiện mặt # chấm.', 'Rút ngẫu nhiên một thẻ trong hộp có # thẻ đánh số, tính xác suất rút được thẻ số chẵn.', 'Chọn ngẫu nhiên hai bạn trong lớp có # học sinh, tính xác suất cả hai là nữ.'];
   const bank = [...mkBank(A, TA), ...mkBank(B, TB)];
-  const sg = verifierFor(tax, bank);
+  const sg = verifierFor(tax, bank, gvE);
   const latexes = [
     ex('Tìm tập xác định của hàm số $y=\\sqrt{x-9}$.', code(A, 'NB')),          // 0: ID khớp
     ex('Tìm tập xác định của hàm số $y=\\sqrt{x-8}$.', code(B, 'NB')),          // 1: bất đồng, giữ
@@ -150,6 +154,109 @@ console.log('Tệp phụ: đọc, ghi, lỗi');
   // dòng hỏng bị bỏ qua, dòng tốt giữ lại
   const m = parseReview(JSON.stringify({ v: 1, recs: { a: mk(x), b: { form: 'zzz' }, c: 5 } }));
   ok(m.size === 1 && m.has('a'), 'bản ghi hỏng bị bỏ qua, bản ghi tốt giữ lại');
+  _resetReview(null);
+}
+
+console.log('Lịch sử quyết định và ID nguyên bản');
+{
+  const disk = { json: null as string | null };
+  const be: Backend = { async load() { return disk.json; }, async save(j) { disk.json = j; } };
+  _resetReview(be);
+  await loadIdReview();
+  const x = q(A, ex('Y'));
+  putRecs([[x.uid, mk(x, { form: 'xem-lai', src: 'tep', orig: '2D1N1-1', prop: B.formId, why: 'bất đồng', at: 1 })]]);
+  putRecs([[x.uid, mk(x, { form: 'gv', src: 'tay', at: 2 })]]);
+  putRecs([[x.uid, mk(x, { form: 'chua', level: 'chua', src: 'tay', at: 3 })]]);
+  const r = getRec(x.uid)!;
+  ok(r.form === 'chua' && (r.hist?.length ?? 0) === 2 && r.hist![0].form === 'gv' && r.hist![1].form === 'xem-lai' && r.hist![1].why === 'bất đồng', 'đổi trạng thái nhiều lần (kể cả "Bỏ xác nhận") ⇒ lịch sử vẫn đủ, mới nhất trước');
+  ok(r.orig === '2D1N1-1', 'ID nguyên bản trong tệp được giữ qua các lần đổi trạng thái');
+  for (let i = 0; i < 40; i++) putRecs([[x.uid, mk(x, { form: i % 2 ? 'gv' : 'chua', src: 'tay', at: 10 + i })]]);
+  ok(getRec(x.uid)!.hist!.length === 30, 'lịch sử có giới hạn (30 mục)');
+  await flushIdReview();
+  _resetReview(be); await loadIdReview();
+  ok(getRec(x.uid)!.hist!.length === 30 && getRec(x.uid)!.orig === '2D1N1-1', 'lịch sử và ID nguyên bản đọc lại đúng sau khi mở lại');
+  const before = getRec(x.uid)!;
+  putRecs([[x.uid, mk(x, { form: 'gv', src: 'tay', at: 999 })]]);
+  setRecRaw(x.uid, before);
+  ok(getRec(x.uid) === before, 'hoàn tác đặt lại nguyên bản ghi (không thêm vào lịch sử)');
+  setRecRaw(x.uid, undefined);
+  ok(getRec(x.uid) === undefined, 'hoàn tác về "chưa có bản ghi"');
+  _resetReview(null);
+}
+
+console.log('Sao lưu/khôi phục trạng thái xác nhận');
+{
+  const disk = { json: null as string | null };
+  const be: Backend = { async load() { return disk.json; }, async save(j) { disk.json = j; } };
+  _resetReview(be);
+  await loadIdReview();
+  const qa = q(A, ex('Bản sao lưu A')), qb = q(B, ex('Bản sao lưu B'));
+  putRecs([[qa.uid, mk(qa, { form: 'gv', src: 'tay', at: 10 })], [qb.uid, mk(qb, { form: 'may', src: 'tep', at: 10 })]]);
+  const file = JSON.parse(JSON.stringify(idReviewForBackup()));
+  ok(file.v === 1 && Object.keys(file.recs).length === 2, 'phần trạng thái xác minh đưa được vào file sao lưu JSON');
+  // máy khác (trống): khôi phục đủ
+  _resetReview({ async load() { return null; }, async save() { /* trống */ } });
+  await loadIdReview();
+  const r1 = await restoreIdReview(file);
+  ok(r1.added === 2 && r1.saved && getRec(qa.uid)?.form === 'gv', 'khôi phục vào nơi trống ⇒ đủ trạng thái');
+  // GỘP: không xoá thứ đang có; trùng khoá thì giữ bản MỚI hơn
+  putRecs([[qa.uid, mk(qa, { form: 'xem-lai', src: 'soat', at: 50 })]]);
+  const r2 = await restoreIdReview(file);
+  ok(r2.added === 0 && getRec(qa.uid)?.form === 'xem-lai', 'bản đang có mới hơn file sao lưu ⇒ giữ bản đang có');
+  const qc = q(C, ex('Chỉ có ở máy hiện tại'));
+  putRecs([[qc.uid, mk(qc, { form: 'gv', src: 'tay', at: 60 })]]);
+  await restoreIdReview(file);
+  ok(getRec(qc.uid)?.form === 'gv', 'khôi phục không xoá bản ghi chỉ có ở máy hiện tại');
+  const r3 = await restoreIdReview(undefined);
+  const r4 = await restoreIdReview({ v: 2, recs: {} });
+  ok(r3.added === 0 && r4.added === 0, 'file sao lưu cũ (không có phần trạng thái xác minh) ⇒ bỏ qua, mọi thứ giữ nguyên');
+  // đi qua exportBackup / importBackup thật của kho
+  const disk2 = { json: null as string | null };
+  await initStore({ async load() { return { json: disk2.json, recovered: false }; }, async save(j: string) { disk2.json = j; } });
+  const added = addMany([{ latex: ex('Sao lưu thật'), level: 'TH', tags: [], ...A }]);
+  _resetReview(be); await loadIdReview();
+  putRecs([[added[0].uid, makeRec(added[0], { form: 'gv', src: 'tay', taxRev: rev })]]);
+  const backup = exportBackup();
+  const parsed = JSON.parse(backup);
+  ok(parsed.idReview?.recs?.[added[0].uid]?.form === 'gv' && parsed.dupSidecar && Array.isArray(parsed.questions), 'exportBackup mang theo câu hỏi, quyết định trùng VÀ trạng thái xác minh');
+  _resetReview({ async load() { return null; }, async save() { /* máy mới */ } });
+  await loadIdReview();
+  importBackup(backup);
+  await new Promise((r) => setTimeout(r, 30));
+  ok(getRec(added[0].uid)?.form === 'gv', 'importBackup khôi phục trạng thái xác minh cùng với câu hỏi');
+  const old = JSON.parse(backup); delete old.idReview;
+  _resetReview({ async load() { return null; }, async save() { /* máy mới */ } });
+  await loadIdReview();
+  importBackup(JSON.stringify(old));
+  await new Promise((r) => setTimeout(r, 30));
+  ok(getRec(added[0].uid) === undefined && getState().questions.length === old.questions.length, 'file sao lưu cũ (không có idReview) vẫn khôi phục được câu hỏi; trạng thái là "chưa xác minh"');
+  _resetReview(null);
+}
+
+console.log('Ghi nốt và khoá khi thay dữ liệu');
+{
+  const disk = { json: null as string | null, saves: 0 };
+  const be: Backend = { async load() { return disk.json; }, async save(j) { disk.saves++; disk.json = j; } };
+  _resetReview(be); await loadIdReview();
+  const x = q(A, ex('Khoá'));
+  ok(await flushIdReview() && disk.saves === 0, 'không có thay đổi ⇒ coi như đã ghi, không ghi thừa');
+  putRecs([[x.uid, mk(x, { form: 'gv', src: 'tay' })]]);
+  ok(await flushIdReview() && disk.saves === 1, 'có thay đổi ⇒ ghi một lần');
+  // thay cả tệp dữ liệu (khôi phục .db): bản trong bộ nhớ không được đè lên bản vừa khôi phục
+  putRecs([[x.uid, mk(x, { form: 'xem-lai', src: 'soat' })]]);
+  freezeIdReview();
+  await new Promise((r) => setTimeout(r, 600));
+  const restored = '{"v":1,"recs":{}}';
+  disk.json = restored; // mô phỏng Rust vừa thay tệp .db bằng bản khôi phục
+  const saves0 = disk.saves;
+  putRecs([[x.uid, mk(x, { form: 'gv', src: 'tay' })]]);
+  await new Promise((r) => setTimeout(r, 600));
+  ok(disk.json === restored && disk.saves === saves0, 'sau khi khoá, không ghi đè lên tệp vừa khôi phục (kể cả khi hẹn giờ ghi trễ đã chạy)');
+  // tệp phụ bị chặn ghi (đọc không được) nhưng không có thay đổi: không chặn cập nhật/khôi phục
+  disk.json = '{"v":9,"recs":1}';
+  _resetReview(be);
+  await loadIdReview();
+  ok(await flushIdReview(), 'tệp trạng thái hỏng và không có gì để ghi ⇒ không chặn việc cập nhật/khôi phục');
   _resetReview(null);
 }
 
