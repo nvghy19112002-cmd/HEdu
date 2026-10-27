@@ -18,6 +18,7 @@ import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
 import { AiAskBar } from '../components/AiAskBar';
 import { CONFIDENCE_LABEL, IdSuggester } from '../lib/idsuggest';
 import { taxRevision } from '../lib/taxpath';
+import { isFresh, summarizeVerify, usableChoice, verifyId, VERDICT_LABEL, type IdChoice, type IdVerification } from '../lib/idverify';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
@@ -109,7 +110,7 @@ export function ImportScreen() {
   const [confirm, setConfirm] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [bulkAsk, setBulkAsk] = useState(false);
-  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); }, [batchKey]);
+  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); setIdChoices({}); setOnlyIdBD(false); }, [batchKey]);
   // Gán ID tự động cho câu không có %[ID] hợp lệ (chỉ metadata bản nháp; đổi lớp đích ⇒ gợi ý cũ bỏ)
   const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
   /** câu mà AI không đủ căn cứ chọn Dạng: cần giáo viên chọn, nếu không sẽ vào vị trí chung (phải xác nhận trước khi nhập) */
@@ -235,10 +236,19 @@ export function ImportScreen() {
   const texByCat = texFail.reduce<Partial<Record<Category, number>>>((a, x) => ({ ...a, [x.fail.category]: (a[x.fail.category] ?? 0) + 1 }), {});
   const blocks = useMemo(() => rows.map((r) => r.latex), [rows]);
   useEffect(() => { setPkgFilter(null); setLimit(200); setFileF('all'); }, [batchKey]);
+  // Kiểm chứng ID có sẵn (PR 1B): trạng thái phải khai báo trước danh sách hiển thị
+  const [verifs, setVerifs] = useState<ReadonlyMap<number, IdVerification>>(new Map());
+  const [idChoices, setIdChoices] = useState<Record<number, { choice: IdChoice; latex: string }>>({});
+  const [onlyIdBD, setOnlyIdBD] = useState(false);
+  const taxRevNow = taxRevision(getTaxonomy());
+  const verifOf = (i: number): IdVerification | undefined => { const v = verifs.get(i); return v && isFresh(v, latexOf(i), taxRevNow) ? v : undefined; };
+  const choiceOf = (i: number): IdChoice | undefined => { const c = idChoices[i]; return usableChoice(verifOf(i), c && c.latex === latexOf(i) ? c.choice : undefined); };
+  const setChoice = (i: number, choice: IdChoice | '') => setIdChoices((m) => { const n = { ...m }; if (choice) n[i] = { choice, latex: latexOf(i) }; else delete n[i]; return n; });
   const shownRows = rows
     .map((r, i) => ({ r, i }))
     .filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh')
     .filter(({ r }) => fileF === 'all' || r.srcIdx === fileF)
+    .filter(({ i }) => !onlyIdBD || verifOf(i)?.verdict === 'bat-dong')
     .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i))
     .filter(({ i }) => !texOnlyBad || tex[i]?.ok === false)
     .filter(({ i }) => statusF === 'all' || (statusF === 'hold' ? decOf(i) === 'hold' : statusOf(i).key === statusF));
@@ -248,12 +258,41 @@ export function ImportScreen() {
   const lesson = chapter?.lessons.find((l) => l.id === loc.lessonId) ?? chapter?.lessons[0];
 
   const importCount = sum.importN;
-  const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0;
   const fromIdOf = (i: number) => {
     if (edits[i] == null) return rows[i].fromId;
     return idFromLatex(latexOf(i));
   };
   const noIdRows = rows.map((_, i) => i).filter((i) => !fromIdOf(i));
+  // ---- Kiểm chứng ID có sẵn (PR 1B, quy tắc 15a): ID trong tệp chỉ là bằng chứng cần kiểm chứng, đối chiếu với ngân hàng ----
+  const idRows = useMemo(() => rows.map((_, i) => i).filter((i) => !!(edits[i] == null ? rows[i].fromId : idFromLatex(edits[i]))), [rows, edits]);
+  const suggesterRef = useRef<{ q: typeof questions; tax: ReturnType<typeof getTaxonomy>; s: IdSuggester } | null>(null);
+  useEffect(() => {
+    setVerifs(new Map());
+    if (!idRows.length) return;
+    let stop = false;
+    const acc = new Map<number, IdVerification>();
+    let k = 0;
+    const step = () => {
+      if (stop) return;
+      const tax = getTaxonomy();
+      const c = suggesterRef.current;
+      const sg = c && c.q === questions && c.tax === tax ? c.s : new IdSuggester(tax, questions);
+      suggesterRef.current = { q: questions, tax, s: sg };
+      const until = Math.min(k + 20, idRows.length);
+      for (; k < until; k++) {
+        const i = idRows[k];
+        const latex = edits[i] ?? rows[i].latex;
+        const id = idFromLatex(latex, tax);
+        if (id) acc.set(i, verifyId(latex, id.loc, sg, `d${i}`));
+      }
+      setVerifs(new Map(acc));
+      if (k < idRows.length) setTimeout(step, 0);
+    };
+    const t = setTimeout(step, 0);
+    return () => { stop = true; clearTimeout(t); };
+  }, [idRows, questions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const vsum = summarizeVerify(idRows, verifOf, choiceOf, (i) => decOf(i) === 'import');
+  const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0 && vsum.pending === 0;
   /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
   const headIdNote = (latex: string): string | null => {
     const r = readLatexId(latex, getTaxonomy());
@@ -270,6 +309,15 @@ export function ImportScreen() {
     if (decOf(i) !== 'import') return [];
     const text = latexOf(i).trim();
     const fromId = fromIdOf(i);
+    const ver = fromId ? verifOf(i) : undefined;
+    if (fromId && ver?.verdict === 'bat-dong') {
+      // ID bất đồng với ngân hàng: chỉ đi theo lựa chọn của giáo viên. Giữ ID ⇒ nguyên văn; đổi vị trí ⇒ ghi ID mới (giáo viên đã thấy ID cũ → mới).
+      const ch = choiceOf(i);
+      if (ch === 'giu') return [{ latex: text, level: fromId.level, tags: tagsFor(rows[i], info), ...fromId.loc }];
+      const to = ch === 'goi-y' && ver.suggested ? ver.suggested.location : loc;
+      const w = placeWithId(text, to, level, getTaxonomy(), true);
+      return [{ latex: 'latex' in w ? w.latex : text, level, tags: tagsFor(rows[i], info), ...to }];
+    }
     if (fromId) return [{ latex: text, level: fromId.level, tags: tagsFor(rows[i], info), ...fromId.loc }];
     // Câu chưa có ID: ghi ID theo vị trí đã xác nhận vào mã LaTeX lưu trong ngân hàng (tệp .tex gốc không bị sửa).
     // Câu có ID lỗi/thiếu Dạng/nhiều ID: giữ nguyên LaTeX (không tự thay), vị trí vẫn theo lựa chọn của giáo viên.
@@ -287,7 +335,9 @@ export function ImportScreen() {
       const dec = decOf(i);
       const st = idStateOf(latexOf(i));
       const key = statusOf(i).key;
-      const place: IdPlace | undefined = dec !== 'import' ? undefined : st === 'ok' ? 'dung-ma' : draftLocOf(i).suggested ? 'ai' : 'vi-tri-chung';
+      const vv = st === 'ok' ? verifOf(i) : undefined;
+      const idPlaceOk: IdPlace = vv?.verdict === 'khop' ? 'ma-khop' : vv?.verdict === 'bat-dong' ? (choiceOf(i) === 'giu' ? 'ma-giu-tay' : choiceOf(i) === 'goi-y' ? 'ai' : 'vi-tri-chung') : 'ma-chua-kiem-chung';
+      const place: IdPlace | undefined = dec !== 'import' ? undefined : st === 'ok' ? idPlaceOk : draftLocOf(i).suggested ? 'ai' : 'vi-tri-chung';
       const q = dec === 'import' ? added[k++] : undefined;
       const w = issues[i] ? worstLevel(issues[i]!) : null;
       return {
@@ -309,7 +359,7 @@ export function ImportScreen() {
   /** Bước cuối: rà soát LẠI theo kho hiện hành (chống kho đổi sau lúc xem), rồi mới ghi. */
   const commit = async () => {
     setConfirm(false);
-    if (!ana) return;
+    if (!ana || vsum.pending > 0 || vsum.unchecked > 0) return;
     const fresh = await analyzeDrafts(drafts, getState().questions);
     if (!fresh.complete || bankHitSignature(fresh.rows) !== bankHitSignature(ana.rows)) {
       setAna(fresh);
@@ -553,12 +603,24 @@ export function ImportScreen() {
                     <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của ${multi ? `tệp ${r.file}` : 'file'}`}>{i + 1}</span>{multi && <span className="chk-tag tin" title={r.rel ? `${r.rel}/${r.file}` : r.file}>{r.file}</span>}
                     <b>{TYPE_LABEL[r.p.type]}</b>
                     <span className="mono">{fromIdOf(i) ? questionCode(fromIdOf(i)!.loc, fromIdOf(i)!.level) : headIdNote(latexOf(i)) ?? (idPicks && draftLocOf(i).suggested ? `${questionCode(draftLocOf(i).loc, level)} (gợi ý)` : 'không ID')}</span>
+                    {verifOf(i) && <span className={`chk-tag ${verifOf(i)!.verdict === 'khop' ? 'tin' : verifOf(i)!.verdict === 'bat-dong' ? 'loi' : 'canh'}`} title="Đối chiếu ID trong tệp với câu giống trong ngân hàng">{VERDICT_LABEL[verifOf(i)!.verdict]}</span>}
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
                     {anaDone && statusOf(i).key !== 'new' && <span className={`chk-tag dup d-${statusOf(i).key}`}>{statusOf(i).label}{(ana!.rows[i]?.hits.length ?? 0) > 0 ? ` · ${ana!.rows[i]!.hits.length}` : ''}</span>}
                     {edits[i] != null && <span className="chk-tag tin">đã sửa tại chỗ</span>}
                     {tex[i] && <span className={`chk-tag ${tex[i].ok ? 'tin' : 'loi'}`}>{tex[i].ok ? 'TeX đạt' : `TeX: ${(tex[i] as { fail: Failure }).fail.label}`}</span>}
                     {worstOf(i) && <span className={`chk-tag ${worstOf(i)}`}>{worstOf(i) === 'tin' ? 'có hình' : LEVEL_TEXT[worstOf(i)!]}</span>}
                   </button>
+                  {verifOf(i)?.verdict === 'bat-dong' && fromIdOf(i) && (
+                    <label className="dec-sel">
+                      <span className="sr-only">Cách xử lý ID bất đồng của câu {i + 1}</span>
+                      <select value={choiceOf(i) ?? ''} onChange={(e) => setChoice(i, e.target.value as IdChoice | '')} aria-label={`Cách xử lý ID bất đồng của câu ${i + 1}`}>
+                        <option value="" disabled>Chọn cách xử lý ID…</option>
+                        <option value="giu">Giữ ID trong tệp ({questionCode(fromIdOf(i)!.loc, fromIdOf(i)!.level)})</option>
+                        <option value="goi-y" disabled={!verifOf(i)!.suggested}>Theo gợi ý ({verifOf(i)!.suggested ? questionCode(verifOf(i)!.suggested!.location, level) : '—'})</option>
+                        <option value="chung">Vào vị trí chung (ghi ID mới)</option>
+                      </select>
+                    </label>
+                  )}
                   <label className="dec-sel">
                     <span className="sr-only">Quyết định cho câu {i + 1}</span>
                     <select value={decOf(i)} disabled={!anaDone} onChange={(e) => setDec(i, e.target.value as Decision)} aria-label={`Quyết định cho câu ${i + 1}`}>
@@ -642,11 +704,17 @@ export function ImportScreen() {
                 <div className="head-actions"><button type="button" className="btn btn-sm btn-accent" onClick={retrySave}>Thử ghi lại</button></div>
               </div>
             )}
+            {vsum.total > 0 && (
+              <p className="sys-hint" role="status">
+                ID trong tệp (đối chiếu với ngân hàng, không tin tuyệt đối): {vsum.khop} khớp · {vsum.chua} chưa kiểm chứng{vsum.unchecked > 0 ? ` · ${vsum.unchecked} đang kiểm` : ''} · {vsum.batDong} bất đồng{vsum.pending > 0 ? ` (còn ${vsum.pending} chưa chọn cách xử lý)` : ''}.
+              </p>
+            )}
             <div className="head-actions imp-bar">
               <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => { setAckRefused(false); setConfirm(true); }}>
-                {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : `Nhập ${importCount} câu vào ngân hàng`}
+                {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : vsum.unchecked > 0 ? 'Đang kiểm chứng ID…' : vsum.pending > 0 ? `Còn ${vsum.pending} câu ID bất đồng cần chọn` : `Nhập ${importCount} câu vào ngân hàng`}
               </button>
               {anaDone && sum.holdN > 0 && <button type="button" className="btn btn-sm" onClick={() => setStatusF('hold')}>Xem các câu chưa quyết định</button>}
+              {vsum.batDong > 0 && <button type="button" className="btn btn-sm" onClick={() => setOnlyIdBD((x) => !x)}>{onlyIdBD ? 'Hiện tất cả câu' : `Xem ${vsum.batDong} câu ID bất đồng`}</button>}
             </div>
             {confirm && (
               <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Xác nhận nhập">
@@ -662,6 +730,7 @@ export function ImportScreen() {
                     Tôi đã xem lại và xác nhận.
                   </span></label>
                 )}
+                {vsum.chua > 0 && <p>{vsum.chua} câu có ID trong tệp nhưng ngân hàng chưa đủ căn cứ để kiểm chứng: vẫn nhập theo ID đó, báo cáo nhập sẽ ghi “chưa kiểm chứng”.</p>}
                 <p>HEdu sẽ rà soát lại với ngân hàng ngay trước khi ghi. Không câu nào trong ngân hàng bị sửa hay xoá.</p>
                 <div className="head-actions">
                   <button type="button" className="btn btn-accent" autoFocus disabled={idSum.mustConfirm && !ackRefused} onClick={commit}>Nhập {sum.importN} câu</button>
