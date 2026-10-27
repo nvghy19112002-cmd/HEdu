@@ -482,4 +482,21 @@ mod tests {
         assert_eq!(Db::open(&cur).unwrap().sidecar_get("id-review").unwrap().as_deref(), Some(BEFORE), "sau khi khôi phục từ bản chụp");
     }
 
+
+    #[test]
+    fn ban_hedu_cu_ghi_mot_khoa_tep_phu_khong_xoa_trang_thai_xac_minh() {
+        // Quay về HEdu cũ (beta.34) trên dữ liệu mới: bản cũ chỉ biết khoá "dup-decisions". Khi nó ghi khoá đó, khoá lạ "id-review" PHẢI còn nguyên
+        // (nó không hiểu khoá này nhưng cũng không được làm mất), và bản chụp .db vẫn mở được.
+        const IDR: &str = "{\"v\":1,\"recs\":{\"u000001\":{\"form\":\"gv\"}}}";
+        let d = tmp("cu");
+        let mut db = make(&d, "x.db", 5);
+        db.apply(&Batch { sidecar: vec![("id-review".into(), IDR.into())], ..Default::default() }).unwrap();
+        db.apply(&Batch { sidecar: vec![("dup-decisions".into(), "{\"v\":1,\"recs\":[{\"a\":\"x\"}]}".into())], ..Default::default() }).unwrap();
+        assert_eq!(db.sidecar_get("id-review").unwrap().as_deref(), Some(IDR), "ghi khoá dup-decisions không xoá khoá id-review");
+        snapshot_verified(&db, &d.join("snap.db"), "manual", "thu-cong", "0.1.0-beta.34").unwrap();
+        let s = Db::open(&d.join("snap.db")).unwrap();
+        assert_eq!(s.sidecar_get("id-review").unwrap().as_deref(), Some(IDR));
+        assert_eq!(s.count().unwrap(), 5, "dữ liệu câu hỏi không đổi");
+    }
+
 }

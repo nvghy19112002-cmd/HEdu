@@ -1,4 +1,4 @@
-import { _resetReview, dropRec, effectiveOf, freezeIdReview, idReviewForBackup, restoreIdReview, setRecRaw, type Effective, flushIdReview, getRec, isEvidence, loadIdReview, makeRec, parseReview, putRecs, reviewCount, type Backend, type ReviewRec } from './idreview';
+import { _resetReview, commitRecs, dropRec, effectiveOf, freezeIdReview, newerRec, parseReview, idReviewForBackup, restoreIdReview, setRecRaw, type Effective, flushIdReview, getRec, isEvidence, loadIdReview, makeRec, putRecs, reviewCount, type Backend, type ReviewRec } from './idreview';
 import { addMany, exportBackup, getState, importBackup, initStore } from './store';
 import { planDrafts } from './importplan';
 import { strictCode } from './idsync';
@@ -257,6 +257,80 @@ console.log('Ghi nốt và khoá khi thay dữ liệu');
   _resetReview(be);
   await loadIdReview();
   ok(await flushIdReview(), 'tệp trạng thái hỏng và không có gì để ghi ⇒ không chặn việc cập nhật/khôi phục');
+  _resetReview(null);
+}
+
+console.log('Ghi bền vững: lỗi ghi không để lại "giáo viên xác minh" giả');
+{
+  const disk = { json: null as string | null, failSave: false };
+  const be: Backend = { async load() { return disk.json; }, async save(j) { if (disk.failSave) throw new Error('đĩa đầy'); disk.json = j; } };
+  _resetReview(be); await loadIdReview();
+  const x = q(A, ex('Bền vững X'));
+  disk.failSave = true;
+  const bad = await commitRecs([[x.uid, mk(x, { form: 'gv', src: 'tay' })]]);
+  ok(!bad && getRec(x.uid) === undefined && effectiveOf(x, getRec(x.uid), ctx).form === 'chua', 'ghi lỗi ⇒ trả false và câu KHÔNG hiện là giáo viên xác minh (trạng thái được trả lại)');
+  disk.failSave = false;
+  ok(await commitRecs([[x.uid, mk(x, { form: 'gv', src: 'tay', at: 5 })]]) && getRec(x.uid)?.form === 'gv' && disk.json !== null, 'ghi được ⇒ lưu và hiện đúng');
+  disk.failSave = true;
+  const bad2 = await commitRecs([[x.uid, mk(x, { form: 'xem-lai', src: 'soat', at: 9 })]]);
+  ok(!bad2 && getRec(x.uid)?.form === 'gv' && getRec(x.uid)?.at === 5, 'ghi lỗi khi đổi trạng thái đã có ⇒ giữ NGUYÊN bản ghi cũ (không mất, không nửa vời)');
+  disk.failSave = false;
+  _resetReview(be); await loadIdReview();
+  ok(getRec(x.uid)?.form === 'gv', 'sau khi mở lại, đĩa vẫn là bản ghi cũ đã lưu thành công');
+  // tệp trạng thái hỏng (bị chặn ghi): không thể xác nhận, báo lỗi, không hiện xác minh giả
+  disk.json = '{"v":9,"recs":1}';
+  _resetReview(be); await loadIdReview();
+  const blocked = await commitRecs([[x.uid, mk(x, { form: 'gv', src: 'tay' })]]);
+  ok(!blocked && getRec(x.uid) === undefined && disk.json === '{"v":9,"recs":1}', 'tệp không đọc được ⇒ không ghi đè, không hiện xác minh giả');
+  _resetReview(null);
+}
+
+console.log('Hai bản ghi cùng uid, bản ghi mồ côi, bản ghi không khớp');
+{
+  const x = q(A, ex('Cùng uid'));
+  const older = mk(x, { form: 'gv', src: 'tay', at: 10 }), newer = mk(x, { form: 'xem-lai', src: 'soat', at: 20 });
+  ok(newerRec(older, newer) === newer && newerRec(newer, older) === newer, 'cùng uid: bản MỚI hơn thắng, không phụ thuộc thứ tự');
+  const sameT1 = mk(x, { form: 'gv', src: 'tay', at: 30 }), sameT2 = mk(x, { form: 'may', src: 'tep', at: 30 });
+  ok(newerRec(sameT1, sameT2) === newerRec(sameT2, sameT1), 'cùng thời điểm: kết quả xác định (không phụ thuộc thứ tự)');
+  ok(newerRec(sameT1, sameT2).form !== 'gv', 'cùng thời điểm: chọn trạng thái an toàn hơn (không phải giáo viên xác minh)');
+  const withHist = { ...mk(x, { form: 'may', src: 'tep', at: 40 }), hist: [{ at: 1, form: 'chua' as const, level: 'chua' as const, src: 'tep' as const, formId: x.formId }] };
+  ok(newerRec(withHist, mk(x, { form: 'gv', src: 'tay', at: 40 })) === withHist, 'cùng thời điểm: bản có lịch sử dài hơn thắng');
+  // dạng mảng có uid lặp: bản mới nhất thắng dù đứng trước hay sau
+  const arr = (list: unknown[]) => JSON.stringify({ v: 1, recs: list });
+  const e1 = { uid: x.uid, ...older }, e2 = { uid: x.uid, ...newer };
+  ok(parseReview(arr([e1, e2])).get(x.uid)?.form === 'xem-lai' && parseReview(arr([e2, e1])).get(x.uid)?.form === 'xem-lai', 'file có hai bản ghi cùng uid (dạng mảng): bản mới nhất thắng, bất kể thứ tự trong file');
+  ok(parseReview(arr([{ uid: 5, ...older }, { ...older }, 7])).size === 0, 'phần tử không có uid hợp lệ bị bỏ qua');
+  // bản ghi mồ côi khi khôi phục: không tạo xác minh nào
+  const disk = { json: null as string | null };
+  const be: Backend = { async load() { return disk.json; }, async save(j) { disk.json = j; } };
+  _resetReview(be); await loadIdReview();
+  const file = { v: 1, recs: { [x.uid]: older, 'uid-khong-ton-tai': older } };
+  const r = await restoreIdReview(file, new Set([x.uid]));
+  ok(r.added === 1 && r.orphans === 1 && getRec('uid-khong-ton-tai') === undefined && getRec(x.uid)?.form === 'gv', 'khôi phục: bản ghi của uid không tồn tại bị bỏ (mồ côi), không tạo xác minh');
+  // xác minh mới hơn đang có không bị file cũ ghi đè
+  putRecs([[x.uid, mk(x, { form: 'xem-lai', src: 'soat', at: 99 })]]);
+  await restoreIdReview(file, new Set([x.uid]));
+  ok(getRec(x.uid)?.form === 'xem-lai', 'bản đang có mới hơn ⇒ file khôi phục không ghi đè');
+  // importBackup thật: bản ghi mồ côi trong file sao lưu không vào kho
+  const d2 = { json: null as string | null };
+  await initStore({ async load() { return { json: d2.json, recovered: false }; }, async save(j: string) { d2.json = j; } });
+  const added = addMany([{ latex: ex('Sao lưu mồ côi'), level: 'TH', tags: [], ...A }]);
+  _resetReview({ async load() { return null; }, async save() { /* máy mới */ } }); await loadIdReview();
+  putRecs([[added[0].uid, makeRec(added[0], { form: 'gv', src: 'tay', taxRev: rev })], ['mo-coi-1', makeRec(added[0], { form: 'gv', src: 'tay', taxRev: rev })]]);
+  const backup = exportBackup();
+  _resetReview({ async load() { return null; }, async save() { /* máy mới */ } }); await loadIdReview();
+  importBackup(backup);
+  await new Promise((res) => setTimeout(res, 30));
+  ok(getRec(added[0].uid)?.form === 'gv' && getRec('mo-coi-1') === undefined, 'importBackup: bản ghi mồ côi trong file sao lưu bị bỏ, bản ghi của câu có thật được khôi phục');
+  // bản ghi không khớp câu (nội dung/Dạng/mức độ đã đổi) hoặc Dạng không còn trong cây: không hiệu lực
+  const cur = added[0];
+  const rec = makeRec(cur, { form: 'gv', src: 'tay', taxRev: rev });
+  ok(effectiveOf({ ...cur, latex: cur.latex + ' ' + 'khác' }, rec, ctx).form === 'chua', 'nội dung không khớp ⇒ hết hiệu lực');
+  ok(effectiveOf({ ...cur, formId: B.formId }, rec, ctx).form === 'chua', 'Dạng của câu không khớp bản ghi ⇒ hết hiệu lực');
+  const taxX = structuredClone(tax);
+  const lx = taxX.grades.flatMap((g2) => g2.branches).flatMap((b) => b.chapters).flatMap((c) => c.lessons).find((l) => l.id === cur.lessonId)!;
+  lx.forms = lx.forms.filter((f) => f.id !== cur.formId);
+  ok(effectiveOf(cur, rec, { ix: indexOf(taxX), taxRev: taxRevision(taxX) }).form === 'xem-lai', 'Dạng không còn trong cây ⇒ không tự coi là đã xác minh (cần xem lại)');
   _resetReview(null);
 }
 

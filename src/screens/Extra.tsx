@@ -19,7 +19,7 @@ import { AiAskBar } from '../components/AiAskBar';
 import { CONFIDENCE_LABEL, IdSuggester } from '../lib/idsuggest';
 import { taxRevision } from '../lib/taxpath';
 import { idRowsOf, planDrafts, readIds } from '../lib/importplan';
-import { effectiveOf, flushIdReview, getRec, makeRec, putRecs, useIdReview } from '../lib/idreview';
+import { commitRecs, effectiveOf, getRec, makeRec, useIdReview } from '../lib/idreview';
 import { decide, effectiveDecision, isFresh, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
@@ -379,10 +379,10 @@ export function ImportScreen() {
     if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
     const added = addMany(built.drafts);
     // Trạng thái xác minh (tệp phụ). Thiếu/ghi lỗi chỉ làm câu thành "chưa xác minh" (an toàn), không làm sai dữ liệu câu.
-    putRecs(added.map((qq, k) => [qq.uid, makeRec(qq, { form: built.meta[k].form, src: built.meta[k].src, taxRev: taxRevNow, unclassified: built.meta[k].unclassified, ...(built.meta[k].why ? { why: built.meta[k].why } : {}), ...(built.meta[k].orig ? { orig: built.meta[k].orig } : {}), ...(built.meta[k].prop ? { prop: built.meta[k].prop } : {}) })] as const));
+    const recsToSave = added.map((qq, k) => [qq.uid, makeRec(qq, { form: built.meta[k].form, src: built.meta[k].src, taxRev: taxRevNow, unclassified: built.meta[k].unclassified, ...(built.meta[k].why ? { why: built.meta[k].why } : {}), ...(built.meta[k].orig ? { orig: built.meta[k].orig } : {}), ...(built.meta[k].prop ? { prop: built.meta[k].prop } : {}) })] as const);
     const report = makeReport(added, rp.taken);
     await flushSave();
-    const reviewSaved = await flushIdReview();
+    const reviewSaved = await commitRecs(recsToSave);
     if (!reviewSaved) toast('Đã nhập câu, nhưng chưa lưu được trạng thái xác minh ID: các câu này sẽ hiện là “chưa xác minh”.');
     if (!isLastSaveOk()) {
       setSaveErr(`Đã đưa ${added.length} câu vào ngân hàng trong phiên này nhưng CHƯA ghi được xuống đĩa. Đừng đóng app. Nội dung dán vẫn được giữ lại; các câu đã thêm sẽ hiện là “trùng chắc”, nên thử lại không bị nhân đôi.`);
