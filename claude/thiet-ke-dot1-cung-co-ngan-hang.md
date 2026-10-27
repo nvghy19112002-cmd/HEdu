@@ -1,6 +1,6 @@
 # Đợt 1 — Củng cố ngân hàng: ID đáng tin (loại L, CHỜ CHỦ DỰ ÁN DUYỆT)
 
-Mốc đối chiếu: `main` ca75b22, beta.34. Soạn 27/10/2026. Chưa có dòng mã nào được sửa theo tài liệu này.
+Mốc đối chiếu: `main` ca75b22, beta.34. Soạn 27/10/2026. **Cập nhật 28/10/2026:** duyệt nội dung TÁCH khỏi xác minh Dạng/mức độ (căn cứ kiểm chứng chỉ là Dạng giáo viên xác minh); câu bất đồng vào hàng đợi, không chặn nhập; thứ tự PR và tài liệu hiện hành ở `claude/phuong-an-gan-id-hoan-chinh.md`. Mục 3.1–3.3 dưới đây đã được thay/cập nhật bởi tài liệu đó khi mâu thuẫn. Chưa có dòng mã nào được sửa theo tài liệu này.
 Bất biến: không đổi schema (3), định dạng ID6, UID, LaTeX/TikZ gốc, thuật toán dò trùng; không tự xoá/duyệt câu; không commit dữ liệu thật.
 
 ## 1. Vấn đề (từ góc nhìn giáo viên)
@@ -18,7 +18,7 @@ Bất biến: không đổi schema (3), định dạng ID6, UID, LaTeX/TikZ gố
 ## 3. Hành vi cần có
 ### 3.1 Phân hạng ID khi nhập (PR 1B)
 Mỗi câu có ID hợp lệ được chấm bằng bằng chứng độc lập (không dùng chính ID để chấm):
-- **Khớp**: gợi ý tin cậy "cao/vừa" (`IdSuggester`, loại trừ chính câu) cùng Dạng với ID; hoặc câu giống/gần giống đã duyệt trong ngân hàng ở đúng Dạng đó.
+- **Khớp**: gợi ý tin cậy "cao/vừa" (`IdSuggester`, loại trừ chính câu) cùng Dạng với ID; hoặc câu giống/gần giống **có Dạng do giáo viên xác minh** (không phải chỉ "Đã duyệt" nội dung) ở đúng Dạng đó.
 - **Chưa kiểm chứng**: không đủ căn cứ (câu mới, kho thiếu mẫu, `cut`, có hình thiếu căn cứ).
 - **Bất đồng**: bằng chứng độc lập tin cậy cao chỉ Dạng/Bài khác ID.
 Tick "đồng ý" mới nhập với nhóm Bất đồng: mặc định **không nhập thẳng**; vào hàng chờ để giáo viên chọn (giữ ID cũ / theo gợi ý / vị trí chung). "Chưa kiểm chứng" được nhập nhưng mang trạng thái chưa xác minh (3.2). Mức độ từ ID cũng chỉ giữ khi không bất đồng với gợi ý; đổi mức độ vẫn chỉ khi giáo viên tick riêng.
