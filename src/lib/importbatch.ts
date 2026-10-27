@@ -42,7 +42,7 @@ export function perFile(rows: readonly BatchRow[], sources: readonly ImportSourc
     const f = st[r.srcIdx];
     if (!f) continue;
     f.blocks++;
-    const id = r.fromId ? 'ok' : idStateOf(r.latex);
+    const id = idStateOf(r.latex); // theo cây hiện tại (r.fromId là kết quả đọc lúc tách tệp, có thể cũ)
     if (id === 'ok') f.idOk++;
     else if (id === 'thieu-dang') f.idNoForm++;
     else if (id === 'khong-hop-le') f.idInvalid++;

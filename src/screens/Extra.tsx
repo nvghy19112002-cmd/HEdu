@@ -5,7 +5,7 @@ import { compileBatch, CATEGORY_ORDER, type Category, type Failure } from '../li
 import { isTikzReady } from '../lib/tikz';
 import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
-import { chapters, firstLocation, getTaxonomy, grades } from '../lib/curriculum';
+import { chapters, firstLocation, getTaxonomy, grades, useTaxonomy } from '../lib/curriculum';
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
@@ -18,7 +18,8 @@ import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
 import { AiAskBar } from '../components/AiAskBar';
 import { CONFIDENCE_LABEL, IdSuggester } from '../lib/idsuggest';
 import { taxRevision } from '../lib/taxpath';
-import { decide, isFresh, placeDisputed, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
+import { idRowsOf, planDrafts, readIds } from '../lib/importplan';
+import { decide, isFresh, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
@@ -42,6 +43,9 @@ function readFile(file: File): Promise<string> {
 export function ImportScreen() {
   const { go, toast } = useApp();
   const { questions } = useBank();
+  // Cây đổi ⇒ vẽ lại và đọc lại ID theo cây MỚI (ID từng hợp lệ có thể không còn hợp lệ)
+  const taxNow = useTaxonomy().tax;
+  const taxRevNow = taxRevision(taxNow);
   const [src, setSrc] = useState('');
   const [loc, setLoc] = useState<Location>(firstLocation(12));
   const [level, setLevel] = useState<Level>('TH');
@@ -72,7 +76,7 @@ export function ImportScreen() {
   /** lô quá lớn: chưa rà trùng/nhập; giáo viên bỏ tick bớt tệp hoặc chia lô */
   const tooBig = usedRows.length > BATCH_MAX;
   const rows = useMemo(() => (tooBig ? [] : usedRows), [tooBig, usedRows]);
-  const fileStats = useMemo(() => perFile(allRows, allSources), [allRows, allSources]);
+  const fileStats = useMemo(() => perFile(allRows, allSources), [allRows, allSources, taxRevNow]); // eslint-disable-line react-hooks/exhaustive-deps
   /** khoá của lô hiện tại: đổi nguồn/tick tệp ⇒ làm lại rà soát từ đầu */
   const batchKey = useMemo(() => (multi ? `f|${srcs.map((s) => `${s.name}:${s.text.length}`).join('|')}|${[...skip].sort().join(',')}` : `p|${text250}`), [multi, srcs, skip, text250]);
   const clearAll = () => { setSrc(''); setSrcs([]); setSkip(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
@@ -117,7 +121,7 @@ export function ImportScreen() {
   const [refused, setRefused] = useState<ReadonlySet<number>>(new Set());
   const [ackRefused, setAckRefused] = useState(false);
   useEffect(() => { if (!idPicks) setRefused(new Set()); }, [idPicks]);
-  useEffect(() => { setIdPicks(null); }, [loc.grade]);
+  useEffect(() => { setIdPicks(null); }, [loc.grade, taxRevNow]);
   const pickIx = useMemo(() => (idPicks ? indexOf(getTaxonomy()) : null), [idPicks]);
   /** Hỏi AI cho các câu đang có gợi ý (câu không có ID): AI dẫn đầu, gợi ý ngân hàng làm bằng chứng. */
   const draftAiJobs = () => {
@@ -240,7 +244,6 @@ export function ImportScreen() {
   const [verifs, setVerifs] = useState<ReadonlyMap<number, IdVerification>>(new Map());
   const [idDecs, setIdDecs] = useState<Record<number, IdDecision>>({});
   const [onlyIdBD, setOnlyIdBD] = useState(false);
-  const taxRevNow = taxRevision(getTaxonomy());
   const verifOf = (i: number): IdVerification | undefined => { const v = verifs.get(i); return v && isFresh(v, latexOf(i), taxRevNow) ? v : undefined; };
   /** Quyết định của giáo viên còn hiệu lực: đúng câu, đúng kết quả kiểm (gợi ý + cây) đã xem; không thì phải chọn lại. */
   const idDecOf = (i: number): IdDecision | undefined => usableDecision(verifOf(i), idDecs[i]);
@@ -260,13 +263,12 @@ export function ImportScreen() {
   const lesson = chapter?.lessons.find((l) => l.id === loc.lessonId) ?? chapter?.lessons[0];
 
   const importCount = sum.importN;
-  const fromIdOf = (i: number) => {
-    if (edits[i] == null) return rows[i].fromId;
-    return idFromLatex(latexOf(i));
-  };
+  // ID đọc theo cây HIỆN TẠI cho từng câu (không dùng kết quả đọc cũ lưu trong dòng của lô): cây đổi ⇒ đọc lại
+  const idInfo = useMemo(() => readIds(rows.map((r, i) => edits[i] ?? r.latex), taxNow), [rows, edits, taxNow]);
+  const fromIdOf = (i: number) => idInfo[i] ?? null;
   const noIdRows = rows.map((_, i) => i).filter((i) => !fromIdOf(i));
   // ---- Kiểm chứng ID có sẵn (PR 1B, quy tắc 15a): ID trong tệp chỉ là bằng chứng cần kiểm chứng, đối chiếu với ngân hàng ----
-  const idRows = useMemo(() => rows.map((_, i) => i).filter((i) => !!(edits[i] == null ? rows[i].fromId : idFromLatex(edits[i]))), [rows, edits]);
+  const idRows = useMemo(() => idRowsOf(idInfo), [idInfo]);
   const suggesterRef = useRef<{ q: typeof questions; tax: ReturnType<typeof getTaxonomy>; s: IdSuggester } | null>(null);
   useEffect(() => {
     setVerifs(new Map());
@@ -276,7 +278,7 @@ export function ImportScreen() {
     let k = 0;
     const step = () => {
       if (stop) return;
-      const tax = getTaxonomy();
+      const tax = taxNow;
       const c = suggesterRef.current;
       const sg = c && c.q === questions && c.tax === tax ? c.s : verifierFor(tax, questions);
       suggesterRef.current = { q: questions, tax, s: sg };
@@ -284,7 +286,7 @@ export function ImportScreen() {
       for (; k < until; k++) {
         const i = idRows[k];
         const latex = edits[i] ?? rows[i].latex;
-        const id = idFromLatex(latex, tax);
+        const id = idInfo[i];
         if (id) acc.set(i, verifyId(latex, id.loc, sg, `d${i}`));
       }
       setVerifs(new Map(acc));
@@ -292,7 +294,7 @@ export function ImportScreen() {
     };
     const t = setTimeout(step, 0);
     return () => { stop = true; clearTimeout(t); };
-  }, [idRows, questions, taxRevNow]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [idRows, questions, taxNow]); // eslint-disable-line react-hooks/exhaustive-deps
   const vsum = summarizeVerify(idRows, verifOf, idDecOf, (i) => decOf(i) === 'import');
   const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0 && vsum.pending === 0;
   /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
@@ -307,29 +309,11 @@ export function ImportScreen() {
   const setPick = (i: number, formId: string | null) => { if (formId) setRefused((r) => { if (!r.has(i)) return r; const x = new Set(r); x.delete(i); return x; }); setIdPicks((m) => { if (!m?.has(i)) return m; const n = new Map(m); n.set(i, { ...m.get(i)!, formId }); return n; }); };
   /** Vị trí của câu không có ID: gợi ý đã chọn (nếu còn hợp lệ) hoặc vị trí chung. */
   const draftLocOf = (i: number) => { const tax = getTaxonomy(); return draftLocation(idPicks?.get(i), latexOf(i), indexOf(tax), taxRevision(tax), loc); };
-  /** Dựng bản ghi sẽ lưu. Câu ID bất đồng chỉ đi theo quyết định còn hiệu lực với kết quả kiểm `verOf`; không ghi được nhất quán ⇒ trả lỗi, KHÔNG ghi gì. */
-  const buildDrafts = (verOf: (i: number) => IdVerification | undefined): { drafts: Draft[] } | { error: string } => {
-    const out: Draft[] = [];
-    for (let i = 0; i < rows.length; i++) {
-      if (decOf(i) !== 'import') continue;
-      const text = latexOf(i).trim();
-      const fromId = fromIdOf(i);
-      const ver = fromId ? verOf(i) : undefined;
-      if (fromId && ver?.verdict === 'bat-dong') {
-        const pl = placeDisputed({ text, id: fromId, ver, decision: idDecs[i], commonLoc: loc, commonLevel: level, tax: getTaxonomy() });
-        if (!pl.ok) return { error: `Câu ${i + 1}: ${pl.reason}` };
-        out.push({ latex: pl.latex, level: pl.level, tags: tagsFor(rows[i], info), ...pl.loc });
-        continue;
-      }
-      if (fromId) { out.push({ latex: text, level: fromId.level, tags: tagsFor(rows[i], info), ...fromId.loc }); continue; }
-      // Câu chưa có ID: ghi ID theo vị trí đã xác nhận vào mã LaTeX lưu trong ngân hàng (tệp .tex gốc không bị sửa).
-      // Câu có ID lỗi/thiếu Dạng/nhiều ID: giữ nguyên LaTeX (không tự thay), vị trí vẫn theo lựa chọn của giáo viên.
-      const at = draftLocOf(i).loc;
-      const w = placeWithId(text, at, level, getTaxonomy(), false);
-      out.push({ latex: 'latex' in w ? w.latex : text, level, tags: tagsFor(rows[i], info), ...at });
-    }
-    return { drafts: out };
-  };
+  /** Dựng bản ghi sẽ lưu theo cây HIỆN TẠI (logic ở importplan.ts, có test). Không ghi được nhất quán ⇒ lỗi, không ghi gì. */
+  const buildDrafts = (verOf: (i: number) => IdVerification | undefined): { drafts: Draft[] } | { error: string } => planDrafts({
+    latexes: rows.map((_, i) => latexOf(i)), importing: (i) => decOf(i) === 'import', ids: idInfo, ver: verOf, decision: (i) => idDecs[i],
+    noIdLoc: (i) => draftLocOf(i).loc, commonLoc: loc, commonLevel: level, tags: (i) => tagsFor(rows[i], info), tax: taxNow,
+  });
   /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
   const idSum = summarizeImportIds(rows.map((_r, i) => idStateOf(latexOf(i))), (i) => decOf(i) === 'import', (i) => draftLocOf(i).suggested);
   /** Báo cáo của lô vừa nhập (dựng ngay sau addMany, trước khi xoá nội dung đang xem). */
@@ -365,6 +349,7 @@ export function ImportScreen() {
   const commit = async () => {
     setConfirm(false);
     if (!ana || vsum.pending > 0 || vsum.unchecked > 0) return;
+    if (taxRevision(getTaxonomy()) !== taxRevNow) { toast('Cây chương trình vừa đổi nên HEdu đã đọc lại ID theo cây mới. Xem lại rồi bấm Nhập một lần nữa.'); return; }
     const fresh = await analyzeDrafts(drafts, getState().questions);
     if (!fresh.complete || bankHitSignature(fresh.rows) !== bankHitSignature(ana.rows)) {
       setAna(fresh);
