@@ -1,3 +1,35 @@
+## Có gì mới trong beta.35 (kênh beta): xác minh ID đáng tin
+Gồm PR #128–#132 (so với beta.34; commit trên main `ada2f89`). Không đổi schema ngân hàng (3), cấu trúc ID6, UID, LaTeX/TikZ gốc, cây chương trình, thuật toán dò trùng. **Chưa nghiệm thu máy Windows thật.** Đây là bản BETA, không thay bản chính thức.
+
+**Điều chính cần biết**
+- **ID có sẵn trong tệp .tex không còn được tin tuyệt đối.** Khi nhập, HEdu đối chiếu ID với các câu có **Dạng do giáo viên xác minh**: *khớp*, *chưa kiểm chứng* hoặc *bất đồng*. Bất đồng **không chặn cả lô**: câu vào ngân hàng với ID gốc nguyên văn, đánh dấu “cần xem lại” và nằm trong hàng đợi xác minh.
+- **Ba trục độc lập:** *Nội dung* (chưa kiểm tra / cần sửa / đã duyệt), *Dạng* (chưa xác minh / máy phân loại / giáo viên xác minh / cần xem lại), *Mức độ* (chưa xác minh / máy đề xuất / giáo viên xác minh). Chỉ thao tác xác nhận của thầy/cô mới tạo “giáo viên xác minh”; máy hoặc AI không bao giờ tự tạo. **“Đã duyệt” nội dung không phải căn cứ xác minh ID.**
+- **Câu chưa phân loại** vào vị trí chung nhưng **HEdu không ghi ID giả** vào LaTeX.
+- **Hàng đợi xác minh** (Ngân hàng → nút “Hàng đợi xác minh”): xem từng câu và xác nhận bằng phím tắt `Y` xác nhận Dạng · `M` xác nhận mức độ · `N` cần xem lại · `1`–`3` đổi sang Dạng gợi ý · `D` chọn Dạng khác · `U` hoàn tác · `S`/`→` bỏ qua · `←` câu trước · `L` lời giải · `?` bảng phím · `Esc` đóng. Đổi Dạng ghi vị trí và ID mới cùng lúc, **giữ nguyên mức độ gốc**; hoàn tác trả lại đúng vị trí và LaTeX cũ; mọi thay đổi có lịch sử. Duyệt nội dung là ô riêng, không bị các phím này đổi.
+- **Sao lưu và khôi phục trạng thái xác minh:** bản chụp `.db`, điểm khôi phục và bản trước cập nhật mang theo đầy đủ (đây là sao lưu **đầy đủ**). File sao lưu JSON thủ công mang theo trạng thái; khôi phục thay ngân hàng và gộp trạng thái (bản mới hơn thắng, bản ghi của câu không còn tồn tại bị bỏ). “Xuất ra JSON” tạo thêm `id-review.json` cạnh `hedu.json`: đó là **JSON trao đổi / quay về bản cũ, KHÔNG phải sao lưu đầy đủ**.
+- **Ghi lỗi không tạo xác minh giả:** nếu không ghi được xuống đĩa, câu không hiện là “giáo viên xác minh”.
+- **An toàn phát hành:** bước dọn bản cũ giữ 3 bản mới nhất và bản được ghim (beta.34), và dừng nếu không chắc.
+
+**Bảng việc đã làm và chưa làm**
+| Việc | Trạng thái |
+|---|---|
+| Kiểm chứng ID khi nhập (khớp / chưa kiểm chứng / bất đồng), quyết định gắn với kết quả đã xem, kiểm lại trước khi ghi | Đã làm |
+| Trạng thái Dạng và mức độ riêng, tệp phụ `id-review`, lịch sử, hết hiệu lực theo nội dung/Dạng/cây | Đã làm |
+| Hàng đợi xác minh từng câu có phím tắt và hoàn tác | Đã làm |
+| Sao lưu/khôi phục trạng thái (SQLite, JSON sao lưu, JSON trao đổi) có kiểm thử chéo Rust–TypeScript | Đã làm |
+| Dọn bản phát hành an toàn, ghim beta.34 | Đã làm |
+| Hàng đợi chạy nền cho lô rất lớn (tạm dừng/tiếp tục), nhớ vị trí hàng đợi giữa các phiên, phím tắt tuỳ biến | **Chưa làm** |
+| Phân loại nhiều tầng tự động, “sổ tay phân loại” cho AI ngoài, đánh giá độc lập độ chính xác, tự gán theo nhóm | **Chưa làm** |
+| Xác nhận AI một lần cho một công việc | **Chưa quyết, chưa làm** (vẫn xin phép từng lượt) |
+| Cây chương trình mới (KNTT), ma trận đề, trộn đề, xuất Word | Ngoài phạm vi bản này |
+
+**Giới hạn và lưu ý khi dùng**
+- **Ngân hàng hiện có chưa có câu nào làm căn cứ** cho tới khi thầy/cô xác nhận Dạng (hàng đợi xác minh). Vì vậy câu nhập mới ban đầu phần lớn là “chưa kiểm chứng”; đó là chủ ý thận trọng, không phải lỗi.
+- Ví dụ HEdu gửi kèm khi hỏi AI vẫn lấy câu có nội dung “Đã duyệt” (chỉ để tham khảo, không phải căn cứ xác minh).
+- **Trước khi nâng cấp:** nên dùng Cài đặt → Lưu trữ SQLite → “Lưu bản chụp .db…”. HEdu cũng tự sao lưu trước khi cập nhật.
+- **Quay về beta.34:** dữ liệu thêm một tệp phụ (`id-review`) mà beta.34 không hiểu nhưng không xóa; beta.34 mở được ngân hàng, chỉ không hiện/không cập nhật trạng thái xác minh. Nếu cần quay lại nguyên trạng, khôi phục từ bản chụp `.db` hoặc điểm khôi phục chụp trước khi nâng cấp. Bộ cài beta.34 vẫn còn trên trang Releases.
+- Kiểm thử giao diện Tauri được điều khiển tự động qua cổng gỡ lỗi (không phải thao tác chuột/phím thủ công); chưa nghiệm thu với ngân hàng thật.
+
 ## Có gì mới trong beta.34 (kênh beta): Ngân hàng đề thi LaTeX
 Gồm PR #112–#125 (so với beta.33). Chưa nghiệm thu máy Windows thật (checklist: claude/nghiem-thu-de-thi.md).
 **Ngân hàng đề thi LaTeX (beta):** mục mới **Đề thi**: nhập đề `.tex`/thư mục dự án vào thư viện của HEdu (tệp gốc không bị sửa), thư mục ảo và bộ lọc, **Biên tập** nhiều tệp (CodeMirror, lưu an toàn, cảnh báo khi tệp đổi ngoài HEdu, bản nháp), **biên dịch PDF** bằng TeX Live (pdfLaTeX/XeLaTeX/LuaLaTeX, huỷ được cả cây tiến trình, giữ PDF tốt gần nhất), **xem PDF** ngay trong app, **PDF Đề và PDF Lời giải riêng** từ cùng một nguồn khi nhận diện chắc `ex_test`, chép câu **nguyên văn** từ Ngân hàng kèm nguồn UID, **Thùng rác đề** và **sao lưu/khôi phục thư viện đề** riêng, chốt đề, xuất/nhập gói. Không đổi cấu trúc dữ liệu ngân hàng câu hỏi (schema 3), ID, UID. Màn Tạo đề (trộn mã) vẫn tạm tắt. Sao lưu của Ngân hàng câu hỏi KHÔNG bao gồm thư viện đề: dùng "Sao lưu thư viện" trong mục Đề thi.
