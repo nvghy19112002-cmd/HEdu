@@ -18,7 +18,7 @@ import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
 import { AiAskBar } from '../components/AiAskBar';
 import { CONFIDENCE_LABEL, IdSuggester } from '../lib/idsuggest';
 import { taxRevision } from '../lib/taxpath';
-import { isFresh, summarizeVerify, usableChoice, verifyId, VERDICT_LABEL, type IdChoice, type IdVerification } from '../lib/idverify';
+import { decide, isFresh, placeDisputed, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
@@ -110,7 +110,7 @@ export function ImportScreen() {
   const [confirm, setConfirm] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [bulkAsk, setBulkAsk] = useState(false);
-  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); setIdChoices({}); setOnlyIdBD(false); }, [batchKey]);
+  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); setIdDecs({}); setOnlyIdBD(false); }, [batchKey]);
   // Gán ID tự động cho câu không có %[ID] hợp lệ (chỉ metadata bản nháp; đổi lớp đích ⇒ gợi ý cũ bỏ)
   const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
   /** câu mà AI không đủ căn cứ chọn Dạng: cần giáo viên chọn, nếu không sẽ vào vị trí chung (phải xác nhận trước khi nhập) */
@@ -238,12 +238,14 @@ export function ImportScreen() {
   useEffect(() => { setPkgFilter(null); setLimit(200); setFileF('all'); }, [batchKey]);
   // Kiểm chứng ID có sẵn (PR 1B): trạng thái phải khai báo trước danh sách hiển thị
   const [verifs, setVerifs] = useState<ReadonlyMap<number, IdVerification>>(new Map());
-  const [idChoices, setIdChoices] = useState<Record<number, { choice: IdChoice; latex: string }>>({});
+  const [idDecs, setIdDecs] = useState<Record<number, IdDecision>>({});
   const [onlyIdBD, setOnlyIdBD] = useState(false);
   const taxRevNow = taxRevision(getTaxonomy());
   const verifOf = (i: number): IdVerification | undefined => { const v = verifs.get(i); return v && isFresh(v, latexOf(i), taxRevNow) ? v : undefined; };
-  const choiceOf = (i: number): IdChoice | undefined => { const c = idChoices[i]; return usableChoice(verifOf(i), c && c.latex === latexOf(i) ? c.choice : undefined); };
-  const setChoice = (i: number, choice: IdChoice | '') => setIdChoices((m) => { const n = { ...m }; if (choice) n[i] = { choice, latex: latexOf(i) }; else delete n[i]; return n; });
+  /** Quyết định của giáo viên còn hiệu lực: đúng câu, đúng kết quả kiểm (gợi ý + cây) đã xem; không thì phải chọn lại. */
+  const idDecOf = (i: number): IdDecision | undefined => usableDecision(verifOf(i), idDecs[i]);
+  const setChoice = (i: number, choice: IdChoice | '') => setIdDecs((m) => { const n = { ...m }; const v = verifOf(i); if (choice && v) n[i] = decide(v, choice, m[i] && usableDecision(v, m[i]) ? m[i].level : 'giu'); else delete n[i]; return n; });
+  const setLevelChoice = (i: number, lv: LevelChoice) => setIdDecs((m) => { const v = verifOf(i); const d = m[i]; if (!v || !d || !usableDecision(v, d)) return m; return { ...m, [i]: { ...d, level: lv } }; });
   const shownRows = rows
     .map((r, i) => ({ r, i }))
     .filter(({ i }) => !onlyBad || worstOf(i) === 'loi' || worstOf(i) === 'canh')
@@ -276,7 +278,7 @@ export function ImportScreen() {
       if (stop) return;
       const tax = getTaxonomy();
       const c = suggesterRef.current;
-      const sg = c && c.q === questions && c.tax === tax ? c.s : new IdSuggester(tax, questions);
+      const sg = c && c.q === questions && c.tax === tax ? c.s : verifierFor(tax, questions);
       suggesterRef.current = { q: questions, tax, s: sg };
       const until = Math.min(k + 20, idRows.length);
       for (; k < until; k++) {
@@ -290,8 +292,8 @@ export function ImportScreen() {
     };
     const t = setTimeout(step, 0);
     return () => { stop = true; clearTimeout(t); };
-  }, [idRows, questions]); // eslint-disable-line react-hooks/exhaustive-deps
-  const vsum = summarizeVerify(idRows, verifOf, choiceOf, (i) => decOf(i) === 'import');
+  }, [idRows, questions, taxRevNow]); // eslint-disable-line react-hooks/exhaustive-deps
+  const vsum = summarizeVerify(idRows, verifOf, idDecOf, (i) => decOf(i) === 'import');
   const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0 && vsum.pending === 0;
   /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
   const headIdNote = (latex: string): string | null => {
@@ -305,26 +307,29 @@ export function ImportScreen() {
   const setPick = (i: number, formId: string | null) => { if (formId) setRefused((r) => { if (!r.has(i)) return r; const x = new Set(r); x.delete(i); return x; }); setIdPicks((m) => { if (!m?.has(i)) return m; const n = new Map(m); n.set(i, { ...m.get(i)!, formId }); return n; }); };
   /** Vị trí của câu không có ID: gợi ý đã chọn (nếu còn hợp lệ) hoặc vị trí chung. */
   const draftLocOf = (i: number) => { const tax = getTaxonomy(); return draftLocation(idPicks?.get(i), latexOf(i), indexOf(tax), taxRevision(tax), loc); };
-  const toDrafts = (): Draft[] => rows.flatMap((_r, i) => {
-    if (decOf(i) !== 'import') return [];
-    const text = latexOf(i).trim();
-    const fromId = fromIdOf(i);
-    const ver = fromId ? verifOf(i) : undefined;
-    if (fromId && ver?.verdict === 'bat-dong') {
-      // ID bất đồng với ngân hàng: chỉ đi theo lựa chọn của giáo viên. Giữ ID ⇒ nguyên văn; đổi vị trí ⇒ ghi ID mới (giáo viên đã thấy ID cũ → mới).
-      const ch = choiceOf(i);
-      if (ch === 'giu') return [{ latex: text, level: fromId.level, tags: tagsFor(rows[i], info), ...fromId.loc }];
-      const to = ch === 'goi-y' && ver.suggested ? ver.suggested.location : loc;
-      const w = placeWithId(text, to, level, getTaxonomy(), true);
-      return [{ latex: 'latex' in w ? w.latex : text, level, tags: tagsFor(rows[i], info), ...to }];
+  /** Dựng bản ghi sẽ lưu. Câu ID bất đồng chỉ đi theo quyết định còn hiệu lực với kết quả kiểm `verOf`; không ghi được nhất quán ⇒ trả lỗi, KHÔNG ghi gì. */
+  const buildDrafts = (verOf: (i: number) => IdVerification | undefined): { drafts: Draft[] } | { error: string } => {
+    const out: Draft[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      if (decOf(i) !== 'import') continue;
+      const text = latexOf(i).trim();
+      const fromId = fromIdOf(i);
+      const ver = fromId ? verOf(i) : undefined;
+      if (fromId && ver?.verdict === 'bat-dong') {
+        const pl = placeDisputed({ text, id: fromId, ver, decision: idDecs[i], commonLoc: loc, commonLevel: level, tax: getTaxonomy() });
+        if (!pl.ok) return { error: `Câu ${i + 1}: ${pl.reason}` };
+        out.push({ latex: pl.latex, level: pl.level, tags: tagsFor(rows[i], info), ...pl.loc });
+        continue;
+      }
+      if (fromId) { out.push({ latex: text, level: fromId.level, tags: tagsFor(rows[i], info), ...fromId.loc }); continue; }
+      // Câu chưa có ID: ghi ID theo vị trí đã xác nhận vào mã LaTeX lưu trong ngân hàng (tệp .tex gốc không bị sửa).
+      // Câu có ID lỗi/thiếu Dạng/nhiều ID: giữ nguyên LaTeX (không tự thay), vị trí vẫn theo lựa chọn của giáo viên.
+      const at = draftLocOf(i).loc;
+      const w = placeWithId(text, at, level, getTaxonomy(), false);
+      out.push({ latex: 'latex' in w ? w.latex : text, level, tags: tagsFor(rows[i], info), ...at });
     }
-    if (fromId) return [{ latex: text, level: fromId.level, tags: tagsFor(rows[i], info), ...fromId.loc }];
-    // Câu chưa có ID: ghi ID theo vị trí đã xác nhận vào mã LaTeX lưu trong ngân hàng (tệp .tex gốc không bị sửa).
-    // Câu có ID lỗi/thiếu Dạng/nhiều ID: giữ nguyên LaTeX (không tự thay), vị trí vẫn theo lựa chọn của giáo viên.
-    const at = draftLocOf(i).loc;
-    const w = placeWithId(text, at, level, getTaxonomy(), false);
-    return [{ latex: 'latex' in w ? w.latex : text, level, tags: tagsFor(rows[i], info), ...at }];
-  });
+    return { drafts: out };
+  };
   /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
   const idSum = summarizeImportIds(rows.map((_r, i) => idStateOf(latexOf(i))), (i) => decOf(i) === 'import', (i) => draftLocOf(i).suggested);
   /** Báo cáo của lô vừa nhập (dựng ngay sau addMany, trước khi xoá nội dung đang xem). */
@@ -336,7 +341,7 @@ export function ImportScreen() {
       const st = idStateOf(latexOf(i));
       const key = statusOf(i).key;
       const vv = st === 'ok' ? verifOf(i) : undefined;
-      const idPlaceOk: IdPlace = vv?.verdict === 'khop' ? 'ma-khop' : vv?.verdict === 'bat-dong' ? (choiceOf(i) === 'giu' ? 'ma-giu-tay' : choiceOf(i) === 'goi-y' ? 'ai' : 'vi-tri-chung') : 'ma-chua-kiem-chung';
+      const idPlaceOk: IdPlace = vv?.verdict === 'khop' ? 'ma-khop' : vv?.verdict === 'bat-dong' ? (idDecOf(i)?.choice === 'giu' ? 'ma-giu-tay' : idDecOf(i)?.choice === 'goi-y' ? 'ai' : 'vi-tri-chung') : 'ma-chua-kiem-chung';
       const place: IdPlace | undefined = dec !== 'import' ? undefined : st === 'ok' ? idPlaceOk : draftLocOf(i).suggested ? 'ai' : 'vi-tri-chung';
       const q = dec === 'import' ? added[k++] : undefined;
       const w = issues[i] ? worstLevel(issues[i]!) : null;
@@ -366,10 +371,23 @@ export function ImportScreen() {
       toast('Ngân hàng vừa có thay đổi nên HEdu đã rà soát lại. Xem lại các câu nghi trùng rồi bấm Nhập một lần nữa.');
       return;
     }
+    // Kiểm chứng ID LẠI ngay trước khi ghi (kho, cây hoặc câu có thể đã đổi): dấu kết quả phải trùng với lúc giáo viên xem và quyết định.
+    const tax = getTaxonomy();
+    const sg = verifierFor(tax, getState().questions);
+    const freshVer = new Map<number, IdVerification>();
+    for (const i of idRows) { const lx = latexOf(i); const id = idFromLatex(lx, tax); if (id) freshVer.set(i, verifyId(lx, id.loc, sg, `d${i}`)); }
+    const moved = idRows.filter((i) => decOf(i) === 'import' && (!freshVer.get(i) || !verifOf(i) || verificationSig(freshVer.get(i)!) !== verificationSig(verifOf(i)!)));
+    if (moved.length) {
+      setVerifs(freshVer);
+      toast(`Ngân hàng hoặc cây chương trình vừa đổi nên kết quả kiểm chứng ID của ${moved.length} câu đã thay đổi. HEdu đã kiểm lại: xem lại các câu bất đồng (quyết định cũ của bạn cho các câu đó bị bỏ) rồi bấm Nhập một lần nữa.`);
+      return;
+    }
+    const built = buildDrafts((i) => freshVer.get(i));
+    if ('error' in built) { toast(`Chưa ghi gì. ${built.error}`); return; }
     // SQLite: nhập hàng loạt (từ 20 câu) tự chụp điểm khôi phục trước; không chụp được thì KHÔNG nhập
     const rp = await ensureRestorePoint('nhap-hang-loat', sum.importN >= BIG_OP);
     if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
-    const added = addMany(toDrafts());
+    const added = addMany(built.drafts);
     const report = makeReport(added, rp.taken);
     await flushSave();
     if (!isLastSaveOk()) {
@@ -611,15 +629,26 @@ export function ImportScreen() {
                     {worstOf(i) && <span className={`chk-tag ${worstOf(i)}`}>{worstOf(i) === 'tin' ? 'có hình' : LEVEL_TEXT[worstOf(i)!]}</span>}
                   </button>
                   {verifOf(i)?.verdict === 'bat-dong' && fromIdOf(i) && (
-                    <label className="dec-sel">
-                      <span className="sr-only">Cách xử lý ID bất đồng của câu {i + 1}</span>
-                      <select value={choiceOf(i) ?? ''} onChange={(e) => setChoice(i, e.target.value as IdChoice | '')} aria-label={`Cách xử lý ID bất đồng của câu ${i + 1}`}>
-                        <option value="" disabled>Chọn cách xử lý ID…</option>
-                        <option value="giu">Giữ ID trong tệp ({questionCode(fromIdOf(i)!.loc, fromIdOf(i)!.level)})</option>
-                        <option value="goi-y" disabled={!verifOf(i)!.suggested}>Theo gợi ý ({verifOf(i)!.suggested ? questionCode(verifOf(i)!.suggested!.location, level) : '—'})</option>
-                        <option value="chung">Vào vị trí chung (ghi ID mới)</option>
-                      </select>
-                    </label>
+                    <>
+                      <label className="dec-sel">
+                        <span className="sr-only">Cách xử lý ID bất đồng của câu {i + 1}</span>
+                        <select value={idDecOf(i)?.choice ?? ''} onChange={(e) => setChoice(i, e.target.value as IdChoice | '')} aria-label={`Cách xử lý ID bất đồng của câu ${i + 1}`}>
+                          <option value="" disabled>Chọn cách xử lý ID…</option>
+                          <option value="giu">Giữ ID trong tệp ({questionCode(fromIdOf(i)!.loc, fromIdOf(i)!.level)})</option>
+                          <option value="goi-y" disabled={!verifOf(i)!.suggested}>Theo gợi ý ({verifOf(i)!.suggested ? questionCode(verifOf(i)!.suggested!.location, fromIdOf(i)!.level) : '—'})</option>
+                          <option value="chung">Vào vị trí chung (ghi ID mới)</option>
+                        </select>
+                      </label>
+                      {idDecOf(i) && idDecOf(i)!.choice !== 'giu' && (
+                        <label className="dec-sel">
+                          <span className="sr-only">Mức độ của câu {i + 1} khi đổi vị trí</span>
+                          <select value={idDecOf(i)!.level} onChange={(e) => setLevelChoice(i, e.target.value as LevelChoice)} aria-label={`Mức độ của câu ${i + 1} khi đổi vị trí`}>
+                            <option value="giu">Giữ mức độ gốc ({LEVEL_LABEL[fromIdOf(i)!.level]})</option>
+                            <option value="chung">Đổi theo ô Mức độ chung ({LEVEL_LABEL[level]})</option>
+                          </select>
+                        </label>
+                      )}
+                    </>
                   )}
                   <label className="dec-sel">
                     <span className="sr-only">Quyết định cho câu {i + 1}</span>
