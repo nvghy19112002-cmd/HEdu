@@ -2,9 +2,9 @@
 import { _resetReview, effectiveOf, getRec, loadIdReview, putRecs, makeRec, type Backend } from './idreview';
 import { strictCode } from './idsync';
 import { readHead } from './idtex';
-import { addMany, getState, initStore } from './store';
+import { addMany, flushSave, getState, initStore } from './store';
 import { applyQueueAction, queueUids, scopeCounts, scopeOf, undoQueueAction, type QueueCtx } from './verifyqueue';
-import { verifierFor, verifyId } from './idverify';
+import { evidenceQuestions, verifierFor, verifyId } from './idverify';
 import { buildDefault, indexOf } from './taxonomy';
 import { taxRevision } from './taxpath';
 import type { Level, Location, Question } from './types';
@@ -24,8 +24,8 @@ const ex = (body: string, id?: string) => `\\begin{ex}${id ? `%[${id}]` : ''}\n$
 
 const disk = { json: null as string | null, failSave: false };
 const be: Backend = { async load() { return disk.json; }, async save(j) { if (disk.failSave) throw new Error('đĩa đầy'); disk.json = j; } };
-const dstore = { json: null as string | null };
-await initStore({ async load() { return { json: dstore.json, recovered: false }; }, async save(j: string) { dstore.json = j; } });
+const dstore = { json: null as string | null, fail: false };
+await initStore({ async load() { return { json: dstore.json, recovered: false }; }, async save(j: string) { if (dstore.fail) throw new Error('đĩa đầy'); dstore.json = j; } });
 _resetReview(be);
 await loadIdReview();
 const eff = (q: Question) => effectiveOf(q, getRec(q.uid), { ix, taxRev: rev });
@@ -136,6 +136,106 @@ console.log('Xác nhận trong hàng đợi trở thành căn cứ kiểm chứn
   const afterOk = verifyId(probe, A, sg, 'k');
   const afterBad = verifyId(probe, B, sg, 'k');
   ok(afterOk.verdict === 'khop' && afterBad.verdict === 'bat-dong', 'sau khi giáo viên xác nhận: câu mới có ID đúng ⇒ khớp, ID sai ⇒ bất đồng');
+}
+const fresh1 = (tag: string, loc: Location = B) => addMany([{ ...loc, latex: ex(`Câu mới ${tag} tính $${tag.length}+1$`, code(loc, 'TH')), level: 'TH' as Level, tags: [] }])[0];
+const mustUndo = (r: Awaited<ReturnType<typeof applyQueueAction>>) => { if (!r.ok) throw new Error(r.message); return r.undo; };
+
+console.log('Lỗi ghi tệp phụ / kho: không hiện xác minh giả, không đổi nửa vời');
+{
+  const z = fresh1('loi-ghi');
+  const snapQ = () => { const x = cur(z.uid); return JSON.stringify([x.grade, x.chapterId, x.lessonId, x.formId, x.latex, x.level]); };
+  const q0 = snapQ();
+  ok(getRec(z.uid) === undefined, 'câu thử chưa có bản ghi');
+  disk.failSave = true;
+  for (const [label, act] of [['xác nhận Dạng', { kind: 'xac-nhan-dang' }], ['xác nhận mức độ', { kind: 'xac-nhan-muc-do' }], ['cần xem lại', { kind: 'can-xem-lai' }], ['đổi Dạng', { kind: 'doi-dang', formId: A.formId }]] as const) {
+    const r = await applyQueueAction(z.uid, act, ctx);
+    ok(!r.ok && getRec(z.uid) === undefined && eff(cur(z.uid)).form === 'chua' && snapQ() === q0, `ghi tệp phụ lỗi: ${label} ⇒ báo lỗi, KHÔNG hiện xác minh, câu y nguyên`);
+  }
+  disk.failSave = false;
+  dstore.fail = true;
+  const rk = await applyQueueAction(z.uid, { kind: 'doi-dang', formId: A.formId }, ctx);
+  ok(!rk.ok && snapQ() === q0 && getRec(z.uid) === undefined, 'ghi kho câu hỏi lỗi: đổi Dạng ⇒ không đổi gì, không có xác minh');
+  dstore.fail = false;
+  // ghi được: xác nhận; sau đó hoàn tác gặp lỗi ghi tệp phụ ⇒ trạng thái không bị sai lệch giữa bộ nhớ và đĩa
+  const okr = await applyQueueAction(z.uid, { kind: 'xac-nhan-dang' }, ctx);
+  const undoOk = mustUndo(okr);
+  const onDisk = disk.json;
+  disk.failSave = true;
+  const ru = await undoQueueAction(undoOk);
+  ok(!ru.ok && eff(cur(z.uid)).form === 'gv' && disk.json === onDisk, 'hoàn tác gặp lỗi ghi ⇒ báo lỗi, bộ nhớ và đĩa vẫn khớp nhau (không lệch)');
+  disk.failSave = false;
+  const ru2 = await undoQueueAction(undoOk);
+  ok(ru2.ok && eff(cur(z.uid)).form === 'chua', 'ghi được lại ⇒ hoàn tác thành công');
+}
+
+console.log('Câu đã đổi / bị xoá / cây đổi khi đang xử lý');
+{
+  const z = fresh1('cau-doi');
+  const q0 = cur(z.uid);
+  const stale = await applyQueueAction(z.uid, { kind: 'xac-nhan-dang' }, ctx, q0.latex + ' (đã khác)');
+  ok(!stale.ok && getRec(z.uid) === undefined, 'câu đã được sửa sau khi xem (nội dung khác lúc hiển thị) ⇒ từ chối, không ghi');
+  const fresh = await applyQueueAction(z.uid, { kind: 'xac-nhan-dang' }, ctx, q0.latex);
+  ok(fresh.ok, 'nội dung đúng như lúc xem ⇒ áp dụng');
+  if (fresh.ok) await undoQueueAction(mustUndo(fresh));
+  // cây đổi: Dạng đề xuất không còn trong cây hiện tại ⇒ không áp đề xuất cũ
+  const taxNew = structuredClone(tax);
+  const lesNew = taxNew.grades.flatMap((x) => x.branches).flatMap((b) => b.chapters).flatMap((c) => c.lessons).find((l) => l.id === C.lessonId)!;
+  lesNew.forms = lesNew.forms.filter((f) => f.id !== C.formId);
+  const ctxNew: QueueCtx = { tax: taxNew, ix: indexOf(taxNew), taxRev: taxRevision(taxNew) };
+  const before = JSON.stringify(cur(z.uid));
+  const old = await applyQueueAction(z.uid, { kind: 'doi-dang', formId: C.formId }, ctxNew);
+  ok(!old.ok && JSON.stringify(cur(z.uid)) === before, 'cây đổi khi hàng đợi đang mở: Dạng gợi ý cũ không còn ⇒ không áp dụng, câu y nguyên');
+  // câu bị xoá từ nơi khác
+  const gone = fresh1('bi-xoa');
+  (await import('./store')).deleteQuestion(gone.uid);
+  const rg = await applyQueueAction(gone.uid, { kind: 'xac-nhan-dang' }, ctx);
+  ok(!rg.ok && getRec(gone.uid) === undefined, 'câu đã bị xoá ⇒ báo lỗi, không tạo bản ghi cho uid khác');
+}
+
+console.log('Hai câu cùng nội dung, UID khác nhau');
+{
+  const twin = addMany([
+    { ...B, latex: ex('Hai câu giống hệt nhau về nội dung', code(B, 'TH')), level: 'TH' as Level, tags: [] },
+    { ...B, latex: ex('Hai câu giống hệt nhau về nội dung', code(B, 'TH')), level: 'TH' as Level, tags: [] },
+  ]);
+  const [t1, t2] = twin;
+  ok(t1.uid !== t2.uid && t1.latex === t2.latex, 'hai câu cùng nội dung, hai UID');
+  const r = await applyQueueAction(t1.uid, { kind: 'xac-nhan-dang' }, ctx);
+  ok(r.ok && eff(cur(t1.uid)).form === 'gv' && eff(cur(t2.uid)).form === 'chua' && getRec(t2.uid) === undefined, 'xác nhận câu thứ nhất KHÔNG ảnh hưởng câu thứ hai (theo UID, không theo nội dung)');
+  const d = await applyQueueAction(t2.uid, { kind: 'doi-dang', formId: A.formId }, ctx);
+  ok(d.ok && cur(t2.uid).formId === A.formId && cur(t1.uid).formId === B.formId && cur(t1.uid).latex === t1.latex, 'đổi Dạng câu thứ hai không đụng câu thứ nhất');
+  // số đếm theo nhóm giảm đúng sau khi câu rời hàng đợi
+  const pool = [cur(t1.uid), cur(t2.uid)];
+  const c1 = scopeCounts(pool, eff);
+  ok(c1['tat-ca'] === 0, 'cả hai đã được giáo viên xác minh ⇒ không còn câu nào trong hàng đợi');
+  await undoQueueAction(mustUndo(r));
+  const c2 = scopeCounts([cur(t1.uid), cur(t2.uid)], eff);
+  ok(c2['tat-ca'] === 1 && c2.chua === 1, 'hoàn tác một câu ⇒ số đếm tăng lại đúng một');
+}
+
+console.log('Đóng/mở lại và khởi động lại; căn cứ hết hiệu lực khi bỏ xác minh hoặc nội dung đổi');
+{
+  const w = fresh1('bat-dau');
+  const r = await applyQueueAction(w.uid, { kind: 'xac-nhan-dang' }, ctx);
+  const wUndo = mustUndo(r);
+  // đóng/mở lại hàng đợi = đọc lại trạng thái từ tệp phụ; khởi động lại = nạp lại kho từ đĩa (kho đã ghi xuống đĩa như khi nhập thật)
+  await flushSave();
+  _resetReview(be);
+  await loadIdReview();
+  await initStore({ async load() { return { json: dstore.json, recovered: false }; }, async save(j: string) { dstore.json = j; } });
+  ok(eff(cur(w.uid)).form === 'gv' && getState().questions.some((x) => x.uid === w.uid), 'sau khi khởi động lại: câu vẫn ở trạng thái giáo viên xác minh');
+  const probe = ex('Tìm tập xác định của hàm số $y=\\sqrt{x-9}$.');
+  const ev = () => evidenceQuestions(getState().questions, eff).map((x) => x.uid);
+  ok(ev().includes(w.uid), 'câu đã xác minh là căn cứ cho câu khác');
+  void probe;
+  // nội dung đổi ⇒ căn cứ hết hiệu lực
+  await (await import('./store')).updateMany([w.uid], (x) => ({ ...x, latex: x.latex.replace('Câu mới', 'Bài mới') }));
+  ok(!ev().includes(w.uid) || cur(w.uid).latex === w.latex, 'nội dung đổi (ngoài vùng ID) ⇒ không còn là căn cứ');
+  // đổi lại về nội dung cũ + bỏ xác minh ⇒ không phải căn cứ
+  await (await import('./store')).updateMany([w.uid], (x) => ({ ...x, latex: w.latex }));
+  ok(ev().includes(w.uid), 'trả nội dung về như lúc xác minh ⇒ bản ghi lại khớp');
+  await undoQueueAction(wUndo);
+  ok(!ev().includes(w.uid), 'bỏ xác minh (hoàn tác) ⇒ không còn là căn cứ');
 }
 
 if (fail) process.exit(1);

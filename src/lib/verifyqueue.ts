@@ -3,7 +3,7 @@
 //   - Duyệt NỘI DUNG (`Question.review`) là việc khác: hàng đợi này không đổi nó.
 //   - Chỉ hành động xác nhận của giáo viên tạo trạng thái "giáo viên xác minh"; mọi lần đổi đều lưu lịch sử (idreview.putRecs).
 //   - Đổi Dạng = đổi vị trí VÀ ghi ID6 mới vào `%[ID]` cùng lúc (quy tắc 10), mức độ giữ nguyên (quy tắc 12); không ghi được thì không đổi gì.
-import { effectiveOf, flushIdReview, getRec, makeRec, putRecs, type Effective, type FormState, type ReviewRec } from './idreview';
+import { commitRecs, effectiveOf, getRec, makeRec, type Effective, type FormState, type ReviewRec } from './idreview';
 import { placeWithId } from './idsync';
 import { getState, updateMany } from './store';
 import type { TaxIndex } from './taxonomy';
@@ -64,10 +64,14 @@ const sameSnap = (q: Question, s: NonNullable<QueueUndo['after']>) => q.grade ==
 
 export type QueueResult = { ok: true; undo: QueueUndo; message: string } | { ok: false; message: string };
 
-/** Áp dụng một hành động cho một câu và ghi (câu + tệp phụ). Lỗi ⇒ không đổi gì. */
-export async function applyQueueAction(uid: string, action: QueueAction, ctx: QueueCtx): Promise<QueueResult> {
+/**
+ * Áp dụng một hành động cho một câu và ghi BỀN VỮNG (câu + tệp phụ). Lỗi ghi ⇒ không đổi gì (không để câu hiện là "giáo viên xác minh" khi chưa lưu được).
+ * `seenLatex` = nội dung câu lúc giáo viên xem: câu đã bị sửa từ nơi khác sau đó ⇒ từ chối (không áp đề xuất đã cũ).
+ */
+export async function applyQueueAction(uid: string, action: QueueAction, ctx: QueueCtx, seenLatex?: string): Promise<QueueResult> {
   const q = getState().questions.find((x) => x.uid === uid);
   if (!q) return { ok: false, message: 'Câu không còn trong ngân hàng.' };
+  if (seenLatex !== undefined && q.latex !== seenLatex) return { ok: false, message: 'Câu vừa được sửa ở nơi khác nên chưa đổi gì. Hãy xem lại câu rồi thử lại.' };
   const prevRec = getRec(uid);
   const eff = effectiveOf(q, prevRec, { ix: ctx.ix, taxRev: ctx.taxRev });
   const mk = (qq: Question, o: { form: FormState; level: Effective['level']; src: 'tay'; unclassified?: boolean; why?: string }) =>
@@ -75,19 +79,16 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
 
   if (action.kind === 'xac-nhan-dang') {
     if (!checkLocation(ctx.ix, q).ok) return { ok: false, message: 'Vị trí của câu không còn đúng đường dẫn cây: hãy đổi sang Dạng đúng thay vì xác nhận.' };
-    putRecs([[uid, mk(q, { form: 'gv', level: eff.level, src: 'tay', why: 'Giáo viên xác nhận Dạng' })]]);
-    const saved = await flushIdReview();
-    return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh Dạng' } : { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh Dạng (chưa ghi được xuống đĩa — chỉ giữ trong phiên này)' };
+    const saved = await commitRecs([[uid, mk(q, { form: 'gv', level: eff.level, src: 'tay', why: 'Giáo viên xác nhận Dạng' })]]);
+    return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh Dạng' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   if (action.kind === 'xac-nhan-muc-do') {
-    putRecs([[uid, mk(q, { form: eff.form, level: 'gv', src: 'tay', unclassified: eff.unclassified, ...(eff.why ? { why: eff.why } : {}) })]]);
-    const saved = await flushIdReview();
-    return { ok: true, undo: { uid, prevRec }, message: saved ? 'Đã xác minh mức độ' : 'Đã xác minh mức độ (chưa ghi được xuống đĩa)' };
+    const saved = await commitRecs([[uid, mk(q, { form: eff.form, level: 'gv', src: 'tay', unclassified: eff.unclassified, ...(eff.why ? { why: eff.why } : {}) })]]);
+    return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh mức độ' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   if (action.kind === 'can-xem-lai') {
-    putRecs([[uid, mk(q, { form: 'xem-lai', level: eff.level, src: 'tay', why: 'Giáo viên đánh dấu cần xem lại' })]]);
-    const saved = await flushIdReview();
-    return { ok: true, undo: { uid, prevRec }, message: saved ? 'Đã đánh dấu cần xem lại' : 'Đã đánh dấu cần xem lại (chưa ghi được xuống đĩa)' };
+    const saved = await commitRecs([[uid, mk(q, { form: 'xem-lai', level: eff.level, src: 'tay', why: 'Giáo viên đánh dấu cần xem lại' })]]);
+    return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã đánh dấu cần xem lại' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   // đổi Dạng: vị trí + ID6 cùng lúc, mức độ giữ nguyên
   const to: Location | null = locationOfForm(ctx.ix, action.formId);
@@ -105,9 +106,13 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
   if (!r.ok) return { ok: false, message: 'Chưa ghi được dữ liệu nên chưa đổi gì.' };
   if (!r.changed || !after) return { ok: false, message: 'Câu vừa được sửa ở nơi khác nên chưa đổi gì. Hãy xem lại câu.' };
   const nq = getState().questions.find((x) => x.uid === uid)!;
-  putRecs([[uid, mk(nq, { form: 'gv', level: eff.level, src: 'tay', why: 'Giáo viên đổi Dạng trong hàng đợi xác minh' })]]);
-  const saved = await flushIdReview();
-  return { ok: true, undo: { uid, before, after, prevRec }, message: saved ? `Đã đổi Dạng và xác minh (${w.code})` : `Đã đổi Dạng (${w.code}); chưa ghi được trạng thái xuống đĩa` };
+  const saved = await commitRecs([[uid, mk(nq, { form: 'gv', level: eff.level, src: 'tay', why: 'Giáo viên đổi Dạng trong hàng đợi xác minh' })]]);
+  if (!saved) {
+    // câu đã đổi nhưng trạng thái chưa lưu được ⇒ trả câu về đúng như cũ (không để câu mang vị trí mới mà thiếu xác minh)
+    const back = await updateMany([uid], (x) => (after && sameSnap(x, after) ? { ...x, ...before } : null));
+    return { ok: false, message: back.ok && back.changed ? 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' : 'Chưa ghi được trạng thái xác minh và chưa trả được câu về như cũ: hãy kiểm tra câu này.' };
+  }
+  return { ok: true, undo: { uid, before, after, prevRec }, message: `Đã đổi Dạng và xác minh (${w.code})` };
 }
 
 /** Hoàn tác một hành động: trả lại câu nếu còn y như lúc đổi, và trả lại đúng bản ghi trạng thái trước đó. */
@@ -120,8 +125,8 @@ export async function undoQueueAction(u: QueueUndo): Promise<{ ok: boolean; mess
   }
   // Hoàn tác cũng là một bước trong lịch sử (A → B → A), không xoá dấu vết của hành động vừa hoàn tác.
   const cur = getRec(u.uid);
-  if (u.prevRec) putRecs([[u.uid, { ...u.prevRec, at: Date.now() }]]);
-  else if (cur) putRecs([[u.uid, { ...cur, form: 'chua', level: 'chua', unclassified: false, why: 'Hoàn tác', at: Date.now() }]]);
-  const saved = await flushIdReview();
-  return { ok: true, message: saved ? 'Đã hoàn tác' : 'Đã hoàn tác (chưa ghi được trạng thái xuống đĩa)' };
+  const next: ReviewRec | undefined = u.prevRec ? { ...u.prevRec, at: Date.now() } : cur ? { ...cur, form: 'chua', level: 'chua', unclassified: false, why: 'Hoàn tác', at: Date.now() } : undefined;
+  const saved = next ? await commitRecs([[u.uid, next]]) : true;
+  // Nếu câu đã được trả về mà trạng thái chưa lưu được: bản ghi cũ tự hết hiệu lực vì không còn khớp Dạng/nội dung ⇒ an toàn (không hiện xác minh giả)
+  return saved ? { ok: true, message: 'Đã hoàn tác' } : { ok: false, message: 'Chưa ghi được trạng thái xuống đĩa nên chưa hoàn tác xong. Hãy kiểm tra ổ đĩa rồi thử lại.' };
 }

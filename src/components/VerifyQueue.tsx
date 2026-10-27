@@ -7,7 +7,7 @@ import { IdSuggester, CONFIDENCE_LABEL, type Suggestion } from '../lib/idsuggest
 import { indexOf } from '../lib/taxonomy';
 import { taxRevision } from '../lib/taxpath';
 import { getState, setReview, useBank } from '../lib/store';
-import { applyQueueAction, queueUids, SCOPE_LABEL, scopeCounts, undoQueueAction, type QueueAction, type QueueScope, type QueueUndo } from '../lib/verifyqueue';
+import { applyQueueAction, queueUids, SCOPE_LABEL, scopeCounts, scopeOf, undoQueueAction, type QueueAction, type QueueScope, type QueueUndo } from '../lib/verifyqueue';
 import { LEVEL_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 import { useEffectiveOf } from './IdReviewControl';
 import { QuestionView } from './QuestionView';
@@ -50,24 +50,26 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
   const pick = useRef<HTMLSelectElement>(null);
 
   const changeScope = (s: QueueScope) => { setScope(s); setUids(queueUids(pool, effOf, s)); setIdx(0); setMsg(null); };
+  const remaining = useMemo(() => uids.filter((u) => { const qq = byUid.get(u); return !!qq && scopeOf(effOf(qq)) !== null; }).length, [uids, byUid, effOf]);
   const uid = uids[idx];
   const q = uid ? byUid.get(uid) : undefined;
   const eff = q ? effOf(q) : null;
 
   // gợi ý tham khảo: dựng MỘT lần khi mở (kho đổi theo từng thao tác nhưng gợi ý cũ vẫn đủ để tham khảo)
-  const sug = useRef<IdSuggester | null>(null);
+  const sug = useRef<{ tax: typeof tax; s: IdSuggester } | null>(null);
   const suggestion = useMemo<Suggestion | null>(() => {
     if (!q) return null;
-    sug.current = sug.current ?? new IdSuggester(tax, getState().questions);
-    return sug.current.suggest({ key: q.uid, latex: q.latex, grade: q.grade, excludeUid: q.uid });
-  }, [q?.uid, tax]); // eslint-disable-line react-hooks/exhaustive-deps
+    // cây đổi ⇒ dựng lại bộ gợi ý (không dùng gợi ý theo cây cũ); câu đổi nội dung/Dạng ⇒ gợi ý tính lại cho câu hiện tại
+    if (!sug.current || sug.current.tax !== tax) sug.current = { tax, s: new IdSuggester(tax, getState().questions) };
+    return sug.current.s.suggest({ key: q.uid, latex: q.latex, grade: q.grade, excludeUid: q.uid });
+  }, [q?.uid, q?.latex, q?.formId, tax]); // eslint-disable-line react-hooks/exhaustive-deps
   const options = useMemo(() => (suggestion ? [suggestion.best, ...suggestion.alternatives].filter((o): o is NonNullable<typeof o> => !!o && o.formId !== q?.formId).slice(0, 3) : []), [suggestion, q?.formId]);
   const allForms = useMemo(() => (q ? (tax.grades.find((g) => g.grade === q.grade)?.branches ?? []).flatMap((b) => b.chapters.flatMap((c) => c.lessons.flatMap((l) => l.forms.map((f) => ({ id: f.id, label: `${c.name} › ${l.name} › ${f.name}` }))))) : []), [tax, q?.grade]);
 
   const run = async (action: QueueAction, advance: boolean) => {
     if (!q || busy) return;
     setBusy(true);
-    const r = await applyQueueAction(q.uid, action, { tax, ix, taxRev });
+    const r = await applyQueueAction(q.uid, action, { tax, ix, taxRev }, q.latex);
     setBusy(false);
     setMsg({ ok: r.ok, text: r.message });
     if (r.ok) {
@@ -89,8 +91,12 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) { if (e.key === 'Escape') (t as HTMLElement).blur(); return; }
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // đang gõ / chọn trong ô nhập, danh sách, vùng soạn thảo (CodeMirror, contenteditable): phím không phải phím tắt
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.closest('.cm-editor,[role="textbox"],[contenteditable="true"]'))) { if (e.key === 'Escape') (t as HTMLElement).blur(); return; }
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      if (e.repeat) return; // giữ phím lâu không được sinh nhiều hành động
+      // hộp xác nhận con (vd xác nhận "Đã duyệt") đang mở: không bắt phím của hàng đợi
+      if (document.querySelector('.vq-overlay [role="alertdialog"], .vq-overlay .rv-ask')) return;
       const k = e.key.toLowerCase();
       const act = (a: QueueAction | null, adv = true) => { e.preventDefault(); if (a) void run(a, adv); };
       if (k === 'y' || k === 'enter') act({ kind: 'xac-nhan-dang' });
@@ -122,7 +128,7 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
               {SCOPES.map((s) => <option key={s} value={s}>{SCOPE_LABEL[s]} ({counts[s]})</option>)}
             </select>
           </label>
-          <span className="sys-hint">{uids.length ? `Câu ${Math.min(idx + 1, uids.length)}/${uids.length} · đã xử lý ${done}` : 'Không còn câu nào trong nhóm này.'}</span>
+          <span className="sys-hint" aria-live="polite">{uids.length ? `Câu ${Math.min(idx + 1, uids.length)}/${uids.length} · đã xử lý ${done} · còn ${remaining} chưa xác minh Dạng` : 'Không còn câu nào trong nhóm này.'}</span>
           <span className="vq-acts">
             <button type="button" className="btn btn-sm" onClick={() => setHelp((v) => !v)}>Phím tắt (?)</button>
             <button type="button" className="btn btn-sm" onClick={onClose}>Đóng (Esc)</button>
