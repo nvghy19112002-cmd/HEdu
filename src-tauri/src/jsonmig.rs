@@ -875,4 +875,63 @@ mod tests {
         assert_eq!(db.sidecar_get(IDREVIEW_KEY).unwrap(), None, "tệp hỏng bị bỏ qua, mọi câu là chưa xác minh");
     }
 
+
+    /// Bộ dữ liệu TỔNG HỢP dùng chung với kiểm thử TypeScript (src/lib/idexchange.test.ts): sinh bằng chính mã TS (dấu nội dung thật).
+    fn fixture(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("scripts").join("fixtures").join("json-trao-doi").join(name)
+    }
+
+    #[test]
+    fn json_trao_doi_tong_hop_nhap_roi_xuat_giong_tung_byte() {
+        let d = dir("fixture");
+        let files = SourceFiles::in_data_dir(&d.join("data"));
+        let hedu = fs::read_to_string(fixture("hedu.json")).unwrap();
+        let idr = fs::read_to_string(fixture("id-review.json")).unwrap();
+        fs::write(&files.json, &hedu).unwrap();
+        fs::write(&files.idreview, &idr).unwrap();
+        let db_path = d.join("hedu.db");
+        let rep = migrate(&files, &db_path, &d.join("backups")).unwrap();
+        assert_eq!(rep.pre.questions, 8, "đủ 8 câu của bộ dữ liệu");
+        let db = Db::open(&db_path).unwrap();
+        assert_eq!(db.count().unwrap(), 8);
+        assert_eq!(db.sidecar_get(IDREVIEW_KEY).unwrap().as_deref(), Some(idr.as_str()), "trạng thái xác minh vào SQLite y nguyên (kể cả bản ghi mồ côi: chỉ TypeScript quyết định hiệu lực)");
+        // xuất ngược: hedu.json và id-review.json giống từng byte với đầu vào
+        let out = d.join("xuat");
+        export_json(&db, &out).unwrap();
+        assert_eq!(fs::read_to_string(out.join("hedu.json")).unwrap(), hedu, "hedu.json xuất ra giống từng byte (UID, seq, LaTeX, tikz, macro)");
+        assert_eq!(fs::read_to_string(out.join("id-review.json")).unwrap(), idr, "id-review.json xuất ra giống từng byte");
+        // UID và số lượng khớp với tệp gốc
+        let want: Vec<String> = serde_json::from_str::<Value>(&hedu).unwrap()["questions"].as_array().unwrap().iter().map(|q| q["uid"].as_str().unwrap().to_string()).collect();
+        let got: Vec<String> = serde_json::from_str::<Value>(&fs::read_to_string(out.join("hedu.json")).unwrap()).unwrap()["questions"].as_array().unwrap().iter().map(|q| q["uid"].as_str().unwrap().to_string()).collect();
+        assert_eq!(want, got);
+    }
+
+    #[test]
+    fn json_cu_khong_co_id_review_khong_bia_ban_ghi() {
+        let d = dir("fixture_cu");
+        let files = SourceFiles::in_data_dir(&d.join("data"));
+        fs::write(&files.json, fs::read_to_string(fixture("hedu.json")).unwrap()).unwrap();
+        let db_path = d.join("hedu.db");
+        let rep = migrate(&files, &db_path, &d.join("backups")).unwrap();
+        assert!(rep.pre.warnings.iter().all(|w| !w.contains("id-review")), "không có tệp thì không cảnh báo, không bịa");
+        let db = Db::open(&db_path).unwrap();
+        assert_eq!(db.sidecar_get(IDREVIEW_KEY).unwrap(), None, "không có id-review.json ⇒ không có bản ghi nào (mọi câu là chưa xác minh)");
+        let out = d.join("xuat");
+        export_json(&db, &out).unwrap();
+        assert!(!out.join("id-review.json").exists(), "không xuất tệp trạng thái khi không có gì");
+    }
+
+    #[test]
+    fn id_review_json_hop_cu_phap_nhung_sai_cau_truc_bi_bo_qua() {
+        let d = dir("fixture_sai");
+        let files = SourceFiles::in_data_dir(&d.join("data"));
+        fs::write(&files.json, fs::read_to_string(fixture("hedu.json")).unwrap()).unwrap();
+        // JSON hợp cú pháp nhưng không phải dạng id-review (recs không phải đối tượng)
+        fs::write(&files.idreview, "{\"v\":1,\"recs\":[1,2,3]}").unwrap();
+        let rep = migrate(&files, &d.join("hedu.db"), &d.join("backups")).unwrap();
+        assert!(rep.pre.warnings.iter().any(|w| w.contains("id-review")), "báo tệp trạng thái không dùng được");
+        assert_eq!(Db::open(&d.join("hedu.db")).unwrap().sidecar_get(IDREVIEW_KEY).unwrap(), None, "không ghi trạng thái sai vào SQLite");
+        assert_eq!(Db::open(&d.join("hedu.db")).unwrap().count().unwrap(), 8, "không mất câu nào");
+    }
+
 }

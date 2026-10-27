@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTaxonomy } from '../lib/curriculum';
-import { effectiveOf, FORM_STATE_LABEL, flushIdReview, getRec, LEVEL_STATE_LABEL, makeRec, putRecs, SOURCE_LABEL, useIdReview, type Effective } from '../lib/idreview';
+import { commitRecs, effectiveOf, FORM_STATE_LABEL, getRec, LEVEL_STATE_LABEL, makeRec, SOURCE_LABEL, useIdReview, type Effective } from '../lib/idreview';
 import { indexOf } from '../lib/taxonomy';
 import { taxRevision } from '../lib/taxpath';
 import type { Question } from '../lib/types';
@@ -35,10 +35,10 @@ export function IdReviewControl({ q, eff }: { q: Question; eff: Effective }) {
 
   const apply = async (o: { form: Effective['form']; level: Effective['level']; src?: 'tay' | 'soat'; unclassified?: boolean }, done: string) => {
     setBusy(true); setMsg(null);
-    putRecs([[q.uid, makeRec(q, { form: o.form, level: o.level, src: o.src ?? 'tay', taxRev: taxRevision(tax), unclassified: o.unclassified })]]);
-    const ok = await flushIdReview();
+    // ghi bền vững; ghi lỗi ⇒ trạng thái được TRẢ LẠI như cũ (không hiện "giáo viên xác minh" khi chưa lưu được)
+    const ok = await commitRecs([[q.uid, makeRec(q, { form: o.form, level: o.level, src: o.src ?? 'tay', taxRev: taxRevision(tax), unclassified: o.unclassified })]]);
     setBusy(false);
-    setMsg(ok ? { ok: true, text: done } : { ok: false, text: 'Chưa ghi được xuống đĩa — trạng thái chỉ giữ trong phiên này.' });
+    setMsg(ok ? { ok: true, text: done } : { ok: false, text: 'Chưa ghi được xuống đĩa nên CHƯA đổi trạng thái. Hãy kiểm tra ổ đĩa rồi thử lại.' });
     if (ok) setTimeout(() => setMsg((m) => (m && m.ok ? null : m)), 2000);
   };
 

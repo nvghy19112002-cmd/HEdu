@@ -117,12 +117,25 @@ const isRec = (r: unknown): r is ReviewRec => {
     && typeof x.f === 'string' && typeof x.i === 'string' && typeof x.taxRev === 'string' && typeof x.at === 'number'
     && (x.orig === undefined || typeof x.orig === 'string') && (x.prop === undefined || typeof x.prop === 'string') && (x.hist === undefined || (Array.isArray(x.hist) && x.hist.every(isHist)));
 };
+/**
+ * Quy tắc khi CÙNG MỘT uid có nhiều bản ghi (xác định, không phụ thuộc thứ tự duyệt): bản có `at` MỚI hơn thắng; bằng nhau thì bản có lịch sử dài hơn;
+ * vẫn bằng nhau thì bản giữ trạng thái "an toàn hơn" (không phải giáo viên xác minh). JSON dạng đối tượng không thể có khoá lặp (khoá lặp chỉ còn bản cuối),
+ * nên quy tắc này áp dụng cho dạng mảng `[{ uid, ...bản ghi }]` và cho việc gộp hai nguồn (`restoreIdReview`).
+ */
+export function newerRec(a: ReviewRec, b: ReviewRec): ReviewRec {
+  if (a.at !== b.at) return a.at > b.at ? a : b;
+  const ha = a.hist?.length ?? 0, hb = b.hist?.length ?? 0;
+  if (ha !== hb) return ha > hb ? a : b;
+  return a.form === 'gv' && b.form !== 'gv' ? b : a.form !== 'gv' && b.form === 'gv' ? a : a;
+}
 export const parseReview = (json: string | null): Map<string, ReviewRec> => {
   const m = new Map<string, ReviewRec>();
   if (!json) return m;
-  const f = JSON.parse(json) as { v?: number; recs?: Record<string, unknown> };
+  const f = JSON.parse(json) as { v?: number; recs?: unknown };
   if (f.v !== 1 || !f.recs || typeof f.recs !== 'object') throw new Error('Tệp trạng thái xác minh có cấu trúc không hiểu được.');
-  for (const [uid, r] of Object.entries(f.recs)) if (isRec(r)) m.set(uid, r);
+  const put = (uid: string, r: unknown) => { if (isRec(r)) { const cur = m.get(uid); m.set(uid, cur ? newerRec(cur, r) : r); } };
+  if (Array.isArray(f.recs)) { for (const e of f.recs) { const x = e as { uid?: unknown }; if (x && typeof x.uid === 'string') { const { uid, ...rest } = e as { uid: string } & Record<string, unknown>; put(uid, rest); } } }
+  else for (const [uid, r] of Object.entries(f.recs as Record<string, unknown>)) put(uid, r);
   return m;
 };
 const dump = (): string => JSON.stringify({ v: 1, recs: Object.fromEntries(recs) });
@@ -175,6 +188,20 @@ export function putRecs(list: readonly (readonly [string, ReviewRec])[]): void {
   dirty = true;
   emit(); schedule();
 }
+/**
+ * Đặt và GHI BỀN VỮNG. Ghi lỗi (đĩa đầy, tệp trạng thái hỏng/bị chặn ghi) ⇒ TRẢ LẠI đúng trạng thái cũ và trả false:
+ * không bao giờ để một câu hiện là "giáo viên xác minh" khi điều đó chưa được lưu (sau khi mở lại app sẽ mất, còn trong phiên thì đang làm căn cứ giả).
+ */
+export async function commitRecs(list: readonly (readonly [string, ReviewRec])[]): Promise<boolean> {
+  const wasDirty = dirty;
+  const prev = list.map(([uid]) => [uid, recs.get(uid)] as const);
+  putRecs(list);
+  if (await flushIdReview()) return true;
+  for (const [uid, r] of prev) { if (r) recs.set(uid, r); else recs.delete(uid); }
+  dirty = wasDirty;
+  emit();
+  return false;
+}
 /** Đặt lại NGUYÊN bản ghi (hoặc xoá nếu undefined) — chỉ cho "Hoàn tác" trong hàng đợi; không thêm vào lịch sử. */
 export function setRecRaw(uid: string, rec: ReviewRec | undefined): void {
   if (rec) recs.set(uid, rec); else recs.delete(uid);
@@ -195,18 +222,22 @@ export const idReviewForBackup = (): { v: 1; recs: Record<string, ReviewRec> } =
  * Khôi phục từ file sao lưu JSON: GỘP (không xoá thứ đang có); trùng khoá thì giữ bản MỚI hơn theo thời điểm. Bản ghi vẫn phải qua `effectiveOf`
  * (khớp nội dung/Dạng/mức độ của câu) nên bản ghi không còn khớp câu nào chỉ nằm đó, không gây hại.
  */
-export async function restoreIdReview(f: unknown): Promise<{ added: number; saved: boolean }> {
-  const x = f as { v?: number; recs?: Record<string, unknown> } | undefined;
-  if (!x || x.v !== 1 || !x.recs || typeof x.recs !== 'object') return { added: 0, saved: true };
+export async function restoreIdReview(f: unknown, known?: ReadonlySet<string>): Promise<{ added: number; saved: boolean; orphans: number }> {
+  const x = f as { v?: number; recs?: unknown } | undefined;
+  if (!x || x.v !== 1 || !x.recs || typeof x.recs !== 'object') return { added: 0, saved: true, orphans: 0 };
   if (!loadedOnce) await loadIdReview();
-  let added = 0;
-  for (const [uid, r] of Object.entries(x.recs)) {
-    if (!isRec(r)) continue;
+  let incoming: Map<string, ReviewRec>;
+  try { incoming = parseReview(JSON.stringify({ v: 1, recs: x.recs })); } catch { return { added: 0, saved: true, orphans: 0 }; }
+  let added = 0, orphans = 0;
+  for (const [uid, r] of incoming) {
+    // `known` = các uid của ngân hàng vừa khôi phục: bản ghi của câu không tồn tại (mồ côi) bị bỏ, không tạo xác minh nào
+    if (known && !known.has(uid)) { orphans++; continue; }
     const cur = recs.get(uid);
-    if (!cur || r.at > cur.at) { recs.set(uid, r); dirty = true; if (!cur) added++; }
+    if (!cur) { recs.set(uid, r); dirty = true; added++; }
+    else { const win = newerRec(cur, r); if (win !== cur) { recs.set(uid, win); dirty = true; } }
   }
   emit();
-  return { added, saved: await flushIdReview() };
+  return { added, saved: await flushIdReview(), orphans };
 }
 /** Vẽ lại khi kho trạng thái đổi. */
 export const useIdReview = (): number => useSyncExternalStore(subscribe, () => version, () => version);

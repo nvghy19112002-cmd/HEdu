@@ -394,7 +394,7 @@ export function importBackup(json: string): number {
   // quyết định trùng / thùng rác / nhãn chuẩn đi kèm file sao lưu: GỘP vào tệp phụ hiện có (không xoá gì)
   if (m.dupSidecar) void restoreSidecar(m.dupSidecar).catch(() => undefined);
   // trạng thái xác minh ID (Dạng/mức độ): cũng GỘP; file sao lưu cũ không có phần này ⇒ các câu là "chưa xác minh"
-  if (m.idReview) void restoreIdReview(m.idReview).catch(() => undefined);
+  if (m.idReview) void restoreIdReview(m.idReview, new Set(questions.map((q) => q.uid))).catch(() => undefined);
   return questions.length;
 }
 
