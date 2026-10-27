@@ -45,10 +45,8 @@ Quy ước tại thời điểm nhập: ID khớp ngân hàng ⇒ Dạng "máy";
 3. Câu ID bất đồng vào hàng đợi, không chặn nhập — **ĐÃ CHỐT**.
 4. Xác nhận AI **một lần cho một công việc** (vẫn mặc định tắt) / giữ xin phép từng lượt — **CHƯA quyết, chưa làm**.
 
-## 7. Quy tắc 15b–15d (chuyển vào `quy-tac-gan-id-chuan.md` mục D sau khi #128 được gộp, để không xung đột với 15a)
-- **15b.** Dạng và mức độ có trạng thái xác minh riêng (tệp phụ `id-review`). Dạng: chưa xác minh / máy phân loại / giáo viên xác minh / cần xem lại. Mức độ: chưa / máy / giáo viên. "Máy phân loại" KHÔNG BAO GIỜ tự thành "giáo viên xác minh"; chỉ hành động xác nhận của giáo viên tạo trạng thái đó. Trạng thái hết hiệu lực khi nội dung (không tính vùng ID) hoặc Dạng/mức độ của câu đổi; riêng "máy phân loại" còn hết hiệu lực khi cây đổi.
-- **15c.** Căn cứ kiểm chứng chỉ gồm câu có Dạng "giáo viên xác minh" hoặc nội dung "Đã duyệt" (tạm thời), trừ câu "cần xem lại" và "chưa phân loại". Câu chưa duyệt, cần sửa hoặc chỉ "máy phân loại" không bao giờ là căn cứ.
-- **15d.** Câu "chưa phân loại" vào vị trí chung KHÔNG được HEdu ghi ID6 giả vào LaTeX; giữ nguyên LaTeX, có cờ ở tệp phụ, không làm căn cứ cho câu khác. Thiếu bản ghi trạng thái luôn hiểu là "chưa xác minh".
+## 7. Quy tắc 15–15e (đã chuyển vào `quy-tac-gan-id-chuan.md`, PR #128)
+Định nghĩa các quy tắc 15, 15a (kiểm chứng ID khi nhập), 15b (ba trục độc lập), 15c (căn cứ chỉ là Dạng giáo viên xác minh), 15d (chưa phân loại không ghi ID giả) và 15e (sao lưu/JSON trao đổi) nằm Ở MỘT CHỖ: `claude/quy-tac-gan-id-chuan.md`. Tài liệu này không lặp lại để tránh hai bản lệch nhau; khi mâu thuẫn, quy tắc chuẩn thắng.
 
 ## 8. Sao lưu và khôi phục trạng thái xác minh (PR 1C, bổ sung 28/10/2026)
 Ba loại "bản sao" khác nhau, đã ghi rõ trên giao diện:
