@@ -83,7 +83,7 @@ ok(sumB.unchecked === 0 && sumB.pending === 0, 'đồng bộ theo cây hiện t�
 const oldDecision = decide(verA.get(1)!, 'goi-y');
 const common: Location = at(3);
 const tagsOf = () => ['Nguồn: de.tex'];
-const plan = planDrafts({ latexes, importing: () => true, ids: idsB, ver: (i) => verB.get(i), decision: () => oldDecision, noIdLoc: () => common, commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxB });
+const plan = planDrafts({ latexes, importing: () => true, ids: idsB, ver: (i) => verB.get(i), decision: () => oldDecision, noId: () => ({ loc: common, suggested: false }), commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxB });
 if ('error' in plan) throw new Error(plan.error);
 const d = plan.drafts;
 ok(d.length === 3 && d[0].formId === A.formId && d[0].level === lvl, 'câu 0 (ID còn hợp lệ): theo đúng ID, mức độ gốc');
@@ -105,12 +105,12 @@ console.log('Đường cũ trước khi đổi cây vẫn đúng (không hồi q
   setTaxonomy(taxA);
   const ids = readIds(latexes, taxA);
   const dec = decide(verA.get(1)!, 'goi-y');
-  const p = planDrafts({ latexes, importing: () => true, ids, ver: (i) => verA.get(i), decision: (i) => (i === 1 ? dec : undefined), noIdLoc: () => common, commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxA });
+  const p = planDrafts({ latexes, importing: () => true, ids, ver: (i) => verA.get(i), decision: (i) => (i === 1 ? dec : undefined), noId: () => ({ loc: common, suggested: false }), commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxA });
   if ('error' in p) throw new Error(p.error);
   ok(p.drafts[0].formId === A.formId && p.drafts[1].formId === A.formId && p.drafts[1].level === lvl && p.drafts[2].formId === C.formId, 'cây chưa đổi: khớp theo ID; bất đồng theo gợi ý và giữ mức độ gốc; khớp theo ID');
   // quyết định cũ (cây A) áp vào kết quả kiểm theo cây B ⇒ không ghi, báo lỗi
   const verStale = { ...verA.get(1)!, taxRev: taxRevision(taxB) };
-  const bad = planDrafts({ latexes, importing: (i) => i === 1, ids, ver: () => verStale, decision: () => dec, noIdLoc: () => common, commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxA });
+  const bad = planDrafts({ latexes, importing: (i) => i === 1, ids, ver: () => verStale, decision: () => dec, noId: () => ({ loc: common, suggested: false }), commonLoc: common, commonLevel: 'NB', tags: tagsOf, tax: taxA });
   ok('error' in bad, 'quyết định gắn với phiên bản cây khác ⇒ không dựng bản ghi (không ghi gì)');
 }
 

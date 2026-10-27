@@ -3,7 +3,7 @@
 // vị trí sẽ ghi, thống kê) PHẢI đọc lại qua `readIds` với cây hiện tại, không dùng kết quả đọc cũ lưu trong dòng của lô.
 import { idFromLatex } from './importid';
 import { placeWithId } from './idsync';
-import { placeDisputed, type IdDecision, type IdVerification } from './idverify';
+import { placeDisputed, type IdDecision, type IdVerification, type PlacedMeta } from './idverify';
 import type { Draft } from './store';
 import type { Level, Location, Taxonomy } from './types';
 
@@ -28,8 +28,8 @@ export interface PlanInput {
   ver: (i: number) => IdVerification | undefined;
   /** quyết định của giáo viên cho câu ID bất đồng */
   decision: (i: number) => IdDecision | undefined;
-  /** vị trí của câu KHÔNG có ID dùng được (gợi ý đã chọn nếu còn hợp lệ, không thì vị trí chung) */
-  noIdLoc: (i: number) => Location;
+  /** vị trí của câu KHÔNG có ID dùng được: gợi ý đã chọn (suggested = true, còn hợp lệ) hoặc vị trí chung (suggested = false ⇒ chưa phân loại) */
+  noId: (i: number) => { loc: Location; suggested: boolean };
   commonLoc: Location;
   commonLevel: Level;
   tags: (i: number) => string[];
@@ -41,8 +41,9 @@ export interface PlanInput {
  * Câu không có ID dùng được (kể cả ID từng hợp lệ nhưng cây đã đổi): vị trí đã xác nhận, KHÔNG dùng vị trí đọc cũ.
  * Không ghi được nhất quán ⇒ trả lỗi, không ghi gì.
  */
-export function planDrafts(p: PlanInput): { drafts: Draft[] } | { error: string } {
+export function planDrafts(p: PlanInput): { drafts: Draft[]; meta: PlacedMeta[] } | { error: string } {
   const out: Draft[] = [];
+  const meta: PlacedMeta[] = [];
   for (let i = 0; i < p.latexes.length; i++) {
     if (!p.importing(i)) continue;
     const text = p.latexes[i].trim();
@@ -52,14 +53,27 @@ export function planDrafts(p: PlanInput): { drafts: Draft[] } | { error: string 
       const pl = placeDisputed({ text, id, ver, decision: p.decision(i), commonLoc: p.commonLoc, commonLevel: p.commonLevel, tax: p.tax });
       if (!pl.ok) return { error: `Câu ${i + 1}: ${pl.reason}` };
       out.push({ latex: pl.latex, level: pl.level, tags: p.tags(i), ...pl.loc });
+      meta.push({ form: pl.form, src: pl.src, unclassified: pl.unclassified, ...(pl.why ? { why: pl.why } : {}) });
       continue;
     }
-    if (id) { out.push({ latex: text, level: id.level, tags: p.tags(i), ...id.loc }); continue; }
-    // Câu chưa có ID dùng được: ghi ID theo vị trí đã xác nhận vào mã LaTeX lưu trong ngân hàng (tệp .tex gốc không bị sửa).
-    // Câu có ID lỗi/thiếu Dạng/nhiều ID: giữ nguyên LaTeX (không tự thay), vị trí vẫn theo lựa chọn của giáo viên.
-    const at = p.noIdLoc(i);
-    const w = placeWithId(text, at, p.commonLevel, p.tax, false);
-    out.push({ latex: 'latex' in w ? w.latex : text, level: p.commonLevel, tags: p.tags(i), ...at });
+    if (id) {
+      out.push({ latex: text, level: id.level, tags: p.tags(i), ...id.loc });
+      // ID từ tệp: khớp ngân hàng ⇒ máy phân loại; chưa kiểm chứng ⇒ chưa xác minh. Không bao giờ tự thành giáo viên xác minh.
+      meta.push({ form: ver?.verdict === 'khop' ? 'may' : 'chua', src: 'tep', unclassified: false });
+      continue;
+    }
+    // Câu chưa có ID dùng được. Giáo viên đã nhận gợi ý ⇒ ghi ID theo vị trí đó vào LaTeX lưu trong ngân hàng (tệp .tex gốc không đổi), máy phân loại.
+    // Vào vị trí chung ⇒ Chưa phân loại: LaTeX NGUYÊN VĂN, không ghi ID giả. Câu có ID lỗi/thiếu Dạng/nhiều ID: không tự thay mã.
+    const { loc: at, suggested } = p.noId(i);
+    if (suggested) {
+      const w = placeWithId(text, at, p.commonLevel, p.tax, false);
+      const wrote = 'latex' in w;
+      out.push({ latex: wrote ? w.latex : text, level: p.commonLevel, tags: p.tags(i), ...at });
+      meta.push({ form: wrote ? 'may' : 'chua', src: 'goi-y', unclassified: !wrote });
+    } else {
+      out.push({ latex: text, level: p.commonLevel, tags: p.tags(i), ...at });
+      meta.push({ form: 'chua', src: 'tay', unclassified: true });
+    }
   }
-  return { drafts: out };
+  return { drafts: out, meta };
 }

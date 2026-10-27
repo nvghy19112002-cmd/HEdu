@@ -6,9 +6,10 @@
 //   bat-dong         gợi ý tin cậy "cao" chỉ Dạng khác ID ⇒ KHÔNG nhập lặng lẽ: giáo viên chọn.
 // Mức độ (N/H/V/C) không bao giờ tự đổi: đổi Dạng/vị trí vẫn giữ mức độ gốc của ID; muốn đổi mức độ phải chọn riêng.
 // Quyết định của giáo viên gắn với đúng kết quả kiểm đã xem (`verificationSig`): gợi ý/cây/câu đổi ⇒ phải chọn lại.
+import { isEvidence, type Effective, type FormState, type IdSource } from './idreview';
 import { IdSuggester, type SuggestConfidence, type SuggestOption } from './idsuggest';
 import { placeWithId, strictCode } from './idsync';
-import { reviewOf, type Level, type Location, type Question, type Taxonomy } from './types';
+import type { Level, Location, Question, Taxonomy } from './types';
 
 export type IdVerdict = 'khop' | 'chua-kiem-chung' | 'bat-dong';
 /** Lựa chọn của giáo viên cho câu Bất đồng: giữ ID trong tệp / theo gợi ý / vị trí chung đang chọn. */
@@ -35,11 +36,17 @@ export interface IdVerification {
   taxRev: string;
 }
 
-/** Câu làm căn cứ kiểm chứng: chỉ câu ĐÃ DUYỆT. */
-export const evidenceQuestions = (questions: readonly Question[]): Question[] => questions.filter((q) => reviewOf(q) === 'approved');
+const NO_STATE: Effective = { form: 'chua', level: 'chua', unclassified: false };
 
-/** Bộ gợi ý dùng để kiểm chứng: dựng chỉ trên câu đã duyệt. */
-export const verifierFor = (tax: Taxonomy, questions: readonly Question[]): IdSuggester => new IdSuggester(tax, evidenceQuestions(questions));
+/**
+ * Câu làm căn cứ kiểm chứng: Dạng "giáo viên xác minh" hoặc nội dung "Đã duyệt" (tạm thời, đến khi có hàng đợi xác nhận Dạng),
+ * trừ câu "cần xem lại" và câu "chưa phân loại". Câu chưa duyệt / cần sửa / "máy phân loại" không bao giờ là căn cứ.
+ */
+export const evidenceQuestions = (questions: readonly Question[], effOf: (q: Question) => Effective = () => NO_STATE): Question[] =>
+  questions.filter((q) => isEvidence(q, effOf(q)));
+
+/** Bộ gợi ý dùng để kiểm chứng: dựng chỉ trên câu làm căn cứ. */
+export const verifierFor = (tax: Taxonomy, questions: readonly Question[], effOf?: (q: Question) => Effective): IdSuggester => new IdSuggester(tax, evidenceQuestions(questions, effOf));
 
 /** Kiểm một câu có ID hợp lệ. `idLoc` = vị trí đọc từ ID trong LaTeX. `s` PHẢI dựng bằng `verifierFor`. */
 export function verifyId(latex: string, idLoc: Location, s: IdSuggester, key: string): IdVerification {
@@ -93,7 +100,9 @@ export function summarizeVerify(
   return s;
 }
 
-export type Placed = { ok: true; latex: string; level: Level; loc: Location } | { ok: false; reason: string };
+/** Trạng thái xác minh sẽ lưu kèm (tệp phụ id-review). */
+export interface PlacedMeta { form: FormState; src: IdSource; unclassified: boolean; why?: string }
+export type Placed = ({ ok: true; latex: string; level: Level; loc: Location } & PlacedMeta) | { ok: false; reason: string };
 
 export interface PlaceInput {
   /** LaTeX đã cắt khoảng trắng đầu/cuối, đúng như sẽ lưu */
@@ -110,7 +119,8 @@ export interface PlaceInput {
 
 /**
  * Vị trí, mức độ và LaTeX sẽ GHI cho một câu có ID nhưng BẤT ĐỒNG với ngân hàng. Không có quyết định còn hiệu lực ⇒ KHÔNG ghi.
- * Giữ ID ⇒ LaTeX nguyên văn. Đổi vị trí ⇒ ghi ID mới vào `%[ID]` cùng lúc với vị trí (quy tắc 10: cả hai hoặc không gì); không ghi được ⇒ lỗi, KHÔNG lưu nửa vời.
+ * Giữ ID ⇒ LaTeX nguyên văn. Theo gợi ý ⇒ ghi ID mới vào `%[ID]` cùng lúc với vị trí (quy tắc 10: cả hai hoặc không gì); không ghi được ⇒ lỗi, KHÔNG lưu nửa vời.
+ * Vị trí chung ⇒ Chưa phân loại: LaTeX nguyên văn, không ghi ID.
  * Mức độ: giữ mức độ gốc của ID, trừ khi giáo viên chọn riêng "đổi theo ô Mức độ chung".
  */
 export function placeDisputed(p: PlaceInput): Placed {
@@ -118,12 +128,21 @@ export function placeDisputed(p: PlaceInput): Placed {
   if (!d) return { ok: false, reason: 'Chưa có quyết định còn hiệu lực cho ID bất đồng (gợi ý, cây hoặc câu đã đổi sau khi bạn chọn).' };
   if (d.choice === 'giu') {
     const sc = strictCode(p.id.loc, p.id.level, p.tax);
-    return sc.ok ? { ok: true, latex: p.text, level: p.id.level, loc: p.id.loc } : { ok: false, reason: `Vị trí của ID trong tệp không còn đúng đường dẫn cây (${sc.problem}).` };
+    return sc.ok
+      ? { ok: true, latex: p.text, level: p.id.level, loc: p.id.loc, form: 'chua', src: 'tep', unclassified: false, why: 'ID bất đồng với ngân hàng; giữ ID trong tệp' }
+      : { ok: false, reason: `Vị trí của ID trong tệp không còn đúng đường dẫn cây (${sc.problem}).` };
   }
-  const to = d.choice === 'goi-y' ? p.ver.suggested?.location : p.commonLoc;
+  if (d.choice === 'chung') {
+    // Chưa phân loại: vào vị trí chung, LaTeX NGUYÊN VĂN (không ghi ID giả); ID gốc của tệp vẫn nằm trong LaTeX và sẽ hiện là lệch vị trí.
+    const lv = d.level === 'chung' ? p.commonLevel : p.id.level;
+    const sc = strictCode(p.commonLoc, lv, p.tax);
+    if (!sc.ok) return { ok: false, reason: `Vị trí chung không còn đúng đường dẫn cây (${sc.problem}).` };
+    return { ok: true, latex: p.text, level: lv, loc: p.commonLoc, form: 'chua', src: 'tay', unclassified: true, why: 'ID bất đồng với ngân hàng; chuyển vào Chưa phân loại' };
+  }
+  const to = p.ver.suggested?.location;
   if (!to) return { ok: false, reason: 'Không có Dạng gợi ý để áp dụng.' };
   const level = d.level === 'chung' ? p.commonLevel : p.id.level;
   const w = placeWithId(p.text, to, level, p.tax, true);
   if ('problem' in w) return { ok: false, reason: `Không ghi được ID mới vào LaTeX (${w.problem}).` };
-  return { ok: true, latex: w.latex, level, loc: to };
+  return { ok: true, latex: w.latex, level, loc: to, form: 'may', src: 'goi-y', unclassified: false };
 }

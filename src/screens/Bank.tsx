@@ -35,6 +35,7 @@ import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort'
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
+import { IdReviewControl, IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
 import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 
 function fold(s: string) {
@@ -123,8 +124,11 @@ export function BankScreen() {
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
   useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
   const selectedQs = useMemo(() => sortedCopy(questions.filter((q) => sel.has(q.uid)), sort), [questions, sel, sort]);
-  const resultUids = useMemo(() => new Set(facets.list.map((q) => q.uid)), [facets.list]);
-  const list = facets.list;
+  // Trạng thái xác minh Dạng (PR 1C): lọc phụ ngoài hệ bộ lọc chính, chưa có số đếm theo chiều
+  const effOf = useEffectiveOf();
+  const [idF, setIdF] = useState<'all' | 'chua' | 'may' | 'gv' | 'xem-lai' | 'chua-phan-loai'>('all');
+  const list = useMemo(() => (idF === 'all' ? facets.list : facets.list.filter((q) => { const e = effOf(q); return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF; })), [facets.list, idF, effOf]);
+  const resultUids = useMemo(() => new Set(list.map((q) => q.uid)), [list]);
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
@@ -192,10 +196,10 @@ export function BankScreen() {
   useEffect(() => {
     if (focusDone.current || !nav.focusUid) return;
     focusDone.current = true;
-    const i = facets.list.findIndex((q) => q.uid === nav.focusUid);
+    const i = list.findIndex((q) => q.uid === nav.focusUid);
     if (i >= 0) { setPage(Math.floor(i / PER_PAGE)); setActiveUid(nav.focusUid); }
     else toast('Câu vừa lưu nằm ngoài bộ lọc hiện tại. Bấm “Đặt lại toàn bộ” để thấy tất cả.');
-  }, [nav.focusUid, facets.list, toast, PER_PAGE]);
+  }, [nav.focusUid, list, toast, PER_PAGE]);
 
   const clearFilters = () => setF(clearAttrs(f));
   const resetEverything = () => { setF(emptyFilters()); setText(''); setWide(false); };
@@ -224,9 +228,9 @@ export function BankScreen() {
   const resultsName = noFilter ? 'toàn bộ ngân hàng' : 'kết quả đang lọc';
   const selectPage = () => setSel(addMany(sel, shownUids));
   const deselectPage = () => setSel(removeMany(sel, shownUids));
-  const doSelectAll = () => { setSel(addMany(sel, facets.list.map((q) => q.uid))); toast(`Đã chọn thêm ${nf.format(facets.list.length)} câu (${resultsName}). Tổng đang chọn sẽ hiện ở thanh phía trên.`); };
+  const doSelectAll = () => { setSel(addMany(sel, list.map((q) => q.uid))); toast(`Đã chọn thêm ${nf.format(list.length)} câu (${resultsName}). Tổng đang chọn sẽ hiện ở thanh phía trên.`); };
   const selectAllResults = () => {
-    if (facets.list.length > SELECT_ALL_CONFIRM_OVER) setAsk({ title: `Chọn ${nf.format(facets.list.length)} câu?`, body: `Sẽ chọn tất cả ${nf.format(facets.list.length)} câu trong ${resultsName}, ở mọi trang. Các câu đã chọn trước đó vẫn giữ.`, label: `Chọn ${nf.format(facets.list.length)} câu`, run: doSelectAll });
+    if (list.length > SELECT_ALL_CONFIRM_OVER) setAsk({ title: `Chọn ${nf.format(list.length)} câu?`, body: `Sẽ chọn tất cả ${nf.format(list.length)} câu trong ${resultsName}, ở mọi trang. Các câu đã chọn trước đó vẫn giữ.`, label: `Chọn ${nf.format(list.length)} câu`, run: doSelectAll });
     else doSelectAll();
   };
   /** Chạy một thao tác hàng loạt: ghi MỘT lần, báo trung thực "Đã lưu X/Y" hoặc "Chưa lưu được". Giữ nguyên lựa chọn. */
@@ -376,11 +380,12 @@ export function BankScreen() {
               </div>
             </div>
           </div>
-          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
+          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<IdStateBadge eff={effOf(q)} /></div>
           {exact.has(q.uid)
             ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
             : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
           <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
+          <IdReviewControl key={`id-${q.uid}`} q={q} eff={effOf(q)} />
         </div>
       </article>
     );
@@ -423,6 +428,7 @@ export function BankScreen() {
                 <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
                 <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
                 <ReviewBadge q={q} compact />
+                <IdStateBadge eff={effOf(q)} />
               </span>
               <span className="row-text">{plainSnippet(p.stem) || '(câu chưa có đề bài)'}</span>
             </button>
@@ -515,11 +521,21 @@ export function BankScreen() {
                   <input ref={masterRef} type="checkbox" checked={pState === 'all'} onChange={() => (pState === 'all' ? deselectPage() : selectPage())} />
                   Chọn trang ({shown.length})
                 </label>
-                {list.length > shown.length && counts.total - counts.outScope < facets.list.length && (
-                  <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(facets.list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(facets.list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
+                {list.length > shown.length && counts.total - counts.outScope < list.length && (
+                  <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
                 )}
               </span>
               <span className="qtools-r">
+                <label className="qsel">Dạng
+                  <select value={idF} onChange={(e) => { setPage(0); setIdF(e.target.value as typeof idF); }} aria-label="Lọc theo trạng thái xác minh Dạng">
+                    <option value="all">Tất cả</option>
+                    <option value="chua">Chưa xác minh</option>
+                    <option value="may">Máy phân loại</option>
+                    <option value="gv">Giáo viên xác minh</option>
+                    <option value="xem-lai">Cần xem lại</option>
+                    <option value="chua-phan-loai">Chưa phân loại</option>
+                  </select>
+                </label>
                 <label className="qsel">Sắp xếp
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
                     {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}
