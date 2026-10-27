@@ -30,11 +30,12 @@ console.log('Kiểm chứng ID (PR 1B)');
     row({ idPlace: 'ma-chua-kiem-chung', uid: 'u2', seq: 2 }),
     row({ idPlace: 'ma-giu-tay', uid: 'u3', seq: 3 }),
     row({ idPlace: 'dung-ma', uid: 'u4', seq: 4 }),
+    row({ idPlace: 'ma-cho', uid: 'u6', seq: 6 }),
     row({ idPlace: 'ai', uid: 'u5', seq: 5 }),
     row({ decision: 'skip-user', idPlace: 'ma-chua-kiem-chung', uid: undefined, seq: undefined }),
   ];
   const r = buildReport({ at: 1, name: 'V', paste: false, restorePoint: false, rows: vr });
-  ok(r.ids.ok === 4 && r.ids.ai === 1 && r.ids.unverified === 1 && r.ids.kept === 1, 'câu theo mã ID: khớp, chưa kiểm chứng, giữ tay, mã cũ đều tính vào "theo mã"; riêng chưa kiểm chứng / giữ tay được đếm; câu bỏ qua không tính');
+  ok(r.ids.ok === 5 && r.ids.ai === 1 && r.ids.unverified === 1 && r.ids.kept === 1 && r.ids.queued === 1, 'câu theo mã ID: khớp, chưa kiểm chứng, giữ tay, mã cũ đều tính vào "theo mã"; riêng chưa kiểm chứng / giữ tay được đếm; câu bỏ qua không tính');
   ok(reportMd(r).includes('chưa kiểm chứng: 1') && reportMd(r).includes('bạn giữ ID: 1'), 'bản tóm tắt .md ghi số câu chưa kiểm chứng và giữ ID');
   const old = { ...r, ids: { ok: 3, firstForm: 0, ai: 0, general: 0 } };
   ok(reportMd(old).includes('Theo mã ID đủ: 3') && !reportMd(old).includes('chưa kiểm chứng'), 'nhật ký cũ (không có trường mới) vẫn đọc và hiện bình thường');

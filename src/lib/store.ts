@@ -13,6 +13,7 @@ import type { Level, ReviewStatus, Location, Question, Taxonomy } from './types'
 import { getTaxonomy, resetTaxonomy, setTaxonomy } from './curriculum';
 import { idStatus, strictCode } from './idsync';
 import { restoreSidecar, sidecarForBackup } from './dupdecisions';
+import { idReviewForBackup, restoreIdReview } from './idreview';
 import { getStorageMode, sqlitePersistence, storageBootError } from './storage';
 
 export interface AppState {
@@ -378,7 +379,7 @@ export function duplicateQuestion(id: string): Question | undefined {
 }
 
 export function exportBackup(): string {
-  return JSON.stringify({ app: 'HEdu', exportedAt: new Date().toISOString(), ...state, dupSidecar: sidecarForBackup() }, null, 2);
+  return JSON.stringify({ app: 'HEdu', exportedAt: new Date().toISOString(), ...state, dupSidecar: sidecarForBackup(), idReview: idReviewForBackup() }, null, 2);
 }
 
 /** Khôi phục từ file sao lưu (thay toàn bộ). Trả về số câu. */
@@ -392,6 +393,8 @@ export function importBackup(json: string): number {
   set({ schema: m.schema, questions, nextSeq, taxonomy });
   // quyết định trùng / thùng rác / nhãn chuẩn đi kèm file sao lưu: GỘP vào tệp phụ hiện có (không xoá gì)
   if (m.dupSidecar) void restoreSidecar(m.dupSidecar).catch(() => undefined);
+  // trạng thái xác minh ID (Dạng/mức độ): cũng GỘP; file sao lưu cũ không có phần này ⇒ các câu là "chưa xác minh"
+  if (m.idReview) void restoreIdReview(m.idReview, new Set(questions.map((q) => q.uid))).catch(() => undefined);
   return questions.length;
 }
 

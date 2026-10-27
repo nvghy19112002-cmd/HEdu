@@ -1,3 +1,4 @@
+import type { Effective } from './idreview';
 import { IdSuggester } from './idsuggest';
 import { idStatus, readLatexId } from './idsync';
 import { addMany, getState, initStore } from './store';
@@ -5,6 +6,8 @@ import { decide, evidenceQuestions, isFresh, placeDisputed, summarizeVerify, usa
 import { buildDefault } from './taxonomy';
 import type { Level, Location, Question, ReviewStatus } from './types';
 let fail = 0;
+const gv = (): Effective => ({ form: 'gv', level: 'chua', unclassified: false });
+const none = (): Effective => ({ form: 'chua', level: 'chua', unclassified: false });
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 
 const tax = buildDefault();
@@ -28,30 +31,32 @@ const mkBank = (review?: ReviewStatus): Question[] => {
 };
 const approved = mkBank('approved');
 const before = JSON.stringify(approved);
-const s = verifierFor(tax, approved);
+const s = verifierFor(tax, approved, gv); // căn cứ = Dạng giáo viên xác minh
 
 const newA = ex('Tìm tập xác định của hàm số $y=\\sqrt{x-9}$.');
 
-console.log('Căn cứ kiểm chứng: chỉ câu ĐÃ DUYỆT');
+console.log('Căn cứ kiểm chứng: chỉ câu có Dạng GIÁO VIÊN XÁC MINH (Đã duyệt chỉ để tham khảo)');
 {
   const vOk = verifyId(newA, A, s, 'k1');
-  ok(vOk.verdict === 'khop' && vOk.suggested?.formId === A.formId, 'kho đã duyệt: ID đúng Dạng A ⇒ khớp');
+  ok(vOk.verdict === 'khop' && vOk.suggested?.formId === A.formId, 'căn cứ giáo viên xác minh: ID đúng Dạng A ⇒ khớp');
   const vBad = verifyId(newA, B, s, 'k2');
-  ok(vBad.verdict === 'bat-dong' && vBad.suggested?.formId === A.formId, 'kho đã duyệt: ID ghi Dạng B nhưng nội dung nhóm A ⇒ bất đồng');
-  for (const [label, rv] of [['chưa kiểm tra', undefined], ['cần sửa', 'needs_fix' as ReviewStatus]] as const) {
+  ok(vBad.verdict === 'bat-dong' && vBad.suggested?.formId === A.formId, 'căn cứ giáo viên xác minh: ID ghi Dạng B nhưng nội dung nhóm A ⇒ bất đồng');
+  for (const [label, rv] of [['Đã duyệt nhưng chưa xác minh Dạng', 'approved' as ReviewStatus], ['chưa kiểm tra', undefined], ['cần sửa', 'needs_fix' as ReviewStatus]] as const) {
     const sx = verifierFor(tax, mkBank(rv));
     ok(verifyId(newA, A, sx, 'k').verdict === 'chua-kiem-chung', `kho toàn câu ${label}: ID đúng KHÔNG được xác nhận (chưa kiểm chứng)`);
     const w = verifyId(newA, B, sx, 'k');
     ok(w.verdict === 'chua-kiem-chung' && w.suggested === null, `kho toàn câu ${label}: ID sai KHÔNG bị kết luận bất đồng đáng tin cậy`);
   }
   // kho trộn: câu chưa duyệt nhiều và "kêu" hơn không làm đổi kết luận
-  const mixed = [...approved, ...mkBank(undefined).map((x) => ({ ...x, ...B })).slice(0, 9)];
-  ok(evidenceQuestions(mixed).length === approved.length, 'evidenceQuestions chỉ giữ câu Đã duyệt');
-  ok(verifyId(newA, A, verifierFor(tax, mixed), 'k').verdict === 'khop', 'câu chưa duyệt gán nhầm Dạng B không làm lệch kết luận của câu đã duyệt');
+  const mixed = [...approved, ...mkBank('approved').map((x) => ({ ...x, ...B })).slice(0, 9)];
+  const gvSet = new Set(approved.map((x) => x.uid));
+  const effMixed = (x: Question): Effective => (gvSet.has(x.uid) ? gv() : none());
+  ok(evidenceQuestions(mixed, effMixed).length === approved.length, 'evidenceQuestions chỉ giữ câu có Dạng giáo viên xác minh (câu Đã duyệt khác không được tính)');
+  ok(verifyId(newA, A, verifierFor(tax, mixed, effMixed), 'k').verdict === 'khop', 'câu Đã duyệt nhưng chưa xác minh Dạng (gán nhầm Dạng B) không làm lệch kết luận');
   // chỉ MỘT họ câu đã duyệt: chưa đủ để kết luận bất đồng
   const few = approved.filter((x) => x.formId === A.formId).slice(0, 3);
-  ok(verifyId(newA, B, verifierFor(tax, few), 'k').verdict !== 'bat-dong', 'ít câu đã duyệt (một Dạng, vài câu) ⇒ không kết luận bất đồng');
-  ok(verifyId(newA, A, verifierFor(tax, []), 'k').verdict === 'chua-kiem-chung', 'ngân hàng trống ⇒ chưa kiểm chứng');
+  ok(verifyId(newA, B, verifierFor(tax, few, gv), 'k').verdict !== 'bat-dong', 'ít câu đã xác minh (một Dạng, vài câu) ⇒ không kết luận bất đồng');
+  ok(verifyId(newA, A, verifierFor(tax, [], gv), 'k').verdict === 'chua-kiem-chung', 'ngân hàng trống ⇒ chưa kiểm chứng');
   ok(verifyId(ex('Quần đảo trường sa thuộc tỉnh nào'), A, s, 'k').verdict === 'chua-kiem-chung', 'nội dung lạ ⇒ chưa kiểm chứng');
 }
 
@@ -89,7 +94,7 @@ console.log('Quyết định gắn với gợi ý và phiên bản cây đã xem
   ok(verificationSig(vBad) !== verificationSig(otherSug) && verificationSig(vBad) === verificationSig({ ...vBad }), 'dấu kết quả kiểm: đổi gợi ý ⇒ đổi dấu; cùng kết quả ⇒ cùng dấu');
   // kho đổi (thêm câu đã duyệt) làm gợi ý đổi ⇒ dấu đổi ⇒ quyết định cũ bị bỏ
   const extra = TEXT.A.flatMap((t) => [11, 12, 13].map((k) => q(C, ex(t.replace('#', String(k))), 'approved')));
-  const vAfter = verifyId(newA, B, verifierFor(tax, [...approved, ...extra]), 'k2');
+  const vAfter = verifyId(newA, B, verifierFor(tax, [...approved, ...extra], gv), 'k2');
   ok(verificationSig(vAfter) !== verificationSig(vBad) ? usableDecision(vAfter, d) === undefined : true, 'kho đổi làm kết quả kiểm đổi ⇒ quyết định cũ không còn dùng được');
   ok(isFresh(vBad, vBad.latex, vBad.taxRev) && !isFresh(vBad, vBad.latex + ' ', vBad.taxRev) && !isFresh(vBad, vBad.latex, 'khac') && !isFresh(undefined, 'x', 'y'), 'kết quả cũ hết hạn khi câu sửa hoặc cây đổi');
 }
@@ -97,9 +102,12 @@ console.log('Quyết định gắn với gợi ý và phiên bản cây đã xem
 console.log('Kiểm tra hợp lệ ngay trước khi ghi');
 {
   const base = { text: newA, id: { loc: B, level: 'TH' as Level }, ver: vBad, commonLoc: C, commonLevel: 'TH' as Level, tax };
-  ok(!placeDisputed({ ...base, decision: undefined }).ok, 'không có quyết định ⇒ KHÔNG ghi');
+  const dflt = placeDisputed({ ...base, decision: undefined });
+  ok(dflt.ok && dflt.form === 'xem-lai' && dflt.loc.formId === B.formId && dflt.latex === newA && dflt.prop === A.formId && !dflt.unclassified, 'chưa chọn ⇒ MẶC ĐỊNH chờ xác minh: giữ ID gốc và vị trí tệp, cần xem lại, lưu Dạng máy đề xuất');
   const stale = placeDisputed({ ...base, ver: { ...vBad, taxRev: 'cay-moi' }, decision: decide(vBad, 'goi-y') });
-  ok(!stale.ok, 'quyết định gắn với phiên bản cây cũ ⇒ KHÔNG ghi');
+  ok(stale.ok && stale.form === 'xem-lai' && stale.loc.formId === B.formId, 'quyết định gắn với phiên bản cây cũ ⇒ không theo quyết định cũ, quay về chờ xác minh (không ghi vị trí mới)');
+  const gone = placeDisputed({ ...base, ver: { ...vBad, suggested: { formId: C.formId, location: C } }, decision: decide(vBad, 'goi-y') });
+  ok(gone.ok && gone.form === 'xem-lai' && gone.loc.formId === B.formId, 'gợi ý đổi sang Dạng khác sau khi chọn ⇒ không áp quyết định cũ, quay về chờ xác minh');
   const badTarget = placeDisputed({ ...base, ver: { ...vBad, suggested: { formId: bogus.formId, location: bogus } }, decision: decide({ ...vBad, suggested: { formId: bogus.formId, location: bogus } }, 'goi-y') });
   ok(!badTarget.ok && /ghi được|đường dẫn|ID/.test(badTarget.reason), 'Dạng đích không còn hợp lệ trong cây ⇒ lỗi, KHÔNG lưu vị trí mà thiếu ID (quy tắc 10)');
   const badCommon = placeDisputed({ ...base, commonLoc: bogus, decision: decide(vBad, 'chung') });
@@ -143,9 +151,9 @@ console.log('Tổng hợp');
   const vers: Record<number, IdVerification | undefined> = { 0: vOk, 1: vBad, 2: vOk, 3: vBad, 4: undefined };
   const decs: Record<number, IdDecision | undefined> = { 3: dGiu };
   const sum = summarizeVerify([0, 1, 2, 3, 4], (i) => vers[i], (i) => decs[i], (i) => i !== 2);
-  ok(sum.total === 4 && sum.khop === 1 && sum.batDong === 2 && sum.pending === 1 && sum.unchecked === 1, `tổng hợp đúng: ${JSON.stringify(sum)}`);
+  ok(sum.total === 4 && sum.khop === 1 && sum.batDong === 2 && sum.queued === 1 && sum.unchecked === 1, `tổng hợp đúng (bất đồng 2: một câu giáo viên đã chọn, một câu vào hàng đợi): ${JSON.stringify(sum)}`);
   const stale = summarizeVerify([3], () => ({ ...vBad, taxRev: 'moi' }), () => dGiu, () => true);
-  ok(stale.pending === 1, 'quyết định cũ với cây đã đổi tính là chưa chọn');
+  ok(stale.queued === 1, 'quyết định cũ với cây đã đổi không còn hiệu lực ⇒ vào hàng đợi');
   void lessonOther; void IdSuggester;
 }
 

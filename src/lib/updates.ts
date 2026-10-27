@@ -1,6 +1,7 @@
 // Cập nhật app: kiểm tra, cài đặt, quay lại bản trước, khôi phục dữ liệu.
 // Mọi việc nặng (tải, kiểm tra chữ ký, thay file) do Rust xử lý; ở đây chỉ gọi lệnh và hiển thị.
 import { invoke, listen } from './platform';
+import { flushIdReview, freezeIdReview } from './idreview';
 import { flushSave, isLastSaveOk } from './store';
 
 export type Channel = 'stable' | 'beta';
@@ -41,6 +42,7 @@ export const backupInfo = () => invoke<BackupMeta | null>('backup_info');
 /** Cài bản mới. Ghi nốt dữ liệu trước, Rust sẽ sao lưu rồi tải, cài và khởi động lại app. */
 /** Ghi nốt dữ liệu rồi KIỂM TRA đã ghi thành công; chưa ghi được thì dừng (cập nhật/khôi phục sẽ khởi động lại app và làm mất thay đổi còn trong bộ nhớ). */
 export async function ensureSaved(): Promise<void> {
+  if (!(await flushIdReview())) throw new Error('Còn trạng thái xác minh ID CHƯA ghi được xuống đĩa nên chưa tiếp tục (chưa mất gì). Hãy kiểm tra ổ đĩa còn chỗ rồi thử lại.');
   await flushSave();
   if (!isLastSaveOk()) throw new Error('Còn thay đổi CHƯA ghi được xuống đĩa nên chưa tiếp tục (chưa mất gì). Hãy kiểm tra ổ đĩa còn chỗ, tạo file sao lưu, rồi thử lại.');
 }
@@ -58,6 +60,7 @@ export async function installUpdate(channel: Channel | 'previous', onProgress: (
 /** Đổi dữ liệu hiện tại với bản sao lưu trước cập nhật, rồi tải lại app. */
 export async function restoreBackup(): Promise<void> {
   await ensureSaved();
+  freezeIdReview(); // dữ liệu sắp được thay: bản trạng thái xác minh trong bộ nhớ không được ghi đè lên bản vừa khôi phục
   await invoke<string>('restore_backup');
   window.location.reload();
 }

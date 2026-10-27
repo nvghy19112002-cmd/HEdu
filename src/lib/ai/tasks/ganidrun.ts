@@ -18,7 +18,9 @@ export function batchesOf(jobs: readonly GanIdJob[]): GanIdJob[][] {
 }
 
 /**
- * Câu mẫu gửi kèm: các câu dẫn chứng của gợi ý ngân hàng, CHỈ những câu giáo viên đã "Đã duyệt" (vị trí đã được xác nhận).
+ * Câu mẫu gửi kèm AI: các câu dẫn chứng của gợi ý ngân hàng, chỉ những câu có nội dung "Đã duyệt". Đây chỉ là VÍ DỤ THAM KHẢO cho AI:
+ * "Đã duyệt" nội dung KHÔNG có nghĩa là Dạng đã được giáo viên xác minh, và việc chọn mẫu này KHÔNG phải căn cứ kiểm chứng ID
+ * (căn cứ kiểm chứng chỉ gồm câu có Dạng giáo viên xác minh: idreview.isEvidence). Dự kiến chuyển ví dụ sang Dạng giáo viên xác minh khi đã có đủ nhãn.
  * Nhãn cũ chưa kiểm duyệt không được đưa cho AI như đáp án chuẩn. `exclude` = uid không được dùng (chính câu đang hỏi, câu đang đo).
  */
 export function examplesFor(s: Suggestion, bank: ReadonlyMap<string, Question>, exclude: ReadonlySet<string> = new Set()): GanIdExample[] {

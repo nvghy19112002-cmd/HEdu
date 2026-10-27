@@ -450,4 +450,53 @@ mod tests {
         // chưa có bản sao lưu
         assert!(swap_with_before_update(&cur, &d.join("khong-co"), &d.join("scratch.db")).is_err());
     }
+
+    #[test]
+    fn ban_chup_diem_khoi_phuc_va_truoc_cap_nhat_deu_giu_trang_thai_xac_minh() {
+        // Bản sao lưu ĐẦY ĐỦ (tệp .db, điểm khôi phục, bản trước cập nhật) chép nguyên cả bảng tệp phụ: trạng thái xác minh ID đi theo.
+        const BEFORE: &str = "{\"v\":1,\"recs\":{\"u000001\":{\"form\":\"gv\"}}}";
+        const AFTER: &str = "{\"v\":1,\"recs\":{}}";
+        let d = tmp("idr");
+        let cur = d.join("hedu.db");
+        let mut db = make(&d, "x.db", 10);
+        db.apply(&Batch { sidecar: vec![("id-review".into(), BEFORE.into())], ..Default::default() }).unwrap();
+        snapshot_verified(&db, &d.join("snap.db"), "manual", "thu-cong", "0.1.0").unwrap();
+        let pts = d.join("points");
+        create_restore_point(&db, &pts, "nhap-hang-loat", "0.1.0").unwrap();
+        let before_update = d.join("before-update");
+        snapshot_before_update(&db, &before_update, "a", "b").unwrap();
+        // sau đó giáo viên đổi trạng thái (xoá hết)
+        db.apply(&Batch { sidecar: vec![("id-review".into(), AFTER.into())], ..Default::default() }).unwrap();
+        assert_eq!(db.sidecar_get("id-review").unwrap().as_deref(), Some(AFTER));
+        // mỗi bản sao lưu giữ trạng thái LÚC CHỤP
+        let snap = Db::open(&d.join("snap.db")).unwrap();
+        assert_eq!(snap.sidecar_get("id-review").unwrap().as_deref(), Some(BEFORE), "bản chụp .db");
+        let point = list_points(&pts).into_iter().next().expect("có điểm khôi phục");
+        assert_eq!(Db::open(&pts.join(&point.file)).unwrap().sidecar_get("id-review").unwrap().as_deref(), Some(BEFORE), "điểm khôi phục");
+        assert_eq!(Db::open(&before_update.join("hedu.db")).unwrap().sidecar_get("id-review").unwrap().as_deref(), Some(BEFORE), "bản trước cập nhật");
+        snap.close().unwrap();
+        // khôi phục từ bản chụp: trạng thái trở lại như lúc chụp
+        db.close().unwrap();
+        fs::rename(d.join("x.db"), &cur).unwrap();
+        replace_current(&cur, &d.join("snap.db")).unwrap();
+        assert_eq!(Db::open(&cur).unwrap().sidecar_get("id-review").unwrap().as_deref(), Some(BEFORE), "sau khi khôi phục từ bản chụp");
+    }
+
+
+    #[test]
+    fn ban_hedu_cu_ghi_mot_khoa_tep_phu_khong_xoa_trang_thai_xac_minh() {
+        // Quay về HEdu cũ (beta.34) trên dữ liệu mới: bản cũ chỉ biết khoá "dup-decisions". Khi nó ghi khoá đó, khoá lạ "id-review" PHẢI còn nguyên
+        // (nó không hiểu khoá này nhưng cũng không được làm mất), và bản chụp .db vẫn mở được.
+        const IDR: &str = "{\"v\":1,\"recs\":{\"u000001\":{\"form\":\"gv\"}}}";
+        let d = tmp("cu");
+        let mut db = make(&d, "x.db", 5);
+        db.apply(&Batch { sidecar: vec![("id-review".into(), IDR.into())], ..Default::default() }).unwrap();
+        db.apply(&Batch { sidecar: vec![("dup-decisions".into(), "{\"v\":1,\"recs\":[{\"a\":\"x\"}]}".into())], ..Default::default() }).unwrap();
+        assert_eq!(db.sidecar_get("id-review").unwrap().as_deref(), Some(IDR), "ghi khoá dup-decisions không xoá khoá id-review");
+        snapshot_verified(&db, &d.join("snap.db"), "manual", "thu-cong", "0.1.0-beta.34").unwrap();
+        let s = Db::open(&d.join("snap.db")).unwrap();
+        assert_eq!(s.sidecar_get("id-review").unwrap().as_deref(), Some(IDR));
+        assert_eq!(s.count().unwrap(), 5, "dữ liệu câu hỏi không đổi");
+    }
+
 }
