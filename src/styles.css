@@ -1331,3 +1331,7 @@ a { color: var(--accent); }
 .vq-opt { justify-content: flex-start; text-align: left; white-space: normal; height: auto; padding: 6px 10px; }
 .vq kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; margin-right: 4px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; font: 600 12px/1.6 var(--mono, monospace); text-align: center; background: var(--chip); color: var(--ink-2); }
 @media (max-width: 900px) { .vq-body { grid-template-columns: 1fr; } .vq-side { position: static; } }
+/* Hàng đợi xác minh: ô chọn Dạng khác có nhãn rất dài — không được làm tràn khung */
+.vq-card .qsel { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
+.vq-card select { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.vq-body > * { min-width: 0; }
