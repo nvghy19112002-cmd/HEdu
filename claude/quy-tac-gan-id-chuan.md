@@ -40,7 +40,8 @@ Trạng thái: **Phần A–D** đã có trong mã (tài liệu hoá lại). **P
 
 ## D. Thứ tự bằng chứng và AI
 
-15. Bằng chứng, từ mạnh đến yếu: (1) giáo viên chọn tay; (2) ID6 hợp lệ có sẵn trong LaTeX; (3) đối chiếu ngân hàng (câu giống/gần giống đã xác nhận); (4) AI Gemini. **AI không bao giờ ghi đè (1)–(2)**; ngân hàng làm bằng chứng cho AI, không bị AI ghi đè khi AI "không chắc".
+15. Bằng chứng, từ mạnh đến yếu: (1) giáo viên chọn tay hoặc xác nhận; (2) đối chiếu ngân hàng (câu giống/gần giống đã duyệt); (3) AI Gemini; (4) ID6 hợp lệ có sẵn trong LaTeX **khi chưa được kiểm chứng**. **AI không bao giờ ghi đè (1)**; ngân hàng làm bằng chứng cho AI, không bị AI ghi đè khi AI "không chắc".
+15a. **ID có sẵn trong LaTeX là bằng chứng CẦN KIỂM CHỨNG, không phải sự thật** (duyệt 27/10/2026, `claude/thiet-ke-dot1-cung-co-ngan-hang.md`). Mã đúng cú pháp và còn trong cây chưa chứng minh đúng Dạng. Khi nhập, ID được đối chiếu với bằng chứng độc lập (gợi ý loại trừ chính câu, câu đã duyệt trong ngân hàng): **Khớp** thì vào; **Chưa kiểm chứng** thì vào nhưng mang trạng thái chưa xác minh; **Bất đồng** (bằng chứng tin cậy cao chỉ Dạng khác) thì KHÔNG nhập lặng lẽ, giáo viên chọn. Mức độ đọc từ ID cũng chỉ giữ khi không bất đồng.
 16. AI chỉ chọn `form_id` có trong cây gửi kèm. Mọi `form_id` (kể cả phương án khác) phải qua `checkLocation` đúng lớp đích; sai → bỏ, đánh dấu "cần giáo viên chọn". AI **không tạo mã ID6**.
 17. Không có Dạng phù hợp rõ ràng hoặc thiếu dữ kiện → `form_id = null` + lý do. **Không chọn Dạng "gần nhất" cho có.**
 18. Câu bị lược khi gửi AI (hình TikZ dài, đề quá dài: `cut`) → không coi là chắc chắn.
