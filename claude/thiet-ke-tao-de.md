@@ -1,6 +1,6 @@
 # Thiết kế Tạo đề từ Ngân hàng câu hỏi
 
-Trạng thái: PR #135 (lõi) và #136 (giao diện) đang chờ duyệt gộp; chưa phát hành. Các quyết định nghiệp vụ ở mục 7 đã được chủ dự án chốt (28/10/2026).
+Trạng thái: PR #135 (lõi, `24ed055`) và #136 (giao diện, `3c3639b`) đã gộp vào `main`; chưa phát hành. Các quyết định nghiệp vụ ở mục 7 đã được chủ dự án chốt (28/10/2026).
 
 ## 1. Mục tiêu
 Giáo viên chọn câu từ Ngân hàng (theo ma trận hoặc chọn tay), xem trước đề giống bản in, sinh nhiều mã đề, lưu vào Thư viện đề để biên dịch PDF/xuất .tex. Giao diện gọn, đẹp, nhanh như TIAD nhưng chỉ học ý tưởng, không chép mã, thương hiệu hay hình ảnh.
