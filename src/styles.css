@@ -1596,3 +1596,6 @@ span.bt-caret { cursor: default; }
 .qtools .qsel select { max-width: 150px; }
 .qtools .pg-jump { white-space: nowrap; }
 .qtools .pg-jump input { width: 48px; }
+
+.qm.qm-edit { background: var(--bg); top: 2vh; width: min(1480px, 97vw); height: 96vh; max-height: 96vh; overflow: hidden; }
+.qm.qm-edit > * { flex: 1 1 auto; min-height: 0; }
