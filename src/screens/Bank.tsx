@@ -34,11 +34,12 @@ import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
+import { ClampBox } from '../components/ClampBox';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
 import { IdReviewControl, IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
 import { VerifyQueue } from '../components/VerifyQueue';
 import { scopeCounts } from '../lib/verifyqueue';
-import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
+import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPES, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 
 function fold(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
@@ -387,7 +388,7 @@ export function BankScreen() {
           <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<IdStateBadge eff={effOf(q)} /></div>
           {exact.has(q.uid)
             ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
-            : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
+            : mode === 'card' ? <ClampBox><QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} /></ClampBox> : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
           <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
           <IdReviewControl key={`id-${q.uid}`} q={q} eff={effOf(q)} />
         </div>
@@ -514,6 +515,26 @@ export function BankScreen() {
               </div>
             </div>
           )}
+          {list.length > 0 && (
+            <div className="qstats" role="group" aria-label="Thống kê kết quả (bấm để lọc)">
+              <span className="qs-h">Mức độ</span>
+              {LEVELS.map((l) => (
+                <button key={l} type="button" className={`qs-c l-${l}`} aria-pressed={f.levels.has(l)} title={`Chỉ hiện câu ${LEVEL_LABEL[l]} (bấm lần nữa để bỏ)`}
+                  onClick={() => { const n = new Set(f.levels); if (n.has(l)) n.delete(l); else n.add(l); setF({ ...f, levels: n }); }}>
+                  <small>{LEVEL_LABEL[l]}</small><b>{nf.format(facets.level.get(l) ?? 0)}</b>
+                </button>
+              ))}
+              <span className="qs-sep" aria-hidden="true" />
+              <span className="qs-h">Loại câu</span>
+              {TYPES.map((t) => (
+                <button key={t} type="button" className={`qs-c t-${t}`} aria-pressed={f.types.has(t)} title={`Chỉ hiện câu ${TYPE_LABEL[t]} (bấm lần nữa để bỏ)`}
+                  onClick={() => { const n = new Set(f.types); if (n.has(t)) n.delete(t); else n.add(t); setF({ ...f, types: n }); }}>
+                  <small>{TYPE_LABEL[t]}</small><b>{nf.format(facets.type.get(t) ?? 0)}</b>
+                </button>
+              ))}
+              <span className="qs-total"><small>Tổng</small><b>{nf.format(list.length)}</b></span>
+            </div>
+          )}
           <div className="list-head">
             <span><b className="lh-title">{heading}</b>{lesson ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
             <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
@@ -562,7 +583,7 @@ export function BankScreen() {
             </div>
           )}
 
-          {view === 'cards' && shown.map((q) => renderCard(q, 'card'))}
+          {view === 'cards' && shown.length > 0 && <div className="cards-grid">{shown.map((q) => renderCard(q, 'card'))}</div>}
 
           {view === 'list' && shown.length > 0 && active && (
             <div className={`split${detailOpen ? ' has-detail' : ''}`}>
