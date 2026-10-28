@@ -1,6 +1,6 @@
 # Nghiệm thu Tạo đề từ Ngân hàng — danh sách cho chủ dự án
 
-Trạng thái: **chờ nghiệm thu trên máy Windows thật**. Chưa phát hành. Thiết kế: `claude/thiet-ke-tao-de.md`. PR: #135 (lõi), #136 (giao diện).
+Trạng thái: **chờ nghiệm thu trên máy Windows thật**. Chưa phát hành. Thiết kế: `claude/thiet-ke-tao-de.md`. PR: #135 (lõi) và #136 (giao diện), đã gộp vào `main` (`24ed055`, `3c3639b`).
 
 Chạy thử bằng bản riêng, không đụng ngân hàng thật:
 
@@ -26,7 +26,7 @@ npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu
 - [ ] Mở `de-101.tex`: câu giống từng chữ với ngân hàng. Sửa một câu trong Ngân hàng rồi mở lại đề: **Nguồn câu hỏi** báo “Ngân hàng đã đổi”.
 - [ ] Đóng app mở lại: màn Tạo đề còn ma trận và thông tin đề đang soạn.
 - [ ] Giao diện ở màn hình bạn dùng (laptop nhỏ, phóng to 125–150%).
-- [ ] Ở Ngân hàng chọn một câu **chưa duyệt** → Thêm vào đề: hiện hộp hỏi “ngoại lệ”; chọn OK thì câu vào đề có nhãn “Ngoại lệ”; chọn Hủy thì câu đó không vào đề.
+- [ ] **BẮT BUỘC, tự động hóa không thay được:** ở Ngân hàng chọn một câu **chưa duyệt** → Thêm vào đề: phải hiện hộp hỏi `window.confirm` về “ngoại lệ”. Bấm **OK**: câu vào đề, có nhãn “Ngoại lệ”, `hedu-de.json` có mục `ngoaiLe` của câu đó. Bấm **Hủy**: câu đó không vào đề. Thử cả hai lần, và thử thêm một câu “Cần sửa” (phải bị từ chối, không có hộp hỏi).
 - [ ] Đang có câu khóa, sang Ngân hàng đổi câu đó thành “Cần sửa” (hoặc sửa nội dung cho mất “Đã duyệt”), quay lại Tạo đề: hiện danh sách “câu đã khóa không còn vào được đề” kèm nguyên nhân; nút Lưu/Xuất bị khóa tới khi bấm “Bỏ khóa”.
 - [ ] Số câu bị loại vì ký tự điều khiển lạ hiện đúng; mở “Xem câu bị loại” thấy #số, UID, nguyên nhân; câu đó vẫn còn nguyên trong Ngân hàng.
 - [ ] Ghi chú điểm: phần I/II/III 0,25 / 1,0 / 0,5; Đúng/Sai theo số ý đúng 0,1 / 0,25 / 0,5 / 1,0; đổi điểm tự luận thì tổng điểm đổi theo.
