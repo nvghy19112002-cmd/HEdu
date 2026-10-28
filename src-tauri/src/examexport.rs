@@ -935,3 +935,7 @@ pub async fn exam_codes_backfill(app: AppHandle, id: String, apply: bool) -> Res
 #[cfg(test)]
 #[path = "examexport_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "examexport_backfill_tests.rs"]
+mod backfill_tests;
