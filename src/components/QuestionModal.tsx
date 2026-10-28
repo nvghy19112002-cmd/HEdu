@@ -1,7 +1,8 @@
 // Cửa sổ xem một câu (màn Ngân hàng): bấm vào thẻ là mở. Hiện đủ đề, đáp án, lời giải; Trước/Sau theo đúng danh sách đang lọc
-// (qua cả ranh giới trang); chọn câu; kiểm duyệt và xác minh Dạng/mức độ; xem chuẩn bằng TeX Live; mở sửa.
-// Phím: ← → câu trước/sau, Esc đóng (khi không có hộp nhỏ nào đang mở bên trong).
+// (qua cả ranh giới trang); chọn câu; kiểm duyệt và xác minh Dạng/mức độ; xem chuẩn bằng TeX Live; SỬA NGAY TRONG CỬA SỔ này
+// (lưu xong quay về xem; còn thay đổi chưa lưu thì hỏi trước khi rời). Phím: ← → câu trước/sau, Esc đóng / thoát sửa.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { QuestionEditor } from './QuestionEditor';
 import { parseExTest } from '../lib/extest';
 import { questionCode, seqLabel } from '../lib/id';
 import { isTikzReady } from '../lib/tikz';
@@ -26,12 +27,17 @@ interface Props {
   onToggleSel(): void;
   onPrev(): void;
   onNext(): void;
-  onEdit(): void;
+  /** đang sửa câu ngay trong cửa sổ */
+  editing: boolean;
+  onEditing(on: boolean): void;
   onReview(s: ReviewStatus | undefined): Promise<boolean>;
   onClose(): void;
 }
 
-export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onPrev, onNext, onEdit, onReview, onClose }: Props) {
+export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onPrev, onNext, editing, onEditing, onReview, onClose }: Props) {
+  const leaveRef = useRef<((proceed: () => void) => boolean) | null>(null);
+  /** mọi lối rời (đóng, Trước/Sau, thoát sửa) đi qua câu hỏi "bỏ thay đổi chưa lưu?" của trình sửa */
+  const guard = (proceed: () => void) => { const l = editing ? leaveRef.current : null; if (l) l(proceed); else proceed(); };
   const root = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(document.activeElement);
   const [sol, setSol] = useState(true);
@@ -47,7 +53,8 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
       if (e.defaultPrevented) return;
       const t = e.target as HTMLElement;
       if (t.closest?.('input, textarea, select, [contenteditable="true"]')) return;
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      if (e.key === 'Escape') { e.preventDefault(); if (editing) guard(() => onEditing(false)); else onClose(); }
+      else if (editing) return;
       else if (e.key === 'ArrowLeft' && index > 0) { e.preventDefault(); onPrev(); }
       else if (e.key === 'ArrowRight' && index < total - 1) { e.preventDefault(); onNext(); }
     };
@@ -57,7 +64,12 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
 
   return (
     <>
-      <div className="qm-scrim" onMouseDown={onClose} aria-hidden="true" />
+      <div className="qm-scrim" onMouseDown={() => guard(onClose)} aria-hidden="true" />
+      {editing ? (
+        <div className="qm qm-edit" role="dialog" aria-modal="true" aria-label={`Sửa câu ${seqLabel(q.seq)}`} tabIndex={-1} ref={root}>
+          <QuestionEditor key={q.uid} editing={q} variant="drawer" leaveRef={leaveRef} onSaved={() => onEditing(false)} onClose={() => guard(() => onEditing(false))} />
+        </div>
+      ) : (
       <div className="qm" role="dialog" aria-modal="true" aria-label={`Câu ${seqLabel(q.seq)}`} tabIndex={-1} ref={root}>
         <header className="qm-head">
           <b className="qm-no">{seqLabel(q.seq)}</b>
@@ -85,9 +97,10 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
             <button type="button" className="btn btn-sm" disabled={index <= 0} onClick={onPrev} title="Câu trước (←)">‹ Trước</button>
             <button type="button" className="btn btn-sm" disabled={index >= total - 1} onClick={onNext} title="Câu sau (→)">Sau ›</button>
           </span>
-          <button type="button" className="btn btn-sm btn-dark" onClick={onEdit}><IcEdit size={15} /> Sửa câu</button>
+          <button type="button" className="btn btn-sm btn-dark" onClick={() => onEditing(true)}><IcEdit size={15} /> Sửa câu</button>
         </footer>
       </div>
+      )}
     </>
   );
 }

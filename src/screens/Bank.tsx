@@ -84,6 +84,7 @@ export function BankScreen() {
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   /** câu đang mở trong cửa sổ xem (bấm vào thẻ) */
   const [viewUid, setViewUid] = useState<string | null>(null);
+  const [viewEdit, setViewEdit] = useState(false); // đang sửa câu ngay trong cửa sổ xem
   const [openUid, setOpenUid] = useState<string | null>(nav.openUid ?? null); // câu đang sửa ở ngăn bên phải
   const opened = openUid ? questions.find((q) => q.uid === openUid) : undefined;
   const [page, setPage] = useState(() => sess?.page ?? 0);
@@ -384,7 +385,7 @@ export function BankScreen() {
             <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
             <span className="code-tag">{questionCode(q, q.level)}</span>
             <div className="card-acts">
-              <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => setOpenUid(q.uid)}><IcEdit size={17} /></button>
+              <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => { setViewUid(q.uid); setViewEdit(true); }}><IcEdit size={17} /></button>
               <div className="more">
                 <button type="button" className="ico" aria-label="Thêm thao tác" aria-haspopup="menu" aria-expanded={menuUid === q.uid} title="Nhân bản, xoá…" onClick={() => { setConfirmDel(null); setMenuUid(menuUid === q.uid ? null : q.uid); }}><IcMore size={17} /></button>
                 {menuUid === q.uid && (
@@ -608,7 +609,7 @@ export function BankScreen() {
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
       {viewQ && (
         <QuestionModal q={viewQ} index={viewIdx} total={list.length} eff={effOf(viewQ)} selected={sel.has(viewQ.uid)} onToggleSel={() => setSel(toggleOne(sel, viewQ.uid))}
-          onPrev={() => stepView(-1)} onNext={() => stepView(1)} onEdit={() => { setViewUid(null); setOpenUid(viewQ.uid); }} onReview={(s) => changeReview(viewQ, s)} onClose={() => setViewUid(null)} />
+          onPrev={() => stepView(-1)} onNext={() => stepView(1)} editing={viewEdit} onEditing={setViewEdit} onReview={(s) => changeReview(viewQ, s)} onClose={() => { setViewUid(null); setViewEdit(false); }} />
       )}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
