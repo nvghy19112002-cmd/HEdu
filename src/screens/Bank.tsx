@@ -15,7 +15,7 @@ import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
 import { gradeLabel, shortName } from '../lib/taxonomy';
-import { questionCode, seqLabel } from '../lib/id';
+import { LEVEL_LETTER, questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank, updateMany } from '../lib/store';
 import { moveManyToTrash, moveToTrash, trashBlockReason, undoMoveToTrash } from '../lib/trashflow';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
@@ -34,6 +34,7 @@ import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
+import { BankMoreFilters } from '../components/BankMoreFilters';
 import { ClampBox } from '../components/ClampBox';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
 import { IdReviewControl, IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
@@ -476,10 +477,11 @@ export function BankScreen() {
               <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Thẻ</button>
               <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             </div>
+            <BankMoreFilters f={f} facets={facets} onF={setF} />
             <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
-            {!docked && (
+            {!docked && narrow && (
               <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
-                {narrow ? 'Mục lục & lọc' : 'Bộ lọc'}{nAttr > 0 && <i className="fs-badge">{nAttr}</i>}
+                Mục lục
               </button>
             )}
             {!narrow && <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)} title="Gắn mục lục và bộ lọc cố định bên trái">Mục lục</button>}
@@ -515,24 +517,32 @@ export function BankScreen() {
               </div>
             </div>
           )}
-          {list.length > 0 && (
-            <div className="qstats" role="group" aria-label="Thống kê kết quả (bấm để lọc)">
-              <span className="qs-h">Mức độ</span>
-              {LEVELS.map((l) => (
-                <button key={l} type="button" className={`qs-c l-${l}`} aria-pressed={f.levels.has(l)} title={`Chỉ hiện câu ${LEVEL_LABEL[l]} (bấm lần nữa để bỏ)`}
-                  onClick={() => { const n = new Set(f.levels); if (n.has(l)) n.delete(l); else n.add(l); setF({ ...f, levels: n }); }}>
-                  <small>{LEVEL_LABEL[l]}</small><b>{nf.format(facets.level.get(l) ?? 0)}</b>
-                </button>
-              ))}
-              <span className="qs-sep" aria-hidden="true" />
-              <span className="qs-h">Loại câu</span>
-              {TYPES.map((t) => (
-                <button key={t} type="button" className={`qs-c t-${t}`} aria-pressed={f.types.has(t)} title={`Chỉ hiện câu ${TYPE_LABEL[t]} (bấm lần nữa để bỏ)`}
-                  onClick={() => { const n = new Set(f.types); if (n.has(t)) n.delete(t); else n.add(t); setF({ ...f, types: n }); }}>
-                  <small>{TYPE_LABEL[t]}</small><b>{nf.format(facets.type.get(t) ?? 0)}</b>
-                </button>
-              ))}
-              <span className="qs-total"><small>Tổng</small><b>{nf.format(list.length)}</b></span>
+          {(list.length > 0 || levelsActive(f) || f.types.size > 0) && (
+            <div className="qstats" role="group" aria-label="Thống kê kết quả (bấm để lọc; bấm nhiều ô để chọn nhiều)">
+              <span className="qs-title">Thống kê</span>
+              <div className="qs-grp">
+                <span className="qs-col qs-head"><span>Mức</span><span>Số câu</span></span>
+                {LEVELS.map((l) => (
+                  <button key={l} type="button" className={`qs-col qs-btn l-${l}`} aria-pressed={f.levels.has(l)} title={`${LEVEL_LABEL[l]}: bấm để lọc (bấm lần nữa để bỏ)`} aria-label={`${LEVEL_LABEL[l]}: ${nf.format(facets.level.get(l) ?? 0)} câu`}
+                    onClick={() => { const n = new Set(f.levels); if (n.has(l)) n.delete(l); else n.add(l); setF({ ...f, levels: n }); }}>
+                    <span>{LEVEL_LETTER[l]}</span><span>{nf.format(facets.level.get(l) ?? 0)}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="qs-grp">
+                <span className="qs-col qs-head"><span>Kiểu</span><span>Số câu</span></span>
+                {TYPES.map((t) => (
+                  <button key={t} type="button" className={`qs-col qs-btn t-${t}`} aria-pressed={f.types.has(t)} title={`${TYPE_LABEL[t]}: bấm để lọc (bấm lần nữa để bỏ)`}
+                    onClick={() => { const n = new Set(f.types); if (n.has(t)) n.delete(t); else n.add(t); setF({ ...f, types: n }); }}>
+                    <span>{TYPE_LABEL[t]}</span><span>{nf.format(facets.type.get(t) ?? 0)}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="qs-grp qs-end">
+                {levelsActive(f) || f.types.size > 0
+                  ? <button type="button" className="qs-col qs-btn qs-sum" title="Bỏ lọc mức độ và kiểu câu" onClick={() => setF({ ...f, levels: new Set(), types: new Set() })}><span>Bỏ lọc ✕</span><span>{nf.format(list.length)}</span></button>
+                  : <span className="qs-col qs-sum"><span>Tổng</span><span>{nf.format(list.length)}</span></span>}
+              </div>
             </div>
           )}
           <div className="list-head">

@@ -1,0 +1,65 @@
+// Nút "Bộ lọc ▾" trên thanh công cụ màn Ngân hàng: Hình, Duyệt, Nhãn (Mức độ và Loại câu đã nằm trên thanh thống kê).
+import { useEffect, useRef, useState } from 'react';
+import { FIGURE_LABEL, type FigureFilter } from '../lib/figure';
+import type { BankFilters, Facets } from '../lib/bankfilter';
+import { REVIEW_LABEL, type ReviewFilter } from '../lib/types';
+import { FieldMenu, type FieldOption } from './FieldMenu';
+
+const FIG_HINT = 'Phân tích mã LaTeX: có TikZ/ảnh ở đề, nhóm hình \\immini, phương án hoặc phần đuôi. Hình chỉ nằm trong lời giải không tính. “Chưa xác định” = có lệnh lạ chưa biết có phải hình không.';
+
+/** Số bộ lọc đang bật trong nút này. */
+export const moreCount = (f: BankFilters): number => (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0);
+
+export function BankMoreFilters({ f, facets, onF }: { f: BankFilters; facets: Facets; onF(next: BankFilters): void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    // FieldMenu mở danh sách ra ngoài khung bằng cổng (portal) ⇒ chỉ đóng khi bấm ngoài cả khung lẫn danh sách đang mở
+    const h = (e: MouseEvent) => { const t = e.target as HTMLElement; if (!box.current?.contains(t) && !t.closest?.('.fm-pop, [role="listbox"]')) setOpen(false); };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.fm-pop, [role="listbox"]')) { setOpen(false); btn.current?.focus(); } };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
+  }, [open]);
+
+  const figOpts: FieldOption[] = (['yes', 'no', 'unknown'] as const)
+    .filter((k) => k !== 'unknown' || facets.figure.unknown > 0 || f.figure === 'unknown')
+    .map((k) => ({ id: k, label: FIGURE_LABEL[k], count: facets.figure[k] }));
+  const revOpts: FieldOption[] = (['unreviewed', 'needs_fix', 'approved'] as const).map((r) => ({ id: r, label: REVIEW_LABEL[r], count: facets.review[r] }));
+  const tagOpts: FieldOption[] = [...facets.tag].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi')).map(([t, n]) => ({ id: t, label: t, count: n }));
+  if (f.tag && !facets.tag.has(f.tag)) tagOpts.unshift({ id: f.tag, label: f.tag, count: 0 });
+  const n = moreCount(f);
+
+  return (
+    <span className="mf" ref={box}>
+      <button ref={btn} type="button" className={`btn btn-sm${n ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)} title="Lọc theo Hình, Duyệt, Nhãn">
+        Bộ lọc{n > 0 && <i className="fs-badge">{n}</i>} ▾
+      </button>
+      {open && (
+        <div className="mf-pop" role="dialog" aria-label="Bộ lọc khác">
+          <FieldMenu
+            label="Hình" summary={f.figure === 'all' ? 'Tất cả' : FIGURE_LABEL[f.figure]} active={f.figure !== 'all'} hint={FIG_HINT} onReset={() => onF({ ...f, figure: 'all' })}
+            options={figOpts} selected={f.figure === 'all' ? null : f.figure} onPick={(id) => onF({ ...f, figure: (id ?? 'all') as FigureFilter })}
+            allLabel="Tất cả" allCount={facets.figure.yes + facets.figure.no + facets.figure.unknown}
+          />
+          <FieldMenu
+            label="Duyệt" summary={f.review === 'all' ? 'Tất cả' : REVIEW_LABEL[f.review]} active={f.review !== 'all'} onReset={() => onF({ ...f, review: 'all' })}
+            options={revOpts} selected={f.review === 'all' ? null : f.review} onPick={(id) => onF({ ...f, review: (id ?? 'all') as ReviewFilter })}
+            allLabel="Tất cả" allCount={facets.review.unreviewed + facets.review.needs_fix + facets.review.approved}
+          />
+          <FieldMenu
+            label="Nhãn" summary={f.tag ?? 'Tất cả'} active={!!f.tag} searchable hint="Nhãn gắn khi nhập (Nguồn, Lô, Thư mục) hoặc do bạn tự đặt" onReset={() => onF({ ...f, tag: null })}
+            options={tagOpts} selected={f.tag} onPick={(id) => onF({ ...f, tag: id })}
+            allLabel="Tất cả" allCount={facets.tagAll}
+          />
+          <div className="mf-foot">
+            <button type="button" className="btn btn-sm" disabled={n === 0} onClick={() => onF({ ...f, figure: 'all', review: 'all', tag: null })}>Bỏ các lọc này</button>
+            <button type="button" className="btn btn-sm btn-dark" onClick={() => { setOpen(false); btn.current?.focus(); }}>Xong</button>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
