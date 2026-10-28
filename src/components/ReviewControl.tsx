@@ -32,7 +32,7 @@ export function ReviewControl({ q, onChange }: { q: Question; onChange: (s: Revi
   };
 
   return (
-    <div className="rv" role="group" aria-label="Kiểm duyệt câu hỏi">
+    <div className="rv" role="group" aria-label="Kiểm duyệt câu hỏi" title="Sửa LaTeX hoặc đổi loại câu thì câu tự về “Chưa kiểm tra”.">
       <span className="rv-l">Kiểm duyệt</span>
       <div className="rv-seg">
         {(['unreviewed', 'needs_fix', 'approved'] as const).map((s) => (
@@ -54,7 +54,6 @@ export function ReviewControl({ q, onChange }: { q: Question; onChange: (s: Revi
           </div>
         </div>
       )}
-      <small className="rv-note">Sửa LaTeX / đổi loại câu → về “Chưa kiểm tra”</small>
     </div>
   );
 }

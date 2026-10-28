@@ -86,6 +86,7 @@ export function BankScreen() {
   const [dupSel, setDupSel] = useState(false); // mở Kiểm tra trùng với phạm vi "các câu đang chọn"
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [exact, setExact] = useState<Set<string>>(new Set()); // các câu đang ở chế độ “Xem chuẩn”
+  const [ctlOpen, setCtlOpen] = useState<Set<string>>(new Set()); // thẻ đang mở khối Kiểm duyệt / xác minh
   const [openUid, setOpenUid] = useState<string | null>(nav.openUid ?? null); // câu đang sửa ở ngăn bên phải
   const opened = openUid ? questions.find((q) => q.uid === openUid) : undefined;
   const [page, setPage] = useState(() => sess?.page ?? 0);
@@ -386,12 +387,16 @@ export function BankScreen() {
               </div>
             </div>
           </div>
-          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<IdStateBadge eff={effOf(q)} /></div>
+          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<IdStateBadge eff={effOf(q)} />
+            {mode === 'card' && <button type="button" className="linkbtn card-ctl" aria-expanded={ctlOpen.has(q.uid)} onClick={() => toggle(ctlOpen, q.uid, setCtlOpen)} title="Kiểm duyệt nội dung, xác minh Dạng và mức độ">{ctlOpen.has(q.uid) ? 'Ẩn duyệt ▲' : 'Duyệt / xác minh ▾'}</button>}
+          </div>
           {exact.has(q.uid)
             ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
             : mode === 'card' ? <ClampBox><QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} /></ClampBox> : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
-          <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
-          <IdReviewControl key={`id-${q.uid}`} q={q} eff={effOf(q)} />
+          {(mode === 'detail' || ctlOpen.has(q.uid)) && <>
+            <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
+            <IdReviewControl key={`id-${q.uid}`} q={q} eff={effOf(q)} />
+          </>}
         </div>
       </article>
     );

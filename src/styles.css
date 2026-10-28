@@ -1549,3 +1549,5 @@ span.bt-caret { cursor: default; }
 .clamp-in { overflow: hidden; }
 .clamp.is-clamped .clamp-in { -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent); mask-image: linear-gradient(to bottom, #000 78%, transparent); }
 .clamp-btn { margin-top: 4px; font-size: 13px; }
+
+.card-where .card-ctl { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
