@@ -39,7 +39,7 @@ console.log('Tên phạm vi');
 {
   const tax = buildDefault();
   const g = tax.grades[0], c = g.branches[0].chapters[0], l = c.lessons[0], f = l.forms[0];
-  ok(scopeLabel({ kind: 'grade', id: '12' }, tax) === 'Lớp 12', 'cả lớp');
+  ok(scopeLabel({ kind: 'grade', id: '12' }, tax) === 'Cả lớp 12', 'cả lớp');
   ok(scopeLabel({ kind: 'chapter', id: c.id }, tax)?.includes(c.name) === true && scopeLabel({ kind: 'lesson', id: l.id }, tax)?.includes(l.name) === true, 'chương, bài');
   ok(scopeLabel({ kind: 'form', id: f.id }, tax)?.includes(f.name) === true, 'dạng');
   ok(scopeLabel({ kind: 'form', id: 'khong-co' }, tax) === null, 'mục đã xóa khỏi cây ⇒ null (giao diện báo, không sập)');

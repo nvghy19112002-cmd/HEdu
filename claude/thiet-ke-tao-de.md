@@ -46,5 +46,18 @@ Giữ token màu hiện có (Mực xanh & giấy ô ly), nền sáng, nhấn nav
 ## 6. Đối chiếu mã nguồn mở (chỉ học ý tưởng)
 [ExamShuffle](https://github.com/gokcemay/ExamShuffle) (trộn câu và phương án LaTeX), [exam_maker](https://github.com/ieyada/exam_maker) (ngân hàng theo chương/chủ đề/độ khó, bản riêng từng thí sinh, đáp án), [banky](https://github.com/godber/banky) (cấu hình YAML, trộn câu/phương án, đáp án), [AutoQP](https://github.com/milind2k4/AutoQP) (ngân hàng + ma trận + LaTeX). Không dự án nào cho sẵn phân bổ toàn cục hay trộn nguyên văn; HEdu tự làm hai phần đó và có kiểm thử.
 
-## 7. Câu hỏi cho chủ dự án (đáp án đề nghị đã được làm theo)
-Xem phần trả lời trong cuộc trò chuyện; bản cuối được cập nhật vào đây khi chủ dự án chốt.
+## 7. Câu hỏi cho chủ dự án (đáp án đề nghị đã được làm theo trong PR #136)
+Mỗi câu có đáp án đề nghị; chủ dự án chỉ cần ghi "đồng ý" hoặc sửa. Chưa trả lời thì mã vẫn chạy theo đáp án đề nghị.
+
+| # | Câu hỏi | Đáp án đề nghị (đang áp dụng) |
+|---|---|---|
+| 1 | Mặc định lấy câu theo mức nào? | **Đã duyệt nội dung**. Chuyển sang "Đã xác minh" khi đã xác minh đủ Dạng và mức độ cho nhiều câu (hiện chưa câu nào có nhãn xác minh nên mức nghiêm ngặt chưa dùng được) |
+| 2 | Điểm mỗi câu | Giữ 0,25 / 1,0 / 0,5 (phần I/II/III); tự luận 1,0, thầy/cô sửa được ở bước sau |
+| 3 | Mã đề đầu tiên | Giữ bản gốc (thứ tự và phương án như ngân hàng), các mã sau trộn |
+| 4 | Mẫu đề 2025 | 12 câu TN (5 NB, 4 TH, 3 VD), 4 câu Đ/S, 6 câu TLN trong cả lớp; thầy/cô tự chỉnh |
+| 5 | Mỗi mã đề một PDF riêng và nén ZIP | Làm ở PR sau (PR 3) |
+| 6 | Tiêu đề đề thi | Dùng môi trường `name` trong khaibaochung của thầy/cô; cần thầy/cô xem PDF mẫu rồi báo chỗ cần sửa |
+| 7 | Lưu ma trận thành mẫu có tên để dùng lại | Nên làm (PR sau), lưu cùng bản nháp |
+| 8 | Tránh câu đã ra ở đề kỳ trước | Nên làm (PR sau): đánh dấu câu "đã dùng trong đề X" từ `hedu-de.json` của các đề đã lưu, mặc định không lấy lại |
+| 9 | Ma trận theo mẫu của Bộ (chủ đề × mức độ × dạng câu) | Chờ thầy/cô gửi một ma trận thật để làm đúng mẫu |
+| 10 | Word | Để sau, không chặn PDF/TeX |

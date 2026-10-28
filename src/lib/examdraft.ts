@@ -109,7 +109,7 @@ export function rowsFromPick(qs: readonly Question[]): { rows: Row[]; locked: Re
 
 /** Tên phạm vi dạng đường dẫn: “Lớp 12 › Chương 1 › Bài 2 › Dạng”. Nút không còn trong cây thì trả null. */
 export function scopeLabel(scope: Row['scope'], tax: Taxonomy): string | null {
-  if (scope.kind === 'grade') return `Lớp ${scope.id}`;
+  if (scope.kind === 'grade') return `Cả lớp ${scope.id}`;
   for (const g of tax.grades) for (const b of g.branches) for (const c of b.chapters) {
     if (scope.kind === 'chapter' && c.id === scope.id) return `Lớp ${g.grade} › ${c.name}`;
     for (const l of c.lessons) {
