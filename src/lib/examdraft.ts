@@ -12,6 +12,8 @@ export interface Draft {
   locked: Record<string, string[]>;
   /** câu giáo viên loại khỏi đề (không chọn lại) */
   rejected: string[];
+  /** ngoại lệ so với chính sách lấy câu, do giáo viên xác nhận rõ (vd chọn tay câu chưa duyệt): uid → lúc xác nhận */
+  exceptions: Record<string, { at: number; why: string }>;
   info: ExamInfo;
   count: number;
   firstCode: number;
@@ -28,7 +30,7 @@ export const KEY = 'hedu.examdraft.v1';
 export const DEFAULT_INFO: ExamInfo = { dept: '', school: '', group: '', title: 'Kiểm tra cuối học kì I', subject: 'Môn: Toán 12', minutes: 90, note: '' };
 
 export function newDraft(seed = Math.floor(Math.random() * 1e9)): Draft {
-  return { v: 1, rows: [], policy: 'duyet', seed, locked: {}, rejected: [], info: { ...DEFAULT_INFO }, count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, withKeys: true, scoring: { ...SCORING_2025 }, pickSig: '' };
+  return { v: 1, rows: [], policy: 'duyet', seed, locked: {}, rejected: [], exceptions: {}, info: { ...DEFAULT_INFO }, count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, withKeys: true, scoring: { ...SCORING_2025 }, pickSig: '' };
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -54,6 +56,7 @@ export function parseDraft(raw: string | null): Draft {
   if (j.policy === 'duyet' || j.policy === 'xac-minh' || j.policy === 'tat-ca') d.policy = j.policy;
   d.seed = num(j.seed, d.seed, 0, 2 ** 31);
   if (isObj(j.locked)) for (const [k, v] of Object.entries(j.locked)) if (Array.isArray(v)) d.locked[k] = v.filter((x): x is string => typeof x === 'string');
+  if (isObj(j.exceptions)) for (const [k, v] of Object.entries(j.exceptions)) if (isObj(v) && typeof v.at === 'number') d.exceptions[k] = { at: v.at, why: typeof v.why === 'string' ? v.why.slice(0, 200) : 'chon-tay' };
   if (Array.isArray(j.rejected)) d.rejected = j.rejected.filter((x): x is string => typeof x === 'string');
   if (isObj(j.info)) {
     const i = j.info;

@@ -1,6 +1,6 @@
 # Thiết kế Tạo đề từ Ngân hàng câu hỏi
 
-Trạng thái: PR 1 (lõi sinh đề) đã làm; PR 2 (giao diện) đang làm. Chưa phát hành. Các lựa chọn dưới đây là đề xuất của Claude theo yêu cầu "bạn thiết kế"; những chỗ chủ dự án chưa trả lời được ghi ở mục 7 và làm theo đáp án đề nghị.
+Trạng thái: PR #135 (lõi) và #136 (giao diện) đang chờ duyệt gộp; chưa phát hành. Các quyết định nghiệp vụ ở mục 7 đã được chủ dự án chốt (28/10/2026).
 
 ## 1. Mục tiêu
 Giáo viên chọn câu từ Ngân hàng (theo ma trận hoặc chọn tay), xem trước đề giống bản in, sinh nhiều mã đề, lưu vào Thư viện đề để biên dịch PDF/xuất .tex. Giao diện gọn, đẹp, nhanh như TIAD nhưng chỉ học ý tưởng, không chép mã, thương hiệu hay hình ảnh.
@@ -41,23 +41,31 @@ Giữ token màu hiện có (Mực xanh & giấy ô ly), nền sáng, nhấn nav
 |---|---|---|
 | 1 | Lõi: `examgen.ts` (phân bổ luồng cực đại, điều kiện, trộn nguyên văn, đáp án, dựng .tex), test, thiết kế này | npm test, typecheck, **biên dịch thử bằng TeX Live thật** với khaibaochung của giáo viên |
 | 2 | Giao diện Tạo đề mới, thay màn cũ, bật `FEATURES.exam`, lưu vào Thư viện đề, mở biên dịch PDF | thử trình duyệt + app Tauri (`vn.hedu.app.thu`), 1366×768 |
-| sau | Ma trận từ Dạng đã xác minh, xuất ZIP nhiều mã, mẫu trình bày, Word | theo thứ tự ưu tiên của chủ dự án |
+| 3 | Mỗi mã đề một PDF + ZIP (Q5), sau khi #135 và #136 đạt | biên dịch từng mã, đối soát manifest, lỗi một mã không báo đủ |
+| 4 | Mẫu ma trận lưu bền có sao lưu/khôi phục (Q7) và tránh tái dùng câu theo phạm vi chọn (Q8) | sao lưu/khôi phục, thiếu câu thì báo, không tự nới |
+| sau | Mẫu theo ma trận thực tế của chủ dự án (Q9), mẫu trình bày, Word (Q10) | theo thứ tự ưu tiên của chủ dự án |
 
 ## 6. Đối chiếu mã nguồn mở (chỉ học ý tưởng)
 [ExamShuffle](https://github.com/gokcemay/ExamShuffle) (trộn câu và phương án LaTeX), [exam_maker](https://github.com/ieyada/exam_maker) (ngân hàng theo chương/chủ đề/độ khó, bản riêng từng thí sinh, đáp án), [banky](https://github.com/godber/banky) (cấu hình YAML, trộn câu/phương án, đáp án), [AutoQP](https://github.com/milind2k4/AutoQP) (ngân hàng + ma trận + LaTeX). Không dự án nào cho sẵn phân bổ toàn cục hay trộn nguyên văn; HEdu tự làm hai phần đó và có kiểm thử.
 
-## 7. Câu hỏi cho chủ dự án (đáp án đề nghị đã được làm theo trong PR #136)
-Mỗi câu có đáp án đề nghị; chủ dự án chỉ cần ghi "đồng ý" hoặc sửa. Chưa trả lời thì mã vẫn chạy theo đáp án đề nghị.
 
-| # | Câu hỏi | Đáp án đề nghị (đang áp dụng) |
+## 7. Quyết định của chủ dự án (đã chốt 28/10/2026)
+| # | Quyết định | Cách làm trong mã |
 |---|---|---|
-| 1 | Mặc định lấy câu theo mức nào? | **Đã duyệt nội dung**. Chuyển sang "Đã xác minh" khi đã xác minh đủ Dạng và mức độ cho nhiều câu (hiện chưa câu nào có nhãn xác minh nên mức nghiêm ngặt chưa dùng được) |
-| 2 | Điểm mỗi câu | Giữ 0,25 / 1,0 / 0,5 (phần I/II/III); tự luận 1,0, thầy/cô sửa được ở bước sau |
-| 3 | Mã đề đầu tiên | Giữ bản gốc (thứ tự và phương án như ngân hàng), các mã sau trộn |
-| 4 | Mẫu đề 2025 | 12 câu TN (5 NB, 4 TH, 3 VD), 4 câu Đ/S, 6 câu TLN trong cả lớp; thầy/cô tự chỉnh |
-| 5 | Mỗi mã đề một PDF riêng và nén ZIP | Làm ở PR sau (PR 3) |
-| 6 | Tiêu đề đề thi | Dùng môi trường `name` trong khaibaochung của thầy/cô; cần thầy/cô xem PDF mẫu rồi báo chỗ cần sửa |
-| 7 | Lưu ma trận thành mẫu có tên để dùng lại | Nên làm (PR sau), lưu cùng bản nháp |
-| 8 | Tránh câu đã ra ở đề kỳ trước | Nên làm (PR sau): đánh dấu câu "đã dùng trong đề X" từ `hedu-de.json` của các đề đã lưu, mặc định không lấy lại |
-| 9 | Ma trận theo mẫu của Bộ (chủ đề × mức độ × dạng câu) | Chờ thầy/cô gửi một ma trận thật để làm đúng mẫu |
-| 10 | Word | Để sau, không chặn PDF/TeX |
+| Q1 | Mặc định "Đã duyệt nội dung" để dùng ngân hàng hiện có. Duyệt nội dung **không phải** xác minh phân loại. Ra đề chính thức phải cảnh báo câu chưa xác minh | Banner luôn hiện số câu chưa xác minh Dạng/mức độ và nhắc ID hợp lệ vẫn có thể sai lớp (đã từng có câu Toán 10 mang mã lớp 12) |
+| Q2 | Điểm tối đa phần I/II/III = 0,25 / 1,0 / 0,5. Câu Đúng/Sai chấm theo số ý đúng: 1 ý 0,1; 2 ý 0,25; 3 ý 0,5; 4 ý 1,0. Tự luận có thang riêng, cấu hình được. Tách điểm tối đa của câu khỏi điểm thực tế của học sinh | `DS_POINTS_CENTI`, `dsPoints`; ô "Điểm tối đa mỗi câu tự luận"; ghi chú trên giao diện; `hedu-de.json` ghi cả hai |
+| Q3 | Mã đầu giữ nguyên thứ tự và phương án gốc, mã khác trộn theo lựa chọn; lưu seed, ánh xạ UID, đáp án; tái tạo chính xác | `hedu-de.json`: hạt giống, câu khóa, ngoại lệ, UID và đáp án từng mã |
+| Q4 | Mẫu 12 TN + 4 Đ/S + 6 TLN; 5 NB / 4 TH / 3 VD chỉ là preset của HEdu, **không** ghi là quy định của Bộ; sửa toàn bộ được | Nút "Dùng mẫu HEdu 12/4/6" kèm chú thích |
+| Q5 | Mỗi mã một PDF và ZIP: PR 3 riêng sau khi hai PR hiện tại đạt | Chưa làm |
+| Q6 | Dùng `khaibaochung.tex` của dự án; tiếp tục nghiệm thu tiêu đề, chân trang, số trang, mã đề, ngắt trang theo PDF thực tế | Có trong danh sách nghiệm thu |
+| Q7 | Lưu ma trận thành mẫu có tên, **lưu bền**, sao lưu/khôi phục được, không chỉ `localStorage`; tạo, đổi tên, nhân bản, xóa có xác nhận | Chưa làm (PR sau) |
+| Q8 | Tránh tái dùng câu đã có trong các đề trước theo phạm vi giáo viên chọn (học kỳ, năm học hoặc đề cụ thể); hiện số ứng viên bị loại; thiếu thì báo và cho nới có chủ đích, không tự nới; không cấm mãi mãi | Chưa làm (PR sau) |
+| Q9 | Chờ ma trận thực tế của chủ dự án; chưa coi ma trận HEdu là biểu mẫu của Bộ | Chờ |
+| Q10 | Word làm sau, không chặn TeX/PDF | Nút "sắp có" |
+
+### Quy tắc an toàn đã chốt kèm theo (làm trong PR #136)
+1. **Câu khóa không lách được chính sách.** Khóa chỉ giữ câu khi câu vẫn đạt mức lấy câu đang chọn. Ngoại lệ (vd chọn tay câu chưa duyệt từ Ngân hàng) phải được giáo viên xác nhận rõ bằng hộp hỏi, được ghi dấu vết (UID, thời điểm, lý do) trong bản nháp và `hedu-de.json`, và hiện nhãn "Ngoại lệ" trên câu. "Cần sửa" và câu có ký tự điều khiển lạ **không bao giờ** vào đề, kể cả khi có ngoại lệ.
+2. **Câu khóa mất hiệu lực phải báo.** Câu khóa bị loại (đã xóa, thành "Cần sửa", đổi nội dung nên mất "Đã duyệt", đổi loại/mức, ký tự lạ…) được liệt kê kèm nguyên nhân; chưa xuất được cho tới khi giáo viên xử lý (bỏ khóa hoặc sửa).
+3. **Không xuất khi đáp án hoặc tổng chưa khớp.** Mỗi mã đề được kiểm: đáp án đầy đủ (không `?`), khớp `\True`/đáp số trong chính văn bản đã trộn, nhất quán giữa các mã; đối chiếu độc lập số câu, loại câu, bộ câu, điểm so với ma trận. Có lỗi thì nút Lưu/Xuất khóa và hiện danh sách (kèm số câu ở Ngân hàng).
+4. **Câu hỏng giữ nguyên trong Ngân hàng**, chỉ bị loại khỏi tập ứng viên; giao diện liệt kê số câu, `#số` và UID, nguyên nhân.
+5. Đổi câu trong đề không sửa câu nguồn trong Ngân hàng và không làm mất ánh xạ đáp án (có test).

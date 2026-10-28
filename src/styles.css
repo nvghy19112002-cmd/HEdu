@@ -1398,3 +1398,9 @@ a { color: var(--accent); }
   .te-aside { max-width: none; }
 }
 .te-bad { color: var(--danger-ink); font-weight: 600; }
+
+.te-warn .bad { color: var(--danger-ink); }
+.te-warn ul { margin: 4px 0 8px 26px; padding: 0; font-size: 13px; }
+.te-warn code, .te-broken code { font-family: var(--f-code); font-size: 12px; }
+.te-broken { margin: 0 20px 10px; font-size: 13px; color: var(--ink-2); }
+.te-broken ul { margin: 6px 0 0 18px; padding: 0; }

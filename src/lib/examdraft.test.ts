@@ -16,6 +16,8 @@ console.log('Đọc bản nháp');
   ok(back.rows.length === 5 && back.policy === 'tat-ca' && back.count === 3 && back.info.title === 'Thi thử' && back.seed === 5, 'lưu rồi đọc lại giữ nguyên');
   const bad = parseDraft(JSON.stringify({ v: 1, rows: [{ id: 'a', scope: { kind: 'sai', id: 'x' }, type: 'tn', level: 'NB', count: 2 }, { id: 'b', scope: { kind: 'chapter', id: 'c' }, type: 'xx', level: 'NB', count: 2 }, { id: 'c', scope: { kind: 'chapter', id: 'c' }, type: 'tn', level: 'NB', count: 99999 }], policy: 'lạ', count: 999, info: { minutes: -4, title: 5 } }));
   ok(bad.rows.length === 1 && bad.rows[0].count === 200, 'dòng sai kiểu bị bỏ; số lượng bị chặn trong giới hạn');
+  const ex = parseDraft(JSON.stringify({ v: 1, exceptions: { u1: { at: 5, why: 'chon-tay' }, u2: 'sai', u3: { at: 'x' } } }));
+  ok(Object.keys(ex.exceptions).join() === 'u1' && ex.exceptions.u1.at === 5, 'ngoại lệ do giáo viên xác nhận được lưu lại; bản ghi hỏng bị bỏ');
   ok(bad.policy === 'duyet' && bad.count === 24 && bad.info.minutes === 1 && typeof bad.info.title === 'string', 'giá trị lạ về mặc định hoặc bị chặn');
 }
 
@@ -31,8 +33,10 @@ console.log('Mẫu đề 2025 và câu chọn tay');
   const p = rowsFromPick(qs);
   ok(p.rows.length === 2 && p.rows[0].count === 2 && p.locked[p.rows[0].id].join() === 'a,b', 'gộp câu chọn tay theo Dạng, loại, mức độ và khóa chúng');
   const a = allocate(qs, p.rows, { policy: 'duyet', eff: () => ({ form: 'chua', level: 'chua', unclassified: false }), seed: 1, locked: p.locked });
-  const pk = collect(p.rows, a.picks, new Map(qs.map((x) => [x.uid, x])));
-  ok(countsOf(pk).p1 === 3 && Object.values(a.deficit).every((x) => x === 0), 'câu chưa duyệt do giáo viên chọn tay vẫn vào đề dù chính sách là Đã duyệt');
+  ok(countsOf(collect(p.rows, a.picks, new Map(qs.map((x) => [x.uid, x])))).p1 === 0 && a.lost.length === 3, 'câu chưa duyệt chọn tay mà chưa xác nhận ngoại lệ KHÔNG vào đề, và được báo là câu khóa bị loại');
+  const a2 = allocate(qs, p.rows, { policy: 'duyet', eff: () => ({ form: 'chua', level: 'chua', unclassified: false }), seed: 1, locked: p.locked, exceptions: new Set(['a', 'b', 'c']) });
+  const pk = collect(p.rows, a2.picks, new Map(qs.map((x) => [x.uid, x])));
+  ok(countsOf(pk).p1 === 3 && a2.lost.length === 0 && Object.values(a2.deficit).every((x) => x === 0), 'sau khi giáo viên xác nhận ngoại lệ, các câu vào đề');
 }
 
 console.log('Tên phạm vi');

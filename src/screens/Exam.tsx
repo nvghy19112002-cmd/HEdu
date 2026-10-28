@@ -6,7 +6,7 @@ import { QuestionView } from '../components/QuestionView';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
-import { allocate, candidatesFor, collect, countsOf, examFiles, fmtScore, hasControlChars, makeVariants, PART_NAME, PARTS, POLICY_LABEL, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { loadDraft, newRowId, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
@@ -33,18 +33,19 @@ function PartHead({ text }: { text: string }) {
 }
 
 interface SlotProps {
-  slot: Slot; number: number; locked: boolean; verifiedDa: boolean;
+  slot: Slot; number: number; locked: boolean; verifiedDa: boolean; exception: boolean;
   onLock(): void; onSwap(): void; onReroll(): void; swapping: boolean;
 }
 
 /** Một câu trong trang xem trước, có thao tác khi rê chuột hoặc focus. */
-const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, onLock, onSwap, onReroll, swapping }: SlotProps) {
+const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exception, onLock, onSwap, onReroll, swapping }: SlotProps) {
   const parsed = useMemo(() => parseExTest(slot.latex), [slot.latex]);
   const order = useMemo(() => parsed.options.map((_, i) => i), [parsed]);
   return (
     <div className={`te-q${locked ? ' is-locked' : ''}${swapping ? ' is-swap' : ''}`}>
       <div className="te-q-tools" role="group" aria-label={`Thao tác câu ${number}`}>
-        {slot.q.review !== 'approved' && <span className="te-flag warn" title="Câu này chưa được duyệt nội dung">Chưa duyệt</span>}
+        {exception && <span className="te-flag warn" title="Ngoại lệ do giáo viên xác nhận: câu này không đạt mức lấy câu đang chọn">Ngoại lệ</span>}
+        {!exception && slot.q.review !== 'approved' && <span className="te-flag warn" title="Câu này chưa được duyệt nội dung">Chưa duyệt</span>}
         {!verifiedDa && <span className="te-flag" title="Dạng hoặc mức độ chưa được giáo viên xác minh">Chưa xác minh Dạng</span>}
         {slot.note && <span className="te-flag" title={slot.note}>Giữ nguyên phương án</span>}
         <button type="button" className="te-tool" aria-pressed={locked} title={locked ? 'Bỏ khóa câu này' : 'Khóa câu này: giữ nguyên khi sinh lại'} onClick={onLock}>{locked ? <IcLock /> : <IcUnlock />}<span>{locked ? 'Đã khóa' : 'Khóa'}</span></button>
@@ -82,7 +83,7 @@ function RowAdder({ onAdd, onTemplate, defaultGrade }: { onAdd(r: Row): void; on
       <label className="lbl">Số câu<input className="inp" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} /></label>
       <div className="te-add-acts">
         <button type="button" className="btn btn-dark" onClick={add}><IcPlus />Thêm dòng</button>
-        <button type="button" className="btn btn-ghost" onClick={() => onTemplate(grade)} title="12 câu trắc nghiệm, 4 câu đúng/sai, 6 câu trả lời ngắn lấy trong cả lớp">Dùng mẫu đề 2025 cho lớp {grade}</button>
+        <button type="button" className="btn btn-ghost" onClick={() => onTemplate(grade)} title="Mẫu của HEdu: 12 câu trắc nghiệm (5 NB, 4 TH, 3 VD), 4 câu đúng/sai, 6 câu trả lời ngắn trong cả lớp. Không phải quy định bắt buộc của Bộ; sửa tự do.">Dùng mẫu HEdu 12/4/6 cho lớp {grade}</button>
       </div>
     </div>
   );
@@ -106,16 +107,28 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
     if (!pick?.length) return;
     const sig = [...pick].sort().join(',');
     if (sig === d.pickSig) return;
-    const qs = questions.filter((q) => pick.includes(q.uid));
-    if (!qs.length) return;
+    const all = questions.filter((q) => pick.includes(q.uid));
+    if (!all.length) return;
+    const refused = all.filter((q) => q.review === 'needs_fix' || hasControlChars(q));
+    const okQs = all.filter((q) => !refused.includes(q));
+    const off = okQs.filter((q) => !eligible(q, effOf, d.policy));
+    let qs = okQs;
+    const exc: Record<string, { at: number; why: string }> = {};
+    if (off.length) {
+      const yes = window.confirm(`${off.length} / ${okQs.length} câu bạn chọn chưa đạt mức lấy câu “${POLICY_SHORT[d.policy]}” (chưa duyệt hoặc chưa xác minh).\n\nBấm OK để vẫn đưa vào đề như NGOẠI LỆ (HEdu ghi dấu vết trong đề và cảnh báo trên từng câu).\nBấm Hủy để chỉ đưa các câu đạt mức.`);
+      if (yes) off.forEach((q) => { exc[q.uid] = { at: Date.now(), why: 'chon-tay-tu-ngan-hang' }; });
+      else qs = okQs.filter((q) => !off.includes(q));
+    }
+    if (refused.length) toast(`${refused.length} câu không đưa vào đề được (đang “Cần sửa” hoặc có ký tự điều khiển lạ).`);
     const add = rowsFromPick(qs);
-    setD((x) => ({ ...x, rows: [...x.rows, ...add.rows], locked: { ...x.locked, ...add.locked }, rejected: x.rejected.filter((u) => !pick.includes(u)), pickSig: sig }));
-    toast(`Đã đưa ${qs.length} câu từ Ngân hàng vào đề (đã khóa).`);
-  }, [pick, questions, d.pickSig, toast]);
+    setD((x) => ({ ...x, rows: [...x.rows, ...add.rows], locked: { ...x.locked, ...add.locked }, exceptions: { ...x.exceptions, ...exc }, rejected: x.rejected.filter((u) => !pick.includes(u)), pickSig: sig }));
+    if (qs.length) toast(`Đã đưa ${qs.length} câu từ Ngân hàng vào đề (đã khóa).`);
+  }, [pick, questions, d.pickSig, d.policy, effOf, toast]);
 
   const byUid = useMemo(() => new Map(questions.map((q) => [q.uid, q])), [questions]);
   const exclude = useMemo(() => new Set(d.rejected), [d.rejected]);
-  const alloc = useMemo(() => allocate(questions, d.rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude }), [questions, d.rows, d.policy, d.seed, d.locked, exclude, effOf]);
+  const exceptions = useMemo(() => new Set(Object.keys(d.exceptions)), [d.exceptions]);
+  const alloc = useMemo(() => allocate(questions, d.rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions }), [questions, d.rows, d.policy, d.seed, d.locked, exclude, exceptions, effOf]);
   const picked = useMemo(() => collect(d.rows, alloc.picks, byUid), [d.rows, alloc, byUid]);
   const counts = countsOf(picked);
   const total = counts.p1 + counts.p2 + counts.p3 + counts.p4;
@@ -124,6 +137,8 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const rowOf = useMemo(() => { const m = new Map<string, string>(); for (const [rid, us] of Object.entries(alloc.picks)) for (const u of us) m.set(u, rid); return m; }, [alloc]);
   const lockedSet = useMemo(() => new Set(Object.values(d.locked).flat()), [d.locked]);
   const missing = d.rows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
+  const issues = useMemo(() => [...checkVariants(variants), ...reconcile(d.rows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, d.rows, alloc, picked, d.scoring]);
+  const lostLocks = alloc.lost;
   const centi = totalCenti(counts, d.scoring);
   const picks = useMemo(() => PARTS.flatMap((p) => picked[p]), [picked]);
   const unverifiedN = useMemo(() => picks.filter((q) => !verified(effOf(q))).length, [picks, effOf]);
@@ -131,7 +146,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const keptN = variant ? PARTS.reduce((a, p) => a + variant.parts[p].filter((s) => s.note).length, 0) : 0;
   const byLevel = (['NB', 'TH', 'VD', 'VDC'] as Level[]).map((l) => ({ l, n: picks.filter((q) => q.level === l).length }));
   const defaultGrade = grades()[grades().length - 1] ?? 12;
-  const brokenN = useMemo(() => questions.filter(hasControlChars).length, [questions]);
+  const broken = useMemo(() => brokenQuestions(questions), [questions]);
 
   const setRow = (id: string, p: Partial<Row>) => upd({ rows: d.rows.map((r) => (r.id === id ? { ...r, ...p } : r)) });
   const delRow = (id: string) => { const { [id]: _drop, ...rest } = d.locked; upd({ rows: d.rows.filter((r) => r.id !== id), locked: rest }); };
@@ -159,13 +174,13 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const refSheet = useRef<HTMLElement>(null);
   const refExport = useRef<HTMLDivElement>(null);
   const desktop = isDesktop();
-  const canExport = total > 0 && missing === 0 && variants.length > 0;
+  const canExport = total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const projectFiles = (name: string) => [
     ...examFiles(d.info, variants, { withKeys: d.withKeys }),
     { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
-    { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString() }) },
+    { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked }) },
     { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
   ];
 
@@ -228,12 +243,13 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                 {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
               </div>
             </div>
-            <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{brokenN > 0 && <span className="te-bad"> {brokenN} câu trong Ngân hàng có ký tự điều khiển lạ trong LaTeX (không biên dịch được) nên không được chọn; hãy mở và sửa lại.</span>}</p>
+            <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{broken.length > 0 && <span className="te-bad"> {broken.length} câu có ký tự điều khiển lạ trong LaTeX nên bị loại khỏi tập ứng viên (vẫn còn nguyên trong Ngân hàng).</span>}</p>
+            {broken.length > 0 && <details className="te-broken"><summary>Xem câu bị loại và nguyên nhân</summary><ul>{broken.slice(0, 50).map((b) => <li key={b.uid}>Câu #{b.seq} · <code>{b.uid}</code> · {b.why}</li>)}{broken.length > 50 && <li>… và {broken.length - 50} câu nữa</li>}</ul></details>}
             {rowsEmpty ? (
               <div className="te-empty">
                 <b>Chưa có dòng nào.</b>
-                <span>Mỗi dòng là một yêu cầu, vd “4 câu trắc nghiệm Nhận biết ở Chương 1”. Thêm dòng bên dưới hoặc bắt đầu từ mẫu đề 2025.</span>
-                <div><button type="button" className="btn btn-dark" onClick={() => upd({ rows: template2025(defaultGrade) })}>Dùng mẫu đề 2025 cho lớp {defaultGrade}</button></div>
+                <span>Mỗi dòng là một yêu cầu, vd “4 câu trắc nghiệm Nhận biết ở Chương 1”. Thêm dòng bên dưới hoặc bắt đầu từ mẫu HEdu 12/4/6 (chỉ là gợi ý, sửa toàn bộ được).</span>
+                <div><button type="button" className="btn btn-dark" onClick={() => upd({ rows: template2025(defaultGrade) })}>Dùng mẫu HEdu 12/4/6 cho lớp {defaultGrade}</button></div>
               </div>
             ) : (
               <div className="te-rows" role="table" aria-label="Các dòng của ma trận">
@@ -264,16 +280,29 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
             <div className="mx-foot">
               <button type="button" className="btn btn-sm" aria-expanded={adding} onClick={() => setAdding(!adding)}><IcPlus />Thêm dòng</button>
               {!rowsEmpty && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Xóa ma trận</button>}
-              <span className="te-note">Đề chuẩn 2025: 12 câu phần I, 4 câu phần II, 6 câu phần III.</span>
+              <span className="te-note">Mẫu HEdu 12/4/6 chỉ là gợi ý, không phải quy định của Bộ.</span>
             </div>
             {adding && <RowAdder defaultGrade={defaultGrade} onAdd={(r) => upd({ rows: [...d.rows, r] })} onTemplate={(g) => { upd({ rows: [...d.rows, ...template2025(g)] }); setAdding(false); }} />}
           </section>
 
-          {(missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0) && total > 0 && (
+          {(missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
             <section className="te-warn" aria-label="Lưu ý về đề" role="status">
+              {lostLocks.length > 0 && (
+                <div className="bad">
+                  <p className="bad"><IcAlert size={16} />{lostLocks.length} câu đã khóa không còn vào được đề, nên đề đang thiếu hoặc đã thay bằng câu khác. Chưa xuất được cho tới khi bạn xử lý:</p>
+                  <ul>{lostLocks.slice(0, 20).map((l) => <li key={l.uid}>Câu <code>{byUid.get(l.uid) ? `#${byUid.get(l.uid)!.seq}` : l.uid}</code>: {LOST_LABEL[l.why]}</li>)}</ul>
+                  <button type="button" className="btn btn-sm" onClick={() => { const drop = new Set(lostLocks.map((l) => l.uid)); const next: Record<string, string[]> = {}; for (const [k, v] of Object.entries(d.locked)) next[k] = v.filter((u) => !drop.has(u)); upd({ locked: next }); }}>Bỏ khóa các câu này (máy chọn câu khác thay)</button>
+                </div>
+              )}
+              {issues.length > 0 && (
+                <div className="bad">
+                  <p className="bad"><IcAlert size={16} />Đáp án hoặc tổng số chưa khớp ở {issues.length} chỗ nên chưa xuất được:</p>
+                  <ul>{issues.slice(0, 8).map((i, k) => <li key={k}>{i.msg}{i.uid ? <> · <code>{byUid.get(i.uid) ? `#${byUid.get(i.uid)!.seq}` : i.uid}</code></> : null}</li>)}{issues.length > 8 && <li>… và {issues.length - 8} chỗ nữa</li>}</ul>
+                </div>
+              )}
               {missing > 0 && <p className="bad"><IcAlert size={16} />Còn thiếu {missing} câu so với ma trận. Hạ số câu, đổi mức lấy câu hoặc <button type="button" className="linkbtn" onClick={() => go({ screen: 'editor' })}>soạn thêm câu</button>. Chưa xuất được đề.</p>}
-              {unreviewedN > 0 && <p><IcAlert size={16} />{unreviewedN} câu chưa được duyệt nội dung (do bạn chọn tay hoặc đang lấy “Mọi câu”).</p>}
-              {unverifiedN > 0 && d.policy !== 'xac-minh' && <p><IcAlert size={16} />{unverifiedN} / {total} câu chưa được giáo viên xác minh Dạng và mức độ, nên số câu theo mức độ có thể lệch. Xác minh bằng “Hàng đợi xác minh” trong Ngân hàng.</p>}
+              {unreviewedN > 0 && <p><IcAlert size={16} />{unreviewedN} câu chưa được duyệt nội dung (chỉ vào đề qua ngoại lệ bạn đã xác nhận hoặc khi lấy “Mọi câu”).</p>}
+              {unverifiedN > 0 && d.policy !== 'xac-minh' && <p><IcAlert size={16} />{unverifiedN} / {total} câu chưa được giáo viên xác minh Dạng và mức độ. “Đã duyệt nội dung” không phải là xác minh phân loại: số câu theo mức độ có thể lệch, và ID hợp lệ vẫn có thể sai lớp (từng có câu Toán 10 mang mã lớp 12). Khi ra đề chính thức hãy xem lại các câu này.</p>}
               {keptN > 0 && <p><IcAlert size={16} />{keptN} câu trong mã đang xem giữ nguyên thứ tự phương án vì không nhận diện chắc (rê vào nhãn “Giữ nguyên phương án” để xem lý do).</p>}
             </section>
           )}
@@ -298,7 +327,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                   <PartHead text={p === 'p4' ? PART_HEAD[p] : `${PART_HEAD[p]} Thí sinh trả lời từ câu 1 đến câu ${variant.parts[p].length}.`} />
                   {variant.parts[p].map((s, k) => (
                     <div key={s.q.uid}>
-                      <SlotView slot={s} number={k + 1} locked={lockedSet.has(s.q.uid)} verifiedDa={verified(effOf(s.q))}
+                      <SlotView slot={s} number={k + 1} locked={lockedSet.has(s.q.uid)} verifiedDa={verified(effOf(s.q))} exception={!!d.exceptions[s.q.uid]}
                         swapping={swap === s.q.uid} onLock={() => toggleLock(s.q.uid)} onSwap={() => setSwap(swap === s.q.uid ? null : s.q.uid)} onReroll={() => reroll(s.q.uid)} />
                       {swap === s.q.uid && (
                         <div className="te-swap" role="region" aria-label="Chọn câu thay thế">
@@ -382,6 +411,9 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
               </div>
             </div>
             <label className="lbl">Mã đề đầu tiên<input className="inp" type="number" min={1} max={9999} value={d.firstCode} onChange={(e) => upd({ firstCode: Math.max(1, Math.min(9999, Number(e.target.value) || 101)) })} /></label>
+            <div className="divider" />
+            <label className="lbl">Điểm tối đa mỗi câu tự luận<input className="inp" type="number" min={0} max={10} step={0.25} value={d.scoring.p4 / 100} onChange={(e) => upd({ scoring: { ...d.scoring, p4: Math.max(0, Math.min(1000, Math.round((Number(e.target.value) || 0) * 100))) } })} /></label>
+            <p className="te-note">Điểm tối đa mỗi câu: Phần I {fmtScore(d.scoring.p1)}, Phần II {fmtScore(d.scoring.p2)}, Phần III {fmtScore(d.scoring.p3)}. Điểm thực tế của câu Đúng/Sai tính theo số ý đúng: 1 ý {fmtScore(DS_POINTS_CENTI[1])}, 2 ý {fmtScore(DS_POINTS_CENTI[2])}, 3 ý {fmtScore(DS_POINTS_CENTI[3])}, 4 ý {fmtScore(DS_POINTS_CENTI[4])}.</p>
             <div className="divider" />
             <label className="sw">Trộn thứ tự câu trong từng phần<input type="checkbox" checked={d.shuffleQuestions} onChange={(e) => upd({ shuffleQuestions: e.target.checked })} /></label>
             <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={d.shuffleOptions} onChange={(e) => upd({ shuffleOptions: e.target.checked })} /></label>
