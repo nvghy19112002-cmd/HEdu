@@ -127,6 +127,33 @@ export function findChain(scope: Row['scope'], tax: Taxonomy): string[] | null {
   return null;
 }
 
+/**
+ * Dòng ma trận dùng thật: dòng đã có cờ giữ nguyên cờ; dòng KHÔNG cờ nhưng nút phạm vi không còn trong cây (vd cây đổi sau khi lưu bản nháp)
+ * tự coi là `mat`. Nhờ đó ngân hàng vẫn còn câu mang ID cũ cũng không bao giờ được lấy cho một phạm vi không còn tồn tại.
+ */
+export function effectiveRows(rows: readonly Row[], tax: Taxonomy): Row[] {
+  return rows.map((r) => (r.flag || findChain(r.scope, tax) ? r : { ...r, flag: 'mat' as const }));
+}
+
+export type RowFix = { ok: true; row: Row } | { ok: false; why: string };
+const strip = (r: Row): Row => { const { flag: _f, label: _l, ...rest } = r; return rest; };
+
+/**
+ * Giáo viên xác nhận dòng "đã đổi vị trí" (giữ nguyên ID hiện tại). Kiểm lại nút còn thật trong cây rồi mới bỏ cờ.
+ * Dòng "không còn trong cây" KHÔNG xác nhận được: phải chọn lại phạm vi hoặc xóa dòng.
+ */
+export function confirmRow(r: Row, tax: Taxonomy): RowFix {
+  if (r.flag === 'mat') return { ok: false, why: 'Phạm vi này không còn trong cây chương trình: hãy chọn lại phạm vi hợp lệ hoặc xóa dòng.' };
+  if (!findChain(r.scope, tax)) return { ok: false, why: 'Phạm vi không còn trong cây chương trình nên chưa xác nhận được.' };
+  return { ok: true, row: strip(r) };
+}
+
+/** Chọn lại phạm vi cho một dòng. Chỉ bỏ cờ sau khi xác minh phạm vi mới CÓ THẬT trong cây; không bao giờ tự đoán một Dạng khác. */
+export function rescopeRow(r: Row, scope: Row['scope'], tax: Taxonomy): RowFix {
+  if (!findChain(scope, tax)) return { ok: false, why: 'Phạm vi mới không có trong cây chương trình.' };
+  return { ok: true, row: { ...strip(r), scope: { kind: scope.kind, id: scope.id } } };
+}
+
 /** Tên phạm vi dạng đường dẫn: “Lớp 12 › Chương 1 › Bài 2 › Dạng”. Nút không còn trong cây thì trả null. */
 export function scopeLabel(scope: Row['scope'], tax: Taxonomy): string | null {
   if (scope.kind === 'grade') return `Cả lớp ${scope.id}`;

@@ -9,7 +9,7 @@ import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
 import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
-import { loadDraft, newRowId, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
+import { confirmRow, effectiveRows, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
@@ -59,6 +59,30 @@ const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exce
   );
 });
 
+/** Chọn lại phạm vi cho một dòng đã mất/đổi vị trí. Chỉ chọn trong cây hiện có; không tự đoán. */
+function ScopePicker({ defaultGrade, onPick, onCancel }: { defaultGrade: number; onPick(scope: Row['scope']): void; onCancel(): void }) {
+  const [grade, setGrade] = useState(defaultGrade);
+  const [chap, setChap] = useState('');
+  const [les, setLes] = useState('');
+  const [form, setForm] = useState('');
+  const chs = chaptersOf(grade);
+  const lessons = chs.find((c) => c.id === chap)?.lessons ?? [];
+  const forms = lessons.find((l) => l.id === les)?.forms ?? [];
+  const scope: Row['scope'] = form ? { kind: 'form', id: form } : les ? { kind: 'lesson', id: les } : chap ? { kind: 'chapter', id: chap } : { kind: 'grade', id: String(grade) };
+  return (
+    <div className="te-add" role="group" aria-label="Chọn lại phạm vi cho dòng" style={{ gridColumn: '1 / -1', borderTop: 'none', borderRadius: 8 }}>
+      <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
+      <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">Cả chương</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+      <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">Mọi dạng</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+      <div className="te-add-acts">
+        <button type="button" className="btn btn-dark btn-sm" onClick={() => onPick(scope)}>Dùng phạm vi này</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Hủy</button>
+      </div>
+    </div>
+  );
+}
+
 function RowAdder({ onAdd, onTemplate, defaultGrade }: { onAdd(r: Row): void; onTemplate(grade: number): void; defaultGrade: number }) {
   const [grade, setGrade] = useState(defaultGrade);
   const [chap, setChap] = useState('');
@@ -102,6 +126,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tplDlg, setTplDlg] = useState(false);
+  const [rescope, setRescope] = useState<string | null>(null);
   /** bản nháp ngay trước lần áp dụng mẫu gần nhất, để hoàn tác (chỉ trong phiên) */
   const [undoTpl, setUndoTpl] = useState<{ prev: Draft; note: string } | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string; sig: string } | null>(null);
@@ -135,16 +160,19 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const byUid = useMemo(() => new Map(questions.map((q) => [q.uid, q])), [questions]);
   const exclude = useMemo(() => new Set(d.rejected), [d.rejected]);
   const exceptions = useMemo(() => new Set(Object.keys(d.exceptions)), [d.exceptions]);
-  const alloc = useMemo(() => allocate(questions, d.rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions }), [questions, d.rows, d.policy, d.seed, d.locked, exclude, exceptions, effOf]);
-  const picked = useMemo(() => collect(d.rows, alloc.picks, byUid), [d.rows, alloc, byUid]);
+  /** Dòng dùng thật: dòng có cờ hoặc có nút phạm vi không còn trong cây KHÔNG khớp câu nào và chặn xuất */
+  const rows = useMemo(() => effectiveRows(d.rows, tax), [d.rows, tax]);
+  const alloc = useMemo(() => allocate(questions, rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions }), [questions, rows, d.policy, d.seed, d.locked, exclude, exceptions, effOf]);
+  const picked = useMemo(() => collect(rows, alloc.picks, byUid), [rows, alloc, byUid]);
   const counts = countsOf(picked);
   const total = counts.p1 + counts.p2 + counts.p3 + counts.p4;
   const variants = useMemo(() => makeVariants(picked, { count: d.count, firstCode: d.firstCode, shuffleQuestions: d.shuffleQuestions, shuffleOptions: d.shuffleOptions, seed: d.seed, keepFirstOriginal: true }), [picked, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.seed]);
   const variant = variants[Math.min(shown, variants.length - 1)];
   const rowOf = useMemo(() => { const m = new Map<string, string>(); for (const [rid, us] of Object.entries(alloc.picks)) for (const u of us) m.set(u, rid); return m; }, [alloc]);
   const lockedSet = useMemo(() => new Set(Object.values(d.locked).flat()), [d.locked]);
-  const missing = d.rows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
-  const issues = useMemo(() => [...checkVariants(variants), ...reconcile(d.rows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, d.rows, alloc, picked, d.scoring]);
+  const missing = rows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
+  const flaggedN = rows.filter((r) => r.flag).length;
+  const issues = useMemo(() => [...checkVariants(variants), ...reconcile(rows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, rows, alloc, picked, d.scoring]);
   const lostLocks = alloc.lost;
   const centi = totalCenti(counts, d.scoring);
   const picks = useMemo(() => PARTS.flatMap((p) => picked[p]), [picked]);
@@ -174,7 +202,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   };
   const resample = () => upd({ seed: Math.floor(Math.random() * 1e9), rejected: [] });
 
-  const swapRow = swap ? d.rows.find((r) => r.id === rowOf.get(swap)) : undefined;
+  const swapRow = swap ? rows.find((r) => r.id === rowOf.get(swap)) : undefined;
   const candidates = useMemo<Question[]>(() => (swapRow ? candidatesFor(questions, swapRow, { policy: d.policy, eff: effOf }, new Set(picks.map((q) => q.uid))) : []), [swapRow, questions, d.policy, effOf, picks]);
 
   const refMatrix = useRef<HTMLElement>(null);
@@ -187,12 +215,14 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
 
   /** Bộ tệp của đề, kèm dấu vân SHA-256 từng tệp nguồn trong hedu-de.json (để về sau biết tệp có bị sửa tay không). */
   const projectFiles = async (name: string) => {
+    // tầng xuất: không bao giờ ghi đề khi ma trận còn dòng chưa xử lý (kể cả khi giao diện bị bỏ qua)
+    if (rows.some((r) => r.flag)) throw new Error('Ma trận còn dòng chưa xử lý (phạm vi đã xóa hoặc đổi vị trí).');
     const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
     const fileHashes = await sourceHashes(tex);
     return [
       ...tex,
       { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
-      { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes }) },
+      { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes }) },
       { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
     ];
   };
@@ -232,7 +262,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
     if (f) showFile({ title: `Mã LaTeX · mã đề ${variant.code}`, name: f.path, text: f.text, mime: 'application/x-tex' });
   };
 
-  const rowsEmpty = d.rows.length === 0;
+  const rowsEmpty = rows.length === 0;
 
   return (
     <>
@@ -270,14 +300,19 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
             ) : (
               <div className="te-rows" role="table" aria-label="Các dòng của ma trận">
                 <div className="te-row te-row-h" role="row"><span>Phạm vi</span><span>Loại câu</span><span>Mức độ</span><span>Số câu</span><span>Kho câu</span><span /></div>
-                {d.rows.map((r) => {
+                {rows.map((r) => {
                   const pool = alloc.pool[r.id] ?? 0, def = alloc.deficit[r.id] ?? 0;
                   const name = scopeLabel(r.scope, tax) ?? (r.label ? `${r.label} (đã lưu trong mẫu)` : null);
                   return (
                     <div key={r.id} className={`te-row${def ? ' short' : ''}`} role="row">
                       <span className="te-scope" title={name ?? ''}>{name ?? <em>Mục này không còn trong cây</em>}
-                        {r.flag === 'mat' && <span className="te-flag warn" title="Chương/Bài/Dạng của dòng này đã bị xóa khỏi cây chương trình. HEdu không tự chuyển sang mục khác: hãy xóa dòng hoặc thêm dòng mới đúng mục.">không còn trong cây</span>}
-                        {r.flag === 'doi-vi-tri' && <span className="te-flag warn" title="Mục này đã đổi vị trí trong cây kể từ khi lưu mẫu. Kiểm tra rồi bấm “Đã xem” nếu đúng ý.">đã đổi vị trí <button type="button" className="linkbtn" onClick={() => setRow(r.id, { flag: undefined })}>Đã xem</button></span>}
+                        {r.flag === 'mat' && <span className="te-flag warn" title="Chương/Bài/Dạng của dòng này đã bị xóa khỏi cây chương trình. HEdu không tự chuyển sang mục khác: hãy chọn lại phạm vi hoặc xóa dòng. Chưa xuất được đề khi còn dòng này.">không còn trong cây <button type="button" className="linkbtn" onClick={() => setRescope(rescope === r.id ? null : r.id)}>Chọn lại phạm vi…</button></span>}
+                        {r.flag === 'doi-vi-tri' && <span className="te-flag warn" title="Mục này đã đổi vị trí trong cây kể từ khi lưu mẫu. Xem phạm vi cũ và mới rồi xác nhận giữ ID hiện tại. Chưa xuất được đề khi chưa xác nhận.">đã đổi vị trí <button type="button" className="linkbtn" onClick={() => {
+                          const now = scopeLabel(r.scope, tax);
+                          if (!window.confirm(`Mục này đã đổi vị trí trong cây chương trình kể từ khi lưu mẫu.\n\nLúc lưu mẫu: ${r.label ?? '(không ghi)'}\nHiện nay: ${now ?? '(không còn)'}\n\nGiữ nguyên mục hiện tại (cùng ID) cho dòng này?`)) return;
+                          const fx = confirmRow(r, tax);
+                          if (fx.ok) upd({ rows: d.rows.map((x) => (x.id === r.id ? fx.row : x)) }); else toast(fx.why);
+                        }}>Xem và xác nhận…</button> <button type="button" className="linkbtn" onClick={() => setRescope(rescope === r.id ? null : r.id)}>Chọn lại…</button></span>}
                       </span>
                       <select className="sel" aria-label="Loại câu" value={r.type} onChange={(e) => { const t = e.target.value as QType; setRow(r.id, { type: t, level: t === 'tn' ? r.level : 'any' }); }}>{TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</select>
                       <select className="sel" aria-label="Mức độ" value={r.level} onChange={(e) => setRow(r.id, { level: e.target.value as Level | 'any' })}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select>
@@ -291,6 +326,14 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                         {def ? <span className="te-lack"><IcAlert size={14} />Thiếu {def} câu · kho {pool}</span> : <span className="okmark"><IcCheck />Đủ · kho {pool}</span>}
                       </div>
                       <button type="button" className="ico" style={{ width: 32, height: 32 }} aria-label={`Bỏ dòng ${name ?? ''}`} onClick={() => delRow(r.id)}><IcX /></button>
+                      {rescope === r.id && (
+                        <ScopePicker defaultGrade={defaultGrade} onCancel={() => setRescope(null)} onPick={(sc) => {
+                          const fx = rescopeRow(r, sc, tax);
+                          if (!fx.ok) { toast(fx.why); return; }
+                          upd({ rows: d.rows.map((x) => (x.id === r.id ? fx.row : x)) });
+                          setRescope(null);
+                        }} />
+                      )}
                     </div>
                   );
                 })}

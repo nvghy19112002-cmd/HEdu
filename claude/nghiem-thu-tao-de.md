@@ -69,6 +69,7 @@ Nút **Mẫu ma trận…** ở màn Tạo đề: lưu ma trận hiện tại th
 - [ ] Tạo đề → dựng ma trận → **Mẫu ma trận…** → lưu “Giữa kỳ”; đóng app, mở lại: mẫu còn. Tạo mẫu trùng tên bị từ chối.
 - [ ] Ma trận khác → **Áp dụng… → Thay**: hỏi xác nhận nếu đang có dòng/câu khóa; có nút **Hoàn tác áp dụng mẫu**. **Thêm**: giữ nguyên dòng, câu khóa, chính sách đang có.
 - [ ] Đổi tên, nhân bản (tên “… (bản sao)”), xóa (có hỏi xác nhận).
+- [ ] **Dòng không hợp lệ không được dùng để ra đề.** Áp một mẫu có dòng trỏ tới Dạng đã bị xóa khỏi cây (hoặc bài đã chuyển sang chương khác): dòng hiện cờ “không còn trong cây” hoặc “đã đổi vị trí”, **không lấy câu nào**, nút **Lưu vào Thư viện đề** và **Xuất** bị khóa, đầu trang có thông báo “chưa được xử lý”. “Đã đổi vị trí”: bấm **Xem và xác nhận…** (hiện phạm vi lúc lưu mẫu và hiện nay) rồi mới dùng được. “Không còn trong cây”: bấm **Chọn lại phạm vi…** chọn mục có thật, hoặc xóa dòng. Đóng app mở lại: cờ vẫn còn cho tới khi xử lý.
 - [ ] Vào **Chương trình**, xóa một Dạng mà mẫu dùng; mở mẫu: báo “n dòng không còn hợp lệ”; áp dụng ⇒ dòng đó vẫn hiện tên cũ kèm “không còn trong cây”, không bị đổi sang Dạng khác. Đề không xuất được khi dòng đó thiếu câu.
 - [ ] **Cài đặt → Dữ liệu & sao lưu**: tạo bản chụp .db, đổi tên mẫu, khôi phục bản chụp: tên mẫu trở về. Tạo file sao lưu JSON, xóa mẫu, khôi phục từ file JSON: mẫu trở lại.
 - [ ] Quay về bản beta.35 trên dữ liệu có mẫu (nếu cần thử): ngân hàng vẫn mở bình thường.
