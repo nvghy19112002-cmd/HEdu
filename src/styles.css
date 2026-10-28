@@ -1583,3 +1583,16 @@ span.bt-caret { cursor: default; }
 .qm-foot { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .qm-sel { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; font-weight: 600; }
 .qm-nav { margin-left: auto; display: inline-flex; gap: 6px; }
+
+/* Ngân hàng: một hàng công cụ trên thẻ */
+.qbar + .qstats + .qtools, .qtools { flex-wrap: nowrap; gap: 8px; }
+.qtools .lh-left { flex-wrap: nowrap; gap: 12px; white-space: nowrap; }
+.qtools .qtools-r { flex-wrap: nowrap; gap: 6px; }
+.qtools .lh-sol { margin-left: 0; }
+@media (max-width: 1280px) { .qtools, .qtools .lh-left, .qtools .qtools-r { flex-wrap: wrap; } }
+.mf-foot { flex-wrap: wrap; }
+.qtools .lh-left, .qtools .qtools-r { flex: none; }
+.qtools .qtools-r { margin-left: auto; }
+.qtools .qsel select { max-width: 150px; }
+.qtools .pg-jump { white-space: nowrap; }
+.qtools .pg-jump input { width: 48px; }

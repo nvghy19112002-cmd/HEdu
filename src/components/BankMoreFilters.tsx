@@ -14,7 +14,18 @@ const ID_LABEL: Record<Exclude<IdFilter, 'all'>, string> = { chua: 'Chưa xác m
 /** Số bộ lọc đang bật trong nút này. */
 export const moreCount = (f: BankFilters, idF: IdFilter = 'all'): number => (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0) + (idF !== 'all' ? 1 : 0);
 
-export function BankMoreFilters({ f, facets, onF, idF, onIdF }: { f: BankFilters; facets: Facets; onF(next: BankFilters): void; idF: IdFilter; onIdF(v: IdFilter): void }) {
+interface Props {
+  f: BankFilters; facets: Facets; onF(next: BankFilters): void; idF: IdFilter; onIdF(v: IdFilter): void;
+  /** bỏ MỌI bộ lọc (kể cả Mức/Kiểu trên thanh thống kê), giữ mục đang xem */
+  onClearAll(): void;
+  /** về toàn bộ ngân hàng: bỏ mục đang xem, bộ lọc, chữ tìm */
+  onResetAll(): void;
+  canReset: boolean;
+  /** số bộ lọc đang bật trên toàn màn (Mức, Kiểu, Hình, Duyệt, Dạng, Nhãn) */
+  nAll: number;
+}
+
+export function BankMoreFilters({ f, facets, onF, idF, onIdF, onClearAll, onResetAll, canReset, nAll }: Props) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
@@ -64,7 +75,8 @@ export function BankMoreFilters({ f, facets, onF, idF, onIdF }: { f: BankFilters
             allLabel="Tất cả" allCount={facets.tagAll}
           />
           <div className="mf-foot">
-            <button type="button" className="btn btn-sm" disabled={n === 0} onClick={() => { onF({ ...f, figure: 'all', review: 'all', tag: null }); onIdF('all'); }}>Bỏ các lọc này</button>
+            <button type="button" className="btn btn-sm" disabled={nAll === 0} onClick={onClearAll} title="Bỏ mọi bộ lọc (Mức, Kiểu, Hình, Duyệt, Dạng, Nhãn); giữ nguyên mục đang xem">Xoá bộ lọc{nAll > 0 ? ` (${nAll})` : ''}</button>
+            <button type="button" className="btn btn-sm" disabled={!canReset} onClick={onResetAll} title="Về toàn bộ ngân hàng: bỏ mục đang xem, bộ lọc và chữ tìm. Các câu đã tick vẫn giữ">Đặt lại toàn bộ</button>
             <button type="button" className="btn btn-sm btn-dark" onClick={() => { setOpen(false); btn.current?.focus(); }}>Xong</button>
           </div>
         </div>

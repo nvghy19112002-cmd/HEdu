@@ -356,6 +356,20 @@ export function BankScreen() {
     setPage(Math.floor(i / PER_PAGE));
   };
 
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement;
+      if (t.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]') || document.querySelector('[aria-modal="true"]')) return;
+      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
+      else if (e.key === 'PageDown' && cur < pages - 1) { e.preventDefault(); goPage(cur + 1, true); }
+      else if (e.key === 'PageUp' && cur > 0) { e.preventDefault(); goPage(cur - 1, true); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+
   const renderCard = (q: Question) => {
     const p = parseExTest(q.latex);
     const on = sel.has(q.uid);
@@ -427,7 +441,7 @@ export function BankScreen() {
 
       <div className={`body-row${!docked ? ' tree-hidden' : ''}`}>
         {docked && (
-          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => undefined} />
+          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onHide={() => undefined} />
         )}
 
         <section ref={qlistRef} className="qlist" aria-label="Danh sách câu hỏi">
@@ -435,14 +449,14 @@ export function BankScreen() {
             <label className="search sm">
               <IcSearch size={16} />
               <span className="sr-only">Tìm câu hỏi</span>
-              <input type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu hoặc mã (vd 2D1H1)" />
+              <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu hoặc mã (vd 2D1H1) — phím /" />
               <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
                 <option value="here">mục này</option>
                 <option value="all">toàn kho</option>
               </select>
               <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
             </label>
-            <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} />
+            <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); }} onResetAll={() => { resetEverything(); setIdF('all'); }} canReset={canReset || idF !== 'all'} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
             <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
             {narrow && (
               <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
@@ -514,29 +528,29 @@ export function BankScreen() {
               <span className="lh-left">
                 <label className="lh-sel" title="Chọn hoặc bỏ chọn các câu đang hiện ở trang này">
                   <input ref={masterRef} type="checkbox" checked={pState === 'all'} onChange={() => (pState === 'all' ? deselectPage() : selectPage())} />
-                  Chọn trang ({shown.length})
+                  Chọn trang
                 </label>
                 <label className="sw lh-sol"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
                 {list.length > shown.length && counts.total - counts.outScope < list.length && (
-                  <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
+                  <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn cả {nf.format(list.length)} câu</button>
                 )}
               </span>
               <span className="qtools-r">
-                <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Hàng đợi xác minh ({nf.format(vqCount)})</button>
-                <label className="qsel">Sắp xếp
+                <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
+                <label className="qsel" title="Sắp xếp">
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
                     {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}
                   </select>
                 </label>
                 <label className="qsel">
                   <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value) as PerPage)} aria-label="Số câu mỗi trang">
-                    {PER_PAGE_CHOICES.map((n) => <option key={n} value={n}>{n} câu/trang</option>)}
+                    {PER_PAGE_CHOICES.map((n) => <option key={n} value={n}>{n}/trang</option>)}
                   </select>
                 </label>
                 {pages > 1 && (
                   <span className="pager-top" role="group" aria-label="Chuyển trang">
                     <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => goPage(cur - 1)} aria-label="Trang trước">‹</button>
-                    <label className="pg-jump">Trang <input key={cur} type="number" min={1} max={pages} defaultValue={cur + 1} aria-label={`Trang (1–${pages})`}
+                    <label className="pg-jump"><input key={cur} type="number" min={1} max={pages} defaultValue={cur + 1} aria-label={`Trang (1–${pages})`}
                       onKeyDown={(e) => { if (e.key === 'Enter') { const n = Math.round(Number((e.target as HTMLInputElement).value)); if (n >= 1 && n <= pages) goPage(n - 1); else (e.target as HTMLInputElement).value = String(cur + 1); } }}
                       onBlur={(e) => { const n = Math.round(Number(e.target.value)); if (n >= 1 && n <= pages && n !== cur + 1) goPage(n - 1); else e.target.value = String(cur + 1); }} /> / {nf.format(pages)}</label>
                     <button type="button" className="btn btn-sm" disabled={cur >= pages - 1} onClick={() => goPage(cur + 1)} aria-label="Trang sau">›</button>
@@ -567,7 +581,7 @@ export function BankScreen() {
       {drawerOpen && !docked && (
         <>
           <div className="fs-scrim" onClick={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
-          <BankSidebar variant="drawer" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
+          <BankSidebar variant="drawer" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onHide={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
         </>
       )}
       {vqOpen && <VerifyQueue pool={list} onClose={() => setVqOpen(false)} />}

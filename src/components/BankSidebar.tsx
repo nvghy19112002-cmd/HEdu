@@ -1,12 +1,10 @@
 // Thanh "Mục lục" của màn Ngân hàng: cây thư mục Lớp → (Phân môn) → Chương → Bài → Dạng, có số câu.
 // Mức độ và Loại câu lọc bằng nút trên thanh thống kê; Hình, Duyệt, Nhãn ở nút "Bộ lọc ▾" trên thanh công cụ.
 // Dùng cho cả kiểu gắn cố định bên trái và kiểu ngăn trượt khi cửa sổ hẹp/đã ẩn mục lục (cùng một thành phần, cùng một trạng thái).
-import { attrCount, pickGrade, type BankFilters, type Facets } from '../lib/bankfilter';
+import { pickGrade, type BankFilters, type Facets } from '../lib/bankfilter';
 import { pickPath } from '../lib/banktree';
 import type { Taxonomy } from '../lib/types';
 import { BankTree } from './BankTree';
-
-const nf = new Intl.NumberFormat('vi-VN');
 
 export interface BankSidebarProps {
   tax: Taxonomy;
@@ -15,16 +13,11 @@ export interface BankSidebarProps {
   /** Đang tìm "toàn kho" (có chữ tìm): mục lục tạm không áp dụng */
   wide: boolean;
   onF: (next: BankFilters) => void;
-  onClearAttrs: () => void;
-  onResetAll: () => void;
-  /** có gì để đặt lại (vị trí, bộ lọc, chữ tìm) */
-  canReset: boolean;
   onHide: () => void;
   variant: 'dock' | 'drawer';
 }
 
-export function BankSidebar({ tax, f, facets, wide, onF, onClearAttrs, onResetAll, canReset, onHide, variant }: BankSidebarProps) {
-  const nAttr = attrCount(f);
+export function BankSidebar({ tax, f, facets, wide, onF, onHide, variant }: BankSidebarProps) {
   return (
     <aside className={`fside${variant === 'drawer' ? ' is-drawer' : ''}`} aria-label="Mục lục">
       <div className="fs-top">
@@ -40,13 +33,6 @@ export function BankSidebar({ tax, f, facets, wide, onF, onClearAttrs, onResetAl
         </div>
       </div>
 
-      <div className="fs-foot">
-        <p className="fs-count" aria-live="polite">Đang hiện <b>{nf.format(facets.list.length)}</b> / {nf.format(facets.scoped)} câu</p>
-        <div className="fs-btns">
-          <button type="button" className="btn btn-sm" disabled={nAttr === 0} onClick={onClearAttrs} title="Bỏ mọi bộ lọc Mức độ, Loại câu, Hình, Duyệt, Nhãn; giữ nguyên mục đang xem">Xoá bộ lọc{nAttr > 0 ? ` (${nAttr})` : ''}</button>
-          <button type="button" className="btn btn-sm" disabled={!canReset} onClick={onResetAll} title="Về toàn bộ ngân hàng: bỏ mục đang xem, bộ lọc và chữ tìm. Các câu đã tick vẫn giữ">Đặt lại toàn bộ</button>
-        </div>
-      </div>
     </aside>
   );
 }
