@@ -5,9 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
-import { CompiledView } from '../components/CompiledView';
 import { QuestionDrawer } from '../components/QuestionDrawer';
-import { isTikzReady } from '../lib/tikz';
 import { loadPerPage, loadSort, PER_PAGE_CHOICES, savePerPage, saveSort, type PerPage } from '../lib/bankview';
 import { loadSession, saveSession } from '../lib/banksession';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
@@ -33,10 +31,10 @@ import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
+import { QuestionModal } from '../components/QuestionModal';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
-import { ClampBox } from '../components/ClampBox';
-import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
-import { IdReviewControl, IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
+import { ReviewBadge } from '../components/ReviewControl';
+import { IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
 import { VerifyQueue } from '../components/VerifyQueue';
 import { scopeCounts } from '../lib/verifyqueue';
 import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPES, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
@@ -84,8 +82,8 @@ export function BankScreen() {
   const [moreSel, setMoreSel] = useState(false); // menu "Thao tác khác" của thanh chọn
   const [dupSel, setDupSel] = useState(false); // mở Kiểm tra trùng với phạm vi "các câu đang chọn"
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const [exact, setExact] = useState<Set<string>>(new Set()); // các câu đang ở chế độ “Xem chuẩn”
-  const [ctlOpen, setCtlOpen] = useState<Set<string>>(new Set()); // thẻ đang mở khối Kiểm duyệt / xác minh
+  /** câu đang mở trong cửa sổ xem (bấm vào thẻ) */
+  const [viewUid, setViewUid] = useState<string | null>(null);
   const [openUid, setOpenUid] = useState<string | null>(nav.openUid ?? null); // câu đang sửa ở ngăn bên phải
   const opened = openUid ? questions.find((q) => q.uid === openUid) : undefined;
   const [page, setPage] = useState(() => sess?.page ?? 0);
@@ -115,19 +113,27 @@ export function BankScreen() {
   const chapter = gradeObj?.branches.flatMap((b) => b.chapters).find((c) => c.id === f.chapterId) ?? null;
   const lesson = chapter?.lessons.find((l) => l.id === f.lessonId) ?? null;
 
+  // Trạng thái xác minh Dạng: lọc cùng lượt với chữ tìm, để MỌI số đếm (cây, thống kê, Tổng) khớp đúng danh sách đang hiện
+  const effOf = useEffectiveOf();
+  const [idF, setIdF] = useState<IdFilter>('all');
+  const qByUid = useMemo(() => new Map(questions.map((q) => [q.uid, q])), [questions]);
   /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
   const facets = useMemo(() => {
     const words = fold(text.trim()).split(/\s+/).filter(Boolean);
-    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)), wideOn, sort));
-  }, [questions, f, text, wideOn, tax, index, sort]);
+    const idOk = (uid: string) => {
+      if (idF === 'all') return true;
+      const q = qByUid.get(uid);
+      if (!q) return false;
+      const e = effOf(q);
+      return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF;
+    };
+    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)) && idOk(uid), wideOn, sort));
+  }, [questions, f, text, wideOn, tax, index, sort, idF, qByUid, effOf]);
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
   useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
   const selectedQs = useMemo(() => sortedCopy(questions.filter((q) => sel.has(q.uid)), sort), [questions, sel, sort]);
-  // Trạng thái xác minh Dạng (PR 1C): lọc phụ ngoài hệ bộ lọc chính, chưa có số đếm theo chiều
-  const effOf = useEffectiveOf();
-  const [idF, setIdF] = useState<IdFilter>('all');
-  const list = useMemo(() => (idF === 'all' ? facets.list : facets.list.filter((q) => { const e = effOf(q); return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF; })), [facets.list, idF, effOf]);
+  const list = facets.list;
   const resultUids = useMemo(() => new Set(list.map((q) => q.uid)), [list]);
   const [vqOpen, setVqOpen] = useState(false); // hàng đợi xác minh từng câu (PR 1E)
   const vqCount = useMemo(() => scopeCounts(list, effOf)['tat-ca'], [list, effOf]);
@@ -216,7 +222,6 @@ export function BankScreen() {
     return () => document.removeEventListener('keydown', k);
   }, [drawerOpen]);
 
-  const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); apply(n); };
   const noFilter = f.gradeId == null && nAttr === 0 && !hasText;
   const resultsName = noFilter ? 'toàn bộ ngân hàng' : 'kết quả đang lọc';
   const selectPage = () => setSel(addMany(sel, shownUids));
@@ -341,6 +346,16 @@ export function BankScreen() {
     runExport();
   };
 
+  const viewIdx = viewUid ? list.findIndex((q) => q.uid === viewUid) : -1;
+  const viewQ = viewIdx >= 0 ? list[viewIdx] : null;
+  /** Câu trước/sau trong cửa sổ xem, theo cả danh sách đang lọc; trang nền đi theo để đóng cửa sổ là thấy đúng chỗ. */
+  const stepView = (d: number) => {
+    const i = viewIdx + d;
+    if (i < 0 || i >= list.length) return;
+    setViewUid(list[i].uid);
+    setPage(Math.floor(i / PER_PAGE));
+  };
+
   const renderCard = (q: Question) => {
     const p = parseExTest(q.latex);
     const on = sel.has(q.uid);
@@ -355,9 +370,6 @@ export function BankScreen() {
             <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
             <span className="code-tag">{questionCode(q, q.level)}</span>
             <div className="card-acts">
-              {isTikzReady() && (
-                <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
-              )}
               <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => setOpenUid(q.uid)}><IcEdit size={17} /></button>
               <div className="more">
                 <button type="button" className="ico" aria-label="Thêm thao tác" aria-haspopup="menu" aria-expanded={menuUid === q.uid} title="Nhân bản, xoá…" onClick={() => { setConfirmDel(null); setMenuUid(menuUid === q.uid ? null : q.uid); }}><IcMore size={17} /></button>
@@ -372,16 +384,11 @@ export function BankScreen() {
               </div>
             </div>
           </div>
-          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<ReviewBadge q={q} /><IdStateBadge eff={effOf(q)} />
-            <button type="button" className="linkbtn card-ctl" aria-expanded={ctlOpen.has(q.uid)} onClick={() => toggle(ctlOpen, q.uid, setCtlOpen)} title="Kiểm duyệt nội dung, xác minh Dạng và mức độ">{ctlOpen.has(q.uid) ? 'Ẩn duyệt ▲' : 'Duyệt / xác minh ▾'}</button>
+          <div className="card-where" title={at ? `${at.chapter?.name ?? ''} › ${at.lesson?.name ?? ''}` : undefined}><span className="cw-path">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span><ReviewBadge q={q} /><IdStateBadge eff={effOf(q)} />{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
+          <div className="card-content" role="button" tabIndex={0} aria-label={`Xem đầy đủ câu ${seqLabel(q.seq)}`} title="Bấm để xem đầy đủ"
+            onClick={() => setViewUid(q.uid)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewUid(q.uid); } }}>
+            <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />
           </div>
-          {exact.has(q.uid)
-            ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
-            : <ClampBox><QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} /></ClampBox>}
-          {ctlOpen.has(q.uid) && <>
-            <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
-            <IdReviewControl key={`id-${q.uid}`} q={q} eff={effOf(q)} />
-          </>}
         </div>
       </article>
     );
@@ -585,6 +592,10 @@ export function BankScreen() {
       {batch === 'trash' && <BatchTrashDialog qs={selectedQs} busy={batchBusy} onRun={() => { void runTrashBatch(); }} onCancel={() => setBatch(null)} />}
       {exportPick && <ExportChoiceDialog qs={selectedQs} onFileOnly={runFileOnly} onClose={() => setExportPick(false)} onToast={toast} />}
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
+      {viewQ && (
+        <QuestionModal q={viewQ} index={viewIdx} total={list.length} eff={effOf(viewQ)} selected={sel.has(viewQ.uid)} onToggleSel={() => setSel(toggleOne(sel, viewQ.uid))}
+          onPrev={() => stepView(-1)} onNext={() => stepView(1)} onEdit={() => { setViewUid(null); setOpenUid(viewQ.uid); }} onReview={(s) => changeReview(viewQ, s)} onClose={() => setViewUid(null)} />
+      )}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
     </>
   );
