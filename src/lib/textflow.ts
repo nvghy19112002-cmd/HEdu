@@ -54,6 +54,7 @@ const IGNORE_0 = new Set([
   'noindent', 'indent', 'hfill', 'hfil', 'vfill', 'vfil', 'medskip', 'bigskip', 'smallskip', 'relax', 'protect',
   'allowbreak', 'nobreak', 'ignorespaces', 'strut', 'leavevmode', 'newpage', 'clearpage', 'pagebreak', 'nopagebreak',
   'null', 'unskip', 'unkern', 'displaystyle', 'textstyle', 'hrulefill', 'dotfill', 'flushleft', 'maketitle',
+  'allowdisplaybreaks', 'sloppy', 'fussy',
 ]);
 // lệnh chỉ cần BỎ các đối số của nó
 const DROP_ARGS: Record<string, number> = {
@@ -355,6 +356,8 @@ function walk(s: string, ctx: Ctx): string {
       i = e;
       continue;
     }
+    // \centerline{…}: một dòng canh giữa (lệnh TeX gốc, hay gặp trong đề cũ)
+    if (name === 'centerline') { const [a, e] = readArgs(s, afterWs, 1); out += OPEN('tx-center') + walk(a[0] ?? '', ctx) + CLOSE; i = e; continue; }
     if (name === 'texttt') { const [a, e] = readArgs(s, afterWs, 1); out += `<code class="tx-tt">${walk(a[0] ?? '', ctx)}</code>`; i = e; continue; }
     if (name === 'textsuperscript' || name === 'textsubscript') { const [a, e] = readArgs(s, afterWs, 1); const t = name === 'textsuperscript' ? 'sup' : 'sub'; out += `<${t}>${walk(a[0] ?? '', ctx)}</${t}>`; i = e; continue; }
     if (name === 'textcolor' || name === 'colorbox' || name === 'fcolorbox') {
@@ -535,6 +538,14 @@ function renderEnv(name: string, body: string, ctx: Ctx): string {
     const [, e] = readArgs(body, p, need);
     const o2 = readOptional(body, e);
     return wrapBlock('tx-wrap', walk(body.slice(o2 ? o2[1] : e), ctx));
+  }
+
+  // multicols{n}: chia n cột như bản in (gói multicol)
+  if (name === 'multicols' || name === 'multicols*') {
+    const [a, e] = readArgs(body, 0, 1);
+    const n = Math.max(1, Math.min(6, Number.parseInt(a[0] ?? '2', 10) || 2));
+    const o = readOptional(body, e);
+    return OPEN(`tx-cols tx-cols-${n}`) + walk(body.slice(o ? o[1] : e), ctx) + CLOSE;
   }
 
   if (name === 'verbatim' || name === 'verbatim*') return `<pre class="tx-pre">${esc(body)}</pre>`;

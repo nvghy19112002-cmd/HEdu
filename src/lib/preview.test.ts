@@ -93,6 +93,13 @@ console.log('Chữ, danh sách, bảng');
   ok(cells >= 3, `dòng kẻ cuối phủ đủ ${cells}/3 cột (không chỉ cột đầu)`);
   const m = renderPartsEx('\\begin{align*} a &= b \\\\ c &= d \\end{align*} và \\begin{eqnarray*} x &=& 1 \\end{eqnarray*}');
   ok(m.unsupported.length === 0 && (m.parts.map((x) => (x as { html?: string }).html ?? '').join('').match(/katex/g) ?? []).length > 0, 'align*, eqnarray* ngoài $…$ dựng bằng công thức');
+  const ab = renderPartsEx('Ta có\n\\allowdisplaybreaks\n\\begin{eqnarray*} x &=& 1 \\end{eqnarray*}');
+  ok(ab.unsupported.length === 0 && !/allowdisplaybreaks/.test(JSON.stringify(ab.parts)), '\\allowdisplaybreaks chỉ là lệnh ngắt trang: bỏ qua, không báo "Chưa hiểu"');
+  const mc = renderPartsEx('Trong các bất phương trình sau\n\\begin{multicols}{4}\n\\begin{enumerate}[i.]\n\\item $x>0$\n\\item $y<1$\n\\end{enumerate}\n\\end{multicols}');
+  const mcHtml = JSON.stringify(mc.parts);
+  ok(mc.unsupported.length === 0 && /tx-cols-4/.test(mcHtml) && !/multicols/.test(mcHtml), 'multicols{4}: chia 4 cột, không báo "Chưa hiểu", không lộ tên lệnh');
+  const cl = renderPartsEx('\\centerline{Hình 1. Đồ thị $y=x^2$}');
+  ok(cl.unsupported.length === 0 && /tx-center/.test(JSON.stringify(cl.parts)) && /Hình 1/.test(JSON.stringify(cl.parts)), '\\centerline{…}: canh giữa, giữ nội dung');
 }
 
 console.log('Không im lặng nuốt: lệnh lạ phải lộ ra');
