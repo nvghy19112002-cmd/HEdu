@@ -12,6 +12,12 @@ export function useUsageScan(on: boolean): UsageState & { refresh(): void } {
     scanUsage().then((r) => setSt({ projects: r.projects, loading: false, error: null, scannedAt: Date.now() }), (e) => setSt({ projects: [], loading: false, error: e instanceof Error ? e.message : String(e), scannedAt: null }));
   }, []);
   useEffect(() => { if (on) refresh(); }, [on, refresh]);
+  // Thư viện có thể đổi ở màn khác: quay lại cửa sổ thì quét lại
+  useEffect(() => {
+    if (!on) return;
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [on, refresh]);
   return { ...st, refresh };
 }
 
@@ -52,7 +58,7 @@ export function ExamUsagePanel({ scope, onScope, usage, idx }: { scope: UsageSco
               <p className="te-note">Đang đối chiếu <b>{idx.matched.length}</b> đề, <b>{idx.used.size}</b> câu đã dùng.
                 {' '}<button type="button" className="linkbtn" onClick={usage.refresh}>Làm mới</button></p>
               {idx.matched.length > 0 && <details><summary>Danh sách đề được đối chiếu</summary><ul className="us-list">{idx.matched.map((p) => <li key={p.id}>{p.name} · {p.uids.length} câu{p.folder ? ` · ${p.folder}` : ''}</li>)}</ul></details>}
-              {idx.unverifiable.length > 0 && <p className="te-bad" role="status">{idx.unverifiable.length} đề trong phạm vi chưa thể đối chiếu đầy đủ (không có UID đáng tin, vd đề nhập tay bằng tệp .tex). HEdu không coi các đề này là “chưa từng dùng”: câu trong đó có thể vẫn bị lặp. {idx.unverifiable.slice(0, 5).map((p) => p.name).join('; ')}{idx.unverifiable.length > 5 ? '…' : ''}</p>}
+              {idx.unverifiable.length > 0 && <p className="te-bad" role="status">{idx.unverifiable.length} đề trong phạm vi chưa thể đối chiếu đầy đủ (không có UID đáng tin như đề nhập tay bằng tệp .tex, hoặc tệp hedu-de.json / sổ nguồn bị hỏng hay thiếu cấu trúc). HEdu không coi các đề này là “chưa từng dùng”: câu trong đó có thể vẫn bị lặp. {idx.unverifiable.slice(0, 5).map((p) => (p.note ? `${p.name} (${p.note})` : p.name)).join('; ')}{idx.unverifiable.length > 5 ? '…' : ''}</p>}
               {idx.withMissing.length > 0 && <p className="te-note" role="status">{idx.withMissing.length} đề có câu ghi trong sổ nguồn nhưng không còn thấy trong tệp đề; vẫn tính là đã dùng (thận trọng).</p>}
               {scope.on && idx.matched.length === 0 && <p className="te-note">Chưa có đề nào được chọn nên chưa loại câu nào.</p>}
               <p className="te-note">Câu bạn đã khóa tay vẫn được giữ. Câu đã sửa nội dung sau khi dùng vẫn tính theo UID; HEdu chưa xác định được việc “đã sửa sau khi dùng”.</p>

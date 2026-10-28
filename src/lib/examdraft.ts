@@ -80,7 +80,7 @@ export function parseDraft(raw: string | null): Draft {
     const strs = (x: unknown): string[] => (Array.isArray(x) ? x.filter((v): v is string => typeof v === 'string').slice(0, 500) : []);
     d.usage = { on: u.on === true, folders: strs(u.folders), years: strs(u.years), types: strs(u.types), ids: strs(u.ids) };
   }
-  if (isObj(j.reuse)) for (const [k, v] of Object.entries(j.reuse)) if (isObj(v) && typeof v.at === 'number') d.reuse[k] = { at: v.at, from: Array.isArray(v.from) ? v.from.filter((x): x is string => typeof x === 'string').slice(0, 20) : [] };
+  if (isObj(j.reuse)) for (const [k, v] of Object.entries(j.reuse)) if (isObj(v) && typeof v.at === 'number') d.reuse[k] = { at: v.at, from: Array.isArray(v.from) ? v.from.filter((x): x is string => typeof x === 'string').slice(0, 500) : [] };
   d.pickSig = typeof j.pickSig === 'string' ? j.pickSig : '';
   return d;
 }

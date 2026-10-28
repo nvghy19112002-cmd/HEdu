@@ -41,7 +41,6 @@ pub struct UsageScan {
 
 #[derive(Deserialize)]
 struct SrcDoc {
-    #[serde(default)]
     items: Vec<SrcItem>,
 }
 #[derive(Deserialize)]
@@ -76,14 +75,31 @@ pub fn spec_uids(bytes: &[u8]) -> Result<BTreeSet<String>, String> {
     let ma = v.get("maDe").and_then(|x| x.as_array()).ok_or("hedu-de.json thiếu danh sách mã đề.")?;
     let mut out = BTreeSet::new();
     for m in ma {
+        let code = m.get("ma").and_then(|x| x.as_str()).unwrap_or("?");
+        if !m.get("phan").map(|x| x.is_object()).unwrap_or(false) {
+            return Err(format!("hedu-de.json: mã đề {code} thiếu cấu trúc «phan», không dùng làm bằng chứng."));
+        }
         for p in ["p1", "p2", "p3", "p4"] {
-            for it in m.pointer(&format!("/phan/{p}")).and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+            let arr = m.pointer(&format!("/phan/{p}")).and_then(|x| x.as_array()).ok_or_else(|| format!("hedu-de.json: mã đề {code} thiếu phần {p}, không dùng làm bằng chứng."))?;
+            for it in arr {
                 let uid = it.get("uid").and_then(|x| x.as_str()).filter(|u| !u.is_empty()).ok_or("Có câu thiếu UID trong hedu-de.json.")?;
                 out.insert(uid.to_string());
             }
         }
     }
+    if out.is_empty() {
+        return Err("hedu-de.json không có câu nào (cấu trúc không đủ làm bằng chứng).".into());
+    }
     Ok(out)
+}
+
+/// UID trong `.hedu/sources.json`: thiếu `items` hoặc có UID rỗng ⇒ Err (không coi là "không có câu nào").
+pub fn source_uids(bytes: &[u8]) -> Result<Vec<String>, String> {
+    let d: SrcDoc = serde_json::from_slice(bytes).map_err(|e| format!("Sổ nguồn câu hỏi thiếu cấu trúc hoặc hỏng: {e}"))?;
+    if d.items.iter().any(|i| i.uid.is_empty()) {
+        return Err("Sổ nguồn câu hỏi có mục thiếu UID, không dùng làm bằng chứng.".into());
+    }
+    Ok(d.items.into_iter().map(|i| i.uid).collect())
 }
 
 fn project_usage(lib: &Path, s: &examlib::Summary) -> UsageProject {
@@ -100,12 +116,13 @@ fn project_usage(lib: &Path, s: &examlib::Summary) -> UsageProject {
         Ok(None) => {}
         Err(e) => notes.push(e),
     }
-    match read_json(&dir, ".hedu/sources.json").and_then(|o| o.map(|b| serde_json::from_slice::<SrcDoc>(&b).map_err(|e| format!("Sổ nguồn câu hỏi hỏng: {e}"))).transpose()) {
-        Ok(Some(d)) => {
+    match read_json(&dir, ".hedu/sources.json").and_then(|o| o.map(|b| source_uids(&b)).transpose()) {
+        Ok(Some(u)) => {
             src_ok = true;
-            uids.extend(d.items.into_iter().map(|i| i.uid).filter(|u| !u.is_empty()));
-            if let Ok(st) = examsources::sources_status(lib, &s.id) {
-                missing = st.iter().filter(|x| x.state == "missing").count() as u32;
+            uids.extend(u);
+            match examsources::sources_status(lib, &s.id) {
+                Ok(st) => missing = st.iter().filter(|x| x.state == "missing").count() as u32,
+                Err(e) => notes.push(format!("Không kiểm được trạng thái sổ nguồn: {e}")),
             }
         }
         Ok(None) => {}
@@ -174,7 +191,7 @@ mod tests {
         let ma: Vec<serde_json::Value> = uids_by_code
             .iter()
             .enumerate()
-            .map(|(i, us)| serde_json::json!({ "ma": format!("10{}", i + 1), "phan": { "p1": us.iter().map(|u| serde_json::json!({ "uid": u, "dapAn": "A" })).collect::<Vec<_>>() } }))
+            .map(|(i, us)| serde_json::json!({ "ma": format!("10{}", i + 1), "phan": { "p1": us.iter().map(|u| serde_json::json!({ "uid": u, "dapAn": "A" })).collect::<Vec<_>>(), "p2": [], "p3": [], "p4": [] } }))
             .collect();
         serde_json::json!({ "v": 1, "hatGiong": 1, "maDe": ma }).to_string()
     }
@@ -190,6 +207,10 @@ mod tests {
         assert!(spec_uids(b"{}").is_err());
         assert!(spec_uids(br#"{"v":1,"maDe":[{"ma":"1","phan":{"p1":[{"dapAn":"A"}]}}]}"#).is_err(), "câu thiếu UID không đoán");
         assert!(spec_uids(b"khong phai json").is_err());
+        assert!(spec_uids(br#"{"v":1,"maDe":[{"ma":"1"}]}"#).is_err(), "thiếu phan không phải bằng chứng chưa dùng");
+        assert!(spec_uids(br#"{"v":1,"maDe":[{"ma":"1","phan":{"p1":[{"uid":"a"}]}}]}"#).is_err(), "thiếu p2..p4");
+        assert!(spec_uids(br#"{"v":1,"maDe":[]}"#).is_err() && spec_uids(br#"{"v":1,"maDe":[{"ma":"1","phan":{"p1":[],"p2":[],"p3":[],"p4":[]}}]}"#).is_err(), "rỗng không phải bằng chứng");
+        assert!(source_uids(b"{}").is_err() && source_uids(br#"{"items":[{"uid":""}]}"#).is_err() && source_uids(br#"{"items":[]}"#).unwrap().is_empty());
     }
 
     #[test]
@@ -199,6 +220,9 @@ mod tests {
         let a = mk(&lib, "Đề Tạo đề", vec![fi("main.tex", "x\n"), fi("hedu-de.json", &spec(&[&["u1", "u2"]]))], vec![]);
         let b = mk(&lib, "Đề từ ngân hàng", vec![fi("main.tex", "x\n"), fi("cauhoi.tex", &format!("{Q1}\n\n{Q2}\n"))], vec![si("u2", Q1), si("u3", Q2)]);
         let c = mk(&lib, "Đề tay", vec![fi("main.tex", "x\n")], vec![]);
+        let g = mk(&lib, "Đề thiếu phan", vec![fi("main.tex", "x
+"), fi("hedu-de.json", r#"{"v":1,"maDe":[{"ma":"101"}]}"#)], vec![]);
+        fs::write(projects_dir(&lib).join(&c).join(".hedu/sources.json"), "{}").unwrap();
         let e = mk(&lib, "Đề hỏng", vec![fi("main.tex", "x\n"), fi("hedu-de.json", "{hong")], vec![]);
         let s = scan(&lib);
         let get = |id: &str| s.projects.iter().find(|p| p.id == id).unwrap();
@@ -206,6 +230,8 @@ mod tests {
         assert_eq!((get(&b).source.as_str(), get(&b).uids.clone()), ("sources", vec!["u2".to_string(), "u3".into()]));
         assert_eq!((get(&c).source.as_str(), get(&c).uids.len()), ("none", 0), "không UID đáng tin ⇒ none, không coi là chưa dùng");
         assert!(get(&e).source == "none" && get(&e).note.is_some(), "đề hỏng báo lý do, không sập");
+        assert!(get(&c).source == "none" && get(&c).note.is_some(), "sổ nguồn thiếu items: không phải bằng chứng chưa dùng");
+        assert!(get(&g).source == "none" && get(&g).note.is_some(), "thiếu cấu trúc phan: không đối chiếu được, không phải 'chưa dùng'");
         let _ = fs::remove_dir_all(&d);
     }
 
@@ -240,17 +266,17 @@ mod tests {
     fn quet_nhieu_de_van_nhanh_va_khong_ghi_gi() {
         let d = tmp("many");
         let lib = d.join("exam-library");
-        for i in 0..300 {
+        for i in 0..1500 {
             mk(&lib, &format!("Đề {i}"), vec![fi("main.tex", "x\n"), fi("hedu-de.json", &spec(&[&["a", "b", "c"], &["c", "b", "a"]]))], vec![]);
         }
         let before = fs::read_dir(projects_dir(&lib)).unwrap().count();
         let t = std::time::Instant::now();
         let s = scan(&lib);
         let ms = t.elapsed().as_millis();
-        assert_eq!(s.projects.len(), 300);
+        assert_eq!(s.projects.len(), 1500);
         assert_eq!(fs::read_dir(projects_dir(&lib)).unwrap().count(), before);
-        eprintln!("quet 300 de: {ms} ms (so do kiem thu, khong phai bao dam hieu nang)");
-        assert!(ms < 20_000);
+        eprintln!("quet 1500 de: {ms} ms (so do kiem thu, khong phai bao dam hieu nang)");
+        assert!(ms < 60_000);
         let _ = fs::remove_dir_all(&d);
     }
 }

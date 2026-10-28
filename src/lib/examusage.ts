@@ -67,15 +67,36 @@ export function buildIndex(all: readonly UsageProject[], s: UsageScope): UsageIn
   const matched = matchedProjects(all, s);
   const used = new Map<string, UsageProject[]>();
   for (const p of matched) for (const u of p.uids) { const a = used.get(u); if (a) a.push(p); else used.set(u, [p]); }
-  return { used, matched, unverifiable: matched.filter((p) => p.source === 'none'), withMissing: matched.filter((p) => p.missing > 0) };
+  return { used, matched, unverifiable: matched.filter((p) => p.source === 'none' || p.note !== null), withMissing: matched.filter((p) => p.missing > 0) };
 }
 
-/** Tập UID máy phải tránh: câu đã dùng trong phạm vi, trừ câu giáo viên đã xác nhận cho dùng lại. */
+/**
+ * Quyền dùng lại chỉ có hiệu lực với ĐÚNG các đề giáo viên đã xác nhận (`from`). Nếu phạm vi đổi hoặc quét lại thấy thêm một đề khác đã dùng
+ * câu đó thì quyền không còn hiệu lực: câu bị tránh lại và giáo viên phải xác nhận lại. Không tự bỏ lọc.
+ */
+export function reuseValid(idx: UsageIndex, uid: string, reuse: Readonly<ReuseOk>): boolean {
+  const r = reuse[uid];
+  const ps = idx.used.get(uid);
+  return !!r && !!ps && ps.every((p) => r.from.includes(p.id));
+}
+
+/** Tập UID máy phải tránh: câu đã dùng trong phạm vi, trừ câu giáo viên đã xác nhận dùng lại cho đúng các đề đó. */
 export function avoidSet(idx: UsageIndex, reuse: Readonly<ReuseOk>): Set<string> {
   const out = new Set<string>();
-  for (const u of idx.used.keys()) if (!reuse[u]) out.add(u);
+  for (const u of idx.used.keys()) if (!reuseValid(idx, u, reuse)) out.add(u);
   return out;
 }
+
+/** Câu giáo viên đã khóa tay mà thuộc tập đã dùng (chưa được xác nhận dùng lại): vẫn giữ, nhưng phải cảnh báo và ghi dấu vết. */
+export function lockedUsed(idx: UsageIndex, reuse: Readonly<ReuseOk>, lockedUids: Iterable<string>): { uid: string; from: UsageProject[] }[] {
+  const out: { uid: string; from: UsageProject[] }[] = [];
+  for (const uid of new Set(lockedUids)) { const ps = idx.used.get(uid); if (ps?.length && !reuseValid(idx, uid, reuse)) out.push({ uid, from: ps }); }
+  return out;
+}
+
+/** Chữ ký kết quả đối chiếu (đề, nội dung, tập tránh). Khác nhau giữa hai lần quét nghĩa là Thư viện đã đổi. */
+export const usageSig = (idx: UsageIndex, reuse: Readonly<ReuseOk>): string =>
+  JSON.stringify([idx.matched.map((p) => [p.id, p.updatedAt, p.source, p.note, p.missing, p.uids.join(',')]), [...avoidSet(idx, reuse)].sort()]);
 
 /** Tên các đề đã dùng một câu (rút gọn) để hiện nhãn "Đã dùng ở: …". */
 export const usedAtLabel = (idx: UsageIndex, uid: string, max = 3): string | null => {
@@ -94,13 +115,14 @@ export function avoidedFor<Q extends { uid: string }>(bank: readonly Q[], row: R
 }
 
 /** Dấu vết ghi trong hedu-de.json khi giáo viên bật tính năng. Không ghi gì khi tắt. */
-export function traceOf(s: UsageScope, idx: UsageIndex, reuse: Readonly<ReuseOk>, at: string): unknown {
+export function traceOf(s: UsageScope, idx: UsageIndex, reuse: Readonly<ReuseOk>, at: string, locked: Iterable<string> = []): unknown {
   if (!s.on) return undefined;
   return {
     tao: at,
     phamVi: { thuMuc: s.folders, namHoc: s.years, loaiDe: s.types, deChon: s.ids },
     soDeDoiChieu: idx.matched.length,
-    deChuaDoiChieuDuoc: idx.unverifiable.map((p) => p.id),
-    giaoVienChoDungLai: Object.entries(reuse).map(([uid, r]) => ({ uid, luc: r.at, daDungO: r.from })),
+    deChuaDoiChieuDuoc: idx.unverifiable.map((p) => ({ id: p.id, lyDo: p.note ?? 'khong-co-uid-dang-tin' })),
+    cauKhoaDaDung: lockedUsed(idx, reuse, locked).map((l) => ({ uid: l.uid, daDungO: l.from.map((p) => p.id) })),
+    giaoVienChoDungLai: Object.entries(reuse).filter(([u]) => reuseValid(idx, u, reuse)).map(([uid, r]) => ({ uid, luc: r.at, daDungO: r.from })),
   };
 }

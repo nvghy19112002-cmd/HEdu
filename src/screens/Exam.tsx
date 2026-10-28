@@ -11,7 +11,7 @@ import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from 
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
 import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { confirmRow, effectiveRows, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
-import { avoidSet, avoidedFor, buildIndex, traceOf, usedAtLabel } from '../lib/examusage';
+import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usageSig, usedAtLabel } from '../lib/examusage';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
@@ -187,6 +187,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
     const qs = avoidedFor(questions, r, avoid, (q, row) => rowMatches(row, q) && eligible(q, effOf, d.policy) && !exclude.has(q.uid));
     return qs.length ? [{ row: r, qs }] : [];
   }), [rows, alloc, questions, avoid, effOf, d.policy, exclude]);
+  const lockedUsedList = useMemo(() => lockedUsed(idx, d.reuse, Object.values(alloc.picks).flat().filter((u) => lockedSet.has(u))), [idx, d.reuse, alloc, lockedSet]);
   const allowReuse = (qs: readonly Question[]) => {
     const froms = [...new Set(qs.flatMap((q) => (idx.used.get(q.uid) ?? []).map((p) => p.name)))];
     const label = froms.slice(0, 5).join('; ') + (froms.length > 5 ? '…' : '');
@@ -194,7 +195,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
 
 HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngân hàng. Câu vẫn có thể bị máy chọn ngẫu nhiên cho dòng đang thiếu.`)) return;
     const at = Date.now();
-    upd({ reuse: { ...d.reuse, ...Object.fromEntries(qs.map((q) => [q.uid, { at, from: (idx.used.get(q.uid) ?? []).map((p) => p.id).slice(0, 20) }])) } });
+    upd({ reuse: { ...d.reuse, ...Object.fromEntries(qs.map((q) => [q.uid, { at, from: (idx.used.get(q.uid) ?? []).map((p) => p.id) }])) } });
   };
   const centi = totalCenti(counts, d.scoring);
   const picks = useMemo(() => PARTS.flatMap((p) => picked[p]), [picked]);
@@ -239,12 +240,17 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const projectFiles = async (name: string) => {
     // tầng xuất: không bao giờ ghi đề khi ma trận còn dòng chưa xử lý (kể cả khi giao diện bị bỏ qua)
     if (rows.some((r) => r.flag)) throw new Error('Ma trận còn dòng chưa xử lý (phạm vi đã xóa hoặc đổi vị trí).');
+    // Thư viện có thể đã đổi từ lúc quét: quét lại ngay trước khi ghi; khác kết quả thì làm mới và dừng để giáo viên xem lại
+    if (d.usage.on) {
+      const fresh = buildIndex((await scanUsage()).projects, d.usage);
+      if (usageSig(fresh, d.reuse) !== usageSig(idx, d.reuse)) { usage.refresh(); throw new Error('Thư viện đề đã thay đổi kể từ lần quét trước nên danh sách câu đã dùng được làm mới. Hãy xem lại đề rồi lưu lại'); }
+    }
     const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
     const fileHashes = await sourceHashes(tex);
     return [
       ...tex,
       { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
-      { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes, tranhCauDaDung: traceOf(d.usage, idx, d.reuse, new Date().toISOString()) }) },
+      { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes, tranhCauDaDung: traceOf(d.usage, idx, d.reuse, new Date().toISOString(), lockedSet) }) },
       { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
     ];
   };
@@ -370,7 +376,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             {adding && <RowAdder defaultGrade={defaultGrade} onAdd={(r) => upd({ rows: [...d.rows, r] })} onTemplate={(g) => { upd({ rows: [...d.rows, ...template2025(g)] }); setAdding(false); }} />}
           </section>
 
-          {(usageBlocked || missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
+          {(usageBlocked || lockedUsedList.length > 0 || missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
             <section className="te-warn" aria-label="Lưu ý về đề" role="status">
               {usageBlocked && <p className="bad"><IcAlert size={16} />{usage.error ? 'Chưa kiểm tra được câu đã dùng vì không quét được Thư viện đề, nên chưa xuất được.' : 'Đang quét Thư viện đề để tránh câu đã dùng; chưa xuất được cho tới khi quét xong.'}</p>}
               {lostLocks.length > 0 && (
@@ -384,6 +390,12 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                 <div className="bad">
                   <p className="bad"><IcAlert size={16} />Đáp án hoặc tổng số chưa khớp ở {issues.length} chỗ nên chưa xuất được:</p>
                   <ul>{issues.slice(0, 8).map((i, k) => <li key={k}>{i.msg}{i.uid ? <> · <code>{byUid.get(i.uid) ? `#${byUid.get(i.uid)!.seq}` : i.uid}</code></> : null}</li>)}{issues.length > 8 && <li>… và {issues.length - 8} chỗ nữa</li>}</ul>
+                </div>
+              )}
+              {lockedUsedList.length > 0 && (
+                <div>
+                  <p><IcAlert size={16} />{lockedUsedList.length} câu bạn đã khóa tay đã được dùng ở đề trong phạm vi tránh (vẫn giữ trong đề; HEdu ghi dấu vết vào hedu-de.json):</p>
+                  <ul>{lockedUsedList.slice(0, 10).map((l) => <li key={l.uid}>Câu <code>{byUid.get(l.uid) ? `#${byUid.get(l.uid)!.seq}` : l.uid}</code>: {l.from.slice(0, 3).map((p) => p.name).join('; ')}</li>)}</ul>
                 </div>
               )}
               {shortUsed.length > 0 && (
