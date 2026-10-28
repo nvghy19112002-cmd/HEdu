@@ -70,6 +70,8 @@ export interface AllocOpts {
   locked?: Readonly<Record<string, readonly string[]>>;
   /** câu không được chọn (đã dùng ở nơi khác) */
   exclude?: ReadonlySet<string>;
+  /** câu đã dùng ở các đề trong phạm vi giáo viên chọn (PR 4B): không được máy chọn tự động; câu giáo viên đã khóa tay vẫn giữ */
+  avoid?: ReadonlySet<string>;
   /** câu giáo viên đã xác nhận rõ là ngoại lệ so với chính sách (vd chọn tay câu chưa duyệt); vẫn không bao giờ nhận “Cần sửa” hay ký tự lạ */
   exceptions?: ReadonlySet<string>;
 }
@@ -94,6 +96,8 @@ export interface Alloc {
   deficit: Record<string, number>;
   /** số câu đủ điều kiện khớp từng dòng (không trừ câu dùng cho dòng khác) */
   pool: Record<string, number>;
+  /** số câu ứng viên (đủ điều kiện, khớp dòng) bị loại vì đã dùng (`avoid`) */
+  avoided: Record<string, number>;
 }
 
 class Flow {
@@ -143,12 +147,14 @@ class Flow {
 export function allocate(bank: readonly Question[], rows: readonly Row[], o: AllocOpts): Alloc {
   const rand = rng(o.seed);
   const pool: Record<string, number> = {};
-  rows.forEach((r) => { pool[r.id] = 0; });
+  const avoided: Record<string, number> = {};
+  rows.forEach((r) => { pool[r.id] = 0; avoided[r.id] = 0; });
   const byUid = new Map<string, Question>();
   const groups = new Map<string, string[]>(); // khóa = chỉ số các dòng mà câu khớp
   const matchOf = new Map<string, number[]>();
   for (const q of bank) {
     if (o.exclude?.has(q.uid) || !eligible(q, o.eff, o.policy)) continue;
+    if (o.avoid?.has(q.uid)) { rows.forEach((r) => { if (rowMatches(r, q)) avoided[r.id]++; }); continue; }
     const m: number[] = [];
     rows.forEach((r, i) => { if (rowMatches(r, q)) { m.push(i); pool[r.id]++; } });
     if (!m.length) continue;
@@ -198,12 +204,12 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
   }
   const deficit: Record<string, number> = {};
   rows.forEach((r) => { deficit[r.id] = Math.max(0, r.count - picks[r.id].length); });
-  return { picks, deficit, pool, lost };
+  return { picks, deficit, pool, lost, avoided };
 }
 
 /** Câu có thể thay cho một dòng: đủ điều kiện, khớp dòng, chưa nằm trong đề. */
-export function candidatesFor(bank: readonly Question[], row: Row, o: Pick<AllocOpts, 'policy' | 'eff'>, taken: ReadonlySet<string>): Question[] {
-  return bank.filter((q) => !taken.has(q.uid) && rowMatches(row, q) && eligible(q, o.eff, o.policy));
+export function candidatesFor(bank: readonly Question[], row: Row, o: Pick<AllocOpts, 'policy' | 'eff' | 'avoid'>, taken: ReadonlySet<string>): Question[] {
+  return bank.filter((q) => !taken.has(q.uid) && !o.avoid?.has(q.uid) && rowMatches(row, q) && eligible(q, o.eff, o.policy));
 }
 
 // ---------- Các phần của đề ----------
@@ -534,9 +540,9 @@ export async function sourceHashes(files: readonly ExamFile[]): Promise<Record<s
 }
 
 /** Bản ghi để tái hiện đề: ma trận, hạt giống, câu được chọn và đáp án từng mã. */
-export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string; exceptions?: Readonly<Record<string, { at: number; why: string }>>; locked?: Readonly<Record<string, readonly string[]>>; fileHashes?: Readonly<Record<string, string>> }): string {
+export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string; exceptions?: Readonly<Record<string, { at: number; why: string }>>; locked?: Readonly<Record<string, readonly string[]>>; fileHashes?: Readonly<Record<string, string>>; /** dấu vết tránh câu đã dùng (PR 4B), chỉ ghi khi giáo viên bật */ tranhCauDaDung?: unknown }): string {
   return JSON.stringify({
-    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diemToiDaMoiCau: o.scoring, chamDungSaiTheoSoYDung: DS_POINTS_CENTI, matran: o.rows, caKhoa: o.locked ?? {}, ngoaiLe: o.exceptions ?? {}, ...(o.fileHashes ? { dauVanTep: o.fileHashes } : {}),
+    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diemToiDaMoiCau: o.scoring, chamDungSaiTheoSoYDung: DS_POINTS_CENTI, matran: o.rows, caKhoa: o.locked ?? {}, ngoaiLe: o.exceptions ?? {}, ...(o.fileHashes ? { dauVanTep: o.fileHashes } : {}), ...(o.tranhCauDaDung ? { tranhCauDaDung: o.tranhCauDaDung } : {}),
     maDe: o.variants.map((v) => ({ ma: v.code, phan: Object.fromEntries(PARTS.map((p) => [p, v.parts[p].map((s) => ({ uid: s.q.uid, dapAn: s.key, tron: s.shuffled }))])) })),
   }, null, 2) + '\n';
 }

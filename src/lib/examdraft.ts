@@ -2,6 +2,7 @@
 // Chỉ lưu tạm trong trình duyệt/WebView để mở lại màn không mất việc; nơi lưu bền là dự án trong Thư viện đề (hedu-de.json).
 import { SCORING_2025, type ExamInfo, type Policy, type Row, type Scoring } from './examgen';
 import type { Level, QType, Question, Taxonomy } from './types';
+import { defaultScope, type ReuseOk, type UsageScope } from './examusage';
 
 export interface Draft {
   v: 1;
@@ -21,6 +22,10 @@ export interface Draft {
   shuffleOptions: boolean;
   withKeys: boolean;
   scoring: Scoring;
+  /** phạm vi tránh câu đã dùng (PR 4B); mặc định tắt */
+  usage: UsageScope;
+  /** câu đã dùng mà giáo viên chủ động cho dùng lại */
+  reuse: ReuseOk;
   /** chữ ký lần đưa câu từ Ngân hàng sang gần nhất, để không thêm lặp khi mở lại màn */
   pickSig: string;
 }
@@ -30,7 +35,7 @@ export const KEY = 'hedu.examdraft.v1';
 export const DEFAULT_INFO: ExamInfo = { dept: '', school: '', group: '', title: 'Kiểm tra cuối học kì I', subject: 'Môn: Toán 12', minutes: 90, note: '' };
 
 export function newDraft(seed = Math.floor(Math.random() * 1e9)): Draft {
-  return { v: 1, rows: [], policy: 'duyet', seed, locked: {}, rejected: [], exceptions: {}, info: { ...DEFAULT_INFO }, count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, withKeys: true, scoring: { ...SCORING_2025 }, pickSig: '' };
+  return { v: 1, rows: [], policy: 'duyet', seed, locked: {}, rejected: [], exceptions: {}, info: { ...DEFAULT_INFO }, count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, withKeys: true, scoring: { ...SCORING_2025 }, usage: defaultScope(), reuse: {}, pickSig: '' };
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -70,6 +75,12 @@ export function parseDraft(raw: string | null): Draft {
   d.shuffleOptions = j.shuffleOptions !== false;
   d.withKeys = j.withKeys !== false;
   if (isObj(j.scoring)) for (const p of ['p1', 'p2', 'p3', 'p4'] as const) d.scoring[p] = num((j.scoring as Record<string, unknown>)[p], d.scoring[p], 0, 1000);
+  if (isObj(j.usage)) {
+    const u = j.usage;
+    const strs = (x: unknown): string[] => (Array.isArray(x) ? x.filter((v): v is string => typeof v === 'string').slice(0, 500) : []);
+    d.usage = { on: u.on === true, folders: strs(u.folders), years: strs(u.years), types: strs(u.types), ids: strs(u.ids) };
+  }
+  if (isObj(j.reuse)) for (const [k, v] of Object.entries(j.reuse)) if (isObj(v) && typeof v.at === 'number') d.reuse[k] = { at: v.at, from: Array.isArray(v.from) ? v.from.filter((x): x is string => typeof x === 'string').slice(0, 500) : [] };
   d.pickSig = typeof j.pickSig === 'string' ? j.pickSig : '';
   return d;
 }

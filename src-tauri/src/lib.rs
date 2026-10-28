@@ -11,6 +11,7 @@ mod examfiles;
 mod examlib;
 mod examprofile;
 mod examsources;
+mod examusage;
 mod importfs;
 mod jsonmig;
 mod proc;
@@ -490,6 +491,7 @@ pub fn run() {
             examsources::exam_sources_status,
             examsources::exam_sources_forget,
             examsources::exam_lib_create_files,
+            examusage::exam_usage_scan,
             examexport::exam_codes_info,
             examexport::exam_codes_export,
             examexport::exam_codes_export_cancel,

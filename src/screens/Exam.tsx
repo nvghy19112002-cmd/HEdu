@@ -5,11 +5,13 @@ import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
 import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
 import { ExamExportDialog } from '../components/ExamExportDialog';
+import { ExamUsagePanel, useUsageScan } from '../components/ExamUsagePanel';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
-import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { confirmRow, effectiveRows, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
+import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usageSig, usedAtLabel } from '../lib/examusage';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
@@ -158,11 +160,16 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   }, [pick, questions, d.pickSig, d.policy, effOf, toast]);
 
   const byUid = useMemo(() => new Map(questions.map((q) => [q.uid, q])), [questions]);
+  const usage = useUsageScan(d.usage.on);
+  const idx = useMemo(() => buildIndex(usage.projects, d.usage), [usage.projects, d.usage]);
+  const avoid = useMemo(() => avoidSet(idx, d.reuse), [idx, d.reuse]);
+  /** đang bật mà chưa có kết quả quét thì KHÔNG được xuất (tránh đề tưởng đã lọc nhưng chưa lọc) */
+  const usageBlocked = d.usage.on && (usage.loading || !!usage.error || usage.scannedAt === null);
   const exclude = useMemo(() => new Set(d.rejected), [d.rejected]);
   const exceptions = useMemo(() => new Set(Object.keys(d.exceptions)), [d.exceptions]);
   /** Dòng dùng thật: dòng có cờ hoặc có nút phạm vi không còn trong cây KHÔNG khớp câu nào và chặn xuất */
   const rows = useMemo(() => effectiveRows(d.rows, tax), [d.rows, tax]);
-  const alloc = useMemo(() => allocate(questions, rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions }), [questions, rows, d.policy, d.seed, d.locked, exclude, exceptions, effOf]);
+  const alloc = useMemo(() => allocate(questions, rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions, avoid }), [questions, rows, d.policy, d.seed, d.locked, exclude, exceptions, avoid, effOf]);
   const picked = useMemo(() => collect(rows, alloc.picks, byUid), [rows, alloc, byUid]);
   const counts = countsOf(picked);
   const total = counts.p1 + counts.p2 + counts.p3 + counts.p4;
@@ -174,6 +181,22 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const flaggedN = rows.filter((r) => r.flag).length;
   const issues = useMemo(() => [...checkVariants(variants), ...reconcile(rows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, rows, alloc, picked, d.scoring]);
   const lostLocks = alloc.lost;
+  /** dòng thiếu câu mà có ứng viên bị loại vì đã dùng: báo rõ số lượng, giáo viên tự quyết dùng lại */
+  const shortUsed = useMemo(() => rows.flatMap((r) => {
+    if (!(alloc.deficit[r.id] > 0) || !(alloc.avoided[r.id] > 0)) return [];
+    const qs = avoidedFor(questions, r, avoid, (q, row) => rowMatches(row, q) && eligible(q, effOf, d.policy) && !exclude.has(q.uid));
+    return qs.length ? [{ row: r, qs }] : [];
+  }), [rows, alloc, questions, avoid, effOf, d.policy, exclude]);
+  const lockedUsedList = useMemo(() => lockedUsed(idx, d.reuse, Object.values(alloc.picks).flat().filter((u) => lockedSet.has(u))), [idx, d.reuse, alloc, lockedSet]);
+  const allowReuse = (qs: readonly Question[]) => {
+    const froms = [...new Set(qs.flatMap((q) => (idx.used.get(q.uid) ?? []).map((p) => p.name)))];
+    const label = froms.slice(0, 5).join('; ') + (froms.length > 5 ? '…' : '');
+    if (!window.confirm(`Cho phép dùng lại ${qs.length} câu đã dùng ở: ${label}?
+
+HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngân hàng. Câu vẫn có thể bị máy chọn ngẫu nhiên cho dòng đang thiếu.`)) return;
+    const at = Date.now();
+    upd({ reuse: { ...d.reuse, ...Object.fromEntries(qs.map((q) => [q.uid, { at, from: (idx.used.get(q.uid) ?? []).map((p) => p.id) }])) } });
+  };
   const centi = totalCenti(counts, d.scoring);
   const picks = useMemo(() => PARTS.flatMap((p) => picked[p]), [picked]);
   const unverifiedN = useMemo(() => picks.filter((q) => !verified(effOf(q))).length, [picks, effOf]);
@@ -203,26 +226,31 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const resample = () => upd({ seed: Math.floor(Math.random() * 1e9), rejected: [] });
 
   const swapRow = swap ? rows.find((r) => r.id === rowOf.get(swap)) : undefined;
-  const candidates = useMemo<Question[]>(() => (swapRow ? candidatesFor(questions, swapRow, { policy: d.policy, eff: effOf }, new Set(picks.map((q) => q.uid))) : []), [swapRow, questions, d.policy, effOf, picks]);
+  const candidates = useMemo<Question[]>(() => (swapRow ? candidatesFor(questions, swapRow, { policy: d.policy, eff: effOf, avoid }, new Set(picks.map((q) => q.uid))) : []), [swapRow, questions, d.policy, effOf, picks, avoid]);
 
   const refMatrix = useRef<HTMLElement>(null);
   const refSheet = useRef<HTMLElement>(null);
   const refExport = useRef<HTMLDivElement>(null);
   const desktop = isDesktop();
-  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys]), [d]);
-  const canExport = total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
+  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys, d.usage, d.reuse]), [d]);
+  const canExport = !usageBlocked && total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   /** Bộ tệp của đề, kèm dấu vân SHA-256 từng tệp nguồn trong hedu-de.json (để về sau biết tệp có bị sửa tay không). */
   const projectFiles = async (name: string) => {
     // tầng xuất: không bao giờ ghi đề khi ma trận còn dòng chưa xử lý (kể cả khi giao diện bị bỏ qua)
     if (rows.some((r) => r.flag)) throw new Error('Ma trận còn dòng chưa xử lý (phạm vi đã xóa hoặc đổi vị trí).');
+    // Thư viện có thể đã đổi từ lúc quét: quét lại ngay trước khi ghi; khác kết quả thì làm mới và dừng để giáo viên xem lại
+    if (d.usage.on) {
+      const fresh = buildIndex((await scanUsage()).projects, d.usage);
+      if (usageSig(fresh, d.reuse) !== usageSig(idx, d.reuse)) { usage.refresh(); throw new Error('Thư viện đề đã thay đổi kể từ lần quét trước nên danh sách câu đã dùng được làm mới. Hãy xem lại đề rồi lưu lại'); }
+    }
     const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
     const fileHashes = await sourceHashes(tex);
     return [
       ...tex,
       { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
-      { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes }) },
+      { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes, tranhCauDaDung: traceOf(d.usage, idx, d.reuse, new Date().toISOString(), lockedSet) }) },
       { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
     ];
   };
@@ -290,6 +318,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
             </div>
             {undoTpl && <p className="te-hint" role="status">{undoTpl.note} <button type="button" className="linkbtn" onClick={() => { setD(undoTpl.prev); setUndoTpl(null); toast('Đã hoàn tác áp dụng mẫu.'); }}>Hoàn tác áp dụng mẫu</button></p>}
             <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{broken.length > 0 && <span className="te-bad"> {broken.length} câu có ký tự điều khiển lạ trong LaTeX nên bị loại khỏi tập ứng viên (vẫn còn nguyên trong Ngân hàng).</span>}</p>
+            <ExamUsagePanel scope={d.usage} onScope={(usage) => upd({ usage })} usage={usage} idx={idx} />
             {broken.length > 0 && <details className="te-broken"><summary>Xem câu bị loại và nguyên nhân</summary><ul>{broken.slice(0, 50).map((b) => <li key={b.uid}>Câu #{b.seq} · <code>{b.uid}</code> · {b.why}</li>)}{broken.length > 50 && <li>… và {broken.length - 50} câu nữa</li>}</ul></details>}
             {rowsEmpty ? (
               <div className="te-empty">
@@ -347,8 +376,9 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
             {adding && <RowAdder defaultGrade={defaultGrade} onAdd={(r) => upd({ rows: [...d.rows, r] })} onTemplate={(g) => { upd({ rows: [...d.rows, ...template2025(g)] }); setAdding(false); }} />}
           </section>
 
-          {(missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
+          {(usageBlocked || lockedUsedList.length > 0 || missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
             <section className="te-warn" aria-label="Lưu ý về đề" role="status">
+              {usageBlocked && <p className="bad"><IcAlert size={16} />{usage.error ? 'Chưa kiểm tra được câu đã dùng vì không quét được Thư viện đề, nên chưa xuất được.' : 'Đang quét Thư viện đề để tránh câu đã dùng; chưa xuất được cho tới khi quét xong.'}</p>}
               {lostLocks.length > 0 && (
                 <div className="bad">
                   <p className="bad"><IcAlert size={16} />{lostLocks.length} câu đã khóa không còn vào được đề, nên đề đang thiếu hoặc đã thay bằng câu khác. Chưa xuất được cho tới khi bạn xử lý:</p>
@@ -360,6 +390,18 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                 <div className="bad">
                   <p className="bad"><IcAlert size={16} />Đáp án hoặc tổng số chưa khớp ở {issues.length} chỗ nên chưa xuất được:</p>
                   <ul>{issues.slice(0, 8).map((i, k) => <li key={k}>{i.msg}{i.uid ? <> · <code>{byUid.get(i.uid) ? `#${byUid.get(i.uid)!.seq}` : i.uid}</code></> : null}</li>)}{issues.length > 8 && <li>… và {issues.length - 8} chỗ nữa</li>}</ul>
+                </div>
+              )}
+              {lockedUsedList.length > 0 && (
+                <div>
+                  <p><IcAlert size={16} />{lockedUsedList.length} câu bạn đã khóa tay đã được dùng ở đề trong phạm vi tránh (vẫn giữ trong đề; HEdu ghi dấu vết vào hedu-de.json):</p>
+                  <ul>{lockedUsedList.slice(0, 10).map((l) => <li key={l.uid}>Câu <code>{byUid.get(l.uid) ? `#${byUid.get(l.uid)!.seq}` : l.uid}</code>: {l.from.slice(0, 3).map((p) => p.name).join('; ')}</li>)}</ul>
+                </div>
+              )}
+              {shortUsed.length > 0 && (
+                <div className="bad">
+                  <p className="bad"><IcAlert size={16} />Thiếu câu do đã loại câu đã dùng (HEdu không tự nới). Bạn có thể cho dùng lại có chủ đích:</p>
+                  <ul>{shortUsed.map(({ row, qs }) => <li key={row.id}>{scopeLabel(row.scope, tax) ?? row.label ?? 'Dòng'}: thiếu {alloc.deficit[row.id]} câu, đã loại <b>{qs.length}</b> ứng viên vì đã dùng ở {[...new Set(qs.flatMap((q) => (idx.used.get(q.uid) ?? []).map((p) => p.name)))].slice(0, 3).join('; ')}. <button type="button" className="btn btn-sm" onClick={() => allowReuse(qs)}>Cho phép dùng lại {qs.length} câu này</button></li>)}</ul>
                 </div>
               )}
               {missing > 0 && <p className="bad"><IcAlert size={16} />Còn thiếu {missing} câu so với ma trận. Hạ số câu, đổi mức lấy câu hoặc <button type="button" className="linkbtn" onClick={() => go({ screen: 'editor' })}>soạn thêm câu</button>. Chưa xuất được đề.</p>}
@@ -397,7 +439,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                           {candidates.length === 0 ? <p className="te-note">Không còn câu nào khác khớp dòng này ở mức “{POLICY_SHORT[d.policy]}”.</p> : (
                             <ul>
                               {candidates.slice(0, 40).map((c) => (
-                                <li key={c.uid}><span className="te-snip">{plainSnippet(c.latex, 120)}</span><button type="button" className="btn btn-sm" onClick={() => replace(s.q.uid, c.uid)}>Dùng câu này</button></li>
+                                <li key={c.uid}><span className="te-snip">{plainSnippet(c.latex, 120)}{usedAtLabel(idx, c.uid) && <em className="te-note"> · Đã dùng ở: {usedAtLabel(idx, c.uid)} (bạn đã cho phép dùng lại)</em>}</span><button type="button" className="btn btn-sm" onClick={() => replace(s.q.uid, c.uid)}>Dùng câu này</button></li>
                               ))}
                               {candidates.length > 40 && <li className="te-note">Còn {candidates.length - 40} câu nữa; thu hẹp dòng ma trận để xem.</li>}
                             </ul>
