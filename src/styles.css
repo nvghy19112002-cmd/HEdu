@@ -1543,8 +1543,14 @@ span.bt-caret { cursor: default; }
 .mf-foot { display: flex; justify-content: space-between; gap: 8px; padding-top: 4px; }
 
 /* Ngân hàng: thẻ câu dạng lưới (2 cột khi đủ rộng) và khung xem hết */
-.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; align-items: start; }
-.cards-grid .card { min-width: 0; }
+.cards-grid { columns: 2 420px; column-gap: 12px; }
+.cards-grid .card { min-width: 0; break-inside: avoid; margin-bottom: 12px; position: relative; }
+.cards-grid .card-meta { padding-right: 84px; min-height: 32px; }
+.cards-grid .card-acts { position: absolute; top: 12px; right: 14px; flex-direction: row; gap: 6px; }
+.card-no { color: var(--ink-2); font-weight: 600; }
+.lh-sol { margin-left: 8px; }
+.pg-jump { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.pg-jump input { width: 56px; height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font: inherit; text-align: center; color: var(--ink); }
 .clamp { position: relative; }
 .clamp-in { overflow: hidden; }
 .clamp.is-clamped .clamp-in { -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent); mask-image: linear-gradient(to bottom, #000 78%, transparent); }
@@ -1555,3 +1561,5 @@ span.bt-caret { cursor: default; }
 .card.is-flash { animation: card-flash 2s ease-out; }
 @keyframes card-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .card.is-flash { animation: none; box-shadow: 0 0 0 3px var(--accent); } }
+.cards-grid .card-meta { gap: 6px; }
+.cards-grid .card-meta .pill, .cards-grid .card-meta .code-tag, .cards-grid .card-meta [class*="rv-"] { font-size: 12px; height: 24px; padding: 0 8px; }

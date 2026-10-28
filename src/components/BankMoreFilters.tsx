@@ -7,10 +7,14 @@ import { FieldMenu, type FieldOption } from './FieldMenu';
 
 const FIG_HINT = 'Phân tích mã LaTeX: có TikZ/ảnh ở đề, nhóm hình \\immini, phương án hoặc phần đuôi. Hình chỉ nằm trong lời giải không tính. “Chưa xác định” = có lệnh lạ chưa biết có phải hình không.';
 
-/** Số bộ lọc đang bật trong nút này. */
-export const moreCount = (f: BankFilters): number => (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0);
+/** Lọc theo trạng thái xác minh Dạng (áp sau bộ lọc chính). */
+export type IdFilter = 'all' | 'chua' | 'may' | 'gv' | 'xem-lai' | 'chua-phan-loai';
+const ID_LABEL: Record<Exclude<IdFilter, 'all'>, string> = { chua: 'Chưa xác minh', may: 'Máy phân loại', gv: 'Giáo viên xác minh', 'xem-lai': 'Cần xem lại', 'chua-phan-loai': 'Chưa phân loại' };
 
-export function BankMoreFilters({ f, facets, onF }: { f: BankFilters; facets: Facets; onF(next: BankFilters): void }) {
+/** Số bộ lọc đang bật trong nút này. */
+export const moreCount = (f: BankFilters, idF: IdFilter = 'all'): number => (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0) + (idF !== 'all' ? 1 : 0);
+
+export function BankMoreFilters({ f, facets, onF, idF, onIdF }: { f: BankFilters; facets: Facets; onF(next: BankFilters): void; idF: IdFilter; onIdF(v: IdFilter): void }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
@@ -30,11 +34,12 @@ export function BankMoreFilters({ f, facets, onF }: { f: BankFilters; facets: Fa
   const revOpts: FieldOption[] = (['unreviewed', 'needs_fix', 'approved'] as const).map((r) => ({ id: r, label: REVIEW_LABEL[r], count: facets.review[r] }));
   const tagOpts: FieldOption[] = [...facets.tag].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi')).map(([t, n]) => ({ id: t, label: t, count: n }));
   if (f.tag && !facets.tag.has(f.tag)) tagOpts.unshift({ id: f.tag, label: f.tag, count: 0 });
-  const n = moreCount(f);
+  const n = moreCount(f, idF);
+  const idOpts: FieldOption[] = (Object.keys(ID_LABEL) as Exclude<IdFilter, 'all'>[]).map((k) => ({ id: k, label: ID_LABEL[k] }));
 
   return (
     <span className="mf" ref={box}>
-      <button ref={btn} type="button" className={`btn btn-sm${n ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)} title="Lọc theo Hình, Duyệt, Nhãn">
+      <button ref={btn} type="button" className={`btn btn-sm${n ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)} title="Lọc theo Hình, Duyệt, Dạng, Nhãn">
         Bộ lọc{n > 0 && <i className="fs-badge">{n}</i>} ▾
       </button>
       {open && (
@@ -50,12 +55,16 @@ export function BankMoreFilters({ f, facets, onF }: { f: BankFilters; facets: Fa
             allLabel="Tất cả" allCount={facets.review.unreviewed + facets.review.needs_fix + facets.review.approved}
           />
           <FieldMenu
+            label="Dạng" summary={idF === 'all' ? 'Tất cả' : ID_LABEL[idF]} active={idF !== 'all'} hint="Trạng thái xác minh Dạng của câu" onReset={() => onIdF('all')}
+            options={idOpts} selected={idF === 'all' ? null : idF} onPick={(id) => onIdF((id ?? 'all') as IdFilter)} allLabel="Tất cả"
+          />
+          <FieldMenu
             label="Nhãn" summary={f.tag ?? 'Tất cả'} active={!!f.tag} searchable hint="Nhãn gắn khi nhập (Nguồn, Lô, Thư mục) hoặc do bạn tự đặt" onReset={() => onF({ ...f, tag: null })}
             options={tagOpts} selected={f.tag} onPick={(id) => onF({ ...f, tag: id })}
             allLabel="Tất cả" allCount={facets.tagAll}
           />
           <div className="mf-foot">
-            <button type="button" className="btn btn-sm" disabled={n === 0} onClick={() => onF({ ...f, figure: 'all', review: 'all', tag: null })}>Bỏ các lọc này</button>
+            <button type="button" className="btn btn-sm" disabled={n === 0} onClick={() => { onF({ ...f, figure: 'all', review: 'all', tag: null }); onIdF('all'); }}>Bỏ các lọc này</button>
             <button type="button" className="btn btn-sm btn-dark" onClick={() => { setOpen(false); btn.current?.focus(); }}>Xong</button>
           </div>
         </div>

@@ -33,7 +33,7 @@ import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { DupCheck } from '../components/DupCheck';
-import { BankMoreFilters } from '../components/BankMoreFilters';
+import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
 import { ClampBox } from '../components/ClampBox';
 import { ReviewBadge, ReviewControl } from '../components/ReviewControl';
 import { IdReviewControl, IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
@@ -126,7 +126,7 @@ export function BankScreen() {
   const selectedQs = useMemo(() => sortedCopy(questions.filter((q) => sel.has(q.uid)), sort), [questions, sel, sort]);
   // Trạng thái xác minh Dạng (PR 1C): lọc phụ ngoài hệ bộ lọc chính, chưa có số đếm theo chiều
   const effOf = useEffectiveOf();
-  const [idF, setIdF] = useState<'all' | 'chua' | 'may' | 'gv' | 'xem-lai' | 'chua-phan-loai'>('all');
+  const [idF, setIdF] = useState<IdFilter>('all');
   const list = useMemo(() => (idF === 'all' ? facets.list : facets.list.filter((q) => { const e = effOf(q); return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF; })), [facets.list, idF, effOf]);
   const resultUids = useMemo(() => new Set(list.map((q) => q.uid)), [list]);
   const [vqOpen, setVqOpen] = useState(false); // hàng đợi xác minh từng câu (PR 1E)
@@ -350,11 +350,10 @@ export function BankScreen() {
         <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
         <div className="card-body">
           <div className="card-meta">
+            <span className="mono card-no">{seqLabel(q.seq)}</span>
             <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
             <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-            <ReviewBadge q={q} />
             <span className="code-tag">{questionCode(q, q.level)}</span>
-            <span className="mono card-no">{seqLabel(q.seq)}</span>
             <div className="card-acts">
               {isTikzReady() && (
                 <button type="button" className="ico txt" aria-label="Xem chuẩn bằng TeX Live" aria-pressed={exact.has(q.uid)} title="Xem chuẩn: biên dịch nguyên câu bằng TeX Live" onClick={() => toggle(exact, q.uid, setExact)}>TeX</button>
@@ -373,7 +372,7 @@ export function BankScreen() {
               </div>
             </div>
           </div>
-          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<IdStateBadge eff={effOf(q)} />
+          <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<ReviewBadge q={q} /><IdStateBadge eff={effOf(q)} />
             <button type="button" className="linkbtn card-ctl" aria-expanded={ctlOpen.has(q.uid)} onClick={() => toggle(ctlOpen, q.uid, setCtlOpen)} title="Kiểm duyệt nội dung, xác minh Dạng và mức độ">{ctlOpen.has(q.uid) ? 'Ẩn duyệt ▲' : 'Duyệt / xác minh ▾'}</button>
           </div>
           {exact.has(q.uid)
@@ -436,7 +435,7 @@ export function BankScreen() {
               </select>
               <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
             </label>
-            <BankMoreFilters f={f} facets={facets} onF={setF} />
+            <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} />
             <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
             {narrow && (
               <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
@@ -503,10 +502,6 @@ export function BankScreen() {
               </div>
             </div>
           )}
-          <div className="list-head">
-            <span><b className="lh-title">{heading}</b>{lesson ? ` · Bài: ${lesson.name}` : ''} · <b style={{ color: 'var(--ink)' }}>{nf.format(list.length)} câu</b>{pages > 1 && ` · đang xem ${cur * PER_PAGE + 1}–${Math.min(list.length, (cur + 1) * PER_PAGE)}`}</span>
-            <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
-          </div>
           {shown.length > 0 && (
             <div className="qtools">
               <span className="lh-left">
@@ -514,22 +509,13 @@ export function BankScreen() {
                   <input ref={masterRef} type="checkbox" checked={pState === 'all'} onChange={() => (pState === 'all' ? deselectPage() : selectPage())} />
                   Chọn trang ({shown.length})
                 </label>
+                <label className="sw lh-sol"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
                 {list.length > shown.length && counts.total - counts.outScope < list.length && (
                   <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn tất cả {nf.format(list.length)} {noFilter ? 'câu trong ngân hàng' : 'kết quả'}</button>
                 )}
               </span>
               <span className="qtools-r">
                 <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Hàng đợi xác minh ({nf.format(vqCount)})</button>
-                <label className="qsel">Dạng
-                  <select value={idF} onChange={(e) => { setPage(0); setIdF(e.target.value as typeof idF); }} aria-label="Lọc theo trạng thái xác minh Dạng">
-                    <option value="all">Tất cả</option>
-                    <option value="chua">Chưa xác minh</option>
-                    <option value="may">Máy phân loại</option>
-                    <option value="gv">Giáo viên xác minh</option>
-                    <option value="xem-lai">Cần xem lại</option>
-                    <option value="chua-phan-loai">Chưa phân loại</option>
-                  </select>
-                </label>
                 <label className="qsel">Sắp xếp
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
                     {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}
@@ -543,7 +529,9 @@ export function BankScreen() {
                 {pages > 1 && (
                   <span className="pager-top" role="group" aria-label="Chuyển trang">
                     <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => goPage(cur - 1)} aria-label="Trang trước">‹</button>
-                    <span><b>{cur + 1}</b> / {nf.format(pages)}</span>
+                    <label className="pg-jump">Trang <input key={cur} type="number" min={1} max={pages} defaultValue={cur + 1} aria-label={`Trang (1–${pages})`}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { const n = Math.round(Number((e.target as HTMLInputElement).value)); if (n >= 1 && n <= pages) goPage(n - 1); else (e.target as HTMLInputElement).value = String(cur + 1); } }}
+                      onBlur={(e) => { const n = Math.round(Number(e.target.value)); if (n >= 1 && n <= pages && n !== cur + 1) goPage(n - 1); else e.target.value = String(cur + 1); }} /> / {nf.format(pages)}</label>
                     <button type="button" className="btn btn-sm" disabled={cur >= pages - 1} onClick={() => goPage(cur + 1)} aria-label="Trang sau">›</button>
                   </span>
                 )}
