@@ -1,3 +1,19 @@
+## Có gì mới trong beta.37 (kênh beta): màn Ngân hàng mới
+Gồm PR #145–#146 (so với beta.36). Chỉ đổi giao diện; không đổi dữ liệu ngân hàng, ID6, UID, LaTeX hay trạng thái duyệt/xác minh. **Chưa nghiệm thu thủ công trên Windows thật.** Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Cây mục lục kiểu thư mục** bên trái: “Tất cả”, Lớp → Chương → Bài → Dạng, mỗi mục có số câu; ô “Tìm thư mục…” gõ không dấu cũng được; mặc định ẩn mục chưa có câu.
+- **Thanh thống kê** trên danh sách: số câu theo mức N/H/V/C và theo loại câu, ô Tổng. Bấm ô để lọc, bấm nhiều ô để chọn nhiều; khi đang lọc, ô Tổng thành “Bỏ lọc ✕”.
+- **Nút “Bộ lọc ▾”**: Hình, Duyệt, Dạng (trạng thái xác minh), Nhãn, “Xoá bộ lọc”, “Đặt lại toàn bộ”.
+- **Thẻ câu hai cột cao bằng nhau.** Bấm vào câu mở **cửa sổ xem đầy đủ**: đáp án, lời giải, Xem chuẩn TeX, kiểm duyệt, xác minh Dạng/mức độ, chọn câu; **Trước/Sau** (phím ← →) theo cả danh sách đang lọc.
+- **Sửa câu ngay trong cửa sổ đó**; còn thay đổi chưa lưu thì HEdu hỏi trước khi rời.
+- Phím tắt: `/` vào ô tìm; PageUp/PageDown chuyển trang; Esc đóng cửa sổ.
+- Đã bỏ: kiểu xem Danh sách, nút Thẻ/Danh sách, nút ẩn/hiện mục lục, 5 ô lọc ở thanh bên.
+
+**Giới hạn**
+- Chưa đo độ mượt khi lọc trên ngân hàng rất lớn (hàng chục nghìn câu) trên máy thật.
+- Cửa sổ hẹp dưới 1000px: mục lục mở bằng nút “Mục lục”, thanh thống kê cuộn ngang.
+
 ## Có gì mới trong beta.36 (kênh beta): Tạo đề và xuất đề
 Gồm PR #134–#143 (so với beta.35). Không đổi schema ngân hàng (3), ID6, UID, LaTeX/TikZ gốc của câu. **Chưa nghiệm thu thủ công trên Windows thật** (chủ dự án quyết định phát hành beta trước; danh sách thử: `claude/tong-nghiem-thu-beta.md`). Đây là bản BETA, không thay bản chính thức.
 
