@@ -1,5 +1,5 @@
 // Bản nháp Tạo đề: đọc dữ liệu hỏng không làm sập, câu chọn tay thành dòng khóa, mẫu đề 2025, tên phạm vi.
-import { newDraft, parseDraft, rowsFromPick, scopeLabel, template2025 } from './examdraft';
+import { lastGrade, newDraft, parseDraft, rowsFromPick, scopeLabel, scopeParts, template2025 } from './examdraft';
 import { allocate, totalCenti, SCORING_2025, countsOf, collect } from './examgen';
 import { buildDefault } from './taxonomy';
 import type { Question } from './types';
@@ -47,6 +47,13 @@ console.log('Tên phạm vi');
   ok(scopeLabel({ kind: 'chapter', id: c.id }, tax)?.includes(c.name) === true && scopeLabel({ kind: 'lesson', id: l.id }, tax)?.includes(l.name) === true, 'chương, bài');
   ok(scopeLabel({ kind: 'form', id: f.id }, tax)?.includes(f.name) === true, 'dạng');
   ok(scopeLabel({ kind: 'form', id: 'khong-co' }, tax) === null, 'mục đã xóa khỏi cây ⇒ null (giao diện báo, không sập)');
+  const pf = scopeParts({ kind: 'form', id: f.id }, tax);
+  ok(pf?.main === f.name && pf.path.length === 3 && pf.path[1] === c.name && pf.path[2] === l.name, 'tên hai tầng: Dạng, kèm Lớp › Chương › Bài');
+  const pg = scopeParts({ kind: 'grade', id: '12' }, tax);
+  ok(pg?.main === 'Cả lớp 12' && pg.path.length === 0 && pg.grade === 12, 'tên hai tầng: cả lớp');
+  ok(scopeParts({ kind: 'lesson', id: 'khong-co' }, tax) === null, 'mục không còn trong cây ⇒ null');
+  ok(lastGrade([{ id: 'a', scope: { kind: 'grade', id: '12' }, type: 'tn', level: 'NB', count: 1 }, { id: 'b', scope: { kind: 'form', id: 'khong-co' }, type: 'tn', level: 'NB', count: 1 }], tax, 10) === 12, 'lớp mặc định khi thêm dòng = lớp của dòng cuối còn hợp lệ');
+  ok(lastGrade([], tax, 10) === 10, 'ma trận trống ⇒ lớp mặc định');
 }
 
 if (fail) process.exit(1);

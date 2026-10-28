@@ -6,11 +6,13 @@ import { QuestionView } from '../components/QuestionView';
 import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
 import { ExamExportDialog } from '../components/ExamExportDialog';
 import { ExamUsagePanel, useUsageScan } from '../components/ExamUsagePanel';
+import { ExamMatrixGrid } from '../components/ExamMatrixGrid';
+import { stockIndex } from '../lib/examgrid';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
-import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
-import { confirmRow, effectiveRows, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
+import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, partOf, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { confirmRow, effectiveRows, lastGrade, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, scopeParts, template2025, type Draft } from '../lib/examdraft';
 import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usageSig, usedAtLabel } from '../lib/examusage';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
@@ -72,12 +74,12 @@ function ScopePicker({ defaultGrade, onPick, onCancel }: { defaultGrade: number;
   const forms = lessons.find((l) => l.id === les)?.forms ?? [];
   const scope: Row['scope'] = form ? { kind: 'form', id: form } : les ? { kind: 'lesson', id: les } : chap ? { kind: 'chapter', id: chap } : { kind: 'grade', id: String(grade) };
   return (
-    <div className="te-add" role="group" aria-label="Chọn lại phạm vi cho dòng" style={{ gridColumn: '1 / -1', borderTop: 'none', borderRadius: 8 }}>
+    <div className="te-pick" role="group" aria-label="Chọn lại phạm vi cho dòng">
       <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
       <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">Cả chương</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
       <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">Mọi dạng</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-      <div className="te-add-acts">
+      <div className="te-pick-acts">
         <button type="button" className="btn btn-dark btn-sm" onClick={() => onPick(scope)}>Dùng phạm vi này</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Hủy</button>
       </div>
@@ -85,34 +87,65 @@ function ScopePicker({ defaultGrade, onPick, onCancel }: { defaultGrade: number;
   );
 }
 
-function RowAdder({ onAdd, onTemplate, defaultGrade }: { onAdd(r: Row): void; onTemplate(grade: number): void; defaultGrade: number }) {
-  const [grade, setGrade] = useState(defaultGrade);
+const LEVEL_SHORT: Record<Level | 'any', string> = { NB: 'Nhận biết', TH: 'Thông hiểu', VD: 'Vận dụng', VDC: 'Vận dụng cao', any: 'Mọi mức' };
+
+/**
+ * Thêm một yêu cầu vào ma trận. Chia hai nhóm: PHẠM VI (lớp → chương → bài → dạng) và YÊU CẦU (loại câu, mức độ, số câu).
+ * Hiện ngay số câu trong kho khớp yêu cầu (đúng chính sách lấy câu đang chọn) để giáo viên biết trước có đủ hay không.
+ */
+function RowAdder({ initialGrade, stock, onAdd, onClose }: { initialGrade: number; stock(r: Row): number; onAdd(r: Row): void; onClose(): void }) {
+  const [grade, setGrade] = useState(initialGrade);
   const [chap, setChap] = useState('');
   const [les, setLes] = useState('');
   const [form, setForm] = useState('');
   const [type, setType] = useState<QType>('tn');
   const [level, setLevel] = useState<Level | 'any'>('NB');
   const [count, setCount] = useState(4);
+  const [added, setAdded] = useState<string | null>(null);
   const chs = chaptersOf(grade);
   const lessons = chs.find((c) => c.id === chap)?.lessons ?? [];
   const forms = lessons.find((l) => l.id === les)?.forms ?? [];
+  const scope: Row['scope'] = form ? { kind: 'form', id: form } : les ? { kind: 'lesson', id: les } : chap ? { kind: 'chapter', id: chap } : { kind: 'grade', id: String(grade) };
+  const row: Row = { id: '', scope, type, level: type === 'tn' ? level : 'any', count };
+  const have = stock(row);
+  const where = form ? forms.find((f) => f.id === form)?.name : les ? lessons.find((l) => l.id === les)?.name : chap ? chs.find((c) => c.id === chap)?.name : `cả lớp ${grade}`;
   const add = () => {
-    const scope = form ? { kind: 'form' as const, id: form } : les ? { kind: 'lesson' as const, id: les } : chap ? { kind: 'chapter' as const, id: chap } : { kind: 'grade' as const, id: String(grade) };
-    onAdd({ id: newRowId(), scope, type, level: type === 'tn' ? level : 'any', count });
+    onAdd({ ...row, id: newRowId() });
+    setAdded(`Đã thêm: ${count} câu ${TYPE_LABEL[type].toLowerCase()}${type === 'tn' && level !== 'any' ? ` ${LEVEL_SHORT[level].toLowerCase()}` : ''} ở ${where}.`);
   };
   return (
     <div className="te-add" role="group" aria-label="Thêm dòng ma trận">
-      <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
-      <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-      <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">Cả chương</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
-      <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">Mọi dạng</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-      <label className="lbl">Loại câu<select className="sel" value={type} onChange={(e) => setType(e.target.value as QType)}>{TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</select></label>
-      <label className="lbl">Mức độ<select className="sel" value={type === 'tn' ? level : 'any'} disabled={type !== 'tn'} onChange={(e) => setLevel(e.target.value as Level | 'any')}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select></label>
-      <label className="lbl">Số câu<input className="inp" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} /></label>
-      <div className="te-add-acts">
-        <button type="button" className="btn btn-dark" onClick={add}><IcPlus />Thêm dòng</button>
-        <button type="button" className="btn btn-ghost" onClick={() => onTemplate(grade)} title="Mẫu của HEdu: 12 câu trắc nghiệm (5 NB, 4 TH, 3 VD), 4 câu đúng/sai, 6 câu trả lời ngắn trong cả lớp. Không phải quy định bắt buộc của Bộ; sửa tự do.">Dùng mẫu HEdu 12/4/6 cho lớp {grade}</button>
+      <div className="te-add-h"><b>Thêm dòng vào ma trận</b><button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>Đóng</button></div>
+      <fieldset className="te-add-g">
+        <legend>1 · Phạm vi kiến thức</legend>
+        <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
+        <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp {grade}</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">{chap ? 'Cả chương' : '— chọn chương trước'}</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+        <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">{les ? 'Mọi dạng của bài' : '— chọn bài trước'}</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+      </fieldset>
+      <fieldset className="te-add-g">
+        <legend>2 · Yêu cầu</legend>
+        <div className="lbl">Loại câu
+          <div className="seg sm" role="group" aria-label="Loại câu">{TYPES.map((t) => <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)}>{TYPE_LABEL[t]}</button>)}</div>
+        </div>
+        <div className="lbl">Mức độ
+          {type === 'tn'
+            ? <div className="seg sm" role="group" aria-label="Mức độ">{([...LEVELS, 'any'] as (Level | 'any')[]).map((l) => <button key={l} type="button" aria-pressed={level === l} onClick={() => setLevel(l)}>{l === 'any' ? 'Mọi mức' : l}</button>)}</div>
+            : <span className="te-muted">Mọi mức (câu {TYPE_LABEL[type].toLowerCase()} không chia mức độ trong ma trận)</span>}
+        </div>
+        <div className="lbl">Số câu
+          <div className="stepper" role="group" aria-label="Số câu">
+            <button type="button" aria-label="Bớt một câu" onClick={() => setCount(Math.max(1, count - 1))}>−</button>
+            <span aria-live="polite">{count}</span>
+            <button type="button" aria-label="Thêm một câu" onClick={() => setCount(Math.min(100, count + 1))}>+</button>
+          </div>
+        </div>
+      </fieldset>
+      <div className="te-add-foot">
+        <span className={have >= count ? 'okmark' : 'te-lack'} aria-live="polite">{have >= count ? <IcCheck /> : <IcAlert size={14} />}Kho có {have} câu phù hợp{have < count ? ` · thiếu ${count - have}` : ''}</span>
+        <button type="button" className="btn btn-dark" onClick={add}><IcPlus />Thêm vào ma trận</button>
       </div>
+      {added && <p className="te-note" role="status">{added} Có thể chọn tiếp để thêm dòng khác.</p>}
     </div>
   );
 }
@@ -133,6 +166,8 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [undoTpl, setUndoTpl] = useState<{ prev: Draft; note: string } | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string; sig: string } | null>(null);
   const [exportDlg, setExportDlg] = useState(false);
+  /** bước đang mở: 1 chọn câu · 2 kết quả · 3 cấu hình & xuất */
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const upd = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   useEffect(() => { saveDraft(d); }, [d]);
 
@@ -206,6 +241,19 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const defaultGrade = grades()[grades().length - 1] ?? 12;
   const broken = useMemo(() => brokenQuestions(questions), [questions]);
 
+  const gridStock = useMemo(() => stockIndex(questions, (q) => !exclude.has(q.uid) && !avoid.has(q.uid) && eligible(q, effOf, d.policy)), [questions, exclude, avoid, effOf, d.policy]);
+  const goStep = (n: 1 | 2 | 3) => { setStep(n); window.scrollTo({ top: 0 }); };
+  const stockOf = (r: Row): number => questions.reduce((a, q) => a + (!exclude.has(q.uid) && !avoid.has(q.uid) && rowMatches(r, q) && eligible(q, effOf, d.policy) ? 1 : 0), 0);
+  /** lý do chưa lưu/xuất được, hiện ngắn gọn cạnh nút Lưu */
+  const blockers = [
+    total === 0 && missing === 0 ? 'ma trận chưa có câu' : '',
+    missing > 0 ? `thiếu ${missing} câu` : '',
+    flaggedN > 0 ? `${flaggedN} dòng cần chọn lại phạm vi` : '',
+    lostLocks.length > 0 ? `${lostLocks.length} câu khóa không vào được đề` : '',
+    issues.length > 0 ? 'đáp án hoặc tổng số chưa khớp' : '',
+    usageBlocked ? 'đang kiểm câu đã dùng' : '',
+  ].filter(Boolean);
+  const refWarn = useRef<HTMLElement>(null);
   const setRow = (id: string, p: Partial<Row>) => upd({ rows: d.rows.map((r) => (r.id === id ? { ...r, ...p } : r)) });
   const delRow = (id: string) => { const { [id]: _drop, ...rest } = d.locked; upd({ rows: d.rows.filter((r) => r.id !== id), locked: rest }); };
   const toggleLock = (uid: string) => {
@@ -299,18 +347,18 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
           <span className="crumbs">Tạo đề / Đề mới</span>
           <h1>Tạo đề từ Ngân hàng</h1>
         </div>
-        <nav className="te-steps" aria-label="Các bước">
-          <button type="button" onClick={() => jump(refMatrix)}><i>1</i>Ma trận</button>
-          <button type="button" onClick={() => jump(refSheet)}><i>2</i>Xem trước</button>
-          <button type="button" onClick={() => jump(refExport)}><i>3</i>Xuất</button>
+        <nav className="te-steps" role="tablist" aria-label="Các bước">
+          <button type="button" role="tab" aria-selected={step === 1} onClick={() => goStep(1)}><i>1</i>Chọn câu</button>
+          <button type="button" role="tab" aria-selected={step === 2} onClick={() => goStep(2)}><i>2</i>Kết quả{total > 0 ? ` (${total} câu)` : ''}</button>
+          <button type="button" role="tab" aria-selected={step === 3} onClick={() => goStep(3)}><i>3</i>Cấu hình &amp; Xuất</button>
         </nav>
       </header>
 
       <div className="body-row">
-        <div className="te-main">
-          <section className="mx-sec" aria-label="Ma trận đề" ref={refMatrix}>
+        <div className="te-main" hidden={step === 3}>
+          {step === 1 && <section className="mx-sec" aria-label="Ma trận đề" ref={refMatrix}>
             <div className="mx-head">
-              <h2>Ma trận đề</h2>
+              <h2>Chọn câu theo ma trận</h2>
               <button type="button" className="btn btn-sm" onClick={() => setTplDlg(true)} title="Lưu ma trận thành mẫu có tên, hoặc áp dụng mẫu đã lưu">Mẫu ma trận…</button>
               <div className="seg" role="group" aria-label="Câu đủ điều kiện">
                 {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
@@ -320,21 +368,40 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{broken.length > 0 && <span className="te-bad"> {broken.length} câu có ký tự điều khiển lạ trong LaTeX nên bị loại khỏi tập ứng viên (vẫn còn nguyên trong Ngân hàng).</span>}</p>
             <ExamUsagePanel scope={d.usage} onScope={(usage) => upd({ usage })} usage={usage} idx={idx} />
             {broken.length > 0 && <details className="te-broken"><summary>Xem câu bị loại và nguyên nhân</summary><ul>{broken.slice(0, 50).map((b) => <li key={b.uid}>Câu #{b.seq} · <code>{b.uid}</code> · {b.why}</li>)}{broken.length > 50 && <li>… và {broken.length - 50} câu nữa</li>}</ul></details>}
-            {rowsEmpty ? (
+            <ExamMatrixGrid tax={tax} stock={gridStock} rows={d.rows} defaultGrade={defaultGrade} onChange={(next) => upd({ rows: next, locked: Object.fromEntries(Object.entries(d.locked).filter(([k]) => next.some((r) => r.id === k))) })} />
+            <h3 className="mx-sub">Ma trận đã chọn <span className="te-note">gồm các ô đã nhập ở lưới và các dòng theo chương/lớp</span></h3>
+            {rowsEmpty && !adding ? (
               <div className="te-empty">
-                <b>Chưa có dòng nào.</b>
-                <span>Mỗi dòng là một yêu cầu, vd “4 câu trắc nghiệm Nhận biết ở Chương 1”. Thêm dòng bên dưới hoặc bắt đầu từ mẫu HEdu 12/4/6 (chỉ là gợi ý, sửa toàn bộ được).</span>
-                <div><button type="button" className="btn btn-dark" onClick={() => upd({ rows: template2025(defaultGrade) })}>Dùng mẫu HEdu 12/4/6 cho lớp {defaultGrade}</button></div>
+                <b>Ma trận đang trống.</b>
+                <span>Gõ số câu vào các ô ở lưới phía trên, hoặc lấy câu rộng hơn theo cả chương/cả lớp: dùng mẫu HEdu (12 trắc nghiệm, 4 đúng/sai, 6 trả lời ngắn; chỉ là gợi ý, không phải quy định của Bộ) hay tự thêm dòng.</span>
+                <div className="te-empty-acts">
+                  <button type="button" className="btn btn-dark" onClick={() => upd({ rows: template2025(defaultGrade) })}>Dùng mẫu HEdu 12/4/6 cho lớp {defaultGrade}</button>
+                  <button type="button" className="btn" onClick={() => setAdding(true)}><IcPlus />Tự thêm dòng</button>
+                </div>
               </div>
-            ) : (
+            ) : !rowsEmpty && (
               <div className="te-rows" role="table" aria-label="Các dòng của ma trận">
-                <div className="te-row te-row-h" role="row"><span>Phạm vi</span><span>Loại câu</span><span>Mức độ</span><span>Số câu</span><span>Kho câu</span><span /></div>
-                {rows.map((r) => {
-                  const pool = alloc.pool[r.id] ?? 0, def = alloc.deficit[r.id] ?? 0;
-                  const name = scopeLabel(r.scope, tax) ?? (r.label ? `${r.label} (đã lưu trong mẫu)` : null);
+                <div className="te-row te-row-h" role="row"><span role="columnheader">Phạm vi</span><span role="columnheader">Mức độ</span><span role="columnheader">Số câu</span><span role="columnheader">Kho câu</span><span /></div>
+                {PARTS.map((p) => {
+                  const rs = rows.filter((r) => partOf(r.type) === p);
+                  if (!rs.length) return null;
+                  const n = rs.reduce((a, r) => a + r.count, 0);
+                  const lack = rs.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
                   return (
-                    <div key={r.id} className={`te-row${def ? ' short' : ''}`} role="row">
-                      <span className="te-scope" title={name ?? ''}>{name ?? <em>Mục này không còn trong cây</em>}
+                    <div key={p} className="te-part-g" role="rowgroup" aria-label={PART_NAME[p]}>
+                      <div className="te-part-h" role="row">
+                        <b>{PART_NAME[p]}</b>
+                        <span>{n} câu · {fmtScore(n * d.scoring[p])} điểm</span>
+                        {lack > 0 && <span className="te-lack"><IcAlert size={14} />thiếu {lack}</span>}
+                      </div>
+                      {rs.map((r) => {
+                  const pool = alloc.pool[r.id] ?? 0, def = alloc.deficit[r.id] ?? 0;
+                  const parts = scopeParts(r.scope, tax);
+                  const name = parts ? [...parts.path, parts.main].join(' › ') : (r.label ? `${r.label} (đã lưu trong mẫu)` : null);
+                  return (
+                    <div key={r.id} className={`te-row${def ? ' short' : ''}${r.flag ? ' flagged' : ''}`} role="row">
+                      <span className="te-scope" role="cell" title={name ?? ''}>
+                        {parts ? <><b>{parts.main}</b>{parts.path.length > 0 && <small>{parts.path.join(' › ')}</small>}</> : <em>{name ?? 'Mục này không còn trong cây'}</em>}
                         {r.flag === 'mat' && <span className="te-flag warn" title="Chương/Bài/Dạng của dòng này đã bị xóa khỏi cây chương trình. HEdu không tự chuyển sang mục khác: hãy chọn lại phạm vi hoặc xóa dòng. Chưa xuất được đề khi còn dòng này.">không còn trong cây <button type="button" className="linkbtn" onClick={() => setRescope(rescope === r.id ? null : r.id)}>Chọn lại phạm vi…</button></span>}
                         {r.flag === 'doi-vi-tri' && <span className="te-flag warn" title="Mục này đã đổi vị trí trong cây kể từ khi lưu mẫu. Xem phạm vi cũ và mới rồi xác nhận giữ ID hiện tại. Chưa xuất được đề khi chưa xác nhận.">đã đổi vị trí <button type="button" className="linkbtn" onClick={() => {
                           const now = scopeLabel(r.scope, tax);
@@ -343,8 +410,9 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                           if (fx.ok) upd({ rows: d.rows.map((x) => (x.id === r.id ? fx.row : x)) }); else toast(fx.why);
                         }}>Xem và xác nhận…</button> <button type="button" className="linkbtn" onClick={() => setRescope(rescope === r.id ? null : r.id)}>Chọn lại…</button></span>}
                       </span>
-                      <select className="sel" aria-label="Loại câu" value={r.type} onChange={(e) => { const t = e.target.value as QType; setRow(r.id, { type: t, level: t === 'tn' ? r.level : 'any' }); }}>{TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</select>
-                      <select className="sel" aria-label="Mức độ" value={r.level} onChange={(e) => setRow(r.id, { level: e.target.value as Level | 'any' })}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select>
+                      {r.type === 'tn'
+                        ? <select className="sel" aria-label="Mức độ" value={r.level} onChange={(e) => setRow(r.id, { level: e.target.value as Level | 'any' })}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select>
+                        : <span className="te-muted" role="cell">Mọi mức</span>}
                       <div className="stepper" role="group" aria-label="Số câu">
                         <button type="button" aria-label="Bớt một câu" onClick={() => setRow(r.id, { count: Math.max(0, r.count - 1) })}>−</button>
                         <span aria-live="polite">{r.count}</span>
@@ -352,7 +420,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                       </div>
                       <div className="te-stock">
                         <div className="te-bar" aria-hidden="true"><i style={{ width: `${r.count ? Math.min(100, (pool / r.count) * 100) : 100}%` }} className={def ? 'bad' : pool < r.count * 2 ? 'low' : 'ok'} /></div>
-                        {def ? <span className="te-lack"><IcAlert size={14} />Thiếu {def} câu · kho {pool}</span> : <span className="okmark"><IcCheck />Đủ · kho {pool}</span>}
+                        {def ? <span className="te-lack"><IcAlert size={14} />Thiếu {def} · kho {pool}</span> : <span className="okmark"><IcCheck />Đủ · kho {pool}</span>}
                       </div>
                       <button type="button" className="ico" style={{ width: 32, height: 32 }} aria-label={`Bỏ dòng ${name ?? ''}`} onClick={() => delRow(r.id)}><IcX /></button>
                       {rescope === r.id && (
@@ -366,18 +434,25 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                     </div>
                   );
                 })}
+                    </div>
+                  );
+                })}
+                <div className="te-total" role="row"><b>Tổng</b><span>{rows.reduce((a, r) => a + r.count, 0)} câu · {fmtScore(rows.reduce((a, r) => a + r.count * d.scoring[partOf(r.type)], 0))} điểm{rows.some((r) => r.type === 'tl') ? ' (tự luận tính theo điểm tối đa mỗi câu)' : ''}</span></div>
               </div>
             )}
-            <div className="mx-foot">
-              <button type="button" className="btn btn-sm" aria-expanded={adding} onClick={() => setAdding(!adding)}><IcPlus />Thêm dòng</button>
-              {!rowsEmpty && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Xóa ma trận</button>}
-              <span className="te-note">Mẫu HEdu 12/4/6 chỉ là gợi ý, không phải quy định của Bộ.</span>
-            </div>
-            {adding && <RowAdder defaultGrade={defaultGrade} onAdd={(r) => upd({ rows: [...d.rows, r] })} onTemplate={(g) => { upd({ rows: [...d.rows, ...template2025(g)] }); setAdding(false); }} />}
-          </section>
+            {adding
+              ? <RowAdder initialGrade={lastGrade(d.rows, tax, defaultGrade)} stock={stockOf} onAdd={(r) => upd({ rows: [...d.rows, r] })} onClose={() => setAdding(false)} />
+              : !rowsEmpty && (
+                <div className="mx-foot">
+                  <button type="button" className="btn btn-sm" onClick={() => setAdding(true)}><IcPlus />Thêm dòng</button>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Xóa ma trận</button>
+                </div>
+              )}
+            <div className="te-next"><button type="button" className="btn btn-dark" disabled={total === 0} onClick={() => goStep(2)}>Tiếp: Xem kết quả →</button></div>
+          </section>}
 
           {(usageBlocked || lockedUsedList.length > 0 || missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
-            <section className="te-warn" aria-label="Lưu ý về đề" role="status">
+            <section className="te-warn" aria-label="Lưu ý về đề" role="status" ref={refWarn}>
               {usageBlocked && <p className="bad"><IcAlert size={16} />{usage.error ? 'Chưa kiểm tra được câu đã dùng vì không quét được Thư viện đề, nên chưa xuất được.' : 'Đang quét Thư viện đề để tránh câu đã dùng; chưa xuất được cho tới khi quét xong.'}</p>}
               {lostLocks.length > 0 && (
                 <div className="bad">
@@ -406,11 +481,17 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               )}
               {missing > 0 && <p className="bad"><IcAlert size={16} />Còn thiếu {missing} câu so với ma trận. Hạ số câu, đổi mức lấy câu hoặc <button type="button" className="linkbtn" onClick={() => go({ screen: 'editor' })}>soạn thêm câu</button>. Chưa xuất được đề.</p>}
               {unreviewedN > 0 && <p><IcAlert size={16} />{unreviewedN} câu chưa được duyệt nội dung (chỉ vào đề qua ngoại lệ bạn đã xác nhận hoặc khi lấy “Mọi câu”).</p>}
-              {unverifiedN > 0 && d.policy !== 'xac-minh' && <p><IcAlert size={16} />{unverifiedN} / {total} câu chưa được giáo viên xác minh Dạng và mức độ. “Đã duyệt nội dung” không phải là xác minh phân loại: số câu theo mức độ có thể lệch, và ID hợp lệ vẫn có thể sai lớp (từng có câu Toán 10 mang mã lớp 12). Khi ra đề chính thức hãy xem lại các câu này.</p>}
+              {unverifiedN > 0 && d.policy !== 'xac-minh' && (
+                <details className="te-why">
+                  <summary><IcAlert size={16} />{unverifiedN} / {total} câu chưa được giáo viên xác minh Dạng và mức độ, nên xem lại trước khi ra đề chính thức.</summary>
+                  <p>“Đã duyệt nội dung” không phải là xác minh phân loại: số câu theo mức độ có thể lệch, và ID hợp lệ vẫn có thể sai lớp (từng có câu Toán 10 mang mã lớp 12). Muốn chỉ lấy câu đã xác minh, chọn mức “Đã xác minh” ở đầu ma trận.</p>
+                </details>
+              )}
               {keptN > 0 && <p><IcAlert size={16} />{keptN} câu trong mã đang xem giữ nguyên thứ tự phương án vì không nhận diện chắc (rê vào nhãn “Giữ nguyên phương án” để xem lý do).</p>}
             </section>
           )}
 
+          {step === 2 && <>
           <section className="sheet-wrap" aria-label="Xem trước trang đề" ref={refSheet}>
             <div className="te-sheet-bar">
               <div className="codes" role="group" aria-label="Xem mã đề">
@@ -478,9 +559,14 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               </div>
             </section>
           )}
+          <div className="te-next">
+            <button type="button" className="btn" onClick={() => goStep(1)}>← Quay lại chọn câu</button>
+            <button type="button" className="btn btn-dark" onClick={() => goStep(3)}>Tiếp: Cấu hình &amp; Xuất →</button>
+          </div>
+          </>}
         </div>
 
-        <aside className="aside te-aside" aria-label="Thiết lập đề">
+        <aside className={`aside te-aside${step === 3 ? ' is-wide' : ''}`} aria-label="Thiết lập đề">
           <div className="panel te-sum" aria-live="polite">
             <div className="te-big"><b>{total}</b><span>câu</span><b>{fmtScore(centi)}</b><span>điểm</span></div>
             <div className="te-parts">{PARTS.filter((p) => counts[p] > 0).map((p) => <span key={p} className="code-tag">{PART_NAME[p].split(' · ')[0]}: {counts[p]}</span>)}</div>
@@ -492,7 +578,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             )}
           </div>
 
-          <div className="panel">
+          {step === 3 && <div className="panel">
             <h2>Thông tin đề</h2>
             <label className="lbl">Sở / phòng giáo dục<input className="inp" type="text" placeholder="SỞ GD&ĐT …" value={d.info.dept} onChange={(e) => upd({ info: { ...d.info, dept: e.target.value } })} /></label>
             <label className="lbl">Trường<input className="inp" type="text" placeholder="TRƯỜNG THPT …" value={d.info.school} onChange={(e) => upd({ info: { ...d.info, school: e.target.value } })} /></label>
@@ -503,9 +589,9 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               <label className="lbl">Thời gian (phút)<input className="inp" type="number" min={1} max={600} value={d.info.minutes} onChange={(e) => upd({ info: { ...d.info, minutes: Math.max(1, Math.min(600, Number(e.target.value) || 1)) } })} /></label>
             </div>
             <label className="lbl">Ghi chú dưới thời gian<input className="inp" type="text" placeholder="(Đề thi có … trang)" value={d.info.note} onChange={(e) => upd({ info: { ...d.info, note: e.target.value } })} /></label>
-          </div>
+          </div>}
 
-          <div className="panel" style={{ gap: 12 }}>
+          {step === 3 && <div className="panel" style={{ gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <h2>Số mã đề</h2>
               <div className="stepper">
@@ -523,9 +609,11 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={d.shuffleOptions} onChange={(e) => upd({ shuffleOptions: e.target.checked })} /></label>
             <label className="sw">Tạo tệp đáp án cho giáo viên (không nằm trong PDF đề)<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
             <p className="te-note">Mã đầu giữ nguyên thứ tự và phương án gốc; các mã sau được trộn. Câu được chép nguyên văn.</p>
-          </div>
+          </div>}
 
           <div className="te-export" ref={refExport}>
+            {step !== 3 && <button type="button" className="btn btn-dark" style={{ height: 44 }} onClick={() => goStep(step === 1 ? 2 : 3)}>{step === 1 ? 'Tiếp: Xem kết quả →' : 'Tiếp: Cấu hình & Xuất →'}</button>}
+            {step === 3 && <>
             <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canExport || busy || !desktop} onClick={() => { void saveToLibrary(); }}>{busy ? 'Đang lưu…' : 'Lưu vào Thư viện đề'}</button>
             <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'PDF từng mã đề và gói ZIP giáo viên/học sinh' : 'Lưu vào Thư viện đề trước (đề đã đổi sau lần lưu gần nhất)'} onClick={() => setExportDlg(true)}>Xuất PDF từng mã / ZIP…</button>
             {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
@@ -533,7 +621,10 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
               <button type="button" className="btn btn-ghost" style={{ height: 44 }} disabled title="Xuất Word sẽ làm sau">Xuất Word · sắp có</button>
             </div>
-            {!canExport && total > 0 && missing > 0 && <span className="te-note" style={{ color: 'var(--danger)' }}>Ma trận còn thiếu câu nên chưa xuất.</span>}
+            </>}
+            {blockers.length > 0
+              ? <p className="te-ready bad" role="status"><IcAlert size={14} />Chưa lưu được: {blockers.join(' · ')}.{total > 0 && <> <button type="button" className="linkbtn" onClick={() => { if (step === 3) setStep(1); setTimeout(() => jump(refWarn), 50); }}>Xem chi tiết</button></>}</p>
+              : <p className="te-ready ok" role="status"><IcCheck />Sẵn sàng lưu: {total} câu, {d.count} mã đề.</p>}
           </div>
         </aside>
       </div>

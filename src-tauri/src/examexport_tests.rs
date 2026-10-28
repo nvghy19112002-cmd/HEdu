@@ -139,12 +139,22 @@ fn goi_giao_vien_day_du_va_doc_lai_khop() {
     let z = PathBuf::from(out.zip_path.clone().unwrap());
     let n = names(&z);
     for want in [
-        "de/kiem-tra-hoc-ki-i-101-de.pdf", "loigiai/kiem-tra-hoc-ki-i-102-loigiai.pdf", "dapan/kiem-tra-hoc-ki-i-dapan-101.csv", "dapan/kiem-tra-hoc-ki-i-dapan-102.csv",
+        "de/kiem-tra-hoc-ki-i-101-de.pdf", "loigiai/kiem-tra-hoc-ki-i-102-loigiai.pdf", "dapan/kiem-tra-hoc-ki-i-dapan-101.csv", "dapan/kiem-tra-hoc-ki-i-dapan-102.csv", "dapan/kiem-tra-hoc-ki-i-dap-an.xlsx",
         "manifest.json", "nguon/khaibaochung.tex", "nguon/hinh/Hình đồ thị.png", "nguon/de-101.tex",
     ] {
         assert!(n.iter().any(|x| x == want), "thiếu {want} trong {n:?}");
     }
     assert!(!n.iter().any(|x| x.contains("103")), "chỉ các mã đã chọn");
+    // Excel đáp án: một tệp chung, chỉ các mã đã chọn, mở lại được
+    {
+        let mut a = zip::ZipArchive::new(fs::File::open(&z).unwrap()).unwrap();
+        let mut xb = Vec::new();
+        a.by_name("dapan/kiem-tra-hoc-ki-i-dap-an.xlsx").unwrap().read_to_end(&mut xb).unwrap();
+        let mut x = zip::ZipArchive::new(std::io::Cursor::new(xb)).unwrap();
+        let mut s1 = String::new();
+        x.by_name("xl/worksheets/sheet1.xml").unwrap().read_to_string(&mut s1).unwrap();
+        assert!(s1.contains(">101<") && s1.contains(">102<") && !s1.contains(">103<"), "Excel chỉ có mã đã chọn");
+    }
     // manifest: truy nguyên, seed đầy đủ, SHA-256 từng tệp khớp nội dung thật
     let mut a = zip::ZipArchive::new(fs::File::open(&z).unwrap()).unwrap();
     let mut mt = String::new();

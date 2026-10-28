@@ -642,6 +642,7 @@ pub fn build_package(
 
     let student = plan.kind == Kind::Student;
     let mut manifest_codes = Vec::new();
+    let mut xl_codes: Vec<CodeSpec> = Vec::new();
     let total = plan.codes.len();
     let mut any_fail = false;
     for (idx, code) in plan.codes.iter().enumerate() {
@@ -708,6 +709,7 @@ pub fn build_package(
                 let cp = format!("dapan/{}-dapan-{code}.csv", plan.slug);
                 w.add(&cp, csv.as_bytes())?;
                 mcode["csvDapAn"] = json!({ "tep": cp, "sha256": sha_hex(csv.as_bytes()) });
+                xl_codes.push(spec.clone());
             }
             manifest_codes.push(mcode);
         }
@@ -720,6 +722,9 @@ pub fn build_package(
     }
 
     if !student {
+        let refs: Vec<&CodeSpec> = xl_codes.iter().collect();
+        let xl = crate::examxlsx::answers_xlsx(&refs)?;
+        w.add(&format!("dapan/{}-dap-an.xlsx", plan.slug), &xl)?;
         hook("nguon")?;
         stop_if_cancelled!("khi ghi nguồn");
         for (i, s) in plan.sources.iter().enumerate() {
@@ -1183,6 +1188,49 @@ use tauri::{AppHandle, Emitter, Manager};
 
 fn root_of(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| e.to_string())
+}
+
+/// Chỉ xuất Excel đáp án (mọi mã trong hedu-de.json) vào thư mục đã chọn; không ghi đè tệp có sẵn. Dùng cùng điều kiện như xuất ZIP.
+pub fn export_answers_xlsx(lib: &Path, id: &str, dest_dir: &Path) -> Result<String, String> {
+    let info = codes_info(lib, id)?;
+    if !info.has_spec {
+        return Err(info.problems.first().cloned().unwrap_or_else(|| "Đề chưa có dữ liệu mã đề.".into()));
+    }
+    if let Some(p) = info.problems.first() {
+        return Err(p.clone());
+    }
+    let spec = parse_spec(&read_project_text(lib, id, SPEC, 8 * 1024 * 1024)?)?;
+    let refs: Vec<&CodeSpec> = spec.codes.iter().collect();
+    let bytes = crate::examxlsx::answers_xlsx(&refs)?;
+    let md = fs::symlink_metadata(dest_dir).map_err(|e| format!("Thư mục đích không dùng được: {e}"))?;
+    if !md.is_dir() || is_link(&md) {
+        return Err("Thư mục đích không phải thư mục thường.".into());
+    }
+    let base = format!("{}-dap-an-{:08x}", slug(&spec.title), spec.seed & 0xffff_ffff);
+    for n in 1..1000 {
+        let name = if n == 1 { format!("{base}.xlsx") } else { format!("{base}-{n}.xlsx") };
+        let p = dest_dir.join(&name);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&p) {
+            Ok(mut f) => {
+                use std::io::Write as _;
+                if let Err(e) = f.write_all(&bytes).and_then(|_| f.sync_all()) {
+                    drop(f);
+                    let _ = fs::remove_file(&p);
+                    return Err(format!("Không ghi được tệp Excel: {e}"));
+                }
+                return Ok(p.to_string_lossy().into_owned());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("Không tạo được tệp Excel: {e}")),
+        }
+    }
+    Err("Thư mục đích đã có quá nhiều tệp đáp án cùng tên.".into())
+}
+
+#[tauri::command]
+pub async fn exam_answers_xlsx(app: AppHandle, id: String, dest_dir: String) -> Result<String, String> {
+    let lib = root_of(&app)?.join("exam-library");
+    tauri::async_runtime::spawn_blocking(move || export_answers_xlsx(&lib, &id, Path::new(&dest_dir))).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
