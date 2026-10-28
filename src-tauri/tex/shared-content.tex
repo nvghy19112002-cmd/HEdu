@@ -133,6 +133,35 @@
 \newenvironment{tc}{\begin{boxtc}\textcolor{pink!50!black}{\textbf{Tính chất. }}}{\end{boxtc}}
 \newenvironment{lt}[1][Lý thuyết]{\begin{boxlt}\textcolor{teal!60!black}{\textbf{#1. }}}{\end{boxlt}}
 
+% --- Vá tiêu đề "Lời giải" của gói ex_test 3.3 (KHÔNG sửa file ex_test.sty) ---
+% Gói in tiêu đề bằng một hộp rộng `\linewidth-0.5em` rồi `\hfill`, và thân lời giải chạy tiếp NGAY
+% trong cùng đoạn. Lời giải mở đầu bằng một "từ" hẹp hơn 0,5em (`\loigiai{$I$ là trung điểm…}`) thì
+% chữ ấy lọt vừa khe 0,5em còn lại: nó nằm chung dòng với tiêu đề, bị `\hfill` đẩy ra sát lề phải,
+% phần còn lại của câu xuống dòng dưới. Chỉ lộ ở phông có ký tự hẹp (mathpazo của bản xuất đề).
+%
+% `\kern0.5em` lấp đúng cái khe ấy: không chữ nào còn chỗ để ở lại dòng tiêu đề. Khi TeX ngắt dòng
+% tại `\hfill` thì kern (đứng sau chỗ ngắt) tự bị bỏ, nên mọi câu KHÔNG dính lỗi ra y như trước.
+% Không dùng `\break`: lời giải mở đầu bằng `center` / `itemchoice` sẽ dư ra một dòng trống.
+%
+% Đo 09-10-2026, mẫu chưa vá so với mẫu đã vá, mỗi câu một trang cắt khít: 417 câu thật × 3 đường
+% trùng từng điểm ảnh; trong 177 câu của ngân hàng có lời giải mở đầu bằng một "từ" có thể hẹp, đúng
+% MỘT câu đổi (`0H5N1-3`, bản xuất đề có lời giải) — chính là câu dính lỗi; đường xem trước (phông
+% Computer Modern) không câu nào đổi.
+%
+% Đặt trong `\AtEndPreamble` vì file này có đường nạp TRƯỚC ex_test (khaibaochung.tex) lẫn SAU
+% (preamble.tex). `\patchcmd` không tìm thấy chuỗi (gói đổi ở bản sau) thì không làm gì, và
+% `npm run check:figure-routes` mục 6 sẽ đỏ. Bản tự chứa khaibaochung-tailieu.tex mang một bản
+% chép của đúng khối này — mục 6 đo riêng từng bản.
+% `\makeatletter` là BẮT BUỘC: `\patchcmd` đọc lại thân lệnh theo bảng ký tự lúc chạy, mà thân ấy đầy
+% tên có `@` (`\if@extest@showloigiai`) — thiếu nó là thân lệnh bị cắt vụn mà không báo lỗi.
+\AtEndPreamble{%
+  \ifdefined\renewloigiai
+    \makeatletter
+    \patchcmd{\renewloigiai}{\vspace{0.2em}\hfill}{\vspace{0.2em}\hfill\kern0.5em}{\renewloigiai}{}%
+    \makeatother
+  \fi
+}
+
 % --- Macro tự chế của tác giả gốc (không thuộc ex_test.sty) ---
 % Hệ/tuyển phương trình — không phải lệnh LaTeX chuẩn, nhiều câu trong bank dùng.
 \newcommand{\hoac}[1]{\left[\begin{aligned}#1\end{aligned}\right.}

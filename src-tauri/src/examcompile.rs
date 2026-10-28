@@ -1367,14 +1367,16 @@ B
         let _ = fs::remove_dir_all(&d);
     }
 
-    /// Bằng chứng với ex_test THẬT: bản Đề KHÔNG chạy nội dung `\loigiai`, bản Lời giải thì có (dấu `\typeout` chỉ chạy khi lời giải được in).
+    /// Bằng chứng với ex_test THẬT: chữ của lời giải KHÔNG có trong PDF bản Đề, có trong PDF bản Lời giải.
+    /// Đo thẳng trên PDF (tắt nén để đọc được chữ): từ ex_test 3.3, bản Đề vẫn chạy thân `\loigiai` nhưng bỏ vào một hộp bị vứt,
+    /// nên dấu `\typeout` không còn là bằng chứng; điều phải bảo đảm là lời giải không lọt vào trang in.
     #[test]
     #[ignore]
     fn tex_live_that_che_do_de_khong_lo_loi_giai() {
         let Ok(bin) = std::env::var("HEDU_TEX_BIN") else { return };
         let d = tmp("real-modes");
         let root = d.join("root");
-        let main = "\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amsmath,amssymb}\n\\usepackage[loigiai]{ex_test}\n\\begin{document}\n\\begin{ex}\nCho $1+1=?$\n\\choice{$1$}{\\True $2$}{$3$}{$4$}\n\\loigiai{\\typeout{HEDU-SOL-MARK} Vì $1+1=2$.}\n\\end{ex}\n\\end{document}\n";
+        let main = "\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amsmath,amssymb}\n\\usepackage[loigiai]{ex_test}\n\\pdfcompresslevel=0\n\\pdfobjcompresslevel=0\n\\begin{document}\n\\begin{ex}\nCho $1+1=?$\n\\choice{$1$}{\\True $2$}{$3$}{$4$}\n\\loigiai{HEDUSOLMARK Vì $1+1=2$.}\n\\end{ex}\n\\end{document}\n";
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "Thật", None).unwrap();
         let sup = support::prepare(&root);
@@ -1383,8 +1385,10 @@ B
         let lg = compile(&root, &s.id, &o("loigiai"), &sup).unwrap();
         eprintln!("de: {} {:?} | loigiai: {} {:?}", de.status, de.pages, lg.status, lg.pages);
         assert_eq!((de.status.as_str(), lg.status.as_str()), ("ok", "ok"), "{:?} {:?} {}", de.diagnostics, lg.diagnostics, de.raw_log);
-        assert!(!de.raw_log.contains("HEDU-SOL-MARK"), "bản ĐỀ không được chạy nội dung lời giải");
-        assert!(lg.raw_log.contains("HEDU-SOL-MARK"), "bản LỜI GIẢI phải chạy nội dung lời giải");
+        let text = |p: &std::path::Path| String::from_utf8_lossy(&fs::read(p).unwrap()).into_owned();
+        let (de_pdf, lg_pdf) = (text(de.last_good.as_ref().unwrap().pdf_path.as_ref()), text(lg.last_good.as_ref().unwrap().pdf_path.as_ref()));
+        assert!(lg_pdf.contains("HEDUSOLMARK"), "bản LỜI GIẢI phải in lời giải (đồng thời chứng minh cách đọc chữ trong PDF còn dùng được)");
+        assert!(!de_pdf.contains("HEDUSOLMARK"), "bản ĐỀ không được in lời giải");
         assert_eq!(fs::read_to_string(root.join("exam-library/projects").join(&s.id).join("main.tex")).unwrap(), main, "nguồn không đổi");
         let a = fs::read(&de.last_good.unwrap().pdf_path).unwrap();
         let b = fs::read(&lg.last_good.unwrap().pdf_path).unwrap();
