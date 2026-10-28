@@ -3,7 +3,6 @@ import { parseExTest, buildExTest, splitExBlocks } from './extest';
 import { questionCode } from './id';
 import { findDuplicates } from './dup';
 import { seedQuestions } from './seed';
-import { pickByMatrix, makeVariants, shortages, examToTex } from './exam';
 import { renderLatexText } from './render';
 import { CURRENT_SCHEMA, migrate, SchemaNewerError } from './migrate';
 import { parseCode } from './id';
@@ -45,28 +44,6 @@ const near = bank[0].latex.replace('x^3 - 3x^2 + 2', 'x^3 - 3x^2 + 5');
 const hit = findDuplicates(near, bank)[0];
 ok(hit && hit.question.uid === bank[0].uid && hit.score < 1, `đổi một số → gần trùng (${hit ? Math.round(hit.score * 100) : 0}%)`);
 ok(findDuplicates(bank[9].latex, bank, bank[9].uid).length === 0, 'câu khác hẳn không bị báo');
-
-console.log('Tạo đề');
-const rows = [
-  { chapterId: 'c2D1', nb: 1, th: 1, vd: 1, ds: 1, tln: 1 },
-  { chapterId: 'c2D4', nb: 1, th: 1, vd: 0, ds: 1, tln: 1 },
-];
-ok(shortages(bank, rows).length === 0, 'ma trận mẫu đủ câu');
-ok(shortages(bank, [{ chapterId: 'c2H2', nb: 1, th: 0, vd: 1, ds: 0, tln: 1 }]).length === 1, 'phát hiện thiếu câu VD chương véc-tơ');
-const picked = pickByMatrix(bank, rows, 42);
-ok(picked.p1.length === 5 && picked.p2.length === 2 && picked.p3.length === 2, 'chọn đúng số câu mỗi phần');
-const vars = makeVariants(picked, { count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, seed: 42 });
-ok(vars.map((v) => v.code).join(',') === '101,102,103,104', 'sinh 4 mã đề 101–104');
-const keyOk = vars.every((v) => v.parts[0].every((it, i) => {
-  const letter = v.key[0][i];
-  const k = 'ABCD'.indexOf(letter);
-  return it.parsed.options[it.order[k]]?.correct;
-}));
-ok(keyOk, 'bảng đáp án khớp với phương án đã trộn');
-const sameSet = vars.every((v) => v.parts[0].map((x) => x.q.uid).sort().join() === vars[0].parts[0].map((x) => x.q.uid).sort().join());
-ok(sameSet, 'mọi mã đề dùng chung bộ câu');
-const tex = examToTex({ school: 'THPT A', title: 'Kiểm tra', minutes: 90, grade: 12 }, vars, { withSolution: false, withKey: true });
-ok(tex.includes('Mã đề 104') && tex.includes('\\begin{document}') && tex.includes('Bảng đáp án'), 'xuất được mã LaTeX đề');
 
 console.log('Xem trước');
 const html = renderLatexText(bank[5].latex);

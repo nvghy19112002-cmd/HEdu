@@ -132,13 +132,18 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
     if (g) g.push(q.uid); else groups.set(key, [q.uid]);
   }
 
-  // Câu khóa đi trước và không bị chọn lại cho dòng khác.
+  // Câu khóa (hoặc giáo viên chọn tay) đi trước và không bị chọn lại cho dòng khác. Đây là lựa chọn rõ ràng của giáo viên nên không phải qua
+  // điều kiện đủ dùng; chỉ loại câu “Cần sửa”, câu bị loại trừ và câu không còn khớp dòng.
+  const want = new Set(Object.values(o.locked ?? {}).flat());
+  const lockedQ = new Map<string, Question>();
+  if (want.size) for (const q of bank) if (want.has(q.uid)) lockedQ.set(q.uid, q);
   const picks: Record<string, string[]> = {};
   const used = new Set<string>();
-  rows.forEach((r, i) => {
+  rows.forEach((r) => {
     picks[r.id] = [];
     for (const uid of o.locked?.[r.id] ?? []) {
-      if (picks[r.id].length >= r.count || used.has(uid) || !matchOf.get(uid)?.includes(i)) continue;
+      const q = lockedQ.get(uid);
+      if (picks[r.id].length >= r.count || used.has(uid) || !q || q.review === 'needs_fix' || o.exclude?.has(uid) || !rowMatches(r, q)) continue;
       picks[r.id].push(uid);
       used.add(uid);
     }

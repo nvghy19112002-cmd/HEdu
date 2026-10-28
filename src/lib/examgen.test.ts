@@ -65,6 +65,9 @@ console.log('Phân bổ toàn cục');
   const lockBad = mk({ type: 'ds' });
   const a6 = allocate([...bank, lockBad], r, { policy: 'duyet', eff, seed: 9, locked: { r1: [lockBad.uid] } });
   ok(!a6.picks.r1.includes(lockBad.uid), 'câu khóa không còn khớp dòng thì bị bỏ');
+  const raw = mk({ review: undefined }), broken = mk({ review: 'needs_fix' });
+  const a7 = allocate([...bank, raw, broken], r, { policy: 'duyet', eff, seed: 9, locked: { r1: [raw.uid, broken.uid] } });
+  ok(a7.picks.r1.includes(raw.uid) && !a7.picks.r1.includes(broken.uid), 'giáo viên khóa/chọn tay câu chưa duyệt thì giữ; câu “Cần sửa” vẫn bị loại');
 }
 {
   const bank = Array.from({ length: 40 }, (_, i) => mk({ lessonId: `l${i % 4}`, level: (['NB', 'TH', 'VD', 'VDC'] as Level[])[i % 4] }));

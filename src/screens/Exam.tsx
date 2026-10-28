@@ -1,233 +1,342 @@
-// Màn hình Tạo đề: ma trận 3 phần (đề 2025) hoặc chọn tay; sinh nhiều mã đề, bảng đáp án, xuất .tex.
-import { useMemo, useState } from 'react';
+// Tạo đề từ Ngân hàng: ma trận → xem trước (đúng như bản in) → lưu vào Thư viện đề để biên dịch PDF.
+// Lõi chọn câu/trộn/đáp án/dựng .tex nằm ở lib/examgen.ts (có kiểm thử); bản nháp ở lib/examdraft.ts.
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
-import { IcCheck, IcX } from '../components/Icons';
-import { chapters as chaptersOf, grades } from '../lib/curriculum';
-import { shortName } from '../lib/taxonomy';
-import { available, CELLS, examToTex, makeVariants, partTitle, pickByMatrix, pickManual, POINTS, shortages, type Cell, type MatrixRow, type Picked, type Variant } from '../lib/exam';
+import { useEffectiveOf } from '../components/IdReviewControl';
+import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
+import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
+import { allocate, candidatesFor, collect, countsOf, examFiles, fmtScore, makeVariants, PART_NAME, PARTS, POLICY_LABEL, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { loadDraft, newRowId, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
+import { parseExTest } from '../lib/extest';
+import { createFromFiles, toSource } from '../lib/examsources';
+import { requirementsMd, safeFolderName } from '../lib/texproject';
+import { KHAIBAOCHUNG_TEX } from '../lib/texproject.template';
+import { invoke, isDesktop } from '../lib/platform';
+import { plainSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
+import { LEVELS, LEVEL_LABEL, TYPES, TYPE_LABEL, type Level, type QType, type Question } from '../lib/types';
 
-/** Ma trận mở sẵn: ba chương đầu của lớp cao nhất, mỗi ô một câu để thấy cách dùng. */
-function defaultRows(list: { id: string }[]): MatrixRow[] {
-  return list.slice(0, 3).map((c) => ({ chapterId: c.id, nb: 1, th: 1, vd: 0, ds: 1, tln: 1 }));
-}
-
-const CELL_ARIA: Record<Cell, string> = { nb: 'Phần I, Nhận biết', th: 'Phần I, Thông hiểu', vd: 'Phần I, Vận dụng', ds: 'Phần II', tln: 'Phần III' };
-const LEVEL_SHORT: Record<Cell, string> = { nb: 'NB', th: 'TH', vd: 'VD', ds: 'Đ/S', tln: 'TLN' };
+const PART_HEAD: Record<PartKey, string> = {
+  p1: 'PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn.',
+  p2: 'PHẦN II. Câu trắc nghiệm đúng sai.',
+  p3: 'PHẦN III. Câu trắc nghiệm trả lời ngắn.',
+  p4: 'PHẦN IV. Tự luận.',
+};
+const LEVEL_COLOR: Record<Level, string> = { NB: 'var(--c-nb-fg)', TH: 'var(--c-th-fg)', VD: 'var(--c-vd-fg)', VDC: 'var(--c-vdc-fg)' };
+const POLICIES: Policy[] = ['duyet', 'xac-minh', 'tat-ca'];
+const POLICY_SHORT: Record<Policy, string> = { duyet: 'Đã duyệt', 'xac-minh': 'Đã xác minh', 'tat-ca': 'Mọi câu' };
 
 function PartHead({ text }: { text: string }) {
   const k = text.indexOf('. ');
   return <p className="sheet-part"><b>{text.slice(0, k + 1)}</b>{text.slice(k + 1)}</p>;
 }
 
-function fmt(n: number) { return n.toLocaleString('vi-VN', { maximumFractionDigits: 2 }); }
+interface SlotProps {
+  slot: Slot; number: number; locked: boolean; verifiedDa: boolean;
+  onLock(): void; onSwap(): void; onReroll(): void; swapping: boolean;
+}
+
+/** Một câu trong trang xem trước, có thao tác khi rê chuột hoặc focus. */
+const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, onLock, onSwap, onReroll, swapping }: SlotProps) {
+  const parsed = useMemo(() => parseExTest(slot.latex), [slot.latex]);
+  const order = useMemo(() => parsed.options.map((_, i) => i), [parsed]);
+  return (
+    <div className={`te-q${locked ? ' is-locked' : ''}${swapping ? ' is-swap' : ''}`}>
+      <div className="te-q-tools" role="group" aria-label={`Thao tác câu ${number}`}>
+        {slot.q.review !== 'approved' && <span className="te-flag warn" title="Câu này chưa được duyệt nội dung">Chưa duyệt</span>}
+        {!verifiedDa && <span className="te-flag" title="Dạng hoặc mức độ chưa được giáo viên xác minh">Chưa xác minh Dạng</span>}
+        {slot.note && <span className="te-flag" title={slot.note}>Giữ nguyên phương án</span>}
+        <button type="button" className="te-tool" aria-pressed={locked} title={locked ? 'Bỏ khóa câu này' : 'Khóa câu này: giữ nguyên khi sinh lại'} onClick={onLock}>{locked ? <IcLock /> : <IcUnlock />}<span>{locked ? 'Đã khóa' : 'Khóa'}</span></button>
+        <button type="button" className="te-tool" title="Chọn một câu khác thay cho câu này" aria-expanded={swapping} onClick={onSwap}><IcSwap /><span>Đổi câu</span></button>
+        <button type="button" className="te-tool" title="Loại câu này và lấy ngẫu nhiên một câu khác" onClick={onReroll}><IcDice /><span>Ngẫu nhiên</span></button>
+      </div>
+      <QuestionView p={parsed} order={order} number={number} variant="exam" showAnswer={false} showSolution={false} />
+    </div>
+  );
+});
+
+function RowAdder({ onAdd, onTemplate, defaultGrade }: { onAdd(r: Row): void; onTemplate(grade: number): void; defaultGrade: number }) {
+  const [grade, setGrade] = useState(defaultGrade);
+  const [chap, setChap] = useState('');
+  const [les, setLes] = useState('');
+  const [form, setForm] = useState('');
+  const [type, setType] = useState<QType>('tn');
+  const [level, setLevel] = useState<Level | 'any'>('NB');
+  const [count, setCount] = useState(4);
+  const chs = chaptersOf(grade);
+  const lessons = chs.find((c) => c.id === chap)?.lessons ?? [];
+  const forms = lessons.find((l) => l.id === les)?.forms ?? [];
+  const add = () => {
+    const scope = form ? { kind: 'form' as const, id: form } : les ? { kind: 'lesson' as const, id: les } : chap ? { kind: 'chapter' as const, id: chap } : { kind: 'grade' as const, id: String(grade) };
+    onAdd({ id: newRowId(), scope, type, level: type === 'tn' ? level : 'any', count });
+  };
+  return (
+    <div className="te-add" role="group" aria-label="Thêm dòng ma trận">
+      <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
+      <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">Cả chương</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+      <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">Mọi dạng</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+      <label className="lbl">Loại câu<select className="sel" value={type} onChange={(e) => setType(e.target.value as QType)}>{TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</select></label>
+      <label className="lbl">Mức độ<select className="sel" value={type === 'tn' ? level : 'any'} disabled={type !== 'tn'} onChange={(e) => setLevel(e.target.value as Level | 'any')}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select></label>
+      <label className="lbl">Số câu<input className="inp" type="number" min={1} max={100} value={count} onChange={(e) => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} /></label>
+      <div className="te-add-acts">
+        <button type="button" className="btn btn-dark" onClick={add}><IcPlus />Thêm dòng</button>
+        <button type="button" className="btn btn-ghost" onClick={() => onTemplate(grade)} title="12 câu trắc nghiệm, 4 câu đúng/sai, 6 câu trả lời ngắn lấy trong cả lớp">Dùng mẫu đề 2025 cho lớp {grade}</button>
+      </div>
+    </div>
+  );
+}
 
 export function ExamScreen({ pick }: { pick?: string[] }) {
   const { go, toast, showFile } = useApp();
   const { questions } = useBank();
-  const [mode, setMode] = useState<'matrix' | 'manual'>(pick?.length ? 'manual' : 'matrix');
-  const [grade, setGrade] = useState(12);
-  const [rows, setRows] = useState<MatrixRow[]>(() => defaultRows(chaptersOf(grades()[grades().length - 1] ?? 12)));
-  const [school, setSchool] = useState('');
-  const [title, setTitle] = useState('Kiểm tra cuối học kì I');
-  const [minutes, setMinutes] = useState(90);
-  const [n, setN] = useState(4);
-  const [shuffleQ, setShuffleQ] = useState(true);
-  const [shuffleO, setShuffleO] = useState(true);
-  const [withSol, setWithSol] = useState(false);
-  const [withKey, setWithKey] = useState(true);
-  const [result, setResult] = useState<{ variants: Variant[]; sig: string } | null>(null);
+  const { tax } = useTaxonomy();
+  const effOf = useEffectiveOf();
+  const [d, setD] = useState<Draft>(() => loadDraft());
   const [shown, setShown] = useState(0);
+  const [swap, setSwap] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const upd = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
+  useEffect(() => { saveDraft(d); }, [d]);
 
-  const manualQs = useMemo(() => questions.filter((q) => pick?.includes(q.uid)), [questions, pick]);
-  const miss = useMemo(() => shortages(questions, rows), [questions, rows]);
-  const chapters = chaptersOf(grade);
+  // Câu chọn tay từ Ngân hàng: thành dòng ma trận có câu khóa, chỉ thêm một lần cho mỗi lần chọn.
+  useEffect(() => {
+    if (!pick?.length) return;
+    const sig = [...pick].sort().join(',');
+    if (sig === d.pickSig) return;
+    const qs = questions.filter((q) => pick.includes(q.uid));
+    if (!qs.length) return;
+    const add = rowsFromPick(qs);
+    setD((x) => ({ ...x, rows: [...x.rows, ...add.rows], locked: { ...x.locked, ...add.locked }, rejected: x.rejected.filter((u) => !pick.includes(u)), pickSig: sig }));
+    toast(`Đã đưa ${qs.length} câu từ Ngân hàng vào đề (đã khóa).`);
+  }, [pick, questions, d.pickSig, toast]);
 
-  const tot = { nb: 0, th: 0, vd: 0, ds: 0, tln: 0 } as Record<Cell, number>;
-  rows.forEach((r) => CELLS.forEach((c) => (tot[c] += r[c])));
-  const manualPicked: Picked = pickManual(manualQs);
-  const p1 = mode === 'matrix' ? tot.nb + tot.th + tot.vd : manualPicked.p1.length;
-  const p2 = mode === 'matrix' ? tot.ds : manualPicked.p2.length;
-  const p3 = mode === 'matrix' ? tot.tln : manualPicked.p3.length;
-  const p4 = mode === 'matrix' ? 0 : manualPicked.p4.length;
-  const totalQ = p1 + p2 + p3 + p4;
+  const byUid = useMemo(() => new Map(questions.map((q) => [q.uid, q])), [questions]);
+  const exclude = useMemo(() => new Set(d.rejected), [d.rejected]);
+  const alloc = useMemo(() => allocate(questions, d.rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude }), [questions, d.rows, d.policy, d.seed, d.locked, exclude, effOf]);
+  const picked = useMemo(() => collect(d.rows, alloc.picks, byUid), [d.rows, alloc, byUid]);
+  const counts = countsOf(picked);
+  const total = counts.p1 + counts.p2 + counts.p3 + counts.p4;
+  const variants = useMemo(() => makeVariants(picked, { count: d.count, firstCode: d.firstCode, shuffleQuestions: d.shuffleQuestions, shuffleOptions: d.shuffleOptions, seed: d.seed, keepFirstOriginal: true }), [picked, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.seed]);
+  const variant = variants[Math.min(shown, variants.length - 1)];
+  const rowOf = useMemo(() => { const m = new Map<string, string>(); for (const [rid, us] of Object.entries(alloc.picks)) for (const u of us) m.set(u, rid); return m; }, [alloc]);
+  const lockedSet = useMemo(() => new Set(Object.values(d.locked).flat()), [d.locked]);
+  const missing = d.rows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
+  const centi = totalCenti(counts, d.scoring);
+  const picks = useMemo(() => PARTS.flatMap((p) => picked[p]), [picked]);
+  const unverifiedN = useMemo(() => picks.filter((q) => !verified(effOf(q))).length, [picks, effOf]);
+  const unreviewedN = picks.filter((q) => q.review !== 'approved').length;
+  const keptN = variant ? PARTS.reduce((a, p) => a + variant.parts[p].filter((s) => s.note).length, 0) : 0;
+  const byLevel = (['NB', 'TH', 'VD', 'VDC'] as Level[]).map((l) => ({ l, n: picks.filter((q) => q.level === l).length }));
+  const defaultGrade = grades()[grades().length - 1] ?? 12;
 
-  const sig = JSON.stringify([mode, rows, pick, n, shuffleQ, shuffleO]);
-  const stale = result != null && result.sig !== sig;
-  const canGenerate = totalQ > 0 && (mode === 'manual' || miss.length === 0);
+  const setRow = (id: string, p: Partial<Row>) => upd({ rows: d.rows.map((r) => (r.id === id ? { ...r, ...p } : r)) });
+  const delRow = (id: string) => { const { [id]: _drop, ...rest } = d.locked; upd({ rows: d.rows.filter((r) => r.id !== id), locked: rest }); };
+  const toggleLock = (uid: string) => {
+    const rid = rowOf.get(uid);
+    if (!rid) return;
+    const cur = d.locked[rid] ?? [];
+    upd({ locked: { ...d.locked, [rid]: cur.includes(uid) ? cur.filter((u) => u !== uid) : [...cur, uid] } });
+  };
+  const withoutLock = (uid: string): Record<string, string[]> => { const next: Record<string, string[]> = {}; for (const [k, v] of Object.entries(d.locked)) next[k] = v.filter((u) => u !== uid); return next; };
+  const reroll = (uid: string) => { setSwap(null); upd({ rejected: [...d.rejected, uid], locked: withoutLock(uid) }); };
+  const replace = (uid: string, to: string) => {
+    const rid = rowOf.get(uid);
+    if (!rid) return;
+    const base = withoutLock(uid);
+    setSwap(null);
+    upd({ rejected: [...d.rejected, uid], locked: { ...base, [rid]: [...(base[rid] ?? []), to] } });
+  };
+  const resample = () => upd({ seed: Math.floor(Math.random() * 1e9), rejected: [] });
 
-  const generate = () => {
-    const seed = Math.floor(Math.random() * 1e9);
-    const picked = mode === 'matrix' ? pickByMatrix(questions, rows, seed) : manualPicked;
-    const variants = makeVariants(picked, { count: n, firstCode: 101, shuffleQuestions: shuffleQ, shuffleOptions: shuffleO, seed });
-    setResult({ variants, sig });
-    setShown(0);
-    toast(`Đã sinh ${n} mã đề, mỗi đề ${totalQ} câu.`);
+  const swapRow = swap ? d.rows.find((r) => r.id === rowOf.get(swap)) : undefined;
+  const candidates = useMemo<Question[]>(() => (swapRow ? candidatesFor(questions, swapRow, { policy: d.policy, eff: effOf }, new Set(picks.map((q) => q.uid))) : []), [swapRow, questions, d.policy, effOf, picks]);
+
+  const refMatrix = useRef<HTMLElement>(null);
+  const refSheet = useRef<HTMLElement>(null);
+  const refExport = useRef<HTMLDivElement>(null);
+  const desktop = isDesktop();
+  const canExport = total > 0 && missing === 0 && variants.length > 0;
+  const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const projectFiles = (name: string) => [
+    ...examFiles(d.info, variants, { withKeys: d.withKeys }),
+    { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
+    { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString() }) },
+    { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
+  ];
+
+  const saveToLibrary = async () => {
+    if (!canExport || busy) return;
+    setBusy(true);
+    try {
+      const name = `${d.info.title.trim() || 'Đề'} · ${new Date().toLocaleDateString('vi-VN')}`;
+      const s = await createFromFiles(name, projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource));
+      toast(`Đã lưu “${s.name}” vào Thư viện đề. Mở mục Đề thi để biên dịch PDF.`, { label: 'Mở Đề thi', run: () => go({ screen: 'examlib' }) });
+    } catch (e) {
+      toast(`Không lưu được vào Thư viện đề (${e instanceof Error ? e.message : String(e)}). Đề trên màn hình vẫn còn.`);
+    } finally { setBusy(false); }
   };
 
-  const exportTex = () => {
-    if (!result) return;
-    const slug = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-');
-    showFile({ title: `Mã LaTeX · ${n} mã đề`, name: `de-${slug}.tex`, text: examToTex({ school, title, minutes, grade }, result.variants, { withSolution: withSol, withKey }), mime: 'application/x-tex' });
+  const exportFolder = async () => {
+    if (!canExport || busy) return;
+    const open = window.__TAURI__?.dialog?.open;
+    if (!open) { toast('Chỉ xuất được ra thư mục trong bản cài trên Windows.'); return; }
+    setBusy(true);
+    try {
+      const folder = safeFolderName(d.info.title, 'de-hedu');
+      const parent = await open({ directory: true, multiple: false, title: 'Chọn nơi tạo thư mục đề' });
+      if (!parent || Array.isArray(parent)) return;
+      const out = await invoke<string>('export_tex_folder', { parent, name: folder, files: projectFiles(folder) });
+      toast(`Đã tạo thư mục: ${out}`);
+    } catch (e) {
+      toast(`Không tạo được thư mục (${e instanceof Error ? e.message : String(e)}).`);
+    } finally { setBusy(false); }
   };
 
-  const setCell = (i: number, c: Cell, v: number) => setRows(rows.map((r, k) => (k === i ? { ...r, [c]: Math.max(0, Math.min(40, v || 0)) } : r)));
-  const unused = chapters.filter((c) => !rows.some((r) => r.chapterId === c.id));
+  const viewTex = () => {
+    if (!variant) return;
+    const f = examFiles(d.info, variants, { withKeys: false }).find((x) => x.path === variantFile(variant.code));
+    if (f) showFile({ title: `Mã LaTeX · mã đề ${variant.code}`, name: f.path, text: f.text, mime: 'application/x-tex' });
+  };
 
-  const variant = result?.variants[Math.min(shown, (result?.variants.length ?? 1) - 1)];
+  const rowsEmpty = d.rows.length === 0;
 
   return (
     <>
       <header className="page-head">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span className="crumbs">Tạo đề / Đề mới · Toán {grade}</span>
-          <h1>{mode === 'matrix' ? 'Tạo đề theo ma trận' : 'Tạo đề từ câu đã chọn'}</h1>
+          <span className="crumbs">Tạo đề / Đề mới</span>
+          <h1>Tạo đề từ Ngân hàng</h1>
         </div>
-        <div className="seg" role="group" aria-label="Cách chọn câu">
-          <button type="button" aria-pressed={mode === 'matrix'} onClick={() => setMode('matrix')}>Theo ma trận</button>
-          <button type="button" aria-pressed={mode === 'manual'} onClick={() => setMode('manual')}>Chọn tay từ ngân hàng</button>
-        </div>
+        <nav className="te-steps" aria-label="Các bước">
+          <button type="button" onClick={() => jump(refMatrix)}><i>1</i>Ma trận</button>
+          <button type="button" onClick={() => jump(refSheet)}><i>2</i>Xem trước</button>
+          <button type="button" onClick={() => jump(refExport)}><i>3</i>Xuất</button>
+        </nav>
       </header>
 
       <div className="body-row">
-        <div style={{ flex: '999 1 620px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {mode === 'matrix' ? (
-            <section className="mx-sec" aria-label="Ma trận đề">
-              <div className="mx-head">
-                <h2>Ma trận · cấu trúc 3 phần</h2>
-                <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Tổng <b style={{ color: 'var(--ink)' }}>{totalQ} câu</b> · <b style={{ color: 'var(--ink)' }}>{fmt(p1 * POINTS.p1 + p2 * POINTS.p2 + p3 * POINTS.p3)} điểm</b></span>
+        <div className="te-main">
+          <section className="mx-sec" aria-label="Ma trận đề" ref={refMatrix}>
+            <div className="mx-head">
+              <h2>Ma trận đề</h2>
+              <div className="seg" role="group" aria-label="Câu đủ điều kiện">
+                {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
               </div>
-              <div className="mx-wrap">
-                <table className="mx">
-                  <thead>
-                    <tr>
-                      <th rowSpan={2} scope="col" style={{ verticalAlign: 'bottom' }}>Chương</th>
-                      <th colSpan={3} scope="colgroup" style={{ borderBottom: 'none', color: 'var(--ink)' }}>Phần I · Trắc nghiệm</th>
-                      <th scope="col" style={{ borderBottom: 'none', color: 'var(--ink)' }}>Phần II</th>
-                      <th scope="col" style={{ borderBottom: 'none', color: 'var(--ink)' }}>Phần III</th>
-                      <th rowSpan={2} scope="col" style={{ verticalAlign: 'bottom' }}>Kho câu hỏi</th>
-                      <th rowSpan={2} scope="col"><span className="sr-only">Bỏ dòng</span></th>
-                    </tr>
-                    <tr><th scope="col">NB</th><th scope="col">TH</th><th scope="col">VD</th><th scope="col">Đúng / Sai</th><th scope="col">Trả lời ngắn</th></tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r, i) => {
-                      const ch = chapters.find((c) => c.id === r.chapterId);
-                      const rowMiss = miss.filter((m) => m.chapterId === r.chapterId);
-                      return (
-                        <tr key={r.chapterId} className={rowMiss.length ? 'short-row' : undefined}>
-                          <td style={{ fontWeight: 500 }}>{ch ? shortName(ch.name) : r.chapterId}</td>
-                          {CELLS.map((c) => {
-                            const have = available(questions, r.chapterId, c);
-                            return (
-                              <td key={c}>
-                                <input className={`num${r[c] > have ? ' over' : ''}`} type="number" min={0} max={40} value={r[c]} aria-label={`${ch ? shortName(ch.name) : ''}, ${CELL_ARIA[c]}`} onChange={(e) => setCell(i, c, Number(e.target.value))} />
-                                <span className="avail">có {have}</span>
-                              </td>
-                            );
-                          })}
-                          <td>
-                            {rowMiss.length ? (
-                              <button type="button" className="linkbtn" style={{ textAlign: 'left' }} onClick={() => go({ screen: 'editor' })}>
-                                Thiếu {rowMiss.map((m) => `${m.need - m.have} câu ${LEVEL_SHORT[m.cell]}`).join(', ')} · Soạn thêm
-                              </button>
-                            ) : (
-                              <span className="okmark"><IcCheck />Đủ câu</span>
-                            )}
-                          </td>
-                          <td><button type="button" className="ico" style={{ width: 32, height: 32 }} aria-label={`Bỏ chương ${ch ? shortName(ch.name) : ''}`} onClick={() => setRows(rows.filter((_, k) => k !== i))}><IcX /></button></td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ fontWeight: 700 }}>
-                      <td>Số câu</td>
-                      {CELLS.map((c) => <td key={c}>{tot[c]}</td>)}
-                      <td /><td />
-                    </tr>
-                    <tr style={{ color: 'var(--ink-2)' }}>
-                      <td style={{ fontWeight: 600 }}>Điểm</td>
-                      <td colSpan={3}>{p1} × 0,25 = {fmt(p1 * POINTS.p1)}</td>
-                      <td>{p2} × 1,0 = {fmt(p2 * POINTS.p2)}</td>
-                      <td>{p3} × 0,5 = {fmt(p3 * POINTS.p3)}</td>
-                      <td /><td />
-                    </tr>
-                  </tbody>
-                </table>
+            </div>
+            <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}</p>
+            {rowsEmpty ? (
+              <div className="te-empty">
+                <b>Chưa có dòng nào.</b>
+                <span>Mỗi dòng là một yêu cầu, vd “4 câu trắc nghiệm Nhận biết ở Chương 1”. Thêm dòng bên dưới hoặc bắt đầu từ mẫu đề 2025.</span>
+                <div><button type="button" className="btn btn-dark" onClick={() => upd({ rows: template2025(defaultGrade) })}>Dùng mẫu đề 2025 cho lớp {defaultGrade}</button></div>
               </div>
-              <div className="mx-foot">
-                {unused.length > 0 && (
-                  <label className="lbl" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <span>Thêm chương</span>
-                    <select className="sel" style={{ width: 'auto', maxWidth: 360 }} value="" onChange={(e) => e.target.value && setRows([...rows, { chapterId: e.target.value, nb: 0, th: 0, vd: 0, ds: 0, tln: 0 }])}>
-                      <option value="">Chọn chương…</option>
-                      {unused.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </label>
-                )}
-                <span style={{ fontSize: 12, color: 'var(--ink-3)', marginLeft: 'auto' }}>Đề chuẩn 2025: 12 câu phần I, 4 câu phần II, 6 câu phần III.</span>
+            ) : (
+              <div className="te-rows" role="table" aria-label="Các dòng của ma trận">
+                <div className="te-row te-row-h" role="row"><span>Phạm vi</span><span>Loại câu</span><span>Mức độ</span><span>Số câu</span><span>Kho câu</span><span /></div>
+                {d.rows.map((r) => {
+                  const pool = alloc.pool[r.id] ?? 0, def = alloc.deficit[r.id] ?? 0;
+                  const name = scopeLabel(r.scope, tax);
+                  return (
+                    <div key={r.id} className={`te-row${def ? ' short' : ''}`} role="row">
+                      <span className="te-scope" title={name ?? ''}>{name ?? <em>Mục này không còn trong cây</em>}</span>
+                      <select className="sel" aria-label="Loại câu" value={r.type} onChange={(e) => { const t = e.target.value as QType; setRow(r.id, { type: t, level: t === 'tn' ? r.level : 'any' }); }}>{TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</select>
+                      <select className="sel" aria-label="Mức độ" value={r.level} onChange={(e) => setRow(r.id, { level: e.target.value as Level | 'any' })}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select>
+                      <div className="stepper" role="group" aria-label="Số câu">
+                        <button type="button" aria-label="Bớt một câu" onClick={() => setRow(r.id, { count: Math.max(0, r.count - 1) })}>−</button>
+                        <span aria-live="polite">{r.count}</span>
+                        <button type="button" aria-label="Thêm một câu" onClick={() => setRow(r.id, { count: Math.min(200, r.count + 1) })}>+</button>
+                      </div>
+                      <div className="te-stock">
+                        <div className="te-bar" aria-hidden="true"><i style={{ width: `${r.count ? Math.min(100, (pool / r.count) * 100) : 100}%` }} className={def ? 'bad' : pool < r.count * 2 ? 'low' : 'ok'} /></div>
+                        {def ? <span className="te-lack"><IcAlert size={14} />Thiếu {def} câu · kho {pool}</span> : <span className="okmark"><IcCheck />Đủ · kho {pool}</span>}
+                      </div>
+                      <button type="button" className="ico" style={{ width: 32, height: 32 }} aria-label={`Bỏ dòng ${name ?? ''}`} onClick={() => delRow(r.id)}><IcX /></button>
+                    </div>
+                  );
+                })}
               </div>
-            </section>
-          ) : (
-            <section className="panel" aria-label="Câu đã chọn">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <h2>Câu đã chọn từ ngân hàng</h2>
-                <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'bank' })}>Chọn lại trong ngân hàng</button>
-              </div>
-              {manualQs.length ? (
-                <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>
-                  Phần I: <b>{p1}</b> câu · Phần II: <b>{p2}</b> câu · Phần III: <b>{p3}</b> câu{p4 ? <> · Tự luận: <b>{p4}</b> câu</> : null}
-                </span>
-              ) : (
-                <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>Chưa chọn câu nào. Vào Ngân hàng, tích chọn câu rồi bấm “Thêm vào đề”.</span>
-              )}
+            )}
+            <div className="mx-foot">
+              <button type="button" className="btn btn-sm" aria-expanded={adding} onClick={() => setAdding(!adding)}><IcPlus />Thêm dòng</button>
+              {!rowsEmpty && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Xóa ma trận</button>}
+              <span className="te-note">Đề chuẩn 2025: 12 câu phần I, 4 câu phần II, 6 câu phần III.</span>
+            </div>
+            {adding && <RowAdder defaultGrade={defaultGrade} onAdd={(r) => upd({ rows: [...d.rows, r] })} onTemplate={(g) => { upd({ rows: [...d.rows, ...template2025(g)] }); setAdding(false); }} />}
+          </section>
+
+          {(missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0) && total > 0 && (
+            <section className="te-warn" aria-label="Lưu ý về đề" role="status">
+              {missing > 0 && <p className="bad"><IcAlert size={16} />Còn thiếu {missing} câu so với ma trận. Hạ số câu, đổi mức lấy câu hoặc <button type="button" className="linkbtn" onClick={() => go({ screen: 'editor' })}>soạn thêm câu</button>. Chưa xuất được đề.</p>}
+              {unreviewedN > 0 && <p><IcAlert size={16} />{unreviewedN} câu chưa được duyệt nội dung (do bạn chọn tay hoặc đang lấy “Mọi câu”).</p>}
+              {unverifiedN > 0 && d.policy !== 'xac-minh' && <p><IcAlert size={16} />{unverifiedN} / {total} câu chưa được giáo viên xác minh Dạng và mức độ, nên số câu theo mức độ có thể lệch. Xác minh bằng “Hàng đợi xác minh” trong Ngân hàng.</p>}
+              {keptN > 0 && <p><IcAlert size={16} />{keptN} câu trong mã đang xem giữ nguyên thứ tự phương án vì không nhận diện chắc (rê vào nhãn “Giữ nguyên phương án” để xem lý do).</p>}
             </section>
           )}
 
-          <section className="sheet-wrap" aria-label="Xem trước trang đề">
-            {result && (
+          <section className="sheet-wrap" aria-label="Xem trước trang đề" ref={refSheet}>
+            <div className="te-sheet-bar">
               <div className="codes" role="group" aria-label="Xem mã đề">
-                {result.variants.map((v, i) => <button key={v.code} type="button" className="code" aria-pressed={i === shown} onClick={() => setShown(i)}>Mã {v.code}</button>)}
+                {variants.map((v, i) => <button key={v.code} type="button" className="code" aria-pressed={i === Math.min(shown, variants.length - 1)} onClick={() => setShown(i)}>Mã {v.code}{i === 0 ? ' · gốc' : ''}</button>)}
               </div>
-            )}
+              <button type="button" className="btn btn-sm" onClick={resample} title="Chọn lại câu ngẫu nhiên, giữ nguyên câu đã khóa"><IcDice />Sinh lại</button>
+            </div>
             <div className="sheet">
               <div className="sheet-top">
-                <div><b>[TÊN SỞ GD&amp;ĐT]</b><b>{school || '[TÊN TRƯỜNG]'}</b></div>
-                <div><b>{title.toUpperCase()}</b><span>Môn: Toán {grade} · Thời gian: {minutes} phút</span></div>
+                <div><b>{d.info.dept || '[SỞ GD&ĐT]'}</b><b>{d.info.school || '[TÊN TRƯỜNG]'}</b>{d.info.group && <span>{d.info.group}</span>}</div>
+                <div><b>{d.info.title.toUpperCase()}</b><span>{d.info.subject}</span><span>Thời gian làm bài: {d.info.minutes} phút</span>{d.info.note && <span>{d.info.note}</span>}</div>
               </div>
-              <div className="sheet-code">Mã đề {variant?.code ?? '101'}</div>
-              {stale && <p className="sheet-part" style={{ color: 'var(--danger)' }}>Thiết lập đã đổi — bấm “Sinh {n} mã đề” để cập nhật.</p>}
-              {variant ? (
-                variant.parts.map((items, pi) => items.length > 0 && (
-                  <div key={pi} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <PartHead text={partTitle(pi, 1, items.length)} />
-                    {items.map((it, k) => <QuestionView key={it.q.uid} p={it.parsed} order={it.order} number={k + 1} variant="exam" showAnswer={false} showSolution={withSol} />)}
-                  </div>
-                ))
-              ) : (
-                <p className="sheet-blank">Bấm “Sinh {n} mã đề” để xem trước đề thật.</p>
-              )}
+              <div className="sheet-code">Mã đề {variant?.code ?? d.firstCode}</div>
+              {total === 0 ? (
+                <p className="sheet-blank">Chưa có câu nào. Thêm dòng vào ma trận hoặc chọn câu trong Ngân hàng rồi bấm “Thêm vào đề”.</p>
+              ) : variant && PARTS.map((p) => variant.parts[p].length > 0 && (
+                <div key={p} className="te-part">
+                  <PartHead text={p === 'p4' ? PART_HEAD[p] : `${PART_HEAD[p]} Thí sinh trả lời từ câu 1 đến câu ${variant.parts[p].length}.`} />
+                  {variant.parts[p].map((s, k) => (
+                    <div key={s.q.uid}>
+                      <SlotView slot={s} number={k + 1} locked={lockedSet.has(s.q.uid)} verifiedDa={verified(effOf(s.q))}
+                        swapping={swap === s.q.uid} onLock={() => toggleLock(s.q.uid)} onSwap={() => setSwap(swap === s.q.uid ? null : s.q.uid)} onReroll={() => reroll(s.q.uid)} />
+                      {swap === s.q.uid && (
+                        <div className="te-swap" role="region" aria-label="Chọn câu thay thế">
+                          <div className="te-swap-h"><b>Thay bằng câu khác cùng dòng ({candidates.length} câu)</b><button type="button" className="btn btn-sm btn-ghost" onClick={() => setSwap(null)}>Đóng</button></div>
+                          {candidates.length === 0 ? <p className="te-note">Không còn câu nào khác khớp dòng này ở mức “{POLICY_SHORT[d.policy]}”.</p> : (
+                            <ul>
+                              {candidates.slice(0, 40).map((c) => (
+                                <li key={c.uid}><span className="te-snip">{plainSnippet(c.latex, 120)}</span><button type="button" className="btn btn-sm" onClick={() => replace(s.q.uid, c.uid)}>Dùng câu này</button></li>
+                              ))}
+                              {candidates.length > 40 && <li className="te-note">Còn {candidates.length - 40} câu nữa; thu hẹp dòng ma trận để xem.</li>}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </section>
 
-          {result && withKey && (
+          {variants.length > 0 && total > 0 && d.withKeys && (
             <section className="panel" aria-label="Bảng đáp án">
-              <h2>Bảng đáp án</h2>
+              <h2>Bảng đáp án các mã đề</h2>
               <div style={{ overflowX: 'auto' }}>
                 <table className="keytbl">
                   <thead>
                     <tr>
                       <th>Mã đề</th>
-                      {result.variants[0].key[0].map((_, i) => <th key={'a' + i}>I.{i + 1}</th>)}
-                      {result.variants[0].key[1].map((_, i) => <th key={'b' + i}>II.{i + 1}</th>)}
-                      {result.variants[0].key[2].map((_, i) => <th key={'c' + i}>III.{i + 1}</th>)}
+                      {variants[0].parts.p1.map((_, i) => <th key={'a' + i}>I.{i + 1}</th>)}
+                      {variants[0].parts.p2.map((_, i) => <th key={'b' + i}>II.{i + 1}</th>)}
+                      {variants[0].parts.p3.map((_, i) => <th key={'c' + i}>III.{i + 1}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {result.variants.map((v) => (
+                    {variants.map((v) => (
                       <tr key={v.code}>
                         <td>{v.code}</td>
-                        {[...v.key[0], ...v.key[1], ...v.key[2]].map((k, i) => <td key={i}>{k}</td>)}
+                        {[...v.parts.p1, ...v.parts.p2, ...v.parts.p3].map((s, i) => <td key={i}>{s.key}</td>)}
                       </tr>
                     ))}
                   </tbody>
@@ -237,49 +346,56 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
           )}
         </div>
 
-        <aside className="aside" style={{ maxWidth: 380 }} aria-label="Thiết lập đề">
+        <aside className="aside te-aside" aria-label="Thiết lập đề">
+          <div className="panel te-sum" aria-live="polite">
+            <div className="te-big"><b>{total}</b><span>câu</span><b>{fmtScore(centi)}</b><span>điểm</span></div>
+            <div className="te-parts">{PARTS.filter((p) => counts[p] > 0).map((p) => <span key={p} className="code-tag">{PART_NAME[p].split(' · ')[0]}: {counts[p]}</span>)}</div>
+            {total > 0 && (
+              <div className="te-lv" role="img" aria-label={byLevel.map((x) => `${LEVEL_LABEL[x.l]} ${x.n}`).join(', ')}>
+                <div className="te-lv-bar">{byLevel.filter((x) => x.n).map((x) => <i key={x.l} style={{ flexGrow: x.n, background: LEVEL_COLOR[x.l] }} />)}</div>
+                <div className="te-lv-key">{byLevel.map((x) => <span key={x.l}><i style={{ background: LEVEL_COLOR[x.l] }} />{x.l} {x.n}</span>)}</div>
+              </div>
+            )}
+          </div>
+
           <div className="panel">
             <h2>Thông tin đề</h2>
-            <label className="lbl">Trường<input className="inp" type="text" placeholder="[TÊN TRƯỜNG]" value={school} onChange={(e) => setSchool(e.target.value)} /></label>
-            <label className="lbl">Kỳ thi<input className="inp" type="text" value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+            <label className="lbl">Sở / phòng giáo dục<input className="inp" type="text" placeholder="SỞ GD&ĐT …" value={d.info.dept} onChange={(e) => upd({ info: { ...d.info, dept: e.target.value } })} /></label>
+            <label className="lbl">Trường<input className="inp" type="text" placeholder="TRƯỜNG THPT …" value={d.info.school} onChange={(e) => upd({ info: { ...d.info, school: e.target.value } })} /></label>
+            <label className="lbl">Tổ / bộ môn<input className="inp" type="text" value={d.info.group} onChange={(e) => upd({ info: { ...d.info, group: e.target.value } })} /></label>
+            <label className="lbl">Kỳ thi<input className="inp" type="text" value={d.info.title} onChange={(e) => upd({ info: { ...d.info, title: e.target.value } })} /></label>
             <div className="grid2">
-              <label className="lbl">Thời gian (phút)<input className="inp" type="number" min={15} max={180} value={minutes} onChange={(e) => setMinutes(Number(e.target.value) || 0)} /></label>
-              <label className="lbl">Lớp
-                <select className="sel" value={grade} onChange={(e) => {
-                  const g = Number(e.target.value);
-                  setGrade(g);
-                  setRows(defaultRows(chaptersOf(g)));
-                }}>
-                  {[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}
-                </select>
-              </label>
+              <label className="lbl">Môn<input className="inp" type="text" value={d.info.subject} onChange={(e) => upd({ info: { ...d.info, subject: e.target.value } })} /></label>
+              <label className="lbl">Thời gian (phút)<input className="inp" type="number" min={1} max={600} value={d.info.minutes} onChange={(e) => upd({ info: { ...d.info, minutes: Math.max(1, Math.min(600, Number(e.target.value) || 1)) } })} /></label>
             </div>
+            <label className="lbl">Ghi chú dưới thời gian<input className="inp" type="text" placeholder="(Đề thi có … trang)" value={d.info.note} onChange={(e) => upd({ info: { ...d.info, note: e.target.value } })} /></label>
           </div>
 
           <div className="panel" style={{ gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <h2>Số mã đề</h2>
               <div className="stepper">
-                <button type="button" aria-label="Bớt một mã đề" onClick={() => setN(Math.max(1, n - 1))}>−</button>
-                <span aria-live="polite">{n}</span>
-                <button type="button" aria-label="Thêm một mã đề" onClick={() => setN(Math.min(24, n + 1))}>+</button>
+                <button type="button" aria-label="Bớt một mã đề" onClick={() => upd({ count: Math.max(1, d.count - 1) })}>−</button>
+                <span aria-live="polite">{d.count}</span>
+                <button type="button" aria-label="Thêm một mã đề" onClick={() => upd({ count: Math.min(24, d.count + 1) })}>+</button>
               </div>
             </div>
-            <div className="codes">{Array.from({ length: n }, (_, i) => <span key={i} className="code">{101 + i}</span>)}</div>
+            <label className="lbl">Mã đề đầu tiên<input className="inp" type="number" min={1} max={9999} value={d.firstCode} onChange={(e) => upd({ firstCode: Math.max(1, Math.min(9999, Number(e.target.value) || 101)) })} /></label>
             <div className="divider" />
-            <label className="sw">Trộn thứ tự câu trong từng phần<input type="checkbox" checked={shuffleQ} onChange={(e) => setShuffleQ(e.target.checked)} /></label>
-            <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={shuffleO} onChange={(e) => setShuffleO(e.target.checked)} /></label>
-            <label className="sw">Kèm lời giải cuối đề<input type="checkbox" checked={withSol} onChange={(e) => setWithSol(e.target.checked)} /></label>
-            <label className="sw">Kèm bảng đáp án mọi mã đề<input type="checkbox" checked={withKey} onChange={(e) => setWithKey(e.target.checked)} /></label>
+            <label className="sw">Trộn thứ tự câu trong từng phần<input type="checkbox" checked={d.shuffleQuestions} onChange={(e) => upd({ shuffleQuestions: e.target.checked })} /></label>
+            <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={d.shuffleOptions} onChange={(e) => upd({ shuffleOptions: e.target.checked })} /></label>
+            <label className="sw">Kèm bảng đáp án mọi mã đề<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
+            <p className="te-note">Mã đầu giữ nguyên thứ tự và phương án gốc; các mã sau được trộn. Câu được chép nguyên văn.</p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canGenerate} onClick={generate}>Sinh {n} mã đề</button>
-            {!canGenerate && mode === 'matrix' && miss.length > 0 && <span style={{ fontSize: 12.5, color: 'var(--danger)' }}>Ngân hàng chưa đủ câu cho ma trận — soạn thêm hoặc giảm số câu ở ô viền đỏ.</span>}
+          <div className="te-export" ref={refExport}>
+            <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canExport || busy || !desktop} onClick={() => { void saveToLibrary(); }}>{busy ? 'Đang lưu…' : 'Lưu vào Thư viện đề'}</button>
+            {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
             <div className="grid2" style={{ gap: 10 }}>
-              <button type="button" className="btn btn-accent" style={{ height: 48 }} disabled={!result} onClick={() => toast('Xuất Word sẽ chạy trong bản cài trên Windows.')}>Xuất Word</button>
-              <button type="button" className="btn btn-outline" style={{ height: 48 }} disabled={!result} onClick={exportTex}>Xuất .tex</button>
+              <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
+              <button type="button" className="btn btn-ghost" style={{ height: 44 }} disabled title="Xuất Word sẽ làm sau">Xuất Word · sắp có</button>
             </div>
+            {!canExport && total > 0 && missing > 0 && <span className="te-note" style={{ color: 'var(--danger)' }}>Ma trận còn thiếu câu nên chưa xuất.</span>}
           </div>
         </aside>
       </div>
