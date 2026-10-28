@@ -1551,3 +1551,7 @@ span.bt-caret { cursor: default; }
 .clamp-btn { margin-top: 4px; font-size: 13px; }
 
 .card-where .card-ctl { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+
+.card.is-flash { animation: card-flash 2s ease-out; }
+@keyframes card-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .card.is-flash { animation: none; box-shadow: 0 0 0 3px var(--accent); } }

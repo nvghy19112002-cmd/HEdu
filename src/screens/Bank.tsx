@@ -1,16 +1,15 @@
 // Màn hình Ngân hàng câu hỏi.
 // Bố cục: thanh trái "Mục lục & bộ lọc" (Lớp → Phân môn → Chương → Bài → Dạng; Mức độ, Loại, Hình, Kiểm duyệt); cột phải tìm kiếm và xem câu.
 // Mọi lựa chọn đều hiện sẵn số câu (đếm theo chiều) để biết chỗ nào đang thiếu.
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
 import { CompiledView } from '../components/CompiledView';
 import { QuestionDrawer } from '../components/QuestionDrawer';
 import { isTikzReady } from '../lib/tikz';
-import { loadBankView, loadPerPage, loadSort, loadTreeOpen, PER_PAGE_CHOICES, saveBankView, savePerPage, saveSort, saveTreeOpen, type BankView, type PerPage } from '../lib/bankview';
+import { loadPerPage, loadSort, PER_PAGE_CHOICES, savePerPage, saveSort, type PerPage } from '../lib/bankview';
 import { loadSession, saveSession } from '../lib/banksession';
-import { plainSnippet } from '../lib/snippet';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { parseExTest } from '../lib/extest';
 import { place, useTaxonomy } from '../lib/curriculum';
@@ -98,12 +97,8 @@ export function BankScreen() {
   const qlistRef = useRef<HTMLElement>(null);
   /** Chuyển trang; từ pager cuối danh sách thì cuộn về đầu danh sách để thấy câu đầu trang mới. */
   const goPage = (n: number, scroll = false) => { setPage(n); if (scroll) requestAnimationFrame(() => { const el = qlistRef.current; if (el) window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - 8) }); }); };
-  const [view, setViewState] = useState<BankView>(loadBankView);
-  const setView = (v: BankView) => { setViewState(v); saveBankView(v); };
-  const [activeUid, setActiveUid] = useState<string | null>(null); // câu đang xem ở chế độ Danh sách (khác với ô chọn nhiều)
-  const [detailOpen, setDetailOpen] = useState(false);            // cửa sổ hẹp: Chi tiết phủ lên danh sách
-  const [treeOpen, setTreeOpenState] = useState(() => loadTreeOpen() ?? (typeof window !== 'undefined' && window.innerWidth < 1000 ? false : loadBankView() === 'list' ? typeof window === 'undefined' || window.innerWidth >= 1500 : true));
-  const setTreeOpen = (o: boolean) => { setTreeOpenState(o); saveTreeOpen(o); };
+  /** câu vừa được nhảy tới (từ Kiểm tra trùng): cuộn tới thẻ và nháy sáng một lần */
+  const [flashUid, setFlashUid] = useState<string | null>(null);
   const [dupOpen, setDupOpen] = useState(false); // màn Kiểm tra trùng
   const [menuUid, setMenuUid] = useState<string | null>(null); // menu ba chấm của thẻ
 
@@ -146,23 +141,14 @@ export function BankScreen() {
   const pState = pageState(sel, shownUids);
   const masterRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (masterRef.current) masterRef.current.indeterminate = pState === 'some'; }, [pState]);
-  // Câu đang xem: nếu không còn nằm trong trang hiện tại (đổi lọc/trang/xoá) thì lấy câu đầu tiên hợp lệ.
-  const active = shown.find((q) => q.uid === activeUid) ?? shown[0] ?? null;
-  useEffect(() => { if (!active) setDetailOpen(false); }, [active]);
-  const activeIdx = active ? list.findIndex((q) => q.uid === active.uid) : -1;
-  /** Câu trước/sau theo thứ tự của CẢ danh sách (qua ranh giới trang); giữ nguyên lựa chọn và bộ lọc. */
-  const stepActive = (d: number, keepFocus = false) => {
-    const t = list[activeIdx + d];
-    if (!t) return;
-    setActiveUid(t.uid); setPage(Math.floor((activeIdx + d) / PER_PAGE)); setDetailOpen(true);
-    if (keepFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>(`.row-main[data-uid="${t.uid}"]`)?.focus());
-  };
-  /** ↑ ↓ chỉ khi đang đứng trên một hàng của danh sách (không cướp phím ở ô nhập). */
-  const onRowsKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
-    if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || !(e.target as HTMLElement).classList.contains('row-main')) return;
-    e.preventDefault();
-    stepActive(e.key === 'ArrowDown' ? 1 : -1, true);
-  };
+  useEffect(() => {
+    if (!flashUid) return;
+    const el = document.querySelector<HTMLElement>(`.card[data-uid="${flashUid}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const t = setTimeout(() => setFlashUid(null), 2200);
+    return () => clearTimeout(t);
+  }, [flashUid, shown]);
   // Menu ba chấm: bấm ra ngoài thì đóng
   useEffect(() => {
     if (!menuUid) return;
@@ -173,7 +159,7 @@ export function BankScreen() {
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
   }, [menuUid]);
 
-  /** Từ màn Kiểm tra trùng: chuyển tới đúng câu trong Ngân hàng (xem ở chế độ Danh sách) để giáo viên tự xoá có xác nhận. */
+  /** Từ màn Kiểm tra trùng: chuyển tới đúng câu trong Ngân hàng (cuộn tới thẻ, nháy sáng) để giáo viên tự xoá có xác nhận. */
   const gotoQuestion = (uid: string) => {
     const q = questions.find((x) => x.uid === uid);
     if (!q) return;
@@ -182,7 +168,7 @@ export function BankScreen() {
     setF0({ ...emptyFilters(), gradeId: tm.chapterGrade.get(q.chapterId) ?? tm.gradeByNum.get(q.grade) ?? null, branchId: chapterBranchMap(tax).get(q.chapterId) ?? null, chapterId: q.chapterId || null, lessonId: q.lessonId || null });
     const sc = questions.filter((x) => x.grade === q.grade && (!q.chapterId || x.chapterId === q.chapterId) && (!q.lessonId || x.lessonId === q.lessonId)).sort((a, b) => b.updatedAt - a.updatedAt);
     setPage(Math.floor(Math.max(0, sc.findIndex((x) => x.uid === uid)) / PER_PAGE));
-    setView('list'); setActiveUid(uid); setDetailOpen(true);
+    setFlashUid(uid);
     toast(`Đã chuyển tới ${seqLabel(q.seq)}. Muốn xoá: nút ⋯ → Xoá câu (có hỏi lại).`);
   };
 
@@ -204,7 +190,7 @@ export function BankScreen() {
     if (focusDone.current || !nav.focusUid) return;
     focusDone.current = true;
     const i = list.findIndex((q) => q.uid === nav.focusUid);
-    if (i >= 0) { setPage(Math.floor(i / PER_PAGE)); setActiveUid(nav.focusUid); }
+    if (i >= 0) { setPage(Math.floor(i / PER_PAGE)); setFlashUid(nav.focusUid); }
     else toast('Câu vừa lưu nằm ngoài bộ lọc hiện tại. Bấm “Đặt lại toàn bộ” để thấy tất cả.');
   }, [nav.focusUid, list, toast, PER_PAGE]);
 
@@ -216,7 +202,7 @@ export function BankScreen() {
   // Thanh trái: gắn cố định khi đủ rộng và đang mở; ngược lại là ngăn trượt (cùng một thành phần, cùng trạng thái).
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
   useEffect(() => { const h = () => setNarrow(window.innerWidth < 1000); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
-  const docked = !narrow && treeOpen;
+  const docked = !narrow;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (docked && drawerOpen) setDrawerOpen(false); }, [docked, drawerOpen]);
@@ -355,12 +341,12 @@ export function BankScreen() {
     runExport();
   };
 
-  const renderCard = (q: Question, mode: 'card' | 'detail') => {
+  const renderCard = (q: Question) => {
     const p = parseExTest(q.latex);
     const on = sel.has(q.uid);
     const at = place(q.lessonId) ?? place(q.chapterId);
     return (
-      <article key={q.uid} className={`card${on ? ' is-selected' : ''}${mode === 'detail' ? ' card-detail' : ''}`}>
+      <article key={q.uid} data-uid={q.uid} className={`card${on ? ' is-selected' : ''}${flashUid === q.uid ? ' is-flash' : ''}`}>
         <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
         <div className="card-body">
           <div className="card-meta">
@@ -378,7 +364,7 @@ export function BankScreen() {
                 <button type="button" className="ico" aria-label="Thêm thao tác" aria-haspopup="menu" aria-expanded={menuUid === q.uid} title="Nhân bản, xoá…" onClick={() => { setConfirmDel(null); setMenuUid(menuUid === q.uid ? null : q.uid); }}><IcMore size={17} /></button>
                 {menuUid === q.uid && (
                   <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenuUid(null); } }}>
-                    <button type="button" role="menuitem" onClick={() => { setMenuUid(null); const c = duplicateQuestion(q.uid); if (c) { if (mode === 'detail') setActiveUid(c.uid); toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); } }}><IcCopy size={16} />Nhân bản</button>
+                    <button type="button" role="menuitem" onClick={() => { setMenuUid(null); const c = duplicateQuestion(q.uid); if (c) { toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); } }}><IcCopy size={16} />Nhân bản</button>
                     {confirmDel === q.uid
                       ? <button type="button" role="menuitem" className="danger" onClick={() => { setMenuUid(null); removeQuestion(q); }} autoFocus><IcTrash size={16} />Bấm lần nữa để xoá</button>
                       : <button type="button" role="menuitem" className="danger" onClick={() => setConfirmDel(q.uid)}><IcTrash size={16} />Xoá câu</button>}
@@ -388,12 +374,12 @@ export function BankScreen() {
             </div>
           </div>
           <div className="card-where">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}<IdStateBadge eff={effOf(q)} />
-            {mode === 'card' && <button type="button" className="linkbtn card-ctl" aria-expanded={ctlOpen.has(q.uid)} onClick={() => toggle(ctlOpen, q.uid, setCtlOpen)} title="Kiểm duyệt nội dung, xác minh Dạng và mức độ">{ctlOpen.has(q.uid) ? 'Ẩn duyệt ▲' : 'Duyệt / xác minh ▾'}</button>}
+            <button type="button" className="linkbtn card-ctl" aria-expanded={ctlOpen.has(q.uid)} onClick={() => toggle(ctlOpen, q.uid, setCtlOpen)} title="Kiểm duyệt nội dung, xác minh Dạng và mức độ">{ctlOpen.has(q.uid) ? 'Ẩn duyệt ▲' : 'Duyệt / xác minh ▾'}</button>
           </div>
           {exact.has(q.uid)
             ? <CompiledView latex={q.latex} solution={showSol} onBack={() => toggle(exact, q.uid, setExact)} />
-            : mode === 'card' ? <ClampBox><QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} /></ClampBox> : <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />}
-          {(mode === 'detail' || ctlOpen.has(q.uid)) && <>
+            : <ClampBox><QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} /></ClampBox>}
+          {ctlOpen.has(q.uid) && <>
             <ReviewControl key={q.uid} q={q} onChange={(s) => changeReview(q, s)} />
             <IdReviewControl key={`id-${q.uid}`} q={q} eff={effOf(q)} />
           </>}
@@ -409,45 +395,17 @@ export function BankScreen() {
     return ok;
   };
 
-  /** Xoá một câu: bỏ khỏi ô chọn, và nếu đang xem câu đó thì chuyển sang câu liền kề còn lại. */
+  /** Xoá một câu (vào Thùng rác) và bỏ khỏi ô chọn. */
   const removeQuestion = async (q: Question) => {
-    const i = shown.findIndex((x) => x.uid === q.uid);
-    const next = shown[i + 1] ?? shown[i - 1] ?? null;
     setConfirmDel(null);
     const block = await trashBlockReason([q]);
     if (block) { toast(block); return; }
     const mv = await moveManyToTrash([q]);
     if (!mv.ok) { toast(mv.why === 'trash-write' ? 'Không lưu được thùng rác nên CHƯA xoá câu. Hãy thử lại hoặc tạo file sao lưu trước.' : mv.message); return; }
     setSel((s) => { const n = new Set(s); n.delete(q.uid); return n; });
-    if (active?.uid === q.uid) setActiveUid(next ? next.uid : null);
     toast(`Đã chuyển ${seqLabel(q.seq)} vào Thùng rác.`, { label: 'Mở Thùng rác', run: () => go({ screen: 'trash' }) });
   };
 
-  const renderRows = () => (
-    <ul className="rows" aria-label="Danh sách rút gọn" onKeyDown={onRowsKey}>
-      {shown.map((q) => {
-        const p = parseExTest(q.latex);
-        const isActive = active?.uid === q.uid;
-        const on = sel.has(q.uid);
-        return (
-          <li key={q.uid} className={`row${isActive ? ' is-active' : ''}${on ? ' is-checked' : ''}`}>
-            <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
-            <button type="button" className="row-main" data-uid={q.uid} aria-current={isActive ? 'true' : undefined} title={plainSnippet(p.stem, 400)} onClick={() => { setActiveUid(q.uid); setDetailOpen(true); }}>
-              <span className="row-top">
-                <span className="mono row-no">{seqLabel(q.seq)}</span>
-                <span className="code-tag">{questionCode(q, q.level)}</span>
-                <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
-                <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-                <ReviewBadge q={q} compact />
-                <IdStateBadge eff={effOf(q)} />
-              </span>
-              <span className="row-text">{plainSnippet(p.stem) || '(câu chưa có đề bài)'}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
 
   const heading = wideOn ? 'Kết quả tìm trong toàn kho' : chapter && gradeObj ? `${gradeLabel(gradeObj)} · ${chapter.name}` : gradeObj ? gradeLabel(gradeObj) : 'Toàn bộ ngân hàng';
 
@@ -461,9 +419,9 @@ export function BankScreen() {
         </div>
       </header>
 
-      <div className={`body-row${view === 'list' ? ' is-list' : ''}${!docked ? ' tree-hidden' : ''}`}>
+      <div className={`body-row${!docked ? ' tree-hidden' : ''}`}>
         {docked && (
-          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => setTreeOpen(false)} />
+          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onClearAttrs={clearFilters} onResetAll={resetEverything} canReset={canReset} onHide={() => undefined} />
         )}
 
         <section ref={qlistRef} className="qlist" aria-label="Danh sách câu hỏi">
@@ -478,18 +436,13 @@ export function BankScreen() {
               </select>
               <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
             </label>
-            <div className="vseg" role="group" aria-label="Kiểu hiển thị">
-              <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Thẻ</button>
-              <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
-            </div>
             <BankMoreFilters f={f} facets={facets} onF={setF} />
             <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
-            {!docked && narrow && (
+            {narrow && (
               <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
                 Mục lục
               </button>
             )}
-            {!narrow && <button type="button" className="btn btn-sm" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)} title="Gắn mục lục và bộ lọc cố định bên trái">Mục lục</button>}
           </div>
 
 
@@ -598,22 +551,8 @@ export function BankScreen() {
             </div>
           )}
 
-          {view === 'cards' && shown.length > 0 && <div className="cards-grid">{shown.map((q) => renderCard(q, 'card'))}</div>}
+          {shown.length > 0 && <div className="cards-grid">{shown.map((q) => renderCard(q))}</div>}
 
-          {view === 'list' && shown.length > 0 && active && (
-            <div className={`split${detailOpen ? ' has-detail' : ''}`}>
-              {renderRows()}
-              <div className="detail" aria-label="Chi tiết câu đang xem">
-                <button type="button" className="linkbtn detail-back" onClick={() => setDetailOpen(false)}>‹ Quay lại danh sách</button>
-                <div className="detail-nav" role="group" aria-label="Chuyển giữa các câu">
-                  <button type="button" className="btn btn-sm" disabled={activeIdx <= 0} onClick={() => stepActive(-1)} title="Câu trước (phím ↑ khi đang ở danh sách)">‹ Câu trước</button>
-                  <span><b>{nf.format(activeIdx + 1)}</b> / {nf.format(list.length)}</span>
-                  <button type="button" className="btn btn-sm" disabled={activeIdx < 0 || activeIdx >= list.length - 1} onClick={() => stepActive(1)} title="Câu tiếp (phím ↓ khi đang ở danh sách)">Câu tiếp ›</button>
-                </div>
-                {renderCard(active, 'detail')}
-              </div>
-            </div>
-          )}
 
           {pages > 1 && (
             <nav className="pager" aria-label="Phân trang">

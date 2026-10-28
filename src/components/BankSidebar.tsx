@@ -29,7 +29,7 @@ export function BankSidebar({ tax, f, facets, wide, onF, onClearAttrs, onResetAl
     <aside className={`fside${variant === 'drawer' ? ' is-drawer' : ''}`} aria-label="Mục lục">
       <div className="fs-top">
         <h2 title={tax.name}>Cây mục lục</h2>
-        <button type="button" className="btn btn-sm" onClick={onHide} title={variant === 'drawer' ? 'Đóng (Esc)' : 'Ẩn thanh này'}>{variant === 'drawer' ? 'Đóng ✕' : 'Ẩn ◀'}</button>
+        {variant === 'drawer' && <button type="button" className="btn btn-sm" onClick={onHide} title="Đóng (Esc)">Đóng ✕</button>}
       </div>
 
       <div className="fs-scroll">
