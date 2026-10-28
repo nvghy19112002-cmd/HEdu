@@ -1,7 +1,7 @@
 // Xuất PDF từng mã đề và gói ZIP (giáo viên / học sinh) cho một đề đã lưu trong Thư viện đề.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { examDuplicate, chooseProjectFolder } from '../lib/examlib';
-import { codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
+import { answersXlsx, codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
 import { listen } from '../lib/platform';
 
 export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; name: string; onClose(): void; onToast(m: string): void }) {
@@ -65,6 +65,12 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
     } catch (e) { setOut(null); setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); setProg(null); }
   };
 
+  const xlsx = async () => {
+    if (!dest) return;
+    setBusy(true); setErr(null);
+    try { const p = await answersXlsx(id, dest); onToast(`Đã xuất Excel đáp án: ${p}`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+
   const toggle = (c: string) => setChosen((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]));
 
   return (
@@ -118,6 +124,7 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
               <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { void pick(); }}>Chọn thư mục lưu…</button>
                 <span style={{ fontSize: 13, color: 'var(--ink-2)', overflowWrap: 'anywhere' }}>{dest ?? 'Chưa chọn'}</span>
+                <button type="button" className="btn btn-sm btn-outline" style={{ marginLeft: 'auto' }} disabled={busy || !dest} title={dest ? 'Một tệp .xlsx: trang "Theo mã đề" và "Theo câu", mọi mã đề. Không cần biên dịch PDF.' : 'Chọn thư mục lưu trước'} onClick={() => { void xlsx(); }}>Chỉ xuất Excel đáp án</button>
               </div>
               {!gate.ok && <p className="te-note" style={{ marginTop: 8 }}>{gate.why}</p>}
               {busy && prog && <p role="status" aria-live="polite" style={{ marginTop: 8 }}>{phaseText(prog)}</p>}

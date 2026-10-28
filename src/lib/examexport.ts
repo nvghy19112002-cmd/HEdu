@@ -12,12 +12,14 @@ export interface BackfillOut { applied: boolean; willCreate: string[]; skipped: 
 
 export const codesInfo = (id: string) => invoke<CodesInfo>('exam_codes_info', { id });
 export const codesExport = (id: string, opts: ExportOpts) => invoke<ExportOut>('exam_codes_export', { id, opts });
+/** Chỉ xuất Excel đáp án (mọi mã) vào thư mục đã chọn; trả đường dẫn tệp đã ghi (không ghi đè). */
+export const answersXlsx = (id: string, destDir: string) => invoke<string>('exam_answers_xlsx', { id, destDir });
 export const codesExportCancel = (id: string) => invoke<boolean>('exam_codes_export_cancel', { id });
 export const codesBackfill = (id: string, apply: boolean) => invoke<BackfillOut>('exam_codes_backfill', { id, apply });
 
 export const PACK_LABEL: Record<PackKind, string> = { 'giao-vien': 'Gói giáo viên', 'hoc-sinh': 'Gói học sinh' };
 export const PACK_NOTE: Record<PackKind, string> = {
-  'giao-vien': 'PDF đề từng mã, CSV đáp án riêng từng mã, nguồn LaTeX kèm tệp phụ thuộc để biên dịch lại, manifest.json (SHA-256, hạt giống). Có đáp án: KHÔNG phát cho học sinh.',
+  'giao-vien': 'PDF đề từng mã, CSV đáp án riêng từng mã, Excel đáp án chung (theo mã đề và theo câu), nguồn LaTeX kèm tệp phụ thuộc để biên dịch lại, manifest.json (SHA-256, hạt giống). Có đáp án: KHÔNG phát cho học sinh.',
   'hoc-sinh': 'Chỉ có PDF đề của từng mã (chế độ Đề). Không có đáp án, lời giải, nguồn LaTeX hay manifest.',
 };
 
