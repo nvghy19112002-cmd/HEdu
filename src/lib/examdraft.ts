@@ -50,7 +50,8 @@ export function parseDraft(raw: string | null): Draft {
       const sc = r.scope as Record<string, unknown>;
       if (!['grade', 'chapter', 'lesson', 'form'].includes(String(sc.kind)) || typeof sc.id !== 'string') return [];
       if (!TYPES.includes(r.type as QType) || !LEVELS.includes(r.level as Level)) return [];
-      return [{ id: r.id as string, scope: { kind: sc.kind as Row['scope']['kind'], id: sc.id }, type: r.type as QType, level: r.level as Level | 'any', count: num(r.count, 1, 0, 200) }];
+      return [{ id: r.id as string, scope: { kind: sc.kind as Row['scope']['kind'], id: sc.id }, type: r.type as QType, level: r.level as Level | 'any', count: num(r.count, 1, 0, 200),
+        ...(typeof r.label === 'string' ? { label: r.label.slice(0, 200) } : {}), ...(r.flag === 'mat' || r.flag === 'doi-vi-tri' ? { flag: r.flag } : {}) }];
     });
   }
   if (j.policy === 'duyet' || j.policy === 'xac-minh' || j.policy === 'tat-ca') d.policy = j.policy;
@@ -108,6 +109,49 @@ export function rowsFromPick(qs: readonly Question[]): { rows: Row[]; locked: Re
     locked[r.id].push(q.uid);
   }
   return { rows, locked };
+}
+
+/**
+ * Chuỗi tổ tiên của một nút phạm vi: [lớp], [lớp, chương], [lớp, chương, bài], [lớp, chương, bài, dạng]. null = nút không còn trong cây.
+ * Dùng để biết một dòng của mẫu có bị xóa hoặc đổi vị trí (đổi cha) hay không.
+ */
+export function findChain(scope: Row['scope'], tax: Taxonomy): string[] | null {
+  if (scope.kind === 'grade') return tax.grades.some((g) => String(g.grade) === scope.id) ? [scope.id] : null;
+  for (const g of tax.grades) for (const b of g.branches) for (const c of b.chapters) {
+    if (scope.kind === 'chapter' && c.id === scope.id) return [String(g.grade), c.id];
+    for (const l of c.lessons) {
+      if (scope.kind === 'lesson' && l.id === scope.id) return [String(g.grade), c.id, l.id];
+      for (const f of l.forms) if (scope.kind === 'form' && f.id === scope.id) return [String(g.grade), c.id, l.id, f.id];
+    }
+  }
+  return null;
+}
+
+/**
+ * Dòng ma trận dùng thật: dòng đã có cờ giữ nguyên cờ; dòng KHÔNG cờ nhưng nút phạm vi không còn trong cây (vd cây đổi sau khi lưu bản nháp)
+ * tự coi là `mat`. Nhờ đó ngân hàng vẫn còn câu mang ID cũ cũng không bao giờ được lấy cho một phạm vi không còn tồn tại.
+ */
+export function effectiveRows(rows: readonly Row[], tax: Taxonomy): Row[] {
+  return rows.map((r) => (r.flag || findChain(r.scope, tax) ? r : { ...r, flag: 'mat' as const }));
+}
+
+export type RowFix = { ok: true; row: Row } | { ok: false; why: string };
+const strip = (r: Row): Row => { const { flag: _f, label: _l, ...rest } = r; return rest; };
+
+/**
+ * Giáo viên xác nhận dòng "đã đổi vị trí" (giữ nguyên ID hiện tại). Kiểm lại nút còn thật trong cây rồi mới bỏ cờ.
+ * Dòng "không còn trong cây" KHÔNG xác nhận được: phải chọn lại phạm vi hoặc xóa dòng.
+ */
+export function confirmRow(r: Row, tax: Taxonomy): RowFix {
+  if (r.flag === 'mat') return { ok: false, why: 'Phạm vi này không còn trong cây chương trình: hãy chọn lại phạm vi hợp lệ hoặc xóa dòng.' };
+  if (!findChain(r.scope, tax)) return { ok: false, why: 'Phạm vi không còn trong cây chương trình nên chưa xác nhận được.' };
+  return { ok: true, row: strip(r) };
+}
+
+/** Chọn lại phạm vi cho một dòng. Chỉ bỏ cờ sau khi xác minh phạm vi mới CÓ THẬT trong cây; không bao giờ tự đoán một Dạng khác. */
+export function rescopeRow(r: Row, scope: Row['scope'], tax: Taxonomy): RowFix {
+  if (!findChain(scope, tax)) return { ok: false, why: 'Phạm vi mới không có trong cây chương trình.' };
+  return { ok: true, row: { ...strip(r), scope: { kind: scope.kind, id: scope.id } } };
 }
 
 /** Tên phạm vi dạng đường dẫn: “Lớp 12 › Chương 1 › Bài 2 › Dạng”. Nút không còn trong cây thì trả null. */

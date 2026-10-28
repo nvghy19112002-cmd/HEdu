@@ -1404,3 +1404,4 @@ a { color: var(--accent); }
 .te-warn code, .te-broken code { font-family: var(--f-code); font-size: 12px; }
 .te-broken { margin: 0 20px 10px; font-size: 13px; color: var(--ink-2); }
 .te-broken ul { margin: 6px 0 0 18px; padding: 0; }
+.te-scope .te-flag { display: inline-block; margin: 2px 0 0 8px; }

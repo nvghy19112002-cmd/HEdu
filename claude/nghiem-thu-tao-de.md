@@ -56,3 +56,24 @@ npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu
 - [ ] Đề cũ (lưu bằng bản trước, chưa có `main-<mã>.tex`): mở **Xuất từng mã…** → thấy báo thiếu → **Bổ sung tệp chính từng mã…**: hộp xác nhận liệt kê tệp sẽ thêm, những gì **đã** đối chiếu được và những gì **chưa** chứng minh được (nói thẳng, vd đề lưu bằng bản trước không có dấu vân từng tệp, sổ nguồn chỉ ghi mã đầu); sau khi đồng ý có thêm một bản sao dự phòng của đề; tạo tất cả hoặc không (lỗi giữa chừng thì các tệp mới bị hoàn tác); không tệp nào đang có bị sửa. Thử thêm: sửa tay một câu trong `de-<mã>.tex` rồi bổ sung ⇒ bị từ chối.
 - [ ] Đề không tạo bằng Tạo đề (nhập tay) mở **Xuất từng mã…**: báo rõ không dùng được, không báo lỗi lạ.
 - [ ] Thư mục đích còn ít dung lượng: báo rõ không đủ chỗ trước khi dịch.
+## PR 4A — Mẫu ma trận lưu bền (chờ nghiệm thu máy thật)
+Nút **Mẫu ma trận…** ở màn Tạo đề: lưu ma trận hiện tại thành mẫu có tên, áp dụng (thay hoặc thêm), đổi tên, nhân bản, xóa có xác nhận. Mẫu lưu ở tệp phụ SQLite khoá `exam-templates` (cùng cơ chế `id-review`; không đổi schema ngân hàng, UID, ID6, LaTeX hay trạng thái xác minh). Một mẫu chỉ có: dòng ma trận (kèm tên và chuỗi tổ tiên lúc lưu), chính sách, điểm, số mã, lựa chọn trộn, phiên bản định dạng, dấu vân cây. **Không** có câu khóa, ngoại lệ, UID, thông tin trường/kỳ thi.
+
+### Đã kiểm tự động (không thay cho nghiệm thu)
+- TS `examtemplates.test` (64 phép thử): tạo/đổi tên/nhân bản/xóa và bền qua đóng/mở; tên rỗng/dài/trùng; **ghi lỗi không tạo thành công giả** (danh sách và đĩa y nguyên, kể cả khi chưa có nơi lưu); tệp hỏng/thiếu trường/bản ghi hỏng; bản ghi định dạng mới hơn được giữ nguyên từng byte; tệp có `v` mới hơn hoặc JSON hỏng thì **không ghi đè**; ID trùng; cây đổi (xóa Dạng, xóa lớp, đổi vị trí bài, đổi tên); áp dụng thay/thêm, mã dòng trùng, mẫu rỗng, phạm vi trùng lặp; sao lưu JSON qua `exportBackup/importBackup` thật (máy mới, bản cũ rồi mới, bản mới rồi cũ, file cũ không có `examTemplates`, bản ghi hỏng); khóa ghi khi khôi phục; 500 mẫu × 200 dòng.
+- Rust `dbbackup`: mẫu nằm trong bản chụp `.db`, điểm khôi phục, bản trước cập nhật đúng lúc chụp; khôi phục `.db` trả đúng mẫu của thời điểm đó; bản beta.35 (chỉ biết `dup-decisions` và `id-review`) ghi khoá của nó không làm mất khoá mẫu và vẫn mở được ngân hàng.
+- App thử `vn.hedu.app.thu` (SQLite thật, qua CDP): lưu mẫu bằng giao diện ⇒ có trong SQLite, không lộ UID/câu khóa/thông tin trường; **đóng hẳn app, mở lại** ⇒ mẫu còn; áp dụng + hoàn tác; chụp `.db` ⇒ đổi tên ⇒ khôi phục `.db` ⇒ tên trở về lúc chụp; sao lưu JSON ở Cài đặt có `examTemplates`; xóa mẫu ⇒ khôi phục từ file JSON bằng ô chọn tệp thật ⇒ mẫu trở lại.
+- Giao diện 1366×768 (DPI 100%, 125%, 150%) và 1920×1080: hộp thoại vừa khung, không tràn ngang, nút Đóng luôn thấy, dòng không hợp lệ hiện cờ.
+
+### Việc thầy/cô thử trên máy thật
+- [ ] Tạo đề → dựng ma trận → **Mẫu ma trận…** → lưu “Giữa kỳ”; đóng app, mở lại: mẫu còn. Tạo mẫu trùng tên bị từ chối.
+- [ ] Ma trận khác → **Áp dụng… → Thay**: hỏi xác nhận nếu đang có dòng/câu khóa; có nút **Hoàn tác áp dụng mẫu**. **Thêm**: giữ nguyên dòng, câu khóa, chính sách đang có.
+- [ ] Đổi tên, nhân bản (tên “… (bản sao)”), xóa (có hỏi xác nhận).
+- [ ] **Dòng không hợp lệ không được dùng để ra đề.** Áp một mẫu có dòng trỏ tới Dạng đã bị xóa khỏi cây (hoặc bài đã chuyển sang chương khác): dòng hiện cờ “không còn trong cây” hoặc “đã đổi vị trí”, **không lấy câu nào**, nút **Lưu vào Thư viện đề** và **Xuất** bị khóa, đầu trang có thông báo “chưa được xử lý”. “Đã đổi vị trí”: bấm **Xem và xác nhận…** (hiện phạm vi lúc lưu mẫu và hiện nay) rồi mới dùng được. “Không còn trong cây”: bấm **Chọn lại phạm vi…** chọn mục có thật, hoặc xóa dòng. Đóng app mở lại: cờ vẫn còn cho tới khi xử lý.
+- [ ] Vào **Chương trình**, xóa một Dạng mà mẫu dùng; mở mẫu: báo “n dòng không còn hợp lệ”; áp dụng ⇒ dòng đó vẫn hiện tên cũ kèm “không còn trong cây”, không bị đổi sang Dạng khác. Đề không xuất được khi dòng đó thiếu câu.
+- [ ] **Cài đặt → Dữ liệu & sao lưu**: tạo bản chụp .db, đổi tên mẫu, khôi phục bản chụp: tên mẫu trở về. Tạo file sao lưu JSON, xóa mẫu, khôi phục từ file JSON: mẫu trở lại.
+- [ ] Quay về bản beta.35 trên dữ liệu có mẫu (nếu cần thử): ngân hàng vẫn mở bình thường.
+
+### Giới hạn
+- “Xuất ra JSON” (trao đổi sang cấu trúc cũ) không chứa mẫu: đó không phải sao lưu đầy đủ. Dùng bản chụp `.db` hoặc file sao lưu JSON.
+- Mỗi lần đổi mẫu ghi lại cả tệp mẫu (kho rất lớn như 500 mẫu × 200 dòng ≈ 29 MB mất khoảng 0,2 giây trên máy kiểm thử; số đo này không phải bảo đảm hiệu năng). Giới hạn: 500 mẫu, 200 dòng mỗi mẫu.

@@ -9,11 +9,18 @@ import type { Level, QType, Question } from './types';
 // ---------- Phạm vi, dòng ma trận, điều kiện đủ dùng ----------
 export type ScopeKind = 'grade' | 'chapter' | 'lesson' | 'form';
 export interface Scope { kind: ScopeKind; id: string }
-export interface Row { id: string; scope: Scope; type: QType; level: Level | 'any'; count: number }
+export interface Row {
+  id: string; scope: Scope; type: QType; level: Level | 'any'; count: number;
+  /** tên phạm vi lúc lưu mẫu, để hiện khi nút không còn trong cây */
+  label?: string;
+  /** dòng từ mẫu mà nút tương ứng đã bị xóa hoặc đổi vị trí: giữ để giáo viên xem lại, không tự ánh xạ sang nút khác */
+  flag?: 'mat' | 'doi-vi-tri';
+}
 
 export const inScope = (q: Question, s: Scope): boolean =>
   s.kind === 'grade' ? String(q.grade) === s.id : s.kind === 'chapter' ? q.chapterId === s.id : s.kind === 'lesson' ? q.lessonId === s.id : q.formId === s.id;
-export const rowMatches = (r: Row, q: Question): boolean => q.type === r.type && (r.level === 'any' || q.level === r.level) && inScope(q, r.scope);
+/** Dòng mang cờ (`mat` / `doi-vi-tri`) KHÔNG khớp câu nào cho tới khi giáo viên xử lý: không âm thầm lấy câu từ phạm vi chưa được xác nhận. */
+export const rowMatches = (r: Row, q: Question): boolean => !r.flag && q.type === r.type && (r.level === 'any' || q.level === r.level) && inScope(q, r.scope);
 
 /** duyet = nội dung “Đã duyệt”; xac-minh = thêm Dạng và mức độ do giáo viên xác minh; tat-ca = mọi câu trừ “Cần sửa” (có cảnh báo). */
 export type Policy = 'duyet' | 'xac-minh' | 'tat-ca';
@@ -354,7 +361,7 @@ export function makeVariants(picked: Picked, o: VariantOpts): Variant[] {
 export const countsOf = (p: Picked): Record<PartKey, number> => ({ p1: p.p1.length, p2: p.p2.length, p3: p.p3.length, p4: p.p4.length });
 
 // ---------- Kiểm tra trước khi lưu/xuất ----------
-export type IssueKind = 'thieu-dap-an' | 'dap-an-mau-thuan' | 'tong-lech' | 'thieu-cau';
+export type IssueKind = 'thieu-dap-an' | 'dap-an-mau-thuan' | 'tong-lech' | 'thieu-cau' | 'dong-chua-xu-ly';
 export interface Issue { kind: IssueKind; code?: string; part?: PartKey; index?: number; uid?: string; msg: string }
 
 const KEY_OK: Record<PartKey, (k: string) => boolean> = {
@@ -392,6 +399,8 @@ export function checkVariants(vs: readonly Variant[]): Issue[] {
 /** Đối chiếu độc lập từ nội dung các mã đề: số câu, loại câu, mức độ từng dòng và điểm phải khớp ma trận và câu đã chọn. */
 export function reconcile(rows: readonly Row[], alloc: Alloc, picked: Picked, vs: readonly Variant[], scoring: Scoring): Issue[] {
   const out: Issue[] = [];
+  // dòng từ mẫu mà phạm vi đã bị xóa/đổi vị trí chưa được giáo viên xử lý: KHÔNG được lưu/xuất đề dù tổng số câu và đáp án đều đạt
+  for (const r of rows) if (r.flag) out.push({ kind: 'dong-chua-xu-ly', msg: `dòng «${r.label ?? r.scope.id}» ${r.flag === 'mat' ? 'không còn trong cây chương trình' : 'đã đổi vị trí trong cây'} và chưa được xử lý` });
   const want: Record<PartKey, number> = { p1: 0, p2: 0, p3: 0, p4: 0 };
   let need = 0;
   for (const r of rows) {
