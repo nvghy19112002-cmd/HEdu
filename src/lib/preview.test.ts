@@ -93,6 +93,8 @@ console.log('Chữ, danh sách, bảng');
   ok(cells >= 3, `dòng kẻ cuối phủ đủ ${cells}/3 cột (không chỉ cột đầu)`);
   const m = renderPartsEx('\\begin{align*} a &= b \\\\ c &= d \\end{align*} và \\begin{eqnarray*} x &=& 1 \\end{eqnarray*}');
   ok(m.unsupported.length === 0 && (m.parts.map((x) => (x as { html?: string }).html ?? '').join('').match(/katex/g) ?? []).length > 0, 'align*, eqnarray* ngoài $…$ dựng bằng công thức');
+  const ab = renderPartsEx('Ta có\n\\allowdisplaybreaks\n\\begin{eqnarray*} x &=& 1 \\end{eqnarray*}');
+  ok(ab.unsupported.length === 0 && !/allowdisplaybreaks/.test(JSON.stringify(ab.parts)), '\\allowdisplaybreaks chỉ là lệnh ngắt trang: bỏ qua, không báo "Chưa hiểu"');
 }
 
 console.log('Không im lặng nuốt: lệnh lạ phải lộ ra');

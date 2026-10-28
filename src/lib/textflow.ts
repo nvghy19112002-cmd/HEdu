@@ -54,6 +54,7 @@ const IGNORE_0 = new Set([
   'noindent', 'indent', 'hfill', 'hfil', 'vfill', 'vfil', 'medskip', 'bigskip', 'smallskip', 'relax', 'protect',
   'allowbreak', 'nobreak', 'ignorespaces', 'strut', 'leavevmode', 'newpage', 'clearpage', 'pagebreak', 'nopagebreak',
   'null', 'unskip', 'unkern', 'displaystyle', 'textstyle', 'hrulefill', 'dotfill', 'flushleft', 'maketitle',
+  'allowdisplaybreaks', 'sloppy', 'fussy',
 ]);
 // lệnh chỉ cần BỎ các đối số của nó
 const DROP_ARGS: Record<string, number> = {
