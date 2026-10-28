@@ -3,6 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
+import { ExamExportDialog } from '../components/ExamExportDialog';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
@@ -99,6 +100,8 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [swap, setSwap] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<{ id: string; name: string; sig: string } | null>(null);
+  const [exportDlg, setExportDlg] = useState(false);
   const upd = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   useEffect(() => { saveDraft(d); }, [d]);
 
@@ -174,6 +177,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const refSheet = useRef<HTMLElement>(null);
   const refExport = useRef<HTMLDivElement>(null);
   const desktop = isDesktop();
+  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys]), [d]);
   const canExport = total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -190,7 +194,8 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
     try {
       const name = `${d.info.title.trim() || 'Đề'} · ${new Date().toLocaleDateString('vi-VN')}`;
       const s = await createFromFiles(name, projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource));
-      toast(`Đã lưu “${s.name}” vào Thư viện đề. Mở mục Đề thi để biên dịch PDF.`, { label: 'Mở Đề thi', run: () => go({ screen: 'examlib' }) });
+      setSaved({ id: s.id, name: s.name, sig: draftSig });
+      toast(`Đã lưu “${s.name}” vào Thư viện đề. Bấm “Xuất PDF từng mã / ZIP” hoặc mở mục Đề thi để biên dịch.`, { label: 'Mở Đề thi', run: () => go({ screen: 'examlib' }) });
     } catch (e) {
       toast(`Không lưu được vào Thư viện đề (${e instanceof Error ? e.message : String(e)}). Đề trên màn hình vẫn còn.`);
     } finally { setBusy(false); }
@@ -417,12 +422,13 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
             <div className="divider" />
             <label className="sw">Trộn thứ tự câu trong từng phần<input type="checkbox" checked={d.shuffleQuestions} onChange={(e) => upd({ shuffleQuestions: e.target.checked })} /></label>
             <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={d.shuffleOptions} onChange={(e) => upd({ shuffleOptions: e.target.checked })} /></label>
-            <label className="sw">Kèm bảng đáp án mọi mã đề<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
+            <label className="sw">Tạo tệp đáp án cho giáo viên (không nằm trong PDF đề)<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
             <p className="te-note">Mã đầu giữ nguyên thứ tự và phương án gốc; các mã sau được trộn. Câu được chép nguyên văn.</p>
           </div>
 
           <div className="te-export" ref={refExport}>
             <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canExport || busy || !desktop} onClick={() => { void saveToLibrary(); }}>{busy ? 'Đang lưu…' : 'Lưu vào Thư viện đề'}</button>
+            <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'PDF từng mã đề và gói ZIP giáo viên/học sinh' : 'Lưu vào Thư viện đề trước (đề đã đổi sau lần lưu gần nhất)'} onClick={() => setExportDlg(true)}>Xuất PDF từng mã / ZIP…</button>
             {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
             <div className="grid2" style={{ gap: 10 }}>
               <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
@@ -432,6 +438,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
           </div>
         </aside>
       </div>
+      {exportDlg && saved && <ExamExportDialog id={saved.id} name={saved.name} onToast={toast} onClose={() => setExportDlg(false)} />}
     </>
   );
 }

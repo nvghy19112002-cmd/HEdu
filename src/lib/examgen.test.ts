@@ -1,5 +1,5 @@
 // Lõi sinh đề: phân bổ toàn cục, điều kiện đủ dùng, trộn phương án nguyên văn, đáp án theo phép hoán vị, dựng .tex.
-import { allocate, candidatesFor, checkVariants, collect, countsOf, dsPoints, eligible, examFiles, hasControlChars, reconcile, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
+import { allocate, candidatesFor, checkVariants, collect, countsOf, dsPoints, eligible, examFiles, MAIN_HEAD, hasControlChars, reconcile, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
 import { parseExTest } from './extest';
 import type { Level, QType, Question } from './types';
 let fail = 0;
@@ -174,8 +174,14 @@ console.log('Biến thể và đáp án');
   ok(!/(?<!mbox)\{\}/.test(t.split('\n').find((l) => l.startsWith('\\begin{name}')) ?? ''), 'tham số rỗng của môi trường name được thay bằng hộp rỗng');
   ok(t.trimEnd().endsWith('\\zlabel{\\made-lastpage}'), 'có nhãn trang cuối cho chân trang “Trang x/y”');
   const f = examFiles(info, vs, { withKeys: true });
-  ok(f.map((x) => x.path).join() === 'main.tex,de-101.tex,de-102.tex,de-103.tex,de-104.tex,dapan.tex', 'bộ tệp: main, từng mã, đáp án');
-  ok(f[0].text.includes('\\input{khaibaochung}') && f[0].text.includes('\\input{de-104}') && f[0].text.includes('\\input{dapan}') && !/\n\n\n/.test(f[0].text), 'main.tex gọi khaibaochung, các mã và bảng đáp án');
+  ok(f.map((x) => x.path).join() === 'main.tex,de-101.tex,main-101.tex,de-102.tex,main-102.tex,de-103.tex,main-103.tex,de-104.tex,main-104.tex,dapan.tex,main-dapan.tex', 'bộ tệp: main gộp, de-<mã> và main-<mã> từng mã, đáp án cho giáo viên');
+  const noKey = examFiles(info, vs, { withKeys: false });
+  ok(noKey.every((x) => !/dapan/.test(x.path)) && noKey.length === 9, 'tắt tệp đáp án ⇒ không có dapan.tex và main-dapan.tex');
+  const stu = f.filter((x) => /^main(-\d+)?\.tex$/.test(x.path));
+  ok(stu.length === 5 && stu.every((x) => !/dapan|\\anloigiai\n|\\loigiai|\\True/.test(x.text.replace('%\\anloigiai', ''))), 'HỒI QUY D2: mọi tệp chính của PDF đề (gộp và từng mã) không chèn bảng đáp án, không bật lời giải');
+  ok(f.find((x) => x.path === 'main-102.tex')!.text === `${MAIN_HEAD}\n\\input{de-102}\n\\end{document}\n`, 'main-<mã>.tex đúng khung (khớp derive_main ở Rust)');
+  ok(f.find((x) => x.path === 'main-dapan.tex')!.text.includes('\\input{dapan}') && f.find((x) => x.path === 'dapan.tex')!.text.includes('Đáp án &'), 'bảng đáp án chỉ ở tệp dành cho giáo viên');
+  ok(f[0].text.includes('\\input{khaibaochung}') && f[0].text.includes('\\input{de-104}') && !f[0].text.includes('dapan') && !/\n\n\n/.test(f[0].text), 'main.tex gộp gọi khaibaochung và các mã, KHÔNG gọi bảng đáp án');
   ok(!examFiles(info, vs, { withKeys: false }).some((x) => x.path === 'dapan.tex'), 'tắt bảng đáp án ⇒ không có dapan.tex');
   ok(keyTex(vs[0]).includes('MÃ ĐỀ 101') && keyTex(vs[0]).includes('Đáp án &'), 'bảng đáp án có tiêu đề mã');
 }
