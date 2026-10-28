@@ -16,6 +16,7 @@ import {
   type ExamFilter, type ExamKind, type ExamManifest, type ExamScan, type ExamSort, type ExamStatus, type ExamSummary, type ExamVerify,
 } from '../lib/examlib';
 import { ExamWorkspace } from './ExamWorkspace';
+import { ExamExportDialog } from '../components/ExamExportDialog';
 
 const nf = new Intl.NumberFormat('vi-VN');
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -37,6 +38,7 @@ export function ExamLibraryScreen() {
   const [goods, setGoods] = useState<GoodInfo[]>([]);
   const [viewing, setViewing] = useState<ExamMode | null>(null);
   const [editing, setEditing] = useState(false);
+  const [exportingCodes, setExportingCodes] = useState(false);
   const [panel, setPanel] = useState<null | 'trash' | 'backup'>(null);
   const [ask, setAsk] = useState<null | 'trash'>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -274,6 +276,7 @@ export function ExamLibraryScreen() {
                         {desktop && goods.map((g) => <button key={g.mode} type="button" className="btn btn-sm" onClick={() => setViewing(g.mode as ExamMode)}>Xem PDF: {modeLabel(g.mode)}</button>)}
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={duplicate}>Sao chép</button>
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={exportBundle}>Xuất gói…</button>
+                        <button type="button" className="btn btn-sm" disabled={!desktop || busy} title="PDF từng mã đề, gói giáo viên hoặc học sinh (đề tạo bằng Tạo đề)" onClick={() => setExportingCodes(true)}>Xuất từng mã…</button>
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={() => activeId && void examReveal(activeId).catch((e) => toast(msg(e)))}>Hiện trong Explorer</button>
                         <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setAsk('trash')}>Chuyển vào Thùng rác…</button>
                       </div>
@@ -303,6 +306,7 @@ export function ExamLibraryScreen() {
         )}
       </div>
       {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} mode={viewing} note={MODE_NOTE[viewing]} onClose={() => setViewing(null)} />}
+      {exportingCodes && activeId && detail && <ExamExportDialog id={activeId} name={detail.name} onToast={toast} onClose={() => setExportingCodes(false)} />}
       {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={() => { setEditing(false); void reload(); loadDetail(activeId); }} />}
       {panel === 'trash' && <ExamTrashPanel toast={toast} onClose={() => setPanel(null)} onChanged={(rid) => { void reload().then(() => { if (rid) setActiveId(rid); }); }} />}
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}

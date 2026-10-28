@@ -1,5 +1,6 @@
 // Lõi sinh đề: phân bổ toàn cục, điều kiện đủ dùng, trộn phương án nguyên văn, đáp án theo phép hoán vị, dựng .tex.
-import { allocate, candidatesFor, checkVariants, collect, countsOf, dsPoints, eligible, examFiles, hasControlChars, reconcile, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
+import { createHash } from 'node:crypto';
+import { sourceHashes, specJson, allocate, candidatesFor, checkVariants, collect, countsOf, dsPoints, eligible, examFiles, MAIN_HEAD, hasControlChars, reconcile, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
 import { parseExTest } from './extest';
 import type { Level, QType, Question } from './types';
 let fail = 0;
@@ -174,8 +175,14 @@ console.log('Biến thể và đáp án');
   ok(!/(?<!mbox)\{\}/.test(t.split('\n').find((l) => l.startsWith('\\begin{name}')) ?? ''), 'tham số rỗng của môi trường name được thay bằng hộp rỗng');
   ok(t.trimEnd().endsWith('\\zlabel{\\made-lastpage}'), 'có nhãn trang cuối cho chân trang “Trang x/y”');
   const f = examFiles(info, vs, { withKeys: true });
-  ok(f.map((x) => x.path).join() === 'main.tex,de-101.tex,de-102.tex,de-103.tex,de-104.tex,dapan.tex', 'bộ tệp: main, từng mã, đáp án');
-  ok(f[0].text.includes('\\input{khaibaochung}') && f[0].text.includes('\\input{de-104}') && f[0].text.includes('\\input{dapan}') && !/\n\n\n/.test(f[0].text), 'main.tex gọi khaibaochung, các mã và bảng đáp án');
+  ok(f.map((x) => x.path).join() === 'main.tex,de-101.tex,main-101.tex,de-102.tex,main-102.tex,de-103.tex,main-103.tex,de-104.tex,main-104.tex,dapan.tex,main-dapan.tex', 'bộ tệp: main gộp, de-<mã> và main-<mã> từng mã, đáp án cho giáo viên');
+  const noKey = examFiles(info, vs, { withKeys: false });
+  ok(noKey.every((x) => !/dapan/.test(x.path)) && noKey.length === 9, 'tắt tệp đáp án ⇒ không có dapan.tex và main-dapan.tex');
+  const stu = f.filter((x) => /^main(-\d+)?\.tex$/.test(x.path));
+  ok(stu.length === 5 && stu.every((x) => !/dapan|\\anloigiai\n|\\loigiai|\\True/.test(x.text.replace('%\\anloigiai', ''))), 'HỒI QUY D2: mọi tệp chính của PDF đề (gộp và từng mã) không chèn bảng đáp án, không bật lời giải');
+  ok(f.find((x) => x.path === 'main-102.tex')!.text === `${MAIN_HEAD}\n\\input{de-102}\n\\end{document}\n`, 'main-<mã>.tex đúng khung (khớp derive_main ở Rust)');
+  ok(f.find((x) => x.path === 'main-dapan.tex')!.text.includes('\\input{dapan}') && f.find((x) => x.path === 'dapan.tex')!.text.includes('Đáp án &'), 'bảng đáp án chỉ ở tệp dành cho giáo viên');
+  ok(f[0].text.includes('\\input{khaibaochung}') && f[0].text.includes('\\input{de-104}') && !f[0].text.includes('dapan') && !/\n\n\n/.test(f[0].text), 'main.tex gộp gọi khaibaochung và các mã, KHÔNG gọi bảng đáp án');
   ok(!examFiles(info, vs, { withKeys: false }).some((x) => x.path === 'dapan.tex'), 'tắt bảng đáp án ⇒ không có dapan.tex');
   ok(keyTex(vs[0]).includes('MÃ ĐỀ 101') && keyTex(vs[0]).includes('Đáp án &'), 'bảng đáp án có tiêu đề mã');
 }
@@ -252,6 +259,17 @@ console.log('Nhận diện khi trộn (ca khó)');
 console.log('Điểm Đúng/Sai theo số ý đúng');
 ok([0, 1, 2, 3, 4].map(dsPoints).join() === '0,10,25,50,100', '1 ý 0,1; 2 ý 0,25; 3 ý 0,5; 4 ý 1,0 (điểm tối đa của câu là 1,0)');
 ok(SCORING_2025.p2 === dsPoints(4), 'điểm tối đa câu Đúng/Sai bằng điểm khi đúng cả 4 ý');
+
+console.log('Dấu vân tệp nguồn (để bổ sung tệp chính cho đề cũ)');
+{
+  const files = [{ path: 'main.tex', text: 'a' }, { path: 'de-101.tex', text: 'Đề tiếng Việt\n' }, { path: 'main-101.tex', text: 'x' }, { path: 'dapan.tex', text: 'k' }];
+  const h = await sourceHashes(files);
+  ok(Object.keys(h).join() === 'main.tex,de-101.tex', 'chỉ main.tex và de-<mã>.tex có dấu vân');
+  ok(h['de-101.tex'] === createHash('sha256').update('Đề tiếng Việt\n', 'utf8').digest('hex'), 'SHA-256 theo UTF-8, khớp công cụ độc lập');
+  const j = JSON.parse(specJson({ info: { dept: '', school: '', group: '', title: 'T', subject: 'S', minutes: 1, note: '' }, rows: [], policy: 'duyet', seed: 1, scoring: SCORING_2025, variants: [], at: 'x', fileHashes: h }));
+  ok(j.dauVanTep['main.tex'] === h['main.tex'] && j.v === 1, 'hedu-de.json ghi dấu vân từng tệp nguồn');
+  ok(!('dauVanTep' in JSON.parse(specJson({ info: { dept: '', school: '', group: '', title: 'T', subject: 'S', minutes: 1, note: '' }, rows: [], policy: 'duyet', seed: 1, scoring: SCORING_2025, variants: [], at: 'x' }))), 'không truyền thì không ghi (tương thích)');
+}
 
 console.log('Điểm');
 ok(totalCenti({ p1: 12, p2: 4, p3: 6, p4: 0 }, SCORING_2025) === 1000 && fmtScore(1000) === '10', 'cấu trúc 2025 đủ 10 điểm, không sai số thực');

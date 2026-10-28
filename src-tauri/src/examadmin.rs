@@ -771,7 +771,7 @@ mod tests {
         let h = files_hash(&m.files.iter().map(|f| (f.rel.clone(), f.sha256.clone())).collect::<Vec<_>>());
         let src = root.join("tam.pdf");
         fs::write(&src, b"%PDF-1.5\nx\n%%EOF\n").unwrap();
-        let info = GoodInfo { fingerprint: "f".into(), engine: "pdflatex".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: Some(1), bytes: 0, at: iso_now(), pdf_path: String::new(), files_hash: h };
+        let info = GoodInfo { fingerprint: "f".into(), engine: "pdflatex".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: Some(1), bytes: 0, at: iso_now(), pdf_path: String::new(), files_hash: h, main: String::new() };
         publish(root, id, &src, &info).unwrap();
     }
 
