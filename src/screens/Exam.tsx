@@ -4,10 +4,11 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
 import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
+import { ExamExportDialog } from '../components/ExamExportDialog';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
-import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { loadDraft, newRowId, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
@@ -103,6 +104,8 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [tplDlg, setTplDlg] = useState(false);
   /** bản nháp ngay trước lần áp dụng mẫu gần nhất, để hoàn tác (chỉ trong phiên) */
   const [undoTpl, setUndoTpl] = useState<{ prev: Draft; note: string } | null>(null);
+  const [saved, setSaved] = useState<{ id: string; name: string; sig: string } | null>(null);
+  const [exportDlg, setExportDlg] = useState(false);
   const upd = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   useEffect(() => { saveDraft(d); }, [d]);
 
@@ -178,23 +181,30 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const refSheet = useRef<HTMLElement>(null);
   const refExport = useRef<HTMLDivElement>(null);
   const desktop = isDesktop();
+  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys]), [d]);
   const canExport = total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const projectFiles = (name: string) => [
-    ...examFiles(d.info, variants, { withKeys: d.withKeys }),
-    { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
-    { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked }) },
-    { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
-  ];
+  /** Bộ tệp của đề, kèm dấu vân SHA-256 từng tệp nguồn trong hedu-de.json (để về sau biết tệp có bị sửa tay không). */
+  const projectFiles = async (name: string) => {
+    const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
+    const fileHashes = await sourceHashes(tex);
+    return [
+      ...tex,
+      { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
+      { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes }) },
+      { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
+    ];
+  };
 
   const saveToLibrary = async () => {
     if (!canExport || busy) return;
     setBusy(true);
     try {
       const name = `${d.info.title.trim() || 'Đề'} · ${new Date().toLocaleDateString('vi-VN')}`;
-      const s = await createFromFiles(name, projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource));
-      toast(`Đã lưu “${s.name}” vào Thư viện đề. Mở mục Đề thi để biên dịch PDF.`, { label: 'Mở Đề thi', run: () => go({ screen: 'examlib' }) });
+      const s = await createFromFiles(name, await projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource));
+      setSaved({ id: s.id, name: s.name, sig: draftSig });
+      toast(`Đã lưu “${s.name}” vào Thư viện đề. Bấm “Xuất PDF từng mã / ZIP” hoặc mở mục Đề thi để biên dịch.`, { label: 'Mở Đề thi', run: () => go({ screen: 'examlib' }) });
     } catch (e) {
       toast(`Không lưu được vào Thư viện đề (${e instanceof Error ? e.message : String(e)}). Đề trên màn hình vẫn còn.`);
     } finally { setBusy(false); }
@@ -209,7 +219,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
       const folder = safeFolderName(d.info.title, 'de-hedu');
       const parent = await open({ directory: true, multiple: false, title: 'Chọn nơi tạo thư mục đề' });
       if (!parent || Array.isArray(parent)) return;
-      const out = await invoke<string>('export_tex_folder', { parent, name: folder, files: projectFiles(folder) });
+      const out = await invoke<string>('export_tex_folder', { parent, name: folder, files: await projectFiles(folder) });
       toast(`Đã tạo thư mục: ${out}`);
     } catch (e) {
       toast(`Không tạo được thư mục (${e instanceof Error ? e.message : String(e)}).`);
@@ -426,12 +436,13 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
             <div className="divider" />
             <label className="sw">Trộn thứ tự câu trong từng phần<input type="checkbox" checked={d.shuffleQuestions} onChange={(e) => upd({ shuffleQuestions: e.target.checked })} /></label>
             <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={d.shuffleOptions} onChange={(e) => upd({ shuffleOptions: e.target.checked })} /></label>
-            <label className="sw">Kèm bảng đáp án mọi mã đề<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
+            <label className="sw">Tạo tệp đáp án cho giáo viên (không nằm trong PDF đề)<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
             <p className="te-note">Mã đầu giữ nguyên thứ tự và phương án gốc; các mã sau được trộn. Câu được chép nguyên văn.</p>
           </div>
 
           <div className="te-export" ref={refExport}>
             <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canExport || busy || !desktop} onClick={() => { void saveToLibrary(); }}>{busy ? 'Đang lưu…' : 'Lưu vào Thư viện đề'}</button>
+            <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'PDF từng mã đề và gói ZIP giáo viên/học sinh' : 'Lưu vào Thư viện đề trước (đề đã đổi sau lần lưu gần nhất)'} onClick={() => setExportDlg(true)}>Xuất PDF từng mã / ZIP…</button>
             {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
             <div className="grid2" style={{ gap: 10 }}>
               <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
@@ -442,6 +453,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
         </aside>
       </div>
       {tplDlg && <ExamTemplatesDialog draft={d} onToast={toast} onClose={() => setTplDlg(false)} onApply={(next, prev, note) => { setUndoTpl({ prev, note }); setD(next); setSwap(null); }} />}
+      {exportDlg && saved && <ExamExportDialog id={saved.id} name={saved.name} onToast={toast} onClose={() => setExportDlg(false)} />}
     </>
   );
 }

@@ -1,6 +1,6 @@
 # Thiết kế Tạo đề từ Ngân hàng câu hỏi
 
-Trạng thái: PR #135 (lõi) và #136 (giao diện) đang chờ duyệt gộp; chưa phát hành. Các quyết định nghiệp vụ ở mục 7 đã được chủ dự án chốt (28/10/2026).
+Trạng thái: PR #135 (lõi, `24ed055`) và #136 (giao diện, `3c3639b`) đã gộp vào `main`; chưa phát hành. Các quyết định nghiệp vụ ở mục 7 đã được chủ dự án chốt (28/10/2026).
 
 ## 1. Mục tiêu
 Giáo viên chọn câu từ Ngân hàng (theo ma trận hoặc chọn tay), xem trước đề giống bản in, sinh nhiều mã đề, lưu vào Thư viện đề để biên dịch PDF/xuất .tex. Giao diện gọn, đẹp, nhanh như TIAD nhưng chỉ học ý tưởng, không chép mã, thương hiệu hay hình ảnh.
@@ -41,7 +41,7 @@ Giữ token màu hiện có (Mực xanh & giấy ô ly), nền sáng, nhấn nav
 |---|---|---|
 | 1 | Lõi: `examgen.ts` (phân bổ luồng cực đại, điều kiện, trộn nguyên văn, đáp án, dựng .tex), test, thiết kế này | npm test, typecheck, **biên dịch thử bằng TeX Live thật** với khaibaochung của giáo viên |
 | 2 | Giao diện Tạo đề mới, thay màn cũ, bật `FEATURES.exam`, lưu vào Thư viện đề, mở biên dịch PDF | thử trình duyệt + app Tauri (`vn.hedu.app.thu`), 1366×768 |
-| 3 | Mỗi mã đề một PDF + ZIP (Q5), sau khi #135 và #136 đạt | biên dịch từng mã, đối soát manifest, lỗi một mã không báo đủ |
+| 3 | Mỗi mã đề một PDF + ZIP giáo viên/học sinh (Q5, D1–D3, D9): đã làm, chờ duyệt | biên dịch thật nhiều mã, ZIP đọc lại bằng bộ đọc độc lập, lộ đáp án/lời giải, huỷ, lỗi giữa chừng |
 | 4 | Mẫu ma trận lưu bền có sao lưu/khôi phục (Q7) và tránh tái dùng câu theo phạm vi chọn (Q8) | sao lưu/khôi phục, thiếu câu thì báo, không tự nới |
 | sau | Mẫu theo ma trận thực tế của chủ dự án (Q9), mẫu trình bày, Word (Q10) | theo thứ tự ưu tiên của chủ dự án |
 

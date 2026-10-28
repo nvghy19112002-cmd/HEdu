@@ -347,6 +347,86 @@ pub fn create_text_file(lib: &Path, id: &str, rel: &str, text: &str) -> Result<F
     Ok(FileEntry { rel: rel.to_string(), bytes: bytes.len() as u64, kind: "text".into() })
 }
 
+/// Tạo NHIỀU tệp mới ở thư mục gốc dự án theo kiểu TẤT CẢ HOẶC KHÔNG (bổ sung tệp chính từng mã).
+/// Kiểm hết trước khi ghi (tên, tệp đã có, đường dẫn đi qua liên kết, đề đã chốt); ghi từng tệp bằng `create_new` (không bao giờ ghi đè);
+/// sổ (manifest) chỉ được cập nhật MỘT lần ở cuối. Lỗi ở bất kỳ tệp nào ⇒ xoá đúng các tệp VỪA tạo trong lượt này (không đụng tệp vốn có)
+/// và sổ giữ nguyên. `fault(i)` chỉ để kiểm thử: ép lỗi trước khi ghi tệp thứ i.
+pub fn create_text_files_batch(lib: &Path, id: &str, files: &[(String, String)], fault: Option<&dyn Fn(usize) -> Result<(), String>>) -> Result<Vec<FileEntry>, String> {
+    let _g = WRITE_GATE.lock().unwrap_or_else(|e| e.into_inner());
+    let m = read_manifest(lib, id)?;
+    if m.status == "finalized" {
+        return Err("Đề đã chốt nên không thêm tệp. Hãy tạo phiên bản mới.".into());
+    }
+    let dir = projects_dir(lib).join(id);
+    let mut seen = std::collections::HashSet::new();
+    for (rel, text) in files {
+        editable(rel)?;
+        if rel.contains('/') {
+            return Err(format!("Tệp '{rel}' phải nằm ở thư mục gốc của đề."));
+        }
+        if !seen.insert(rel.to_lowercase()) {
+            return Err(format!("Tệp '{rel}' bị lặp trong danh sách."));
+        }
+        if text.len() as u64 > MAX_EDIT_BYTES {
+            return Err(format!("Tệp '{rel}' quá lớn."));
+        }
+        match fs::symlink_metadata(dir.join(rel)) {
+            Ok(_) => return Err(format!("Tệp '{rel}' đã có (hoặc trùng tên một mục khác). HEdu không ghi đè nên chưa tạo tệp nào.")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("Không đọc được '{rel}': {e}")),
+        }
+        if m.files.iter().any(|f| f.rel.eq_ignore_ascii_case(rel)) {
+            return Err(format!("'{rel}' đã có trong sổ của đề nên chưa tạo tệp nào."));
+        }
+    }
+    let mut created: Vec<(String, PathBuf, u64, String)> = Vec::new();
+    let rollback = |created: &[(String, PathBuf, u64, String)], why: String| -> String {
+        let mut left = Vec::new();
+        for (rel, path, _, _) in created {
+            if fs::remove_file(path).is_err() && path.exists() {
+                left.push(rel.clone());
+            }
+        }
+        if left.is_empty() {
+            format!("{why} Đã hoàn tác: không tệp mới nào được giữ lại.")
+        } else {
+            format!("{why} KHÔNG hoàn tác hết được; còn tệp mới: {}. Hãy xoá các tệp đó bằng tay.", left.join(", "))
+        }
+    };
+    for (i, (rel, text)) in files.iter().enumerate() {
+        if let Some(f) = fault {
+            if let Err(e) = f(i) {
+                return Err(rollback(&created, e));
+            }
+        }
+        let bytes = encode(text, "lf", false);
+        let path = dir.join(rel);
+        let mut f = match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(f) => f,
+            Err(e) => return Err(rollback(&created, format!("Không tạo được tệp '{rel}': {e}."))),
+        };
+        created.push((rel.clone(), path.clone(), bytes.len() as u64, sha_hex(&bytes)));
+        if !fs::canonicalize(&dir).map(|b| handle_inside(&f, &path, &b)).unwrap_or(false) {
+            drop(f);
+            return Err(rollback(&created, "Vị trí tạo tệp nằm ngoài thư mục dự án (có liên kết/junction) nên đã dừng.".into()));
+        }
+        if let Err(e) = f.write_all(&bytes).and_then(|_| f.sync_all()) {
+            drop(f);
+            return Err(rollback(&created, format!("Không ghi được tệp '{rel}': {e}.")));
+        }
+    }
+    // cập nhật sổ MỘT lần; lỗi ⇒ sổ không đổi (ghi nguyên tử) và các tệp mới bị xoá
+    let mut m2 = read_manifest(lib, id)?;
+    for (rel, _, n, sha) in &created {
+        m2.files.push(FileRec { rel: rel.clone(), bytes: *n, sha256: sha.clone() });
+    }
+    m2.updated_at = iso_now();
+    if let Err(e) = write_manifest(&dir, &m2) {
+        return Err(rollback(&created, e));
+    }
+    Ok(created.iter().map(|(rel, _, n, _)| FileEntry { rel: rel.clone(), bytes: *n, kind: "text".into() }).collect())
+}
+
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct StatOut {

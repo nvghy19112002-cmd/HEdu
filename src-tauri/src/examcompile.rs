@@ -43,6 +43,8 @@ pub struct CompileOpts {
     pub force: Option<bool>,
     /// nguyen-van (mặc định) | de | loigiai — hai chế độ sau cần nhận diện chắc ex_test (xem examprofile.rs)
     pub mode: Option<String>,
+    /// tệp .tex chính thay cho tệp chính của dự án (vd `main-101.tex`, mỗi mã đề một tệp). Không đặt = như cũ. Phải là tệp .tex có trong dự án.
+    pub main: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -73,6 +75,9 @@ pub struct GoodInfo {
     /// dấu vân của danh sách tệp nguồn lúc biên dịch (để biết PDF còn khớp nguồn hiện tại hay không)
     #[serde(default)]
     pub files_hash: String,
+    /// khoá của tệp chính riêng (rỗng = tệp chính của dự án); bản tốt của tệp chính khác nhau KHÔNG ghi đè nhau
+    #[serde(default)]
+    pub main: String,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -120,12 +125,31 @@ pub fn mode_of(m: &Option<String>) -> Result<&'static str, String> {
 }
 
 /// Tên tệp PDF/sổ của bản tốt gần nhất theo chế độ (nguyên văn giữ tên cũ để tương thích).
-fn good_names(mode: &str) -> (&'static str, &'static str) {
-    match mode {
-        "de" => ("last-good-de.json", "last-good-de.pdf"),
-        "loigiai" => ("last-good-loigiai.json", "last-good-loigiai.pdf"),
-        _ => ("last-good.json", "last-good.pdf"),
+fn good_names(mode: &str, slot: &str) -> (String, String) {
+    let base = match mode {
+        "de" => "last-good-de",
+        "loigiai" => "last-good-loigiai",
+        _ => "last-good",
+    };
+    if slot.is_empty() {
+        (format!("{base}.json"), format!("{base}.pdf"))
+    } else {
+        (format!("{base}@{slot}.json"), format!("{base}@{slot}.pdf"))
     }
+}
+
+/// Khoá an toàn (chỉ a-z, 0-9, '-') cho một tệp chính riêng; kèm 8 ký tự băm để hai đường dẫn khác nhau không bao giờ trùng khoá.
+pub fn slot_of(rel: &str) -> String {
+    let mut t: String = rel.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+    while t.contains("--") {
+        t = t.replace("--", "-");
+    }
+    let t = t.trim_matches('-');
+    let t: String = t.chars().take(24).collect();
+    let mut h = Sha256::new();
+    h.update(rel.as_bytes());
+    let hex: String = h.finalize().iter().take(4).map(|b| format!("{b:02x}")).collect();
+    format!("{t}-{hex}")
 }
 
 // ---------- engine, chạy một lượt ----------
@@ -420,18 +444,26 @@ pub fn last_good(root: &Path, id: &str) -> Option<GoodInfo> {
 
 /// Bản tốt gần nhất theo chế độ. Mọi tệp đọc qua `open_inside` từ thư mục dữ liệu: không đi theo liên kết/junction ở bất kỳ cấp nào.
 pub fn last_good_mode(root: &Path, id: &str, mode: &str) -> Option<GoodInfo> {
-    if !valid_id(id) {
+    last_good_slot(root, id, mode, "")
+}
+
+/// Bản tốt gần nhất theo (chế độ, khoá tệp chính). `slot` rỗng = tệp chính của dự án.
+pub fn last_good_slot(root: &Path, id: &str, mode: &str, slot: &str) -> Option<GoodInfo> {
+    if !valid_id(id) || !slot.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return None;
     }
-    let (jn, pn) = good_names(mode);
+    let (jn, pn) = good_names(mode, slot);
     let mut b = Vec::new();
-    open_inside(root, &out_rel(id, jn)).ok()?.take(1024 * 1024).read_to_end(&mut b).ok()?;
+    open_inside(root, &out_rel(id, &jn)).ok()?.take(1024 * 1024).read_to_end(&mut b).ok()?;
     let info: GoodInfo = serde_json::from_slice(&b).ok()?;
     if info.mode != mode && !(mode == MODE_RAW && info.mode.is_empty()) {
         return None; // sổ không đúng chế độ của tệp (bị đổi tay) ⇒ không tin
     }
-    let pdf = open_inside(root, &out_rel(id, pn)).ok()?;
-    (pdf.metadata().map(|m| m.len() == info.bytes).unwrap_or(false)).then_some(GoodInfo { pdf_path: build_dir(root, id).join("out").join(pn).to_string_lossy().into_owned(), ..info })
+    if info.main != slot {
+        return None; // sổ thuộc tệp chính khác (bị đổi tay hoặc nhầm khoá) ⇒ không tin
+    }
+    let pdf = open_inside(root, &out_rel(id, &pn)).ok()?;
+    (pdf.metadata().map(|m| m.len() == info.bytes).unwrap_or(false)).then_some(GoodInfo { pdf_path: build_dir(root, id).join("out").join(&pn).to_string_lossy().into_owned(), ..info })
 }
 
 /// Mọi bản tốt hiện có (mỗi chế độ một bản).
@@ -440,7 +472,7 @@ pub fn all_good(root: &Path, id: &str) -> Vec<GoodInfo> {
 }
 
 pub(crate) fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Result<GoodInfo, String> {
-    let (jn, pn) = good_names(&info.mode);
+    let (jn, pn) = good_names(&info.mode, &info.main);
     let out = build_dir(root, id).join("out");
     fs::create_dir_all(&out).map_err(|e| format!("Không tạo được thư mục PDF: {e}"))?;
     for d in [build_dir(root, id), out.clone()] {
@@ -448,14 +480,14 @@ pub(crate) fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Res
             return Err("Thư mục PDF là liên kết/junction nên không xuất bản (an toàn).".into());
         }
     }
-    let dest = out.join(pn);
+    let dest = out.join(&pn);
     let mut src = fs::File::open(pdf).map_err(|e| format!("Không mở được PDF vừa dịch: {e}"))?;
     copy_atomic(&mut src, &dest).map_err(|e| format!("Không xuất bản được PDF: {e}"))?;
     let bytes = fs::metadata(&dest).map(|m| m.len()).map_err(|e| e.to_string())?;
     let rec = GoodInfo { bytes, pdf_path: dest.to_string_lossy().into_owned(), ..info.clone() };
     let part = out.join(format!("{jn}.part"));
     fs::write(&part, serde_json::to_vec(&rec).map_err(|e| e.to_string())?).map_err(|e| format!("Không ghi được thông tin PDF: {e}"))?;
-    let j = out.join(jn);
+    let j = out.join(&jn);
     if fs::rename(&part, &j).is_err() {
         let _ = fs::remove_file(&j);
         fs::rename(&part, &j).map_err(|e| format!("Không ghi được thông tin PDF: {e}"))?;
@@ -529,7 +561,18 @@ fn first_line(s: &str) -> String {
 pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<PathBuf>) -> Result<CompileOut, String> {
     let lib = root.join("exam-library");
     let m = read_manifest(&lib, id)?;
-    let main = m.main_file.clone().ok_or("Dự án chưa chọn tệp chính. Hãy chọn tệp chính trước khi biên dịch.")?;
+    let proj_main = m.main_file.clone().ok_or("Dự án chưa chọn tệp chính. Hãy chọn tệp chính trước khi biên dịch.")?;
+    // Tệp chính riêng (vd main-101.tex) phải là tệp .tex CÓ TRONG danh sách tệp của dự án; không nhận đường dẫn tùy ý.
+    let main = match opts.main.as_deref() {
+        None | Some("") => proj_main.clone(),
+        Some(r) => {
+            if bad_rel(r).is_some() || r.starts_with('-') || !r.to_lowercase().ends_with(".tex") || !m.files.iter().any(|f| f.rel == r) {
+                return Err("Tệp chính riêng không hợp lệ hoặc không nằm trong dự án.".into());
+            }
+            r.to_string()
+        }
+    };
+    let slot = if main == proj_main { String::new() } else { slot_of(&main) };
     if bad_rel(&main).is_some() || main.starts_with('-') || !main.to_lowercase().ends_with(".tex") {
         return Err("Tệp chính không hợp lệ.".into());
     }
@@ -583,7 +626,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             Err(reason) => {
                 out.status = "no-profile".into();
                 out.message = format!("Chưa biên dịch được bản {}: {reason} Bạn vẫn có thể biên dịch 'nguyên văn' (PDF chưa xác định đề hay lời giải).", if mode == examprofile::MODE_DE { "ĐỀ" } else { "LỜI GIẢI" });
-                out.last_good = last_good_mode(root, id, mode);
+                out.last_good = last_good_slot(root, id, mode, &slot);
                 out.kept_previous = out.last_good.is_some();
                 return Ok(out);
             }
@@ -600,16 +643,20 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             let t = tikz::missing_tool(engine);
             out.status = "no-tex".into();
             out.message = t.message;
-            out.last_good = last_good_mode(root, id, mode);
+            out.last_good = last_good_slot(root, id, mode, &slot);
             return Ok(out);
         }
         Err(e) => return Err(format!("Không chạy được {engine}: {e}")),
     };
     out.tex_version = ver.clone();
+    // Tệp chính riêng vào dấu vân; tệp chính mặc định giữ nguyên dấu vân cũ nên mọi bộ đệm hiện có vẫn dùng được.
+    if !slot.is_empty() {
+        mode_sig = format!("{mode_sig}|main={main}");
+    }
     out.fingerprint = fingerprint(&sync.files, engine, runs, &mode_sig, &ver);
 
     if !opts.force.unwrap_or(false) {
-        if let Some(g) = last_good_mode(root, id, mode) {
+        if let Some(g) = last_good_slot(root, id, mode, &slot) {
             if g.fingerprint == out.fingerprint {
                 out.status = "ok".into();
                 out.message = "Không có gì thay đổi từ lần biên dịch thành công trước nên dùng lại PDF đó.".into();
@@ -644,7 +691,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 out.status = "no-tex".into();
                 out.message = tikz::missing_tool(engine).message;
-                out.last_good = last_good_mode(root, id, mode);
+                out.last_good = last_good_slot(root, id, mode, &slot);
                 return Ok(out);
             }
             Err(e) => return Err(format!("Không chạy được {engine}: {e}")),
@@ -686,13 +733,13 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     out.raw_log = tail(&last_log, RAW_LOG_KEEP);
 
     if out.status == "ok" {
-        let info = GoodInfo { fingerprint: out.fingerprint.clone(), engine: engine.to_string(), mode: mode.to_string(), tex_version: ver, pages: out.pages, bytes: 0, at: examlib::iso_now(), pdf_path: String::new(), files_hash: files_hash(&sync.files) };
+        let info = GoodInfo { fingerprint: out.fingerprint.clone(), engine: engine.to_string(), mode: mode.to_string(), tex_version: ver, pages: out.pages, bytes: 0, at: examlib::iso_now(), pdf_path: String::new(), files_hash: files_hash(&sync.files), main: slot.clone() };
         let rec = publish(root, id, &pdf, &info)?;
         out.published = true;
         out.last_good = Some(rec);
         out.message = format!("Biên dịch thành công{}.", out.pages.map(|p| format!(" ({p} trang)")).unwrap_or_default());
     } else {
-        out.last_good = last_good_mode(root, id, mode);
+        out.last_good = last_good_slot(root, id, mode, &slot);
         out.kept_previous = out.last_good.is_some();
         out.message = match out.status.as_str() {
             "timeout" => format!("Biên dịch quá {} giây nên đã dừng (cả cây tiến trình TeX).", limit.as_secs()),
@@ -716,7 +763,7 @@ pub const MAX_PDF_VIEW: u64 = 200 * 1024 * 1024;
 
 fn good_pdf_handle(root: &Path, id: &str, mode: &str) -> Result<(fs::File, GoodInfo), String> {
     let g = last_good_mode(root, id, mode).ok_or("Chưa có PDF biên dịch thành công cho dự án này.")?;
-    let h = open_inside(root, &out_rel(id, good_names(mode).1))?;
+    let h = open_inside(root, &out_rel(id, &good_names(mode, "").1))?;
     Ok((h, g))
 }
 
@@ -726,6 +773,21 @@ pub fn read_good(root: &Path, id: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Nội dung PDF tốt gần nhất của một chế độ (chỉ đúng tệp của dự án, qua `open_inside`).
+/// Đọc PDF tốt của một tệp chính riêng (qua `open_inside`, giới hạn kích thước). Dùng cho gói xuất từng mã.
+pub fn read_good_slot(root: &Path, id: &str, mode: &str, slot: &str) -> Result<(Vec<u8>, GoodInfo), String> {
+    let g = last_good_slot(root, id, mode, slot).ok_or("Chưa có PDF biên dịch thành công cho mã này.")?;
+    if g.bytes > MAX_PDF_VIEW {
+        return Err("PDF quá lớn để đóng gói.".into());
+    }
+    let mut h = open_inside(root, &out_rel(id, &good_names(mode, slot).1))?;
+    let mut b = Vec::new();
+    h.read_to_end(&mut b).map_err(|e| format!("Không đọc được PDF: {e}"))?;
+    if b.len() as u64 != g.bytes {
+        return Err("PDF đổi kích thước giữa chừng nên không đóng gói.".into());
+    }
+    Ok((b, g))
+}
+
 pub fn read_good_mode(root: &Path, id: &str, mode: &str) -> Result<Vec<u8>, String> {
     let (h, g) = good_pdf_handle(root, id, mode)?;
     if g.bytes > MAX_PDF_VIEW {
@@ -1124,7 +1186,7 @@ mod tests {
 noi dung
 %%EOF
 ";
-        let info = GoodInfo { fingerprint: "f".into(), engine: "pdflatex".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: Some(1), bytes: 0, at: "x".into(), pdf_path: String::new(), files_hash: String::new() };
+        let info = GoodInfo { fingerprint: "f".into(), engine: "pdflatex".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: Some(1), bytes: 0, at: "x".into(), pdf_path: String::new(), files_hash: String::new(), main: String::new() };
         let src = d.join("tam.pdf");
         fs::write(&src, pdf).unwrap();
         publish(&root, id, &src, &info).unwrap();
@@ -1157,7 +1219,7 @@ A
 ";
         let src = d.join("tam.pdf");
         fs::write(&src, pdf).unwrap();
-        let info = GoodInfo { fingerprint: "f".into(), engine: "e".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: None, bytes: 0, at: "x".into(), pdf_path: String::new(), files_hash: String::new() };
+        let info = GoodInfo { fingerprint: "f".into(), engine: "e".into(), mode: MODE_RAW.into(), tex_version: "t".into(), pages: None, bytes: 0, at: "x".into(), pdf_path: String::new(), files_hash: String::new(), main: String::new() };
         publish(&root, id, &src, &info).unwrap();
         // thư mục out bị thay bằng junction sang nơi khác chứa PDF "bí mật" cùng kích thước
         let out = build_dir(&root, id).join("out");
@@ -1266,7 +1328,7 @@ B
         let sup = support::prepare(&root);
         assert!(sup.is_some());
         for eng in ["pdflatex", "xelatex", "lualatex"] {
-            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None };
+            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None };
             let r = compile(&root, &s.id, &o, &sup).unwrap();
             eprintln!("{eng}: {} · {} · {:?} trang · {} ms · {}", r.status, r.message, r.pages, r.ms, r.tex_version);
             assert_eq!(r.status, "ok", "{eng}: {:?} {}", r.diagnostics, r.raw_log);
@@ -1298,7 +1360,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "TikZ nặng", None).unwrap();
         let sup = support::prepare(&root);
-        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None };
+        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None };
         let r = compile(&root, &s.id, &o, &sup).unwrap();
         eprintln!("TikZ nặng: {} · {:?} trang · {} ms · {} lượt", r.status, r.pages, r.ms, r.runs);
         assert_eq!(r.status, "ok", "{:?} {}", r.diagnostics, r.raw_log);
@@ -1316,7 +1378,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "Thật", None).unwrap();
         let sup = support::prepare(&root);
-        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()) };
+        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()), main: None };
         let de = compile(&root, &s.id, &o("de"), &sup).unwrap();
         let lg = compile(&root, &s.id, &o("loigiai"), &sup).unwrap();
         eprintln!("de: {} {:?} | loigiai: {} {:?}", de.status, de.pages, lg.status, lg.pages);

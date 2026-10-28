@@ -27,6 +27,8 @@ keyring = { version = "3", features = ["windows-native"] }
 tokio = { version = "1", features = ["time"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 sha2 = "0.10.9"
+# PR 3: ZIP gói xuất. Đã nằm sẵn trong Cargo.lock (cùng bản 4.6.1 qua tauri-plugin-updater, không bật nén): chỉ khai báo trực tiếp, không thêm crate mới
+zip = { version = "4.6.1", default-features = false }
 
 # E2a: Job Object để huỷ cả cây tiến trình TeX trên Windows (đã có trong Cargo.lock qua các phụ thuộc khác)
 [target.'cfg(windows)'.dependencies]

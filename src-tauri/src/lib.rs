@@ -6,6 +6,7 @@ mod dbbackup;
 mod dbcmd;
 mod examadmin;
 mod examcompile;
+mod examexport;
 mod examfiles;
 mod examlib;
 mod examprofile;
@@ -488,7 +489,11 @@ pub fn run() {
             examsources::exam_sources_add,
             examsources::exam_sources_status,
             examsources::exam_sources_forget,
-            examsources::exam_lib_create_files
+            examsources::exam_lib_create_files,
+            examexport::exam_codes_info,
+            examexport::exam_codes_export,
+            examexport::exam_codes_export_cancel,
+            examexport::exam_codes_backfill
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được HEdu");
