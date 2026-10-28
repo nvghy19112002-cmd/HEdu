@@ -6,7 +6,7 @@ import { QuestionView } from '../components/QuestionView';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
-import { allocate, candidatesFor, collect, countsOf, examFiles, fmtScore, makeVariants, PART_NAME, PARTS, POLICY_LABEL, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { allocate, candidatesFor, collect, countsOf, examFiles, fmtScore, hasControlChars, makeVariants, PART_NAME, PARTS, POLICY_LABEL, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { loadDraft, newRowId, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
@@ -131,6 +131,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const keptN = variant ? PARTS.reduce((a, p) => a + variant.parts[p].filter((s) => s.note).length, 0) : 0;
   const byLevel = (['NB', 'TH', 'VD', 'VDC'] as Level[]).map((l) => ({ l, n: picks.filter((q) => q.level === l).length }));
   const defaultGrade = grades()[grades().length - 1] ?? 12;
+  const brokenN = useMemo(() => questions.filter(hasControlChars).length, [questions]);
 
   const setRow = (id: string, p: Partial<Row>) => upd({ rows: d.rows.map((r) => (r.id === id ? { ...r, ...p } : r)) });
   const delRow = (id: string) => { const { [id]: _drop, ...rest } = d.locked; upd({ rows: d.rows.filter((r) => r.id !== id), locked: rest }); };
@@ -227,7 +228,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                 {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
               </div>
             </div>
-            <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}</p>
+            <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{brokenN > 0 && <span className="te-bad"> {brokenN} câu trong Ngân hàng có ký tự điều khiển lạ trong LaTeX (không biên dịch được) nên không được chọn; hãy mở và sửa lại.</span>}</p>
             {rowsEmpty ? (
               <div className="te-empty">
                 <b>Chưa có dòng nào.</b>
