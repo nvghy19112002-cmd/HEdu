@@ -20,8 +20,12 @@ export type Policy = 'duyet' | 'xac-minh' | 'tat-ca';
 export const POLICY_LABEL: Record<Policy, string> = { duyet: 'Đã duyệt nội dung', 'xac-minh': 'Đã duyệt + xác minh Dạng và mức độ', 'tat-ca': 'Mọi câu (trừ “Cần sửa”)' };
 export interface EffLike { form: string; level: string; unclassified: boolean }
 
+/** Ký tự điều khiển (trừ xuống dòng, tab) trong LaTeX làm biên dịch lỗi “Unicode character ^^H”; câu như vậy không đưa vào đề. */
+const CTRL = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+export const hasControlChars = (q: Pick<Question, 'latex'>): boolean => CTRL.test(q.latex);
+
 export function eligible(q: Question, eff: (q: Question) => EffLike, policy: Policy): boolean {
-  if (q.review === 'needs_fix') return false;
+  if (q.review === 'needs_fix' || hasControlChars(q)) return false;
   if (policy === 'tat-ca') return true;
   if (q.review !== 'approved') return false;
   if (policy === 'duyet') return true;
@@ -143,7 +147,7 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
     picks[r.id] = [];
     for (const uid of o.locked?.[r.id] ?? []) {
       const q = lockedQ.get(uid);
-      if (picks[r.id].length >= r.count || used.has(uid) || !q || q.review === 'needs_fix' || o.exclude?.has(uid) || !rowMatches(r, q)) continue;
+      if (picks[r.id].length >= r.count || used.has(uid) || !q || q.review === 'needs_fix' || hasControlChars(q) || o.exclude?.has(uid) || !rowMatches(r, q)) continue;
       picks[r.id].push(uid);
       used.add(uid);
     }

@@ -1,5 +1,5 @@
 // Lõi sinh đề: phân bổ toàn cục, điều kiện đủ dùng, trộn phương án nguyên văn, đáp án theo phép hoán vị, dựng .tex.
-import { allocate, candidatesFor, collect, countsOf, eligible, examFiles, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
+import { allocate, candidatesFor, collect, countsOf, eligible, examFiles, hasControlChars, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
 import { parseExTest } from './extest';
 import type { Level, QType, Question } from './types';
 let fail = 0;
@@ -30,6 +30,10 @@ console.log('Điều kiện đủ dùng');
   ok(!eligible(a, () => ({ form: 'gv', level: 'may', unclassified: false }), 'xac-minh'), 'xác minh: mức độ mới do máy thì chưa đủ');
   ok(!eligible(a, () => ({ form: 'gv', level: 'gv', unclassified: true }), 'xac-minh'), 'xác minh: câu chưa phân loại không đủ');
   ok(eligible(u, eff, 'tat-ca') && !eligible(f, eff, 'tat-ca'), 'tất cả: nhận câu chưa kiểm tra, vẫn loại “Cần sửa”');
+  const bad = mk({ latex: '\x08egin{ex}\n x\n\\choice{\\True 1}{2}{3}{4}\n\\end{ex}' });
+  ok(hasControlChars(bad) && !hasControlChars(a) && !eligible(bad, eff, 'tat-ca') && !eligible(bad, eff, 'duyet'), 'câu có ký tự điều khiển lạ bị loại ở mọi chính sách');
+  const a8 = allocate([bad], [row('r1', {})], { policy: 'tat-ca', eff, seed: 1, locked: { r1: [bad.uid] } });
+  ok(a8.picks.r1.length === 0 && a8.deficit.r1 === 1, 'câu có ký tự lạ không vào đề kể cả khi bị khóa');
 }
 
 console.log('Phân bổ toàn cục');
