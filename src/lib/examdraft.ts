@@ -165,6 +165,26 @@ export function rescopeRow(r: Row, scope: Row['scope'], tax: Taxonomy): RowFix {
   return { ok: true, row: { ...strip(r), scope: { kind: scope.kind, id: scope.id } } };
 }
 
+/** Tên phạm vi hai tầng để hiển thị gọn: `main` là mục sâu nhất, `path` là các cấp cha (Lớp › Chương › Bài). null = không còn trong cây. */
+export function scopeParts(scope: Row['scope'], tax: Taxonomy): { main: string; path: string[]; grade: number } | null {
+  if (scope.kind === 'grade') return tax.grades.some((g) => String(g.grade) === scope.id) ? { main: `Cả lớp ${scope.id}`, path: [], grade: Number(scope.id) } : null;
+  for (const g of tax.grades) for (const b of g.branches) for (const c of b.chapters) {
+    const lop = `Lớp ${g.grade}`;
+    if (scope.kind === 'chapter' && c.id === scope.id) return { main: c.name, path: [lop], grade: g.grade };
+    for (const l of c.lessons) {
+      if (scope.kind === 'lesson' && l.id === scope.id) return { main: l.name, path: [lop, c.name], grade: g.grade };
+      for (const f of l.forms) if (scope.kind === 'form' && f.id === scope.id) return { main: f.name, path: [lop, c.name, l.name], grade: g.grade };
+    }
+  }
+  return null;
+}
+
+/** Lớp nên mặc định khi thêm dòng mới: lớp của dòng cuối còn trong cây; không có thì `fallback`. */
+export function lastGrade(rows: readonly Row[], tax: Taxonomy, fallback: number): number {
+  for (let i = rows.length - 1; i >= 0; i--) { const p = scopeParts(rows[i].scope, tax); if (p) return p.grade; }
+  return fallback;
+}
+
 /** Tên phạm vi dạng đường dẫn: “Lớp 12 › Chương 1 › Bài 2 › Dạng”. Nút không còn trong cây thì trả null. */
 export function scopeLabel(scope: Row['scope'], tax: Taxonomy): string | null {
   if (scope.kind === 'grade') return `Cả lớp ${scope.id}`;
