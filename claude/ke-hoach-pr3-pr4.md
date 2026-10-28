@@ -1,6 +1,6 @@
 # Kế hoạch PR 3 và PR 4 của Tạo đề (chờ chủ dự án duyệt, chưa triển khai)
 
-Trạng thái: **phương án để duyệt**. Chưa viết mã, chưa phát hành. Căn cứ: #135, #136 đã gộp (`24ed055`, `3c3639b`) và quyết định Q5, Q7, Q8 trong `claude/thiet-ke-tao-de.md`.
+Trạng thái: **phương án đã được duyệt phạm vi thiết kế và phát triển (28/10/2026)**; mục 5 ghi các quyết định D1–D9 và điều chỉnh bắt buộc, ưu tiên hơn các đề nghị cũ ở mục 2–3 khi mâu thuẫn. Chưa gộp PR nào, chưa phát hành. Căn cứ: #135, #136 đã gộp (`24ed055`, `3c3639b`) và quyết định Q5, Q7, Q8 trong `claude/thiet-ke-tao-de.md`.
 
 ## 1. Điều đã rà soát trong mã hiện có (ảnh hưởng tới thiết kế)
 | Phát hiện | Hệ quả |
@@ -60,16 +60,38 @@ Mẫu: ghi lỗi hoàn lại, sao lưu/khôi phục `.db` và JSON, nhân bản,
 3. **PR 4B** theo dõi câu đã dùng (cần `hedu-de.json` từ #136, đã có).
 PR 4A và 4B tách riêng để duyệt và quay lui từng phần. Mỗi PR có test, CI Windows, thử bằng app thử; **không phát hành** cho tới khi bạn ra lệnh riêng.
 
-## 5. Quyết định cần chủ dự án chốt
-Mỗi mục có đáp án đề nghị.
-| # | Câu hỏi | Đề nghị |
-|---|---|---|
-| D1 | ZIP gồm gì cho mỗi mã? | PDF **Đề** + nguồn `.tex` + đáp án `.csv`; PDF **Lời giải** là tùy chọn (mặc định tắt) vì dịch thêm một lượt mỗi mã |
-| D2 | Đáp án từng mã dạng nào? | `.csv` trong ZIP và bảng đáp án ở cuối `main-<mã>.tex`; PDF đáp án riêng từng mã để sau |
-| D3 | Quy ước tên tệp | `<kỳ thi>-<mã>-de.pdf`, `<kỳ thi>-<mã>-loigiai.pdf`, `<kỳ thi>-dapan-<mã>.csv`; ZIP `<kỳ thi>-<yyyy-mm-dd>-<8 ký tự đầu hạt giống>.zip` (bỏ dấu, ký tự an toàn trên Windows) |
-| D4 | Đề đã lưu bằng #136 (chưa có `main-<mã>.tex`) | Thêm nút "Bổ sung tệp chính từng mã" (sinh từ `hedu-de.json`, hỏi trước khi ghi); không tự sửa |
-| D5 | Câu đã đổi nội dung sau khi dùng có còn tính "đã dùng"? | Có (theo UID), kèm nhãn "đã sửa sau khi dùng" |
-| D6 | "Đã dùng" chỉ tính đề sinh bằng Tạo đề và đề lưu từ Ngân hàng, hay cả đề `.tex` nhập tay? | Chỉ hai loại có UID. Dò nội dung trong đề nhập tay (so khớp gần đúng) để sau, có thể sai nên cần duyệt riêng |
-| D7 | Mẫu ma trận lưu những gì? | Dòng ma trận, chính sách lấy câu, điểm, số mã và tùy chọn trộn; **không** lưu thông tin trường/kỳ thi, câu khóa, ngoại lệ |
-| D8 | Phạm vi tránh tái dùng có thể chọn gì? | Thư mục ảo, năm học, loại đề, hoặc từng đề; mặc định tắt |
-| D9 | Giới hạn số mã mỗi lần xuất ZIP | Tối đa 24 mã (bằng giới hạn hiện có), có cảnh báo thời gian |
+## 5. Quyết định đã chốt (28/10/2026) và điều chỉnh bắt buộc
+Phê duyệt này là phê duyệt **phạm vi thiết kế và phát triển**, không phải phê duyệt gộp PR hay phát hành. Thứ tự: PR 3 → PR 4A → PR 4B. Mỗi PR độc lập, có test, CI Windows, kiểm bằng app thử `vn.hedu.app.thu`, báo HEAD/diff trước khi xin gộp. Không thử bằng ngân hàng thật. Không đổi schema/UID/ID6, không làm Word, không mở sang AI hay cây KNTT.
+
+### Chín quyết định nghiệp vụ
+| # | Quyết định |
+|---|---|
+| D1 | **Gói giáo viên** gồm: PDF đề từng mã; nguồn LaTeX từng mã kèm các tệp phụ thuộc cần để biên dịch lại; CSV đáp án riêng từng mã; `manifest.json` (truy nguyên, SHA-256); PDF lời giải tùy chọn, mặc định tắt. **Gói học sinh** tách riêng: chỉ chứa PDF đề đã kiểm không lộ đáp án; không CSV, không manifest chứa đáp án, không nguồn LaTeX có `\True` |
+| D2 | CSV đáp án riêng từng mã. **Không** để bảng đáp án ở cuối PDF đề học sinh; nếu cần, tạo tệp TeX đáp án riêng chỉ cho giáo viên. PDF đáp án riêng để sau. Đối chiếu mã đề, số câu, loại câu, UID, thứ tự câu và đáp án sau trộn. Bắt buộc có test phát hiện lộ đáp án hoặc lời giải trong PDF chế độ Đề |
+| D3 | Tên tệp có kỳ thi và mã đề; an toàn trên Windows, không dùng tên dành riêng, **không ghi đè** bản xuất cũ, không trùng khi xuất hai lần cùng ngày cùng seed. Seed đầy đủ nằm trong manifest; tên ZIP dùng tiền tố seed + định danh lượt xuất; không dùng chuỗi ngày giờ có ký tự không hợp lệ |
+| D4 | Nút "Bổ sung tệp chính từng mã" chỉ chạy khi dự án có đủ dữ liệu đã lưu và tái dựng **chính xác từ bản chụp trong dự án** (không bao giờ lấy câu mới nhất của ngân hàng). Trước khi ghi: kiểm tệp hiện có, đối chiếu mã và UID, hỏi xác nhận, không ghi đè tệp đã chỉnh tay, có đường hoàn tác. Thiếu dữ liệu thì từ chối kèm lý do |
+| D5 | Câu đã sửa sau khi dùng vẫn tính "đã dùng" theo UID. Chỉ hiện "đã sửa sau khi dùng" khi có dấu vân/bản chụp để so; không đủ căn cứ thì hiện "chưa xác định" |
+| D6 | Chỉ lấy UID đáng tin từ `hedu-de.json` hoặc `.hedu/sources.json`; không đối sánh gần đúng với đề `.tex` nhập tay. Đề không có UID hiển thị "chưa thể đối chiếu đầy đủ", không coi là chưa từng dùng |
+| D7 | Mẫu ma trận lưu: dòng ma trận, chính sách, điểm, số mã, lựa chọn trộn, **phiên bản định dạng mẫu**. Không lưu câu khóa, ngoại lệ, UID, thông tin trường/kỳ thi. Khi áp dụng, kiểm lớp/Chương/Bài/Dạng còn trong cây; dòng không hợp lệ được giữ để xem lại, không tự ánh xạ sang Dạng khác. Lưu bền, kiểm sao lưu/khôi phục thực tế |
+| D8 | Bốn phạm vi: thư mục ảo, năm học, loại đề, các đề chọn. Mặc định tắt. Chọn nhiều điều kiện phải hiện rõ logic kết hợp và danh sách đề được đối chiếu. Đề trong thùng rác không tính; khôi phục thì tính lại. Thiếu câu: báo số lượng và nguyên nhân; chỉ cho dùng lại khi giáo viên xác nhận, ghi dấu vết trong dự án đề, không sửa ngân hàng |
+| D9 | Tối đa 24 mã mỗi lượt. Có tiến độ, Dừng, kết quả từng mã, kiểm dung lượng đĩa trước khi xuất. Không cam kết thời gian; chỉ hiện ước lượng khi có số đo thực tế |
+
+### Điều chỉnh kỹ thuật bắt buộc
+**PR 3 (PDF từng mã và ZIP)**
+1. Giữ `main.tex` cũ và hành vi biên dịch mặc định.
+2. Thêm biên dịch tệp chính riêng từng mã.
+3. Tách bộ đệm theo (chế độ, tệp chính); không ghi đè `last-good` của mã khác.
+4. Không sửa dự án cũ âm thầm.
+5. PDF đề học sinh không lộ lời giải/đáp án, kể cả khi nguồn có `\True`, `\loigiai` hay tệp đáp án.
+6. Đánh giá giải pháp ZIP trước khi chốt (không mặc định tự viết bộ ghi); ưu tiên giải pháp đã kiểm chứng, test bằng bộ đọc độc lập, xử lý Unicode/CRC/giới hạn kích thước; nếu cần thêm dependency thì giải thích phạm vi và rủi ro **trước** khi chốt.
+7. Xuất bằng tệp tạm, đối chiếu toàn bộ rồi mới đổi tên; lỗi hoặc hủy thì không có ZIP thiếu mã.
+8. Bộ đệm giữ mã đã dịch để chạy lại nhưng phải xác nhận dấu vân đầu vào trước khi dùng lại.
+9. Test thật với TeX Live nhiều mã, đối chiếu PDF và đáp án; test hủy khi đang dịch, lỗi ở mã giữa, xuất lại.
+10. Không đưa đường dẫn tùy ý từ metadata vào đọc/ghi; giữ cơ chế kiểm đường dẫn an toàn sẵn có.
+
+**PR 4A (mẫu ma trận)**: ưu tiên sidecar SQLite, không đổi schema ngân hàng; sao lưu JSON thủ công phải nhận `examTemplates` và khôi phục được bản JSON cũ không có trường này; ghi lỗi hoàn nguyên giao diện; có tạo/đổi tên/nhân bản/xóa xác nhận/áp dụng; test trùng tên, trùng ID, cây đổi, khôi phục bản cũ, ghi bị ngắt; không dùng riêng `localStorage`; nếu buộc phải đổi schema hay cấu trúc dữ liệu ngoài phương án đã duyệt thì dừng xin phép.
+
+**PR 4B (câu đã dùng)**: nguồn sự thật là các đề trong Thư viện; chỉ mục là dữ liệu dẫn xuất dựng lại được; kiểm trạng thái nguồn và báo độ tin cậy (UID không còn trong đề hoặc sổ nguồn chưa cập nhật); bộ lọc tránh tái dùng chạy **trước** khi phân bổ; thiếu câu không tự nới; làm mới chỉ mục khi đề đổi/xóa/khôi phục/đổi metadata; test dữ liệu đủ lớn và phân biệt số đo kiểm thử với bảo đảm hiệu năng thực tế; không sửa LaTeX hay trạng thái xác minh của câu để đánh dấu đã dùng.
+
+### Chặn phát hành
+Nghiệm thu thủ công hộp `window.confirm` (OK, Hủy, và câu "Cần sửa" bị từ chối) vẫn là **mục chặn phát hành**; chưa đánh dấu xong khi người dùng chưa thử. Mục tiêu: hoàn tất PR 3, 4A, 4B, tổng kiểm thử, rồi chuẩn bị một bản beta duy nhất khi chủ dự án phê duyệt riêng.
