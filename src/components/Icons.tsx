@@ -18,3 +18,7 @@ export const IcCheckCircle = ({ size = 22 }: P) => <svg {...base(size)} strokeWi
 export const IcAlert = ({ size = 22 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M12 4l9 16H3z" /><path d="M12 10v4M12 17.5v.5" /></svg>;
 export const IcPlus = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M12 5v14M5 12h14" /></svg>;
 export const IcX = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg>;
+export const IcLock = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>;
+export const IcUnlock = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 7.5-2" /></svg>;
+export const IcSwap = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4" /></svg>;
+export const IcDice = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><rect x="4" y="4" width="16" height="16" rx="3" /><circle cx="9" cy="9" r="1.2" fill="currentColor" /><circle cx="15" cy="15" r="1.2" fill="currentColor" /><circle cx="15" cy="9" r="1.2" fill="currentColor" /><circle cx="9" cy="15" r="1.2" fill="currentColor" /></svg>;

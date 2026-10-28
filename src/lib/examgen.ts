@@ -20,8 +20,12 @@ export type Policy = 'duyet' | 'xac-minh' | 'tat-ca';
 export const POLICY_LABEL: Record<Policy, string> = { duyet: 'Đã duyệt nội dung', 'xac-minh': 'Đã duyệt + xác minh Dạng và mức độ', 'tat-ca': 'Mọi câu (trừ “Cần sửa”)' };
 export interface EffLike { form: string; level: string; unclassified: boolean }
 
+/** Ký tự điều khiển (trừ xuống dòng, tab) trong LaTeX làm biên dịch lỗi “Unicode character ^^H”; câu như vậy không đưa vào đề. */
+const CTRL = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+export const hasControlChars = (q: Pick<Question, 'latex'>): boolean => CTRL.test(q.latex);
+
 export function eligible(q: Question, eff: (q: Question) => EffLike, policy: Policy): boolean {
-  if (q.review === 'needs_fix') return false;
+  if (q.review === 'needs_fix' || hasControlChars(q)) return false;
   if (policy === 'tat-ca') return true;
   if (q.review !== 'approved') return false;
   if (policy === 'duyet') return true;
@@ -59,8 +63,24 @@ export interface AllocOpts {
   locked?: Readonly<Record<string, readonly string[]>>;
   /** câu không được chọn (đã dùng ở nơi khác) */
   exclude?: ReadonlySet<string>;
+  /** câu giáo viên đã xác nhận rõ là ngoại lệ so với chính sách (vd chọn tay câu chưa duyệt); vẫn không bao giờ nhận “Cần sửa” hay ký tự lạ */
+  exceptions?: ReadonlySet<string>;
 }
+export type LostWhy = 'khong-con' | 'can-sua' | 'ky-tu-la' | 'bi-loai' | 'khong-khop-dong' | 'chua-dat-chinh-sach' | 'trung' | 'du-so-cau';
+export const LOST_LABEL: Record<LostWhy, string> = {
+  'khong-con': 'không còn trong Ngân hàng',
+  'can-sua': 'đã bị đánh dấu “Cần sửa”',
+  'ky-tu-la': 'có ký tự điều khiển lạ trong LaTeX',
+  'bi-loai': 'đã bị loại khỏi đề',
+  'khong-khop-dong': 'không còn khớp dòng ma trận (đã đổi loại, mức độ hoặc vị trí)',
+  'chua-dat-chinh-sach': 'không còn đạt mức lấy câu đang chọn (vd đã đổi nội dung nên về “Chưa kiểm tra”)',
+  trung: 'đã được dùng ở dòng khác',
+  'du-so-cau': 'dòng đã hạ số câu thấp hơn số câu khóa',
+};
+export interface LostLock { rowId: string; uid: string; why: LostWhy }
 export interface Alloc {
+  /** câu khóa không vào được đề, kèm nguyên nhân */
+  lost: LostLock[];
   /** uid được chọn cho từng dòng, khóa trước rồi tới phần máy chọn */
   picks: Record<string, string[]>;
   /** số câu còn thiếu của từng dòng (0 = đủ) */
@@ -132,13 +152,21 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
     if (g) g.push(q.uid); else groups.set(key, [q.uid]);
   }
 
-  // Câu khóa đi trước và không bị chọn lại cho dòng khác.
+  // Câu khóa đi trước và không bị chọn lại cho dòng khác. Câu khóa vẫn phải đạt điều kiện đủ dùng của chính sách, trừ ngoại lệ giáo viên đã
+  // xác nhận rõ (`exceptions`). “Cần sửa” và câu có ký tự điều khiển lạ không bao giờ vào đề. Câu khóa bị loại thì ghi vào `lost`, không biến mất âm thầm.
+  const want = new Set(Object.values(o.locked ?? {}).flat());
+  const lockedQ = new Map<string, Question>();
+  if (want.size) for (const q of bank) if (want.has(q.uid)) lockedQ.set(q.uid, q);
   const picks: Record<string, string[]> = {};
   const used = new Set<string>();
-  rows.forEach((r, i) => {
+  const lost: LostLock[] = [];
+  rows.forEach((r) => {
     picks[r.id] = [];
     for (const uid of o.locked?.[r.id] ?? []) {
-      if (picks[r.id].length >= r.count || used.has(uid) || !matchOf.get(uid)?.includes(i)) continue;
+      const q = lockedQ.get(uid);
+      const why: LostWhy | null = !q ? 'khong-con' : q.review === 'needs_fix' ? 'can-sua' : hasControlChars(q) ? 'ky-tu-la' : o.exclude?.has(uid) ? 'bi-loai'
+        : !rowMatches(r, q) ? 'khong-khop-dong' : !o.exceptions?.has(uid) && !eligible(q, o.eff, o.policy) ? 'chua-dat-chinh-sach' : used.has(uid) ? 'trung' : picks[r.id].length >= r.count ? 'du-so-cau' : null;
+      if (why) { lost.push({ rowId: r.id, uid, why }); continue; }
       picks[r.id].push(uid);
       used.add(uid);
     }
@@ -163,7 +191,7 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
   }
   const deficit: Record<string, number> = {};
   rows.forEach((r) => { deficit[r.id] = Math.max(0, r.count - picks[r.id].length); });
-  return { picks, deficit, pool };
+  return { picks, deficit, pool, lost };
 }
 
 /** Câu có thể thay cho một dòng: đủ điều kiện, khớp dòng, chưa nằm trong đề. */
@@ -224,7 +252,9 @@ const REFS: RegExp[] = [
   /(cả|tất cả|đều)\s+(các\s+)?(phương án|đáp án|ý|\b[abcd]\b)/i,
   /(phương án|đáp án)\s*\(?[abcd]\)?(?![\p{L}])/iu,
   /không\s+có\s+(phương án|đáp án)/i,
-  /cả\s+(bốn|4)/i,
+  /cả\s+(hai|ba|bốn|[234])\b/i,
+  /(phương án|đáp án)\s+(trên|còn lại|dưới|sau|nào)/i,
+  /\bđều\s+(đúng|sai)\b/i,
   /\b[A-D]\s*(và|,|hoặc)\s*[A-D]\b/,
 ];
 export function refersToOthers(texts: readonly string[]): string | null {
@@ -323,6 +353,87 @@ export function makeVariants(picked: Picked, o: VariantOpts): Variant[] {
 
 export const countsOf = (p: Picked): Record<PartKey, number> => ({ p1: p.p1.length, p2: p.p2.length, p3: p.p3.length, p4: p.p4.length });
 
+// ---------- Kiểm tra trước khi lưu/xuất ----------
+export type IssueKind = 'thieu-dap-an' | 'dap-an-mau-thuan' | 'tong-lech' | 'thieu-cau';
+export interface Issue { kind: IssueKind; code?: string; part?: PartKey; index?: number; uid?: string; msg: string }
+
+const KEY_OK: Record<PartKey, (k: string) => boolean> = {
+  p1: (k) => /^[A-D]$/.test(k),
+  p2: (k) => /^[ĐS]{4}$/.test(k),
+  p3: (k) => k !== '?' && k.trim() !== '',
+  p4: () => true,
+};
+
+/** Đáp án của từng câu ở từng mã phải đầy đủ, khớp với chính văn bản đã trộn và nhất quán giữa các mã. */
+export function checkVariants(vs: readonly Variant[]): Issue[] {
+  const out: Issue[] = [];
+  const seenText = new Map<string, string>(); // uid → nội dung đáp án đúng (không phụ thuộc vị trí)
+  for (const v of vs) for (const p of PARTS) v.parts[p].forEach((s, i) => {
+    const at = { code: v.code, part: p, index: i + 1, uid: s.q.uid };
+    const where = `mã ${v.code}, ${PART_NAME[p].split(' · ')[0]}, câu ${i + 1}`;
+    if (!KEY_OK[p](s.key)) { out.push({ kind: 'thieu-dap-an', ...at, msg: `${where}: không xác định được đáp án` }); return; }
+    const parsed = parseExTest(s.latex);
+    if (p === 'p1') {
+      const ks = parsed.options.map((o, k) => (o.correct ? k : -1)).filter((k) => k >= 0);
+      if (parsed.options.length !== 4 || ks.length !== 1 || LETTERS[ks[0]] !== s.key) { out.push({ kind: 'dap-an-mau-thuan', ...at, msg: `${where}: đáp án ${s.key} không khớp \\True trong văn bản` }); return; }
+      const t = parsed.options[ks[0]].text.replace(/\s+/g, ' ').trim();
+      const prev = seenText.get(s.q.uid);
+      if (prev !== undefined && prev !== t) out.push({ kind: 'dap-an-mau-thuan', ...at, msg: `${where}: phương án đúng khác giữa các mã đề` });
+      seenText.set(s.q.uid, t);
+    } else if (p === 'p2') {
+      if (parsed.options.map((o) => (o.correct ? 'Đ' : 'S')).join('') !== s.key) out.push({ kind: 'dap-an-mau-thuan', ...at, msg: `${where}: đáp án Đúng/Sai không khớp văn bản` });
+    } else if (p === 'p3') {
+      if ((parsed.shortAnswer ?? '?') !== s.key) out.push({ kind: 'dap-an-mau-thuan', ...at, msg: `${where}: đáp số không khớp văn bản` });
+    }
+  });
+  return out;
+}
+
+/** Đối chiếu độc lập từ nội dung các mã đề: số câu, loại câu, mức độ từng dòng và điểm phải khớp ma trận và câu đã chọn. */
+export function reconcile(rows: readonly Row[], alloc: Alloc, picked: Picked, vs: readonly Variant[], scoring: Scoring): Issue[] {
+  const out: Issue[] = [];
+  const want: Record<PartKey, number> = { p1: 0, p2: 0, p3: 0, p4: 0 };
+  let need = 0;
+  for (const r of rows) {
+    const got = alloc.picks[r.id]?.length ?? 0;
+    need += got;
+    want[partOf(r.type)] += got;
+    if (alloc.deficit[r.id]) out.push({ kind: 'thieu-cau', msg: `còn thiếu ${alloc.deficit[r.id]} câu ở một dòng ma trận` });
+  }
+  const total = (c: Record<PartKey, number>) => PARTS.reduce((a, p) => a + c[p], 0);
+  const pc = countsOf(picked);
+  if (total(pc) !== need) out.push({ kind: 'tong-lech', msg: `tổng số câu đã chọn (${total(pc)}) khác tổng theo ma trận (${need})` });
+  for (const p of PARTS) if (pc[p] !== want[p]) out.push({ kind: 'tong-lech', part: p, msg: `${PART_NAME[p]}: ${pc[p]} câu, ma trận cho ${want[p]} câu` });
+  const byUid = new Map<string, Question>();
+  for (const p of PARTS) for (const q of picked[p]) byUid.set(q.uid, q);
+  for (const r of rows) for (const uid of alloc.picks[r.id] ?? []) {
+    const q = byUid.get(uid);
+    if (q && !rowMatches(r, q)) out.push({ kind: 'tong-lech', uid, msg: `câu ${uid} không khớp loại/mức độ của dòng ma trận` });
+  }
+  const expected = totalCenti(pc, scoring);
+  for (const v of vs) {
+    const vc: Record<PartKey, number> = { p1: 0, p2: 0, p3: 0, p4: 0 };
+    for (const p of PARTS) for (const s of v.parts[p]) {
+      vc[p]++;
+      if (partOf(s.q.type) !== p) out.push({ kind: 'tong-lech', code: v.code, part: p, uid: s.q.uid, msg: `mã ${v.code}: câu ${s.q.uid} nằm sai phần` });
+    }
+    for (const p of PARTS) if (vc[p] !== pc[p]) out.push({ kind: 'tong-lech', code: v.code, part: p, msg: `mã ${v.code}, ${PART_NAME[p]}: ${vc[p]} câu, đề gốc có ${pc[p]} câu` });
+    if (totalCenti(vc, scoring) !== expected) out.push({ kind: 'tong-lech', code: v.code, msg: `mã ${v.code}: tổng điểm ${fmtScore(totalCenti(vc, scoring))} khác ${fmtScore(expected)}` });
+    const ids = (p: PartKey) => v.parts[p].map((s) => s.q.uid).sort().join();
+    for (const p of PARTS) if (ids(p) !== picked[p].map((q) => q.uid).sort().join()) out.push({ kind: 'tong-lech', code: v.code, part: p, msg: `mã ${v.code}, ${PART_NAME[p]}: bộ câu khác đề gốc` });
+  }
+  return out;
+}
+
+/** Điểm thực tế của học sinh cho câu Đúng/Sai theo số ý đúng (cấu trúc tốt nghiệp THPT từ 2025); khác với điểm tối đa của câu (1,0). */
+export const DS_POINTS_CENTI = [0, 10, 25, 50, 100] as const;
+export const dsPoints = (nCorrect: number): number => DS_POINTS_CENTI[Math.max(0, Math.min(4, Math.round(nCorrect)))];
+
+/** Câu không đưa vào đề được vì LaTeX hỏng; vẫn nằm nguyên trong Ngân hàng. */
+export function brokenQuestions(bank: readonly Question[]): { uid: string; seq: number; why: string }[] {
+  return bank.filter(hasControlChars).map((q) => ({ uid: q.uid, seq: q.seq, why: 'có ký tự điều khiển lạ trong LaTeX (làm TeX báo lỗi)' }));
+}
+
 // ---------- Dựng tệp .tex ----------
 export interface ExamInfo { dept: string; school: string; /** tổ/ghi chú dưới tên trường; có thể để trống */ group: string; title: string; subject: string; minutes: number; /** dòng dưới thời gian, vd “(Đề thi có 4 trang)”; có thể để trống */ note: string }
 export interface ExamFile { path: string; text: string }
@@ -388,9 +499,9 @@ export function examFiles(info: ExamInfo, variants: readonly Variant[], o: { wit
 }
 
 /** Bản ghi để tái hiện đề: ma trận, hạt giống, câu được chọn và đáp án từng mã. */
-export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string }): string {
+export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string; exceptions?: Readonly<Record<string, { at: number; why: string }>>; locked?: Readonly<Record<string, readonly string[]>> }): string {
   return JSON.stringify({
-    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diem: o.scoring, matran: o.rows,
+    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diemToiDaMoiCau: o.scoring, chamDungSaiTheoSoYDung: DS_POINTS_CENTI, matran: o.rows, caKhoa: o.locked ?? {}, ngoaiLe: o.exceptions ?? {},
     maDe: o.variants.map((v) => ({ ma: v.code, phan: Object.fromEntries(PARTS.map((p) => [p, v.parts[p].map((s) => ({ uid: s.q.uid, dapAn: s.key, tron: s.shuffled }))])) })),
   }, null, 2) + '\n';
 }

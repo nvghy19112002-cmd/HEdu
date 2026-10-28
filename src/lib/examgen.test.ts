@@ -1,5 +1,5 @@
 // Lõi sinh đề: phân bổ toàn cục, điều kiện đủ dùng, trộn phương án nguyên văn, đáp án theo phép hoán vị, dựng .tex.
-import { allocate, candidatesFor, collect, countsOf, eligible, examFiles, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
+import { allocate, candidatesFor, checkVariants, collect, countsOf, dsPoints, eligible, examFiles, hasControlChars, reconcile, fmtScore, keyTex, locateChoice, makeVariants, permuteChoice, refersToOthers, SCORING_2025, totalCenti, variantTex, type EffLike, type Row } from './examgen';
 import { parseExTest } from './extest';
 import type { Level, QType, Question } from './types';
 let fail = 0;
@@ -30,6 +30,10 @@ console.log('Điều kiện đủ dùng');
   ok(!eligible(a, () => ({ form: 'gv', level: 'may', unclassified: false }), 'xac-minh'), 'xác minh: mức độ mới do máy thì chưa đủ');
   ok(!eligible(a, () => ({ form: 'gv', level: 'gv', unclassified: true }), 'xac-minh'), 'xác minh: câu chưa phân loại không đủ');
   ok(eligible(u, eff, 'tat-ca') && !eligible(f, eff, 'tat-ca'), 'tất cả: nhận câu chưa kiểm tra, vẫn loại “Cần sửa”');
+  const bad = mk({ latex: '\x08egin{ex}\n x\n\\choice{\\True 1}{2}{3}{4}\n\\end{ex}' });
+  ok(hasControlChars(bad) && !hasControlChars(a) && !eligible(bad, eff, 'tat-ca') && !eligible(bad, eff, 'duyet'), 'câu có ký tự điều khiển lạ bị loại ở mọi chính sách');
+  const a8 = allocate([bad], [row('r1', {})], { policy: 'tat-ca', eff, seed: 1, locked: { r1: [bad.uid] } });
+  ok(a8.picks.r1.length === 0 && a8.deficit.r1 === 1, 'câu có ký tự lạ không vào đề kể cả khi bị khóa');
 }
 
 console.log('Phân bổ toàn cục');
@@ -65,6 +69,20 @@ console.log('Phân bổ toàn cục');
   const lockBad = mk({ type: 'ds' });
   const a6 = allocate([...bank, lockBad], r, { policy: 'duyet', eff, seed: 9, locked: { r1: [lockBad.uid] } });
   ok(!a6.picks.r1.includes(lockBad.uid), 'câu khóa không còn khớp dòng thì bị bỏ');
+  const raw = mk({ review: undefined }), broken = mk({ review: 'needs_fix' });
+  const a7 = allocate([...bank, raw, broken], r, { policy: 'duyet', eff, seed: 9, locked: { r1: [raw.uid, broken.uid] } });
+  ok(!a7.picks.r1.includes(raw.uid) && !a7.picks.r1.includes(broken.uid), 'HỒI QUY: câu khóa chưa duyệt KHÔNG lách được chính sách “Đã duyệt”; “Cần sửa” bị loại');
+  ok(a7.lost.some((l) => l.uid === raw.uid && l.why === 'chua-dat-chinh-sach') && a7.lost.some((l) => l.uid === broken.uid && l.why === 'can-sua'), 'câu khóa bị loại được báo kèm nguyên nhân, không biến mất âm thầm');
+  const a7b = allocate([...bank, raw, broken], r, { policy: 'duyet', eff, seed: 9, locked: { r1: [raw.uid, broken.uid] }, exceptions: new Set([raw.uid, broken.uid]) });
+  ok(a7b.picks.r1.includes(raw.uid) && !a7b.picks.r1.includes(broken.uid) && a7b.lost.length === 1 && a7b.lost[0].why === 'can-sua', 'ngoại lệ giáo viên xác nhận cho phép câu chưa duyệt nhưng không bao giờ cho “Cần sửa”');
+  const ctl = mk({ latex: '\x08egin{ex}\n x\n\\choice{\\True 1}{2}{3}{4}\n\\end{ex}' });
+  const a7c = allocate([...bank, ctl], r, { policy: 'tat-ca', eff, seed: 9, locked: { r1: [ctl.uid, 'khong-co-uid'] }, exceptions: new Set([ctl.uid]) });
+  ok(a7c.lost.some((l) => l.uid === ctl.uid && l.why === 'ky-tu-la') && a7c.lost.some((l) => l.uid === 'khong-co-uid' && l.why === 'khong-con'), 'ký tự lạ không lách được kể cả có ngoại lệ; câu khóa đã xóa khỏi Ngân hàng được báo');
+  const mismatched = mk({ type: 'ds' });
+  const a7d = allocate([...bank, mismatched], r, { policy: 'tat-ca', eff, seed: 9, locked: { r1: [mismatched.uid] }, exceptions: new Set([mismatched.uid]) });
+  ok(a7d.lost.some((l) => l.uid === mismatched.uid && l.why === 'khong-khop-dong'), 'câu khóa không còn khớp dòng được báo');
+  const eight = allocate(bank, [row('r1', { count: 1 })], { policy: 'duyet', eff, seed: 9, locked: { r1: [bank[0].uid, bank[1].uid] } });
+  ok(eight.lost.some((l) => l.why === 'du-so-cau'), 'hạ số câu dưới số câu khóa cũng được báo'); 
 }
 {
   const bank = Array.from({ length: 40 }, (_, i) => mk({ lessonId: `l${i % 4}`, level: (['NB', 'TH', 'VD', 'VDC'] as Level[])[i % 4] }));
@@ -161,6 +179,79 @@ console.log('Biến thể và đáp án');
   ok(!examFiles(info, vs, { withKeys: false }).some((x) => x.path === 'dapan.tex'), 'tắt bảng đáp án ⇒ không có dapan.tex');
   ok(keyTex(vs[0]).includes('MÃ ĐỀ 101') && keyTex(vs[0]).includes('Đáp án &'), 'bảng đáp án có tiêu đề mã');
 }
+
+console.log('Kiểm tra trước khi xuất');
+{
+  const mkTn = (tag: string, c: number) => mk({ type: 'tn', latex: body('tn', tag, c) });
+  const qs = [mkTn('a', 0), mkTn('b', 1), mkTn('c', 2)];
+  const ds = [mk({ type: 'ds', tag: 'd1' })];
+  const sa = [mk({ type: 'tln', tag: 'k1' })];
+  const pk = { p1: qs, p2: ds, p3: sa, p4: [] };
+  const o = { count: 3, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, seed: 3, keepFirstOriginal: true };
+  const vs = makeVariants(pk, o);
+  ok(checkVariants(vs).length === 0, 'đề sạch: không có vấn đề đáp án');
+  const noAns = mk({ type: 'tln', latex: '\\begin{ex}\n Câu không đáp số.\n\\end{ex}' });
+  const v1 = makeVariants({ ...pk, p3: [noAns] }, o);
+  const i1 = checkVariants(v1);
+  ok(i1.length === 3 && i1.every((i) => i.kind === 'thieu-dap-an' && i.uid === noAns.uid), 'HỒI QUY: đáp số trả lời ngắn không xác định ⇒ mỗi mã đều báo thiếu đáp án');
+  const badTn = mk({ type: 'tn', latex: '\\begin{ex}\n A\n\\choice{1}{2}{3}{4}\n\\end{ex}' });
+  ok(checkVariants(makeVariants({ ...pk, p1: [...qs, badTn] }, o)).some((i) => i.kind === 'thieu-dap-an' && i.uid === badTn.uid), 'HỒI QUY: câu trắc nghiệm thiếu \\True ⇒ đáp án “?” bị bắt');
+  const twoTrue = mk({ type: 'tn', latex: '\\begin{ex}\n A\n\\choice{\\True 1}{\\True 2}{3}{4}\n\\end{ex}' });
+  ok(checkVariants(makeVariants({ ...pk, p1: [...qs, twoTrue] }, o)).length > 0, 'hai \\True ⇒ bị bắt');
+  const tam = structuredClone(vs);
+  tam[1].parts.p1[0] = { ...tam[1].parts.p1[0], key: tam[1].parts.p1[0].key === 'A' ? 'B' : 'A' };
+  ok(checkVariants(tam).some((i) => i.kind === 'dap-an-mau-thuan' && i.code === '102'), 'đáp án bị sửa lệch với văn bản ⇒ mâu thuẫn');
+  const tam2 = structuredClone(vs);
+  tam2[2].parts.p1[0] = { ...tam2[2].parts.p1[0], latex: tam2[0].parts.p1.find((s) => s.q.uid === tam2[2].parts.p1[0].q.uid)!.latex.replace('\\True ', '').replace('{', '{\\True ') };
+  ok(checkVariants(tam2).length > 0, 'phương án đúng khác giữa các mã ⇒ bị bắt');
+
+  const rows: Row[] = [row('r1', { count: 3 }), row('r2', { type: 'ds', level: 'any', count: 1 }), row('r3', { type: 'tln', level: 'any', count: 1 })];
+  const bank = [...qs, ...ds, ...sa];
+  const alloc = allocate(bank, rows, { policy: 'duyet', eff, seed: 1 });
+  const picked = collect(rows, alloc.picks, new Map(bank.map((q) => [q.uid, q])));
+  const vv = makeVariants(picked, o);
+  ok(reconcile(rows, alloc, picked, vv, SCORING_2025).length === 0, 'tổng số câu, loại, điểm khớp ma trận ⇒ không có chênh lệch');
+  const miss = structuredClone(vv);
+  miss[1].parts.p1.pop();
+  ok(reconcile(rows, alloc, picked, miss, SCORING_2025).some((i) => i.kind === 'tong-lech' && i.code === '102'), 'một mã thiếu câu ⇒ báo tổng lệch');
+  const wrongPart = structuredClone(vv);
+  wrongPart[0].parts.p2.push(wrongPart[0].parts.p1.pop()!);
+  ok(reconcile(rows, alloc, picked, wrongPart, SCORING_2025).length > 0, 'câu nằm sai phần ⇒ báo');
+  const short = allocate(bank, [row('r1', { count: 9 })], { policy: 'duyet', eff, seed: 1 });
+  ok(reconcile([row('r1', { count: 9 })], short, collect([row('r1', { count: 9 })], short.picks, new Map(bank.map((q) => [q.uid, q]))), [], SCORING_2025).some((i) => i.kind === 'thieu-cau'), 'thiếu câu so với ma trận ⇒ báo');
+}
+
+console.log('Đổi câu không đổi nguồn và không làm mất ánh xạ đáp án');
+{
+  const bank = Array.from({ length: 6 }, (_, i) => mk({ type: 'tn', latex: body('tn', `s${i}`, i % 4) }));
+  const before = JSON.stringify(bank);
+  const rows = [row('r1', { count: 3 })];
+  const a = allocate(bank, rows, { policy: 'duyet', eff, seed: 4 });
+  const old = a.picks.r1[1];
+  const cand = candidatesFor(bank, rows[0], { policy: 'duyet', eff }, new Set(a.picks.r1));
+  const to = cand[0].uid;
+  const a2 = allocate(bank, rows, { policy: 'duyet', eff, seed: 4, locked: { r1: [...a.picks.r1.filter((u) => u !== old), to] }, exclude: new Set([old]) });
+  ok(a2.picks.r1.includes(to) && !a2.picks.r1.includes(old) && a2.picks.r1.length === 3, 'câu mới thay đúng câu cũ, đủ số câu');
+  const pk = collect(rows, a2.picks, new Map(bank.map((q) => [q.uid, q])));
+  const vs = makeVariants(pk, { count: 3, firstCode: 1, shuffleQuestions: true, shuffleOptions: true, seed: 4, keepFirstOriginal: true });
+  ok(checkVariants(vs).length === 0 && reconcile(rows, a2, pk, vs, SCORING_2025).length === 0, 'sau khi đổi câu, đáp án mọi mã vẫn khớp và tổng vẫn đúng');
+  ok(JSON.stringify(bank) === before, 'đổi câu và trộn không sửa câu nguồn trong Ngân hàng');
+}
+
+console.log('Nhận diện khi trộn (ca khó)');
+{
+  const tikz = '\\begin{ex}\n Hình\n\\begin{tikzpicture}\\node{\\choice{a}{b}{c}{d}};\\end{tikzpicture}\n\\choice{\\True 1}{2}{3}{4}\n\\end{ex}';
+  const t = locateChoice(tikz);
+  ok(t.ok && t.loc.correct === 0, 'chữ \\choice bên trong TikZ không bị nhầm với \\choice thật');
+  ok(!locateChoice('\\begin{ex}\n A\n\\choice{\\True Cả A, B đều đúng}{x}{y}{z}\n\\end{ex}').ok, 'tham chiếu “A, B” giữa các phương án ⇒ không trộn');
+  ok(!locateChoice('\\begin{ex}\n A\n\\choice{\\True 1}{Cả ba phương án trên}{y}{z}\n\\end{ex}').ok, '“phương án trên” ⇒ không trộn');
+  ok(!locateChoice('\\begin{ex}\n A\n\\choice{\\True 1}{2}{3}{4}\n\\choice{1}{2}{3}{4}\n\\end{ex}').ok, 'nhiều \\choice ⇒ không trộn');
+  ok(!locateChoice('\\begin{ex}\n A\n\\choice{1}{2}{3}{4}\n\\end{ex}').ok && !locateChoice('\\begin{ex}\n A\n\\choice{\\True 1}{\\True 2}{3}{4}\n\\end{ex}').ok, '\\True thiếu hoặc lặp ⇒ không trộn');
+}
+
+console.log('Điểm Đúng/Sai theo số ý đúng');
+ok([0, 1, 2, 3, 4].map(dsPoints).join() === '0,10,25,50,100', '1 ý 0,1; 2 ý 0,25; 3 ý 0,5; 4 ý 1,0 (điểm tối đa của câu là 1,0)');
+ok(SCORING_2025.p2 === dsPoints(4), 'điểm tối đa câu Đúng/Sai bằng điểm khi đúng cả 4 ý');
 
 console.log('Điểm');
 ok(totalCenti({ p1: 12, p2: 4, p3: 6, p4: 0 }, SCORING_2025) === 1000 && fmtScore(1000) === '10', 'cấu trúc 2025 đủ 10 điểm, không sai số thực');
