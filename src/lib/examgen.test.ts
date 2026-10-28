@@ -25,11 +25,11 @@ const row = (id: string, o: Partial<Row> & { chapterId?: string }): Row => ({ id
 console.log('Điều kiện đủ dùng');
 {
   const a = mk({ review: 'approved' }), u = mk({ review: undefined }), f = mk({ review: 'needs_fix' });
-  ok(eligible(a, eff(a), 'duyet') && !eligible(u, eff(u), 'duyet') && !eligible(f, eff(f), 'duyet'), 'duyệt: chỉ câu Đã duyệt');
-  ok(!eligible(a, eff(a), 'xac-minh') && eligible(a, effGv(a), 'xac-minh'), 'xác minh: cần Dạng và mức độ do giáo viên xác minh');
-  ok(!eligible(a, { form: 'gv', level: 'may', unclassified: false }, 'xac-minh'), 'xác minh: mức độ mới do máy thì chưa đủ');
-  ok(!eligible(a, { form: 'gv', level: 'gv', unclassified: true }, 'xac-minh'), 'xác minh: câu chưa phân loại không đủ');
-  ok(eligible(u, eff(u), 'tat-ca') && !eligible(f, eff(f), 'tat-ca'), 'tất cả: nhận câu chưa kiểm tra, vẫn loại “Cần sửa”');
+  ok(eligible(a, eff, 'duyet') && !eligible(u, eff, 'duyet') && !eligible(f, eff, 'duyet'), 'duyệt: chỉ câu Đã duyệt');
+  ok(!eligible(a, eff, 'xac-minh') && eligible(a, effGv, 'xac-minh'), 'xác minh: cần Dạng và mức độ do giáo viên xác minh');
+  ok(!eligible(a, () => ({ form: 'gv', level: 'may', unclassified: false }), 'xac-minh'), 'xác minh: mức độ mới do máy thì chưa đủ');
+  ok(!eligible(a, () => ({ form: 'gv', level: 'gv', unclassified: true }), 'xac-minh'), 'xác minh: câu chưa phân loại không đủ');
+  ok(eligible(u, eff, 'tat-ca') && !eligible(f, eff, 'tat-ca'), 'tất cả: nhận câu chưa kiểm tra, vẫn loại “Cần sửa”');
 }
 
 console.log('Phân bổ toàn cục');

@@ -20,12 +20,12 @@ export type Policy = 'duyet' | 'xac-minh' | 'tat-ca';
 export const POLICY_LABEL: Record<Policy, string> = { duyet: 'Đã duyệt nội dung', 'xac-minh': 'Đã duyệt + xác minh Dạng và mức độ', 'tat-ca': 'Mọi câu (trừ “Cần sửa”)' };
 export interface EffLike { form: string; level: string; unclassified: boolean }
 
-export function eligible(q: Question, eff: EffLike, policy: Policy): boolean {
+export function eligible(q: Question, eff: (q: Question) => EffLike, policy: Policy): boolean {
   if (q.review === 'needs_fix') return false;
   if (policy === 'tat-ca') return true;
   if (q.review !== 'approved') return false;
   if (policy === 'duyet') return true;
-  return !eff.unclassified && eff.form === 'gv' && eff.level === 'gv';
+  return verified(eff(q)); // chỉ tính khi cần: kho lớn không phải dựng trạng thái xác minh cho mọi câu
 }
 /** Câu đã được giáo viên xác minh cả Dạng lẫn mức độ. */
 export const verified = (eff: EffLike): boolean => !eff.unclassified && eff.form === 'gv' && eff.level === 'gv';
@@ -121,7 +121,7 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
   const groups = new Map<string, string[]>(); // khóa = chỉ số các dòng mà câu khớp
   const matchOf = new Map<string, number[]>();
   for (const q of bank) {
-    if (o.exclude?.has(q.uid) || !eligible(q, o.eff(q), o.policy)) continue;
+    if (o.exclude?.has(q.uid) || !eligible(q, o.eff, o.policy)) continue;
     const m: number[] = [];
     rows.forEach((r, i) => { if (rowMatches(r, q)) { m.push(i); pool[r.id]++; } });
     if (!m.length) continue;
@@ -168,7 +168,7 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
 
 /** Câu có thể thay cho một dòng: đủ điều kiện, khớp dòng, chưa nằm trong đề. */
 export function candidatesFor(bank: readonly Question[], row: Row, o: Pick<AllocOpts, 'policy' | 'eff'>, taken: ReadonlySet<string>): Question[] {
-  return bank.filter((q) => !taken.has(q.uid) && rowMatches(row, q) && eligible(q, o.eff(q), o.policy));
+  return bank.filter((q) => !taken.has(q.uid) && rowMatches(row, q) && eligible(q, o.eff, o.policy));
 }
 
 // ---------- Các phần của đề ----------
