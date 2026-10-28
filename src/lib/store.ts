@@ -14,6 +14,7 @@ import { getTaxonomy, resetTaxonomy, setTaxonomy } from './curriculum';
 import { idStatus, strictCode } from './idsync';
 import { restoreSidecar, sidecarForBackup } from './dupdecisions';
 import { idReviewForBackup, restoreIdReview } from './idreview';
+import { restoreTemplates, templatesForBackup } from './examtemplates';
 import { getStorageMode, sqlitePersistence, storageBootError } from './storage';
 
 export interface AppState {
@@ -379,7 +380,7 @@ export function duplicateQuestion(id: string): Question | undefined {
 }
 
 export function exportBackup(): string {
-  return JSON.stringify({ app: 'HEdu', exportedAt: new Date().toISOString(), ...state, dupSidecar: sidecarForBackup(), idReview: idReviewForBackup() }, null, 2);
+  return JSON.stringify({ app: 'HEdu', exportedAt: new Date().toISOString(), ...state, dupSidecar: sidecarForBackup(), idReview: idReviewForBackup(), examTemplates: templatesForBackup() }, null, 2);
 }
 
 /** Khôi phục từ file sao lưu (thay toàn bộ). Trả về số câu. */
@@ -395,6 +396,8 @@ export function importBackup(json: string): number {
   if (m.dupSidecar) void restoreSidecar(m.dupSidecar).catch(() => undefined);
   // trạng thái xác minh ID (Dạng/mức độ): cũng GỘP; file sao lưu cũ không có phần này ⇒ các câu là "chưa xác minh"
   if (m.idReview) void restoreIdReview(m.idReview, new Set(questions.map((q) => q.uid))).catch(() => undefined);
+  // mẫu ma trận đề: cũng GỘP (cùng ID giữ bản mới hơn); file sao lưu cũ không có phần này ⇒ không đổi mẫu nào
+  if (m.examTemplates) void restoreTemplates(m.examTemplates).catch(() => undefined);
   return questions.length;
 }
 

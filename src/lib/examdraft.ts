@@ -50,7 +50,8 @@ export function parseDraft(raw: string | null): Draft {
       const sc = r.scope as Record<string, unknown>;
       if (!['grade', 'chapter', 'lesson', 'form'].includes(String(sc.kind)) || typeof sc.id !== 'string') return [];
       if (!TYPES.includes(r.type as QType) || !LEVELS.includes(r.level as Level)) return [];
-      return [{ id: r.id as string, scope: { kind: sc.kind as Row['scope']['kind'], id: sc.id }, type: r.type as QType, level: r.level as Level | 'any', count: num(r.count, 1, 0, 200) }];
+      return [{ id: r.id as string, scope: { kind: sc.kind as Row['scope']['kind'], id: sc.id }, type: r.type as QType, level: r.level as Level | 'any', count: num(r.count, 1, 0, 200),
+        ...(typeof r.label === 'string' ? { label: r.label.slice(0, 200) } : {}), ...(r.flag === 'mat' || r.flag === 'doi-vi-tri' ? { flag: r.flag } : {}) }];
     });
   }
   if (j.policy === 'duyet' || j.policy === 'xac-minh' || j.policy === 'tat-ca') d.policy = j.policy;
@@ -108,6 +109,22 @@ export function rowsFromPick(qs: readonly Question[]): { rows: Row[]; locked: Re
     locked[r.id].push(q.uid);
   }
   return { rows, locked };
+}
+
+/**
+ * Chuỗi tổ tiên của một nút phạm vi: [lớp], [lớp, chương], [lớp, chương, bài], [lớp, chương, bài, dạng]. null = nút không còn trong cây.
+ * Dùng để biết một dòng của mẫu có bị xóa hoặc đổi vị trí (đổi cha) hay không.
+ */
+export function findChain(scope: Row['scope'], tax: Taxonomy): string[] | null {
+  if (scope.kind === 'grade') return tax.grades.some((g) => String(g.grade) === scope.id) ? [scope.id] : null;
+  for (const g of tax.grades) for (const b of g.branches) for (const c of b.chapters) {
+    if (scope.kind === 'chapter' && c.id === scope.id) return [String(g.grade), c.id];
+    for (const l of c.lessons) {
+      if (scope.kind === 'lesson' && l.id === scope.id) return [String(g.grade), c.id, l.id];
+      for (const f of l.forms) if (scope.kind === 'form' && f.id === scope.id) return [String(g.grade), c.id, l.id, f.id];
+    }
+  }
+  return null;
 }
 
 /** Tên phạm vi dạng đường dẫn: “Lớp 12 › Chương 1 › Bài 2 › Dạng”. Nút không còn trong cây thì trả null. */

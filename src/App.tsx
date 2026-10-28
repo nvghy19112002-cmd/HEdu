@@ -18,6 +18,7 @@ import { SystemScreen } from './screens/System';
 import { TrashScreen } from './screens/Trash';
 import { loadDecisions, trashCount, useDecisions } from './lib/dupdecisions';
 import { loadIdReview } from './lib/idreview';
+import { loadTemplates } from './lib/examtemplates';
 import { UpdateProvider, useUpdates } from './update-context';
 
 // "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
@@ -76,7 +77,7 @@ function Shell({ recovered }: { recovered: boolean }) {
 
   useEffect(() => startZoom(), []);
   // nạp tệp phụ (quyết định trùng, thùng rác) ngay khi mở app để sao lưu luôn đầy đủ
-  useEffect(() => { void loadDecisions(); void loadIdReview(); }, []);
+  useEffect(() => { void loadDecisions(); void loadIdReview(); void loadTemplates(); }, []);
 
   useEffect(() => {
     if (recovered) toast('File dữ liệu bị lỗi nên HEdu đã lấy lại từ bản dự phòng. Nên kiểm tra các câu vừa soạn gần đây.');

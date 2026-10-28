@@ -9,7 +9,13 @@ import type { Level, QType, Question } from './types';
 // ---------- Phạm vi, dòng ma trận, điều kiện đủ dùng ----------
 export type ScopeKind = 'grade' | 'chapter' | 'lesson' | 'form';
 export interface Scope { kind: ScopeKind; id: string }
-export interface Row { id: string; scope: Scope; type: QType; level: Level | 'any'; count: number }
+export interface Row {
+  id: string; scope: Scope; type: QType; level: Level | 'any'; count: number;
+  /** tên phạm vi lúc lưu mẫu, để hiện khi nút không còn trong cây */
+  label?: string;
+  /** dòng từ mẫu mà nút tương ứng đã bị xóa hoặc đổi vị trí: giữ để giáo viên xem lại, không tự ánh xạ sang nút khác */
+  flag?: 'mat' | 'doi-vi-tri';
+}
 
 export const inScope = (q: Question, s: Scope): boolean =>
   s.kind === 'grade' ? String(q.grade) === s.id : s.kind === 'chapter' ? q.chapterId === s.id : s.kind === 'lesson' ? q.lessonId === s.id : q.formId === s.id;

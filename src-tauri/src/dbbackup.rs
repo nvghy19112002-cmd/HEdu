@@ -499,4 +499,52 @@ mod tests {
         assert_eq!(s.count().unwrap(), 5, "dữ liệu câu hỏi không đổi");
     }
 
+    #[test]
+    fn mau_ma_tran_nam_trong_moi_ban_sao_luu_dung_luc_chup() {
+        // Mẫu ma trận đề (khoá tệp phụ "exam-templates", PR 4A) đi theo MỌI bản sao lưu đầy đủ như trạng thái xác minh ID.
+        const T1: &str = r#"{"v":1,"templates":[{"id":"tpl-a","fmt":1,"name":"Giữa kỳ","updatedAt":1}]}"#;
+        const T2: &str = r#"{"v":1,"templates":[{"id":"tpl-a","fmt":1,"name":"Giữa kỳ (đổi tên)","updatedAt":2},{"id":"tpl-b","fmt":1,"name":"Cuối kỳ","updatedAt":3}]}"#;
+        let d = tmp("tpl");
+        let cur = d.join("hedu.db");
+        let mut db = make(&d, "x.db", 10);
+        db.apply(&Batch { sidecar: vec![("exam-templates".into(), T1.into())], ..Default::default() }).unwrap();
+        snapshot_verified(&db, &d.join("snap.db"), "manual", "thu-cong", "0.1.0").unwrap();
+        let pts = d.join("points");
+        create_restore_point(&db, &pts, "nhap-hang-loat", "0.1.0").unwrap();
+        let before_update = d.join("before-update");
+        snapshot_before_update(&db, &before_update, "a", "b").unwrap();
+        db.apply(&Batch { sidecar: vec![("exam-templates".into(), T2.into())], ..Default::default() }).unwrap();
+        assert_eq!(db.sidecar_get("exam-templates").unwrap().as_deref(), Some(T2));
+        let snap = Db::open(&d.join("snap.db")).unwrap();
+        assert_eq!(snap.sidecar_get("exam-templates").unwrap().as_deref(), Some(T1), "bản chụp .db giữ mẫu lúc chụp");
+        let point = list_points(&pts).into_iter().next().expect("có điểm khôi phục");
+        assert_eq!(Db::open(&pts.join(&point.file)).unwrap().sidecar_get("exam-templates").unwrap().as_deref(), Some(T1), "điểm khôi phục");
+        assert_eq!(Db::open(&before_update.join("hedu.db")).unwrap().sidecar_get("exam-templates").unwrap().as_deref(), Some(T1), "bản trước cập nhật");
+        snap.close().unwrap();
+        db.close().unwrap();
+        fs::rename(d.join("x.db"), &cur).unwrap();
+        replace_current(&cur, &d.join("snap.db")).unwrap();
+        let back = Db::open(&cur).unwrap();
+        assert_eq!(back.sidecar_get("exam-templates").unwrap().as_deref(), Some(T1), "khôi phục từ bản chụp trả đúng mẫu của thời điểm đó (không trộn với bản mới)");
+        assert_eq!(back.count().unwrap(), 10, "câu hỏi không đổi");
+    }
+
+    #[test]
+    fn ban_beta35_khong_hieu_khoa_mau_van_mo_duoc_va_khong_pha_du_lieu() {
+        // HEdu beta.35 chỉ biết các khoá "dup-decisions" và "id-review". Trên dữ liệu có thêm "exam-templates" nó vẫn mở được ngân hàng,
+        // và khi nó ghi các khoá của nó thì khoá mẫu phải còn NGUYÊN (bản cũ không hiểu nhưng không được làm mất).
+        const TPL: &str = r#"{"v":1,"templates":[{"id":"tpl-a","fmt":1,"name":"Mẫu"},{"id":"tpl-sau","fmt":9,"du":"lieu moi"}]}"#;
+        let d = tmp("b35");
+        let mut db = make(&d, "x.db", 7);
+        db.apply(&Batch { sidecar: vec![("exam-templates".into(), TPL.into())], ..Default::default() }).unwrap();
+        db.apply(&Batch { sidecar: vec![("id-review".into(), r#"{"v":1,"recs":{}}"#.into())], ..Default::default() }).unwrap();
+        db.apply(&Batch { sidecar: vec![("dup-decisions".into(), r#"{"v":1,"recs":[]}"#.into())], ..Default::default() }).unwrap();
+        assert_eq!(db.sidecar_get("exam-templates").unwrap().as_deref(), Some(TPL), "ghi các khoá cũ không xoá khoá mẫu");
+        assert_eq!(db.count().unwrap(), 7, "ngân hàng vẫn mở và đủ câu");
+        snapshot_verified(&db, &d.join("snap.db"), "manual", "thu-cong", "0.1.0-beta.35").unwrap();
+        let s = Db::open(&d.join("snap.db")).unwrap();
+        assert_eq!(s.sidecar_get("exam-templates").unwrap().as_deref(), Some(TPL));
+        assert_eq!(s.count().unwrap(), 7);
+    }
+
 }

@@ -3,6 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
+import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
@@ -99,6 +100,9 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [swap, setSwap] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [tplDlg, setTplDlg] = useState(false);
+  /** bản nháp ngay trước lần áp dụng mẫu gần nhất, để hoàn tác (chỉ trong phiên) */
+  const [undoTpl, setUndoTpl] = useState<{ prev: Draft; note: string } | null>(null);
   const upd = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   useEffect(() => { saveDraft(d); }, [d]);
 
@@ -239,10 +243,12 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
           <section className="mx-sec" aria-label="Ma trận đề" ref={refMatrix}>
             <div className="mx-head">
               <h2>Ma trận đề</h2>
+              <button type="button" className="btn btn-sm" onClick={() => setTplDlg(true)} title="Lưu ma trận thành mẫu có tên, hoặc áp dụng mẫu đã lưu">Mẫu ma trận…</button>
               <div className="seg" role="group" aria-label="Câu đủ điều kiện">
                 {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
               </div>
             </div>
+            {undoTpl && <p className="te-hint" role="status">{undoTpl.note} <button type="button" className="linkbtn" onClick={() => { setD(undoTpl.prev); setUndoTpl(null); toast('Đã hoàn tác áp dụng mẫu.'); }}>Hoàn tác áp dụng mẫu</button></p>}
             <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{broken.length > 0 && <span className="te-bad"> {broken.length} câu có ký tự điều khiển lạ trong LaTeX nên bị loại khỏi tập ứng viên (vẫn còn nguyên trong Ngân hàng).</span>}</p>
             {broken.length > 0 && <details className="te-broken"><summary>Xem câu bị loại và nguyên nhân</summary><ul>{broken.slice(0, 50).map((b) => <li key={b.uid}>Câu #{b.seq} · <code>{b.uid}</code> · {b.why}</li>)}{broken.length > 50 && <li>… và {broken.length - 50} câu nữa</li>}</ul></details>}
             {rowsEmpty ? (
@@ -256,10 +262,13 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
                 <div className="te-row te-row-h" role="row"><span>Phạm vi</span><span>Loại câu</span><span>Mức độ</span><span>Số câu</span><span>Kho câu</span><span /></div>
                 {d.rows.map((r) => {
                   const pool = alloc.pool[r.id] ?? 0, def = alloc.deficit[r.id] ?? 0;
-                  const name = scopeLabel(r.scope, tax);
+                  const name = scopeLabel(r.scope, tax) ?? (r.label ? `${r.label} (đã lưu trong mẫu)` : null);
                   return (
                     <div key={r.id} className={`te-row${def ? ' short' : ''}`} role="row">
-                      <span className="te-scope" title={name ?? ''}>{name ?? <em>Mục này không còn trong cây</em>}</span>
+                      <span className="te-scope" title={name ?? ''}>{name ?? <em>Mục này không còn trong cây</em>}
+                        {r.flag === 'mat' && <span className="te-flag warn" title="Chương/Bài/Dạng của dòng này đã bị xóa khỏi cây chương trình. HEdu không tự chuyển sang mục khác: hãy xóa dòng hoặc thêm dòng mới đúng mục.">không còn trong cây</span>}
+                        {r.flag === 'doi-vi-tri' && <span className="te-flag warn" title="Mục này đã đổi vị trí trong cây kể từ khi lưu mẫu. Kiểm tra rồi bấm “Đã xem” nếu đúng ý.">đã đổi vị trí <button type="button" className="linkbtn" onClick={() => setRow(r.id, { flag: undefined })}>Đã xem</button></span>}
+                      </span>
                       <select className="sel" aria-label="Loại câu" value={r.type} onChange={(e) => { const t = e.target.value as QType; setRow(r.id, { type: t, level: t === 'tn' ? r.level : 'any' }); }}>{TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</select>
                       <select className="sel" aria-label="Mức độ" value={r.level} onChange={(e) => setRow(r.id, { level: e.target.value as Level | 'any' })}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select>
                       <div className="stepper" role="group" aria-label="Số câu">
@@ -432,6 +441,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
           </div>
         </aside>
       </div>
+      {tplDlg && <ExamTemplatesDialog draft={d} onToast={toast} onClose={() => setTplDlg(false)} onApply={(next, prev, note) => { setUndoTpl({ prev, note }); setD(next); setSwap(null); }} />}
     </>
   );
 }

@@ -2,6 +2,7 @@
 import { invoke } from './platform';
 import { getStorageMode } from './storage';
 import { flushIdReview, freezeIdReview } from './idreview';
+import { flushTemplates, freezeTemplates } from './examtemplates';
 import { flushSave, isLastSaveOk } from './store';
 
 export type PointReason = 'nhap-hang-loat' | 'xoa-hang-loat' | 'don-sach-thung-rac' | 'khoi-phuc-tu-tep' | 'truoc-khoi-phuc' | 'thu-cong';
@@ -52,6 +53,8 @@ export async function restoreFrom(s: Source): Promise<void> {
   // Trạng thái xác minh ID nằm trong tệp phụ của CHÍNH tệp .db: ghi nốt vào tệp hiện tại rồi KHOÁ ghi, để bản trong bộ nhớ không đè lên bản vừa khôi phục.
   if (!(await flushIdReview())) throw new Error('Chưa ghi được trạng thái xác minh ID hiện tại nên chưa khôi phục.');
   freezeIdReview();
+  await flushTemplates(); // mẫu ma trận cũng nằm trong tệp phụ của tệp .db: ghi nốt rồi KHOÁ ghi như trên
+  freezeTemplates();
   await invoke('backup_restore', { path: s.path ?? null, point: s.point ?? null });
   window.location.reload();
 }
