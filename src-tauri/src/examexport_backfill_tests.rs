@@ -12,11 +12,11 @@ fn tmp(tag: &str) -> PathBuf {
     d
 }
 
-const DE: &str = "\\def\\made{101}\n\\begin{name}{a}{b}{c}{d}{e}{f}{g}{h}\n\\end{name}\n\n\\caulc\n\n\\begin{ex}%[x]\n A \\choice{\\True 1}{2}{3}{4}\n\\end{ex}\n\n\\begin{ex}\n B \\choice{\\True 1}{2}{3}{4}\n\\end{ex}\n\n\\cauds\n\n\\begin{ex}\n C \\choiceTF{\\True a}{b}{\\True c}{d}\n\\end{ex}\n\n\\caukq\n\n\\begin{ex}\n D \\shortans{3}\n\\end{ex}\n\n\\zlabel{\\made-lastpage}\n";
+const DE: &str = "\\def\\made{101}\n\\begin{name}{a}{b}{c}{d}{e}{f}{g}{h}\n\\end{name}\n\n\\caulc\n\n\\begin{ex}%[x]\n A \\choice{\\True 1}{2}{3}{4}\n\\end{ex}\n\n\\begin{ex}\n B \\choice{1}{\\True 2}{3}{4}\n\\end{ex}\n\n\\cauds\n\n\\begin{ex}\n C \\choiceTF{\\True a}{b}{\\True c}{d}\n\\end{ex}\n\n\\caukq\n\n\\begin{ex}\n D \\shortans{3}\n\\end{ex}\n\n\\zlabel{\\made-lastpage}\n";
 
 const SPEC: &str = r#"{"v":1,"thongTin":{"title":"Thi thử"},"hatGiong":7,"maDe":[
   {"ma":"101","phan":{"p1":[{"uid":"a","dapAn":"A"},{"uid":"b","dapAn":"B"}],"p2":[{"uid":"c","dapAn":"ĐSĐS"}],"p3":[{"uid":"d","dapAn":"3"}],"p4":[]}},
-  {"ma":"102","phan":{"p1":[{"uid":"a","dapAn":"C"},{"uid":"b","dapAn":"D"}],"p2":[{"uid":"c","dapAn":"ĐSĐS"}],"p3":[{"uid":"d","dapAn":"3"}],"p4":[]}}]}"#;
+  {"ma":"102","phan":{"p1":[{"uid":"a","dapAn":"A"},{"uid":"b","dapAn":"B"}],"p2":[{"uid":"c","dapAn":"ĐSĐS"}],"p3":[{"uid":"d","dapAn":"3"}],"p4":[]}}]}"#;
 
 const OLD_MAIN: &str = "\\documentclass[12pt,a4paper,twoside]{book}\n\\input{khaibaochung}\n%\\anloigiai\n\\begin{document}\n\\input{de-101}\n\\newpage\n\\input{de-102}\n\\newpage\n\\input{dapan}\n\\end{document}\n";
 

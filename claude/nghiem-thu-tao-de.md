@@ -53,6 +53,6 @@ npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu
 - [ ] Giải nén `nguon/`, biên dịch `main-<mã>.tex` bằng TeX Live của máy: ra PDF.
 - [ ] Xuất hai lần liên tiếp: hai tệp ZIP tên khác nhau, tệp cũ không bị ghi đè.
 - [ ] Bấm **Dừng** giữa lúc dịch: không có ZIP, không có tệp `.part` trong thư mục đích.
-- [ ] Đề cũ (lưu bằng bản trước, chưa có `main-<mã>.tex`): mở **Xuất từng mã…** → thấy báo thiếu → **Bổ sung tệp chính từng mã…**: hộp xác nhận liệt kê tệp sẽ thêm; sau khi đồng ý có thêm một bản sao dự phòng của đề; không tệp nào bị sửa.
+- [ ] Đề cũ (lưu bằng bản trước, chưa có `main-<mã>.tex`): mở **Xuất từng mã…** → thấy báo thiếu → **Bổ sung tệp chính từng mã…**: hộp xác nhận liệt kê tệp sẽ thêm, những gì **đã** đối chiếu được và những gì **chưa** chứng minh được (nói thẳng, vd đề lưu bằng bản trước không có dấu vân từng tệp, sổ nguồn chỉ ghi mã đầu); sau khi đồng ý có thêm một bản sao dự phòng của đề; tạo tất cả hoặc không (lỗi giữa chừng thì các tệp mới bị hoàn tác); không tệp nào đang có bị sửa. Thử thêm: sửa tay một câu trong `de-<mã>.tex` rồi bổ sung ⇒ bị từ chối.
 - [ ] Đề không tạo bằng Tạo đề (nhập tay) mở **Xuất từng mã…**: báo rõ không dùng được, không báo lỗi lạ.
 - [ ] Thư mục đích còn ít dung lượng: báo rõ không đủ chỗ trước khi dịch.

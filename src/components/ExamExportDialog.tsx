@@ -46,7 +46,7 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
     try {
       const plan = await codesBackfill(id, false);
       if (!plan.willCreate.length) { onToast(plan.message); return; }
-      const ok = window.confirm(`${plan.message}\n\nTệp sẽ tạo:\n${plan.willCreate.join('\n')}\n\nHEdu chỉ THÊM tệp mới, không sửa hay ghi đè tệp nào. Trước khi ghi, HEdu tạo một bản sao của đề này để bạn quay lại được.\n\nTiếp tục?`);
+      const ok = window.confirm(`${plan.message}\n\nTệp sẽ tạo:\n${plan.willCreate.join('\n')}\n\nĐÃ đối chiếu được:\n${plan.verified.map((x) => `• ${x}`).join('\n')}\n\nCHƯA chứng minh được:\n${plan.limits.map((x) => `• ${x}`).join('\n')}\n\nHEdu chỉ THÊM tệp mới (tất cả hoặc không), không sửa hay ghi đè tệp nào. Trước khi ghi, HEdu tạo một bản sao của đề này để bạn quay lại được.\n\nTiếp tục?`);
       if (!ok) return;
       const copy = await examDuplicate(id, `${name} (trước khi bổ sung tệp chính)`);
       const done = await codesBackfill(id, true);

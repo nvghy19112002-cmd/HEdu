@@ -7,7 +7,7 @@ import { ExamExportDialog } from '../components/ExamExportDialog';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
-import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { loadDraft, newRowId, rowsFromPick, saveDraft, scopeLabel, template2025, type Draft } from '../lib/examdraft';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
@@ -181,19 +181,24 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const canExport = total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const projectFiles = (name: string) => [
-    ...examFiles(d.info, variants, { withKeys: d.withKeys }),
-    { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
-    { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked }) },
-    { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
-  ];
+  /** Bộ tệp của đề, kèm dấu vân SHA-256 từng tệp nguồn trong hedu-de.json (để về sau biết tệp có bị sửa tay không). */
+  const projectFiles = async (name: string) => {
+    const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
+    const fileHashes = await sourceHashes(tex);
+    return [
+      ...tex,
+      { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
+      { path: 'hedu-de.json', text: specJson({ info: d.info, rows: d.rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes }) },
+      { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
+    ];
+  };
 
   const saveToLibrary = async () => {
     if (!canExport || busy) return;
     setBusy(true);
     try {
       const name = `${d.info.title.trim() || 'Đề'} · ${new Date().toLocaleDateString('vi-VN')}`;
-      const s = await createFromFiles(name, projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource));
+      const s = await createFromFiles(name, await projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource));
       setSaved({ id: s.id, name: s.name, sig: draftSig });
       toast(`Đã lưu “${s.name}” vào Thư viện đề. Bấm “Xuất PDF từng mã / ZIP” hoặc mở mục Đề thi để biên dịch.`, { label: 'Mở Đề thi', run: () => go({ screen: 'examlib' }) });
     } catch (e) {
@@ -210,7 +215,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
       const folder = safeFolderName(d.info.title, 'de-hedu');
       const parent = await open({ directory: true, multiple: false, title: 'Chọn nơi tạo thư mục đề' });
       if (!parent || Array.isArray(parent)) return;
-      const out = await invoke<string>('export_tex_folder', { parent, name: folder, files: projectFiles(folder) });
+      const out = await invoke<string>('export_tex_folder', { parent, name: folder, files: await projectFiles(folder) });
       toast(`Đã tạo thư mục: ${out}`);
     } catch (e) {
       toast(`Không tạo được thư mục (${e instanceof Error ? e.message : String(e)}).`);

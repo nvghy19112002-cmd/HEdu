@@ -44,6 +44,8 @@ fn plan<'a>(spec: &'a Spec, kind: Kind, codes: &[&str], sol: bool, eid: &str) ->
         export_id: eid.into(),
         now: "2026-10-28T00:00:00Z".into(),
         hedu_version: "0.0.0-test",
+        max_bytes: MAX_PACKAGE_BYTES,
+        hook: None,
     }
 }
 
@@ -83,7 +85,7 @@ fn csv_dap_an_rieng_tung_ma() {
     assert_eq!(csv.lines().count(), 1 + 4);
 }
 
-const DE: &str = "\\def\\made{101}\n\\begin{name}{a}{b}{c}{d}{e}{f}{g}{h}\n\\end{name}\n\n\\caulc\n\n\\begin{ex}%[x]\n A \\choice{\\True 1}{2}{3}{4}\n\\end{ex}\n\n\\begin{ex}\n B \\choice{\\True 1}{2}{3}{4}\n\\end{ex}\n\n\\cauds\n\n\\begin{ex}\n C \\choiceTF{\\True a}{b}{\\True c}{d}\n\\end{ex}\n\n\\caukq\n\n\\begin{ex}\n D \\shortans{3}\n\\end{ex}\n\n\\zlabel{\\made-lastpage}\n";
+const DE: &str = "\\def\\made{101}\n\\begin{name}{a}{b}{c}{d}{e}{f}{g}{h}\n\\end{name}\n\n\\caulc\n\n\\begin{ex}%[x]\n A \\choice{\\True 1}{2}{3}{4}\n\\end{ex}\n\n\\begin{ex}\n B \\choice{1}{2}{\\True 3}{4}\n\\end{ex}\n\n\\cauds\n\n\\begin{ex}\n C \\choiceTF{\\True a}{b}{\\True c}{d}\n\\end{ex}\n\n\\caukq\n\n\\begin{ex}\n D \\shortans{3,5}\n\\end{ex}\n\n\\zlabel{\\made-lastpage}\n";
 const MAIN: &str = "\\documentclass[12pt]{book}\n\\input{khaibaochung}\n%\\anloigiai\n\\begin{document}\n\\input{de-101}\n\\end{document}\n";
 
 #[test]

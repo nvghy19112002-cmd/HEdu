@@ -8,7 +8,7 @@ export interface ExportOpts { kind: PackKind; codes?: string[]; withSolution?: b
 export interface CodeResult { code: string; status: 'ok' | 'failed' | 'cancelled' | 'skipped'; message: string; pages: number | null; cached: boolean; sha256: string | null }
 export interface ExportOut { ok: boolean; cancelled: boolean; zipPath: string | null; zipBytes: number | null; exportId: string; message: string; results: CodeResult[] }
 export interface ExportProgress { id: string; phase: string; index: number; total: number; code: string }
-export interface BackfillOut { applied: boolean; willCreate: string[]; skipped: string[]; message: string }
+export interface BackfillOut { applied: boolean; willCreate: string[]; skipped: string[]; message: string; /** đã đối chiếu được */ verified: string[]; /** chưa chứng minh được (nói thẳng) */ limits: string[] }
 
 export const codesInfo = (id: string) => invoke<CodesInfo>('exam_codes_info', { id });
 export const codesExport = (id: string, opts: ExportOpts) => invoke<ExportOut>('exam_codes_export', { id, opts });

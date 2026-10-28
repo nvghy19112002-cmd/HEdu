@@ -191,8 +191,8 @@ pub fn answers_csv(c: &CodeSpec) -> String {
 
 // ---------- đối chiếu nguồn từng mã ----------
 
-/// Số câu mỗi phần trong `de-<mã>.tex`, đếm theo các lệnh \caulc/\cauds/\caukq/\cautl. None = không nhận diện được cấu trúc.
-pub fn tex_part_counts(tex: &str) -> [usize; 4] {
+/// Các khối `\begin{ex}…\end{ex}` của từng phần (I–IV) trong `de-<mã>.tex`, theo các lệnh \caulc/\cauds/\caukq/\cautl.
+pub fn part_blocks(tex: &str) -> [Vec<String>; 4] {
     let marks = ["\\caulc", "\\cauds", "\\caukq", "\\cautl"];
     let mut pos: Vec<(usize, usize)> = Vec::new();
     for (i, m) in marks.iter().enumerate() {
@@ -208,12 +208,197 @@ pub fn tex_part_counts(tex: &str) -> [usize; 4] {
         }
     }
     pos.sort();
-    let mut out = [0usize; 4];
+    let mut out: [Vec<String>; 4] = Default::default();
     for (n, (at, part)) in pos.iter().enumerate() {
         let end = pos.get(n + 1).map(|x| x.0).unwrap_or(tex.len());
-        out[*part] = tex[*at..end].lines().filter(|l| l.trim_start().starts_with("\\begin{ex}")).count();
+        let mut cur: Option<String> = None;
+        for l in tex[*at..end].lines() {
+            let t = l.trim_start();
+            if cur.is_none() && t.starts_with("\\begin{ex}") {
+                cur = Some(String::new());
+            }
+            if let Some(b) = cur.as_mut() {
+                b.push_str(l);
+                b.push('\n');
+                if t.starts_with("\\end{ex}") {
+                    out[*part].push(cur.take().unwrap());
+                }
+            }
+        }
     }
     out
+}
+
+/// Số câu mỗi phần trong `de-<mã>.tex`.
+pub fn tex_part_counts(tex: &str) -> [usize; 4] {
+    let b = part_blocks(tex);
+    [b[0].len(), b[1].len(), b[2].len(), b[3].len()]
+}
+
+/// Chỉ số byte kết thúc (sau dấu `}`) của nhóm `{…}` bắt đầu tại b[i]; bỏ qua ký tự sau dấu `\`.
+fn group_end(b: &[u8], i: usize) -> Option<usize> {
+    if b.get(i) != Some(&b'{') {
+        return None;
+    }
+    let mut d = 0;
+    let mut j = i;
+    while j < b.len() {
+        match b[j] {
+            b'\\' => j += 1,
+            b'{' => d += 1,
+            b'}' => {
+                d -= 1;
+                if d == 0 {
+                    return Some(j + 1);
+                }
+            }
+            _ => {}
+        }
+        j += 1;
+    }
+    None
+}
+
+/// Che chú thích %, \loigiai{…} và tikzpicture bằng khoảng trắng (giữ nguyên độ dài byte) để tìm lệnh cấu trúc của câu.
+fn mask_structure(tex: &str) -> String {
+    let mut b: Vec<u8> = tex.as_bytes().to_vec();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && (i == 0 || b[i - 1] != b'\\') {
+            while i < b.len() && b[i] != b'\n' {
+                b[i] = b' ';
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    let t = String::from_utf8_lossy(&b).into_owned();
+    let mut b = t.into_bytes();
+    let mut i = 0;
+    while let Some(k) = find_from(&b, b"\\loigiai", i) {
+        let mut j = k + 8;
+        while j < b.len() && b[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        match group_end(&b, j) {
+            Some(e) => {
+                for x in &mut b[k..e] {
+                    *x = b' ';
+                }
+                i = e;
+            }
+            None => i = k + 8,
+        }
+    }
+    let mut i = 0;
+    while let Some(k) = find_from(&b, b"\\begin{tikzpicture}", i) {
+        let e = find_from(&b, b"\\end{tikzpicture}", k).map(|x| x + 17).unwrap_or(b.len());
+        for x in &mut b[k..e] {
+            *x = b' ';
+        }
+        i = e;
+    }
+    String::from_utf8_lossy(&b).into_owned()
+}
+
+fn find_from(b: &[u8], pat: &[u8], from: usize) -> Option<usize> {
+    if from >= b.len() {
+        return None;
+    }
+    b[from..].windows(pat.len()).position(|w| w == pat).map(|k| k + from)
+}
+
+/// Vị trí lệnh `\name` (không bị nối thêm chữ cái) trong văn bản đã che.
+fn find_cmd(mask: &str, name: &str) -> Option<usize> {
+    let pat = format!("\\{name}");
+    let mut from = 0;
+    while let Some(k) = mask[from..].find(&pat) {
+        let at = from + k;
+        let after = mask[at + pat.len()..].chars().next();
+        if !after.map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+            return Some(at);
+        }
+        from = at + pat.len();
+    }
+    None
+}
+
+fn read_groups(b: &[u8], mut i: usize, n: usize) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    for _ in 0..n {
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        match group_end(b, i) {
+            Some(e) => {
+                out.push((i + 1, e - 1));
+                i = e;
+            }
+            None => break,
+        }
+    }
+    out
+}
+
+/// Đáp án đọc từ CHÍNH văn bản một câu (không dùng bộ phân tích khác): phần I = chữ A–D theo \True; phần II = ĐS theo \True từng ý; phần III = nội dung \shortans; phần IV = —.
+pub fn block_answer(part: usize, block: &str) -> String {
+    let mask = mask_structure(block);
+    let b = mask.as_bytes();
+    let skip_opt = |mut i: usize| -> usize {
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if b.get(i) == Some(&b'[') {
+            if let Some(e) = mask[i..].find(']') {
+                return i + e + 1;
+            }
+        }
+        i
+    };
+    let has_true = |(a, e): (usize, usize)| mask[a..e].matches("\\True").count();
+    match part {
+        0 => match find_cmd(&mask, "choice") {
+            Some(k) => {
+                let g = read_groups(b, skip_opt(k + 7), 4);
+                let t: Vec<usize> = g.iter().map(|x| has_true(*x)).collect();
+                if g.len() == 4 && t.iter().sum::<usize>() == 1 { ["A", "B", "C", "D"][t.iter().position(|x| *x == 1).unwrap()].to_string() } else { "?".into() }
+            }
+            None => "?".into(),
+        },
+        1 => match find_cmd(&mask, "choiceTF") {
+            Some(k) => {
+                let g = read_groups(b, skip_opt(k + 9), 4);
+                if g.len() == 4 { g.iter().map(|x| if has_true(*x) > 0 { 'Đ' } else { 'S' }).collect() } else { "?".into() }
+            }
+            None => "?".into(),
+        },
+        2 => match find_cmd(&mask, "shortans") {
+            Some(k) => match read_groups(b, skip_opt(k + 9), 1).first() {
+                Some((a, e)) if !block[*a..*e].trim().is_empty() => block[*a..*e].trim().to_string(),
+                _ => "?".into(),
+            },
+            None => "?".into(),
+        },
+        _ => "—".into(),
+    }
+}
+
+/// Đáp án từng câu trong `de-<mã>.tex` phải KHỚP với hedu-de.json (mỗi câu một dấu hiệu độc lập: \True/\shortans trong chính tệp).
+pub fn check_answers(c: &CodeSpec, de_tex: &str) -> Result<(), String> {
+    let blocks = part_blocks(de_tex);
+    let names = ["Phần I", "Phần II", "Phần III", "Phần IV"];
+    for (i, part) in blocks.iter().enumerate() {
+        for (k, blk) in part.iter().enumerate() {
+            let got = block_answer(i, blk);
+            if let Some((_, want)) = c.parts[i].get(k) {
+                if &got != want {
+                    return Err(format!("de-{}.tex, {} câu {}: đáp án trong tệp là «{got}», hedu-de.json ghi «{want}».", c.code, names[i], k + 1));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn made_of(tex: &str) -> Option<String> {
@@ -246,7 +431,7 @@ pub fn check_code_files(c: &CodeSpec, main_tex: &str, de_tex: &str) -> Result<()
     if got != want {
         return Err(format!("de-{}.tex có {:?} câu mỗi phần, hedu-de.json ghi {:?}.", c.code, got, want));
     }
-    Ok(())
+    check_answers(c, de_tex)
 }
 
 // ---------- dung lượng đĩa ----------
@@ -332,6 +517,10 @@ pub struct Plan<'a> {
     pub export_id: String,
     pub now: String,
     pub hedu_version: &'a str,
+    /// giới hạn dung lượng gói (mặc định `MAX_PACKAGE_BYTES`); chỉ đổi trong kiểm thử
+    pub max_bytes: u64,
+    /// CHỈ KIỂM THỬ: gọi ở đầu mỗi giai đoạn ghi ("nguon", "manifest", "dong", "kiem", "cong-bo"); trả Err để ép lỗi, hoặc đặt cờ huỷ rồi trả Ok
+    pub hook: Option<&'a dyn Fn(&str) -> Result<(), String>>,
 }
 
 fn sha_hex(b: &[u8]) -> String {
@@ -352,6 +541,7 @@ struct PkgWriter {
     z: zip::ZipWriter<fs::File>,
     entries: Vec<Entry>,
     total: u64,
+    max: u64,
     names: HashSet<String>,
 }
 
@@ -364,7 +554,7 @@ impl PkgWriter {
             return Err(format!("Tên mục «{path}» bị trùng trong gói."));
         }
         self.total += data.len() as u64;
-        if self.total > MAX_PACKAGE_BYTES {
+        if self.total > self.max {
             return Err("Gói vượt quá giới hạn dung lượng.".into());
         }
         self.z.start_file(path, opts()).map_err(|e| format!("Không ghi được ZIP: {e}"))?;
@@ -398,7 +588,27 @@ pub fn verify_zip(path: &Path, want: &[(String, u64, String)]) -> Result<(), Str
     Ok(())
 }
 
+/// Tệp tạm tự xoá khi ra khỏi phạm vi (thành công, lỗi `?`, huỷ, thậm chí panic) trừ khi đã `keep()`.
+/// Khai báo TRƯỚC bộ ghi ZIP để bộ ghi (giữ tay cầm tệp) được đóng trước khi xoá.
+struct TempFile {
+    path: PathBuf,
+    keep: bool,
+}
+impl TempFile {
+    fn new(path: PathBuf) -> Self {
+        TempFile { path, keep: false }
+    }
+}
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
 /// Dựng gói. `provider(mã, chế độ)` trả PDF của một mã. Chỉ khi MỌI mã thành công và ZIP đọc lại khớp mới đổi tên thành ZIP chính thức.
+/// Mọi đường thoát (thành công, lỗi, huỷ ở bất kỳ giai đoạn nào) đều đi qua `TempFile`: không bao giờ để `.part` mồ côi, ZIP dở dang hay đè bản cũ.
 pub fn build_package(
     plan: &Plan,
     dest_dir: &Path,
@@ -415,12 +625,20 @@ pub fn build_package(
         return Err("Thư mục đích phải là thư mục thật (không phải liên kết).".into());
     }
     let name = zip_name(&plan.slug, plan.spec.seed, &plan.export_id, plan.kind);
-    let part = dest_dir.join(format!("{name}.part"));
-    let file = fs::OpenOptions::new().write(true).create_new(true).open(&part).map_err(|e| format!("Không tạo được tệp tạm trong thư mục đích: {e}"))?;
-    let mut w = PkgWriter { z: zip::ZipWriter::new(file), entries: Vec::new(), total: 0, names: HashSet::new() };
-    let fail_cleanup = |part: &Path| {
-        let _ = fs::remove_file(part);
-    };
+    let part_path = dest_dir.join(format!("{name}.part"));
+    let file = fs::OpenOptions::new().write(true).create_new(true).open(&part_path).map_err(|e| format!("Không tạo được tệp tạm trong thư mục đích: {e}"))?;
+    let _part = TempFile::new(part_path.clone()); // khai báo trước `w`: w đóng tay cầm trước, rồi mới xoá
+    let mut w = PkgWriter { z: zip::ZipWriter::new(file), entries: Vec::new(), total: 0, max: plan.max_bytes, names: HashSet::new() };
+    let hook = |ph: &str| -> Result<(), String> { plan.hook.map(|h| h(ph)).unwrap_or(Ok(())) };
+    macro_rules! stop_if_cancelled {
+        ($when:expr) => {
+            if cancel.load(Ordering::SeqCst) {
+                out.cancelled = true;
+                out.message = format!("Đã dừng ({}). Không tạo ZIP (không có ZIP thiếu mã).", $when);
+                return Ok(out);
+            }
+        };
+    }
 
     let student = plan.kind == Kind::Student;
     let mut manifest_codes = Vec::new();
@@ -497,16 +715,21 @@ pub fn build_package(
     }
 
     if out.cancelled || any_fail || out.results.iter().any(|r| r.status != "ok") {
-        drop(w);
-        fail_cleanup(&part);
         out.message = if out.cancelled { "Đã dừng. Không tạo ZIP (không có ZIP thiếu mã).".into() } else { "Có mã đề lỗi nên KHÔNG tạo ZIP. Các mã đã dịch xong vẫn được giữ trong bộ đệm để thử lại.".into() };
         return Ok(out);
     }
 
     if !student {
-        for s in &plan.sources {
+        hook("nguon")?;
+        stop_if_cancelled!("khi ghi nguồn");
+        for (i, s) in plan.sources.iter().enumerate() {
+            if i % 16 == 15 {
+                stop_if_cancelled!("khi ghi nguồn");
+            }
             w.add(&format!("nguon/{}", s.path), &s.bytes)?;
         }
+        hook("manifest")?;
+        stop_if_cancelled!("trước khi ghi manifest");
         let files: Vec<_> = w.entries.iter().map(|e| json!({ "tep": e.path, "bytes": e.bytes, "sha256": e.sha256 })).collect();
         let manifest = json!({
             "v": 1, "loai": "giao-vien", "luotXuat": plan.export_id, "tao": plan.now, "hedu": plan.hedu_version,
@@ -518,18 +741,17 @@ pub fn build_package(
         w.add("manifest.json", &text)?;
     }
     let want: Vec<(String, u64, String)> = w.entries.iter().map(|e| (e.path.clone(), e.bytes, e.sha256.clone())).collect();
+    hook("dong")?;
     let PkgWriter { z, .. } = w;
-    let f = z.finish().map_err(|e| {
-        fail_cleanup(&part);
-        format!("Không hoàn tất được ZIP: {e}")
-    })?;
+    let f = z.finish().map_err(|e| format!("Không hoàn tất được ZIP: {e}"))?;
     f.sync_all().ok();
     drop(f);
-    if let Err(e) = verify_zip(&part, &want) {
-        fail_cleanup(&part);
-        return Err(format!("ZIP không qua bước đối chiếu nên đã bỏ: {e}"));
-    }
+    hook("kiem")?;
+    stop_if_cancelled!("khi kiểm ZIP");
+    verify_zip(&part_path, &want).map_err(|e| format!("ZIP không qua bước đối chiếu nên đã bỏ: {e}"))?;
     // Giữ chỗ tên cuối bằng create_new rồi đổi tên đè lên chính chỗ giữ của mình: không bao giờ ghi đè bản xuất cũ.
+    hook("cong-bo")?;
+    stop_if_cancelled!("ngay trước khi công bố");
     let mut final_path = dest_dir.join(&name);
     let mut n = 1;
     loop {
@@ -539,17 +761,12 @@ pub fn build_package(
                 n += 1;
                 final_path = dest_dir.join(name.replace(".zip", &format!("-{n}.zip")));
             }
-            Err(e) => {
-                fail_cleanup(&part);
-                return Err(format!("Không đặt được tên tệp ZIP: {e}"));
-            }
+            Err(e) => return Err(format!("Không đặt được tên tệp ZIP: {e}")),
         }
     }
-    if let Err(e) = fs::rename(&part, &final_path) {
-        let _ = fs::remove_file(&final_path);
-        fail_cleanup(&part);
-        return Err(format!("Không đổi tên được ZIP: {e}"));
-    }
+    let mut reserved = TempFile::new(final_path.clone()); // chỗ giữ tên: lỗi ở bước đổi tên thì xoá đúng tệp rỗng của mình
+    fs::rename(&part_path, &final_path).map_err(|e| format!("Không đổi tên được ZIP: {e}"))?;
+    reserved.keep = true;
     out.ok = true;
     out.zip_bytes = fs::metadata(&final_path).map(|m| m.len()).ok();
     out.zip_path = Some(final_path.to_string_lossy().into_owned());
@@ -798,6 +1015,8 @@ pub fn export_codes(root: &Path, id: &str, o: &ExportOpts, support_dir: &Option<
         export_id: eid,
         now: crate::examlib::iso_now(),
         hedu_version: env!("CARGO_PKG_VERSION"),
+        max_bytes: MAX_PACKAGE_BYTES,
+        hook: None,
     };
     let root2 = root.to_path_buf();
     let sup = support_dir.clone();
@@ -835,6 +1054,10 @@ pub struct BackfillOut {
     pub will_create: Vec<String>,
     pub skipped: Vec<String>,
     pub message: String,
+    /// những gì ĐÃ đối chiếu được từ dữ liệu trong dự án
+    pub verified: Vec<String>,
+    /// những gì CHƯA chứng minh được (nói thẳng, không khẳng định đã đối chiếu toàn bộ)
+    pub limits: Vec<String>,
 }
 
 /// `main-<mã>.tex` = phần đầu của `main.tex` đã lưu (đến hết \begin{document}) + `\input{de-<mã>}` + `\end{document}`; KHÔNG chèn bảng đáp án.
@@ -849,8 +1072,24 @@ pub fn derive_main(main_tex: &str, code: &str) -> Result<String, String> {
     Ok(s)
 }
 
-/// `apply=false`: chỉ kiểm và liệt kê (để hỏi xác nhận). `apply=true`: tạo các tệp còn thiếu bằng `create_text_file` (không bao giờ ghi đè).
+/// Dấu vân SHA-256 của tệp trên đĩa (đọc qua `open_inside`), so với dấu vân ghi trong sổ của đề.
+fn disk_matches_manifest(lib: &Path, id: &str, m: &crate::examlib::Manifest, rel: &str) -> Result<(), String> {
+    let rec = m.files.iter().find(|f| f.rel == rel).ok_or_else(|| format!("{rel} không có trong sổ của đề."))?;
+    let b = read_project_bytes(lib, id, rel)?;
+    if sha_hex(&b) != rec.sha256 {
+        return Err(format!("{rel} trên đĩa KHÔNG khớp dấu vân trong sổ của đề (có thể đã bị sửa ngoài HEdu). Từ chối bổ sung."));
+    }
+    Ok(())
+}
+
 pub fn backfill(lib: &Path, id: &str, apply: bool) -> Result<BackfillOut, String> {
+    backfill_with(lib, id, apply, None)
+}
+
+/// `apply=false`: chỉ kiểm và liệt kê (để hỏi xác nhận). `apply=true`: tạo các tệp còn thiếu TẤT CẢ HOẶC KHÔNG (`create_text_files_batch`): lỗi giữa chừng
+/// thì các tệp mới vừa tạo trong lượt này bị xoá, tệp vốn có không bị đụng. Không bao giờ sửa main.tex, de-<mã>.tex, hedu-de.json, UID hay ngân hàng.
+/// `fault` chỉ để kiểm thử (ép lỗi trước khi ghi tệp thứ i).
+pub fn backfill_with(lib: &Path, id: &str, apply: bool, fault: Option<&dyn Fn(usize) -> Result<(), String>>) -> Result<BackfillOut, String> {
     let info = codes_info(lib, id)?;
     if !info.has_spec {
         return Err(info.problems.first().cloned().unwrap_or_else(|| "Đề không có dữ liệu để bổ sung.".into()));
@@ -859,15 +1098,44 @@ pub fn backfill(lib: &Path, id: &str, apply: bool) -> Result<BackfillOut, String
     if m.status == "finalized" {
         return Err("Đề đã chốt nên không thêm tệp. Hãy sao chép đề rồi bổ sung trên bản sao.".into());
     }
+    let spec_text = read_project_text(lib, id, SPEC, 8 * 1024 * 1024)?;
+    let spec = parse_spec(&spec_text)?;
     let main_tex = read_project_text(lib, id, "main.tex", 1024 * 1024).map_err(|_| "Đề không có main.tex gốc để lấy khung.".to_string())?;
-    let spec = parse_spec(&read_project_text(lib, id, SPEC, 8 * 1024 * 1024)?)?;
     let mut out = BackfillOut::default();
+
+    // 1) KIỂM ĐẦY ĐỦ TẤT CẢ MÃ trước khi ghi bất cứ thứ gì
+    // 1a) mọi tệp đầu vào phải khớp dấu vân trong sổ của đề
+    for rel in ["main.tex", SPEC] {
+        disk_matches_manifest(lib, id, &m, rel)?;
+    }
+    for c in &spec.codes {
+        disk_matches_manifest(lib, id, &m, &format!("de-{}.tex", c.code))?;
+    }
+    out.verified.push(format!("Dấu vân SHA-256 của main.tex, hedu-de.json và {} tệp de-<mã>.tex khớp sổ của đề.", spec.codes.len()));
+    // 1b) dấu vân từng tệp do Tạo đề ghi lúc lưu (có ở đề lưu bằng bản mới): so với tệp hiện tại
+    let sv: serde_json::Value = serde_json::from_str(&spec_text).map_err(|e| e.to_string())?;
+    match sv.get("dauVanTep").and_then(|x| x.as_object()) {
+        Some(map) if !map.is_empty() => {
+            for (rel, want) in map {
+                let want = want.as_str().unwrap_or("");
+                if bad_rel(rel).is_some() || !(rel == "main.tex" || rel.starts_with("de-")) {
+                    continue; // chỉ đối chiếu tệp nguồn của đề; không đọc đường dẫn lạ từ metadata
+                }
+                let b = read_project_bytes(lib, id, rel).map_err(|e| format!("Không đối chiếu được {rel}: {e}"))?;
+                if sha_hex(&b) != want {
+                    return Err(format!("{rel} đã đổi so với lúc lưu từ Tạo đề (dấu vân trong hedu-de.json khác). Từ chối bổ sung vì không chứng minh được nội dung còn nguyên."));
+                }
+            }
+            out.verified.push("Dấu vân từng tệp nguồn khớp với dấu vân Tạo đề đã ghi lúc lưu (chưa bị sửa tay).".into());
+        }
+        _ => out.limits.push("Đề này lưu bằng bản trước nên hedu-de.json không có dấu vân từng tệp: KHÔNG chứng minh được các tệp chưa bị sửa tay kể từ lúc tạo (chỉ biết chúng khớp sổ của đề).".into()),
+    }
+    // 1c) mã, số câu từng phần và đáp án từng câu đọc từ chính tệp
     let mut todo: Vec<(String, String)> = Vec::new();
     for c in &spec.codes {
         let (mn, dn) = (format!("main-{}.tex", c.code), format!("de-{}.tex", c.code));
         let de = read_project_text(lib, id, &dn, 32 * 1024 * 1024).map_err(|e| format!("Không bổ sung được: {e}"))?;
         let want = derive_main(&main_tex, &c.code)?;
-        // đối chiếu snapshot đã lưu: mã, số câu từng phần (không lấy câu mới nhất của ngân hàng)
         check_code_files(c, &want, &de).map_err(|e| format!("Dữ liệu đã lưu không khớp, từ chối bổ sung: {e}"))?;
         if m.files.iter().any(|f| f.rel == mn) {
             let cur = read_project_text(lib, id, &mn, 1024 * 1024)?;
@@ -880,18 +1148,30 @@ pub fn backfill(lib: &Path, id: &str, apply: bool) -> Result<BackfillOut, String
             todo.push((mn, want));
         }
     }
+    out.verified.push("Mã đề, số câu từng phần và đáp án từng câu khớp \\True/\\shortans trong chính tệp de-<mã>.tex so với hedu-de.json.".into());
+    // 1d) sổ nguồn UID (nếu có): các câu đã chép phải còn nguyên văn
+    let src = crate::examsources::sources_status(lib, id).unwrap_or_default();
+    if src.is_empty() {
+        out.limits.push("Đề không có sổ nguồn UID nên không đối chiếu được nội dung từng câu với câu gốc đã chép.".into());
+    } else {
+        if let Some(bad) = src.iter().find(|x| x.state != "verbatim") {
+            return Err(format!("Câu nguồn «{}» không còn nguyên văn trong đề (trạng thái: {}). Từ chối bổ sung vì nội dung không còn khớp bản đã lưu.", bad.item.uid, bad.state));
+        }
+        out.verified.push(format!("{} câu trong sổ nguồn UID còn nguyên văn trong đề.", src.len()));
+        out.limits.push("Sổ nguồn chỉ ghi các câu của MÃ ĐẦU; UID của các mã còn lại không chứng minh được từ nội dung (chỉ khớp số câu và đáp án).".into());
+    }
+    out.limits.push("Khớp số câu và đáp án KHÔNG chứng minh nội dung từng câu giống bản đã lưu của ngân hàng (HEdu không đọc ngân hàng ở bước này, cố ý không lấy câu mới nhất).".into());
+
     out.will_create = todo.iter().map(|x| x.0.clone()).collect();
     if todo.is_empty() {
         out.message = "Không có tệp nào cần bổ sung.".into();
         return Ok(out);
     }
     if !apply {
-        out.message = format!("Sẽ tạo {} tệp mới, không sửa tệp nào đang có.", todo.len());
+        out.message = format!("Sẽ tạo {} tệp mới (tất cả hoặc không), không sửa tệp nào đang có.", todo.len());
         return Ok(out);
     }
-    for (rel, text) in &todo {
-        crate::examfiles::create_text_file(lib, id, rel, text)?;
-    }
+    crate::examfiles::create_text_files_batch(lib, id, &todo, fault)?;
     out.applied = true;
     out.message = format!("Đã tạo {} tệp mới.", todo.len());
     Ok(out)
@@ -939,3 +1219,7 @@ mod tests;
 #[cfg(test)]
 #[path = "examexport_backfill_tests.rs"]
 mod backfill_tests;
+
+#[cfg(test)]
+#[path = "examexport_hardening_tests.rs"]
+mod hardening_tests;

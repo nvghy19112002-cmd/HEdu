@@ -512,10 +512,22 @@ export function examFiles(info: ExamInfo, variants: readonly Variant[], o: { wit
   return files;
 }
 
+/** SHA-256 (hex) của nội dung tệp theo UTF-8: dấu vân các tệp nguồn của đề lúc lưu, để về sau biết tệp có bị sửa tay hay không. */
+export async function sha256Hex(text: string): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+/** Dấu vân của main.tex và các de-<mã>.tex (tệp quyết định nội dung đề). */
+export async function sourceHashes(files: readonly ExamFile[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const f of files) if (f.path === 'main.tex' || /^de-[A-Za-z0-9]+\.tex$/.test(f.path)) out[f.path] = await sha256Hex(f.text);
+  return out;
+}
+
 /** Bản ghi để tái hiện đề: ma trận, hạt giống, câu được chọn và đáp án từng mã. */
-export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string; exceptions?: Readonly<Record<string, { at: number; why: string }>>; locked?: Readonly<Record<string, readonly string[]>> }): string {
+export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string; exceptions?: Readonly<Record<string, { at: number; why: string }>>; locked?: Readonly<Record<string, readonly string[]>>; fileHashes?: Readonly<Record<string, string>> }): string {
   return JSON.stringify({
-    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diemToiDaMoiCau: o.scoring, chamDungSaiTheoSoYDung: DS_POINTS_CENTI, matran: o.rows, caKhoa: o.locked ?? {}, ngoaiLe: o.exceptions ?? {},
+    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diemToiDaMoiCau: o.scoring, chamDungSaiTheoSoYDung: DS_POINTS_CENTI, matran: o.rows, caKhoa: o.locked ?? {}, ngoaiLe: o.exceptions ?? {}, ...(o.fileHashes ? { dauVanTep: o.fileHashes } : {}),
     maDe: o.variants.map((v) => ({ ma: v.code, phan: Object.fromEntries(PARTS.map((p) => [p, v.parts[p].map((s) => ({ uid: s.q.uid, dapAn: s.key, tron: s.shuffled }))])) })),
   }, null, 2) + '\n';
 }
