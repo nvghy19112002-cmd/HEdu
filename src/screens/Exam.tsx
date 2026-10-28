@@ -6,6 +6,8 @@ import { QuestionView } from '../components/QuestionView';
 import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
 import { ExamExportDialog } from '../components/ExamExportDialog';
 import { ExamUsagePanel, useUsageScan } from '../components/ExamUsagePanel';
+import { ExamMatrixGrid } from '../components/ExamMatrixGrid';
+import { stockIndex } from '../lib/examgrid';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
@@ -164,6 +166,8 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [undoTpl, setUndoTpl] = useState<{ prev: Draft; note: string } | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string; sig: string } | null>(null);
   const [exportDlg, setExportDlg] = useState(false);
+  /** bước đang mở: 1 chọn câu · 2 kết quả · 3 cấu hình & xuất */
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const upd = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   useEffect(() => { saveDraft(d); }, [d]);
 
@@ -237,6 +241,8 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const defaultGrade = grades()[grades().length - 1] ?? 12;
   const broken = useMemo(() => brokenQuestions(questions), [questions]);
 
+  const gridStock = useMemo(() => stockIndex(questions, (q) => !exclude.has(q.uid) && !avoid.has(q.uid) && eligible(q, effOf, d.policy)), [questions, exclude, avoid, effOf, d.policy]);
+  const goStep = (n: 1 | 2 | 3) => { setStep(n); window.scrollTo({ top: 0 }); };
   const stockOf = (r: Row): number => questions.reduce((a, q) => a + (!exclude.has(q.uid) && !avoid.has(q.uid) && rowMatches(r, q) && eligible(q, effOf, d.policy) ? 1 : 0), 0);
   /** lý do chưa lưu/xuất được, hiện ngắn gọn cạnh nút Lưu */
   const blockers = [
@@ -341,18 +347,18 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
           <span className="crumbs">Tạo đề / Đề mới</span>
           <h1>Tạo đề từ Ngân hàng</h1>
         </div>
-        <nav className="te-steps" aria-label="Các bước">
-          <button type="button" onClick={() => jump(refMatrix)}><i>1</i>Ma trận</button>
-          <button type="button" onClick={() => jump(refSheet)}><i>2</i>Xem trước</button>
-          <button type="button" onClick={() => jump(refExport)}><i>3</i>Xuất</button>
+        <nav className="te-steps" role="tablist" aria-label="Các bước">
+          <button type="button" role="tab" aria-selected={step === 1} onClick={() => goStep(1)}><i>1</i>Chọn câu</button>
+          <button type="button" role="tab" aria-selected={step === 2} onClick={() => goStep(2)}><i>2</i>Kết quả{total > 0 ? ` (${total} câu)` : ''}</button>
+          <button type="button" role="tab" aria-selected={step === 3} onClick={() => goStep(3)}><i>3</i>Cấu hình &amp; Xuất</button>
         </nav>
       </header>
 
       <div className="body-row">
-        <div className="te-main">
-          <section className="mx-sec" aria-label="Ma trận đề" ref={refMatrix}>
+        <div className="te-main" hidden={step === 3}>
+          {step === 1 && <section className="mx-sec" aria-label="Ma trận đề" ref={refMatrix}>
             <div className="mx-head">
-              <h2>Ma trận đề</h2>
+              <h2>Chọn câu theo ma trận</h2>
               <button type="button" className="btn btn-sm" onClick={() => setTplDlg(true)} title="Lưu ma trận thành mẫu có tên, hoặc áp dụng mẫu đã lưu">Mẫu ma trận…</button>
               <div className="seg" role="group" aria-label="Câu đủ điều kiện">
                 {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
@@ -362,10 +368,12 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{broken.length > 0 && <span className="te-bad"> {broken.length} câu có ký tự điều khiển lạ trong LaTeX nên bị loại khỏi tập ứng viên (vẫn còn nguyên trong Ngân hàng).</span>}</p>
             <ExamUsagePanel scope={d.usage} onScope={(usage) => upd({ usage })} usage={usage} idx={idx} />
             {broken.length > 0 && <details className="te-broken"><summary>Xem câu bị loại và nguyên nhân</summary><ul>{broken.slice(0, 50).map((b) => <li key={b.uid}>Câu #{b.seq} · <code>{b.uid}</code> · {b.why}</li>)}{broken.length > 50 && <li>… và {broken.length - 50} câu nữa</li>}</ul></details>}
+            <ExamMatrixGrid tax={tax} stock={gridStock} rows={d.rows} defaultGrade={defaultGrade} onChange={(next) => upd({ rows: next, locked: Object.fromEntries(Object.entries(d.locked).filter(([k]) => next.some((r) => r.id === k))) })} />
+            <h3 className="mx-sub">Ma trận đã chọn <span className="te-note">gồm các ô đã nhập ở lưới và các dòng theo chương/lớp</span></h3>
             {rowsEmpty && !adding ? (
               <div className="te-empty">
                 <b>Ma trận đang trống.</b>
-                <span>Mỗi dòng là một yêu cầu, ví dụ “4 câu trắc nghiệm Nhận biết ở Chương 1”. Bắt đầu từ mẫu HEdu (12 trắc nghiệm, 4 đúng/sai, 6 trả lời ngắn; chỉ là gợi ý, không phải quy định của Bộ) hoặc tự thêm từng dòng.</span>
+                <span>Gõ số câu vào các ô ở lưới phía trên, hoặc lấy câu rộng hơn theo cả chương/cả lớp: dùng mẫu HEdu (12 trắc nghiệm, 4 đúng/sai, 6 trả lời ngắn; chỉ là gợi ý, không phải quy định của Bộ) hay tự thêm dòng.</span>
                 <div className="te-empty-acts">
                   <button type="button" className="btn btn-dark" onClick={() => upd({ rows: template2025(defaultGrade) })}>Dùng mẫu HEdu 12/4/6 cho lớp {defaultGrade}</button>
                   <button type="button" className="btn" onClick={() => setAdding(true)}><IcPlus />Tự thêm dòng</button>
@@ -440,7 +448,8 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                   <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Xóa ma trận</button>
                 </div>
               )}
-          </section>
+            <div className="te-next"><button type="button" className="btn btn-dark" disabled={total === 0} onClick={() => goStep(2)}>Tiếp: Xem kết quả →</button></div>
+          </section>}
 
           {(usageBlocked || lockedUsedList.length > 0 || missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
             <section className="te-warn" aria-label="Lưu ý về đề" role="status" ref={refWarn}>
@@ -482,6 +491,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             </section>
           )}
 
+          {step === 2 && <>
           <section className="sheet-wrap" aria-label="Xem trước trang đề" ref={refSheet}>
             <div className="te-sheet-bar">
               <div className="codes" role="group" aria-label="Xem mã đề">
@@ -549,9 +559,14 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               </div>
             </section>
           )}
+          <div className="te-next">
+            <button type="button" className="btn" onClick={() => goStep(1)}>← Quay lại chọn câu</button>
+            <button type="button" className="btn btn-dark" onClick={() => goStep(3)}>Tiếp: Cấu hình &amp; Xuất →</button>
+          </div>
+          </>}
         </div>
 
-        <aside className="aside te-aside" aria-label="Thiết lập đề">
+        <aside className={`aside te-aside${step === 3 ? ' is-wide' : ''}`} aria-label="Thiết lập đề">
           <div className="panel te-sum" aria-live="polite">
             <div className="te-big"><b>{total}</b><span>câu</span><b>{fmtScore(centi)}</b><span>điểm</span></div>
             <div className="te-parts">{PARTS.filter((p) => counts[p] > 0).map((p) => <span key={p} className="code-tag">{PART_NAME[p].split(' · ')[0]}: {counts[p]}</span>)}</div>
@@ -563,7 +578,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             )}
           </div>
 
-          <div className="panel">
+          {step === 3 && <div className="panel">
             <h2>Thông tin đề</h2>
             <label className="lbl">Sở / phòng giáo dục<input className="inp" type="text" placeholder="SỞ GD&ĐT …" value={d.info.dept} onChange={(e) => upd({ info: { ...d.info, dept: e.target.value } })} /></label>
             <label className="lbl">Trường<input className="inp" type="text" placeholder="TRƯỜNG THPT …" value={d.info.school} onChange={(e) => upd({ info: { ...d.info, school: e.target.value } })} /></label>
@@ -574,9 +589,9 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               <label className="lbl">Thời gian (phút)<input className="inp" type="number" min={1} max={600} value={d.info.minutes} onChange={(e) => upd({ info: { ...d.info, minutes: Math.max(1, Math.min(600, Number(e.target.value) || 1)) } })} /></label>
             </div>
             <label className="lbl">Ghi chú dưới thời gian<input className="inp" type="text" placeholder="(Đề thi có … trang)" value={d.info.note} onChange={(e) => upd({ info: { ...d.info, note: e.target.value } })} /></label>
-          </div>
+          </div>}
 
-          <div className="panel" style={{ gap: 12 }}>
+          {step === 3 && <div className="panel" style={{ gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <h2>Số mã đề</h2>
               <div className="stepper">
@@ -594,9 +609,11 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={d.shuffleOptions} onChange={(e) => upd({ shuffleOptions: e.target.checked })} /></label>
             <label className="sw">Tạo tệp đáp án cho giáo viên (không nằm trong PDF đề)<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
             <p className="te-note">Mã đầu giữ nguyên thứ tự và phương án gốc; các mã sau được trộn. Câu được chép nguyên văn.</p>
-          </div>
+          </div>}
 
           <div className="te-export" ref={refExport}>
+            {step !== 3 && <button type="button" className="btn btn-dark" style={{ height: 44 }} onClick={() => goStep(step === 1 ? 2 : 3)}>{step === 1 ? 'Tiếp: Xem kết quả →' : 'Tiếp: Cấu hình & Xuất →'}</button>}
+            {step === 3 && <>
             <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canExport || busy || !desktop} onClick={() => { void saveToLibrary(); }}>{busy ? 'Đang lưu…' : 'Lưu vào Thư viện đề'}</button>
             <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'PDF từng mã đề và gói ZIP giáo viên/học sinh' : 'Lưu vào Thư viện đề trước (đề đã đổi sau lần lưu gần nhất)'} onClick={() => setExportDlg(true)}>Xuất PDF từng mã / ZIP…</button>
             {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
@@ -604,8 +621,9 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
               <button type="button" className="btn btn-ghost" style={{ height: 44 }} disabled title="Xuất Word sẽ làm sau">Xuất Word · sắp có</button>
             </div>
+            </>}
             {blockers.length > 0
-              ? <p className="te-ready bad" role="status"><IcAlert size={14} />Chưa lưu được: {blockers.join(' · ')}.{total > 0 && <> <button type="button" className="linkbtn" onClick={() => jump(refWarn)}>Xem chi tiết</button></>}</p>
+              ? <p className="te-ready bad" role="status"><IcAlert size={14} />Chưa lưu được: {blockers.join(' · ')}.{total > 0 && <> <button type="button" className="linkbtn" onClick={() => { if (step === 3) setStep(1); setTimeout(() => jump(refWarn), 50); }}>Xem chi tiết</button></>}</p>
               : <p className="te-ready ok" role="status"><IcCheck />Sẵn sàng lưu: {total} câu, {d.count} mã đề.</p>}
           </div>
         </aside>
