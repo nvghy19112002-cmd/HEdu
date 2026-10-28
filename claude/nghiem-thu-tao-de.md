@@ -77,3 +77,8 @@ Nút **Mẫu ma trận…** ở màn Tạo đề: lưu ma trận hiện tại th
 ### Giới hạn
 - “Xuất ra JSON” (trao đổi sang cấu trúc cũ) không chứa mẫu: đó không phải sao lưu đầy đủ. Dùng bản chụp `.db` hoặc file sao lưu JSON.
 - Mỗi lần đổi mẫu ghi lại cả tệp mẫu (kho rất lớn như 500 mẫu × 200 dòng ≈ 29 MB mất khoảng 0,2 giây trên máy kiểm thử; số đo này không phải bảo đảm hiệu năng). Giới hạn: 500 mẫu, 200 dòng mỗi mẫu.
+
+## PR 4B — Tránh câu đã dùng (chưa phát hành)
+Ô **“Tránh câu đã dùng trong…”** ở màn Tạo đề, mặc định **tắt**. Chỉ đọc: quét `hedu-de.json` và `.hedu/sources.json` của các đề đang có trong Thư viện (không kho riêng; không ghi gì vào ngân hàng/UID/ID6/LaTeX). Đề trong Thùng rác không tính, khôi phục thì tính lại. Đề không có UID đáng tin (vd nhập tay `.tex`) được báo “chưa thể đối chiếu đầy đủ”, không coi là chưa dùng. Phạm vi: thư mục ảo (gồm thư mục con), năm học, loại đề, đề chọn riêng (cùng nhóm “hoặc”, khác nhóm “và”, đề chọn riêng cộng thêm). Bộ lọc chạy **trước** khi phân bổ; thiếu câu thì báo số câu thiếu và số ứng viên bị loại, kèm nút **Cho phép dùng lại** do giáo viên bấm (ghi `tranhCauDaDung` vào `hedu-de.json`). Câu giáo viên đã khóa tay vẫn giữ. Chưa làm: nhãn “đã sửa sau khi dùng” (D5: chưa đủ căn cứ nên không hiển thị); bộ nhớ đệm quét theo `updatedAt` (quét 300 đề giả lập vài giây, số đo kiểm thử, không phải bảo đảm hiệu năng).
+- [ ] Bật ô, chọn một thư mục/năm học: số đề và câu đối chiếu đúng; đưa một đề vào Thùng rác rồi mở lại màn Tạo đề: câu của đề đó không còn bị loại; khôi phục: bị loại lại.
+- [ ] Ma trận lớn hơn số câu chưa dùng: báo thiếu + số ứng viên bị loại; không xuất được cho tới khi bấm “Cho phép dùng lại” (có hỏi xác nhận).

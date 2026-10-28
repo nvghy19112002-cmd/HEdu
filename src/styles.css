@@ -1405,3 +1405,11 @@ a { color: var(--accent); }
 .te-broken { margin: 0 20px 10px; font-size: 13px; color: var(--ink-2); }
 .te-broken ul { margin: 6px 0 0 18px; padding: 0; }
 .te-scope .te-flag { display: inline-block; margin: 2px 0 0 8px; }
+
+/* PR 4B: tránh câu đã dùng */
+.us-panel { margin: 0 20px 10px; padding: 10px 12px; border: 1px solid var(--line, #d8dde3); border-radius: 8px; font-size: 13px; }
+.us-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.us-group { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.us-group legend { font-weight: 600; padding: 0; margin-right: 8px; float: left; }
+.us-chip { display: inline-flex; gap: 4px; align-items: center; }
+.us-list { margin: 4px 0 0; padding-left: 18px; max-height: 180px; overflow: auto; }
