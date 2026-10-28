@@ -125,6 +125,8 @@ export interface Facets {
   chapter: Map<string, number>;
   lesson: Map<string, number>;
   form: Map<string, number>;
+  /** số câu của MỌI mục trong cây (khóa banktree.nodeKey), theo chữ tìm và bộ lọc thuộc tính nhưng KHÔNG theo mục đang chọn — cho cây thư mục */
+  node: Map<string, number>;
   level: Map<Level, number>;
   type: Map<QType, number>;
   figure: Record<'yes' | 'no' | 'unknown', number>;
@@ -145,7 +147,7 @@ const B_LEVEL = 1, B_TYPE = 2, B_FIG = 4, B_REV = 8, B_TAG = 16;
  */
 export function computeFacets(questions: readonly Question[], f: BankFilters, ctx: FilterCtx): Facets {
   const r: Facets = {
-    list: [], scoped: 0, inScope: 0, grade: new Map(), gradeAll: 0, branch: new Map(), chapter: new Map(), lesson: new Map(), form: new Map(),
+    list: [], scoped: 0, inScope: 0, grade: new Map(), gradeAll: 0, branch: new Map(), chapter: new Map(), lesson: new Map(), form: new Map(), node: new Map(),
     level: new Map(), type: new Map(), figure: { yes: 0, no: 0, unknown: 0 }, review: { unreviewed: 0, needs_fix: 0, approved: 0 }, tag: new Map(), tagAll: 0,
   };
   const lv = levelsActive(f), ty = typesActive(f);
@@ -184,6 +186,11 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
       if (prefix >= 2 && q.chapterId) inc(r.chapter, q.chapterId);
       if (prefix >= 3 && q.lessonId) inc(r.lesson, q.lessonId);
       if (prefix >= 4 && q.formId) inc(r.form, q.formId);
+      if (gOfQ) inc(r.node, `g:${gOfQ}`);
+      if (brOfQ) inc(r.node, `b:${brOfQ}`);
+      if (q.chapterId) inc(r.node, `c:${q.chapterId}`);
+      if (q.lessonId) inc(r.node, `l:${q.lessonId}`);
+      if (q.formId) inc(r.node, `f:${q.formId}`);
     }
     if (posOk) {
       if ((fails & ~B_LEVEL) === 0) inc(r.level, q.level);

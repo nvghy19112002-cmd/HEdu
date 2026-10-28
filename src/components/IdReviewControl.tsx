@@ -43,7 +43,7 @@ export function IdReviewControl({ q, eff }: { q: Question; eff: Effective }) {
   };
 
   return (
-    <div className="rv" role="group" aria-label="Xác minh Dạng và mức độ">
+    <div className="rv" role="group" aria-label="Xác minh Dạng và mức độ" title="Xác nhận Dạng nghĩa là thầy/cô đã tự xem câu và thấy Dạng này đúng; câu sẽ được dùng làm căn cứ kiểm chứng cho câu mới. Đổi Dạng, đổi nội dung → về “Chưa xác minh”.">
       <span className="rv-l">Dạng</span>
       <span className={`rv-chip ${cls(eff.form)}`} title={eff.src ? `Nguồn: ${SOURCE_LABEL[eff.src]}` : 'Chưa có xác minh nào'}>{FORM_STATE_LABEL[eff.form]}</span>
       <span className="rv-l">Mức độ</span>
@@ -56,7 +56,6 @@ export function IdReviewControl({ q, eff }: { q: Question; eff: Effective }) {
         <button type="button" disabled={busy || (eff.form === 'chua' && eff.level === 'chua' && !eff.unclassified)} onClick={() => void apply({ form: 'chua', level: 'chua' }, 'Đã bỏ xác nhận')}>Bỏ xác nhận</button>
       </div>
       {msg && <span className={`rv-msg${msg.ok ? '' : ' bad'}`} role="status">{msg.text}</span>}
-      <small className="rv-note">Xác nhận Dạng nghĩa là thầy/cô đã tự xem câu và thấy Dạng này đúng; câu sẽ được dùng làm căn cứ kiểm chứng cho câu mới. Đổi Dạng, đổi nội dung → về “Chưa xác minh”.</small>
     </div>
   );
 }
