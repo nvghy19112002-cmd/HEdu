@@ -1,3 +1,25 @@
+## Có gì mới trong beta.36 (kênh beta): Tạo đề và xuất đề
+Gồm PR #134–#143 (so với beta.35). Không đổi schema ngân hàng (3), ID6, UID, LaTeX/TikZ gốc của câu. **Chưa nghiệm thu thủ công trên Windows thật** (chủ dự án quyết định phát hành beta trước; danh sách thử: `claude/tong-nghiem-thu-beta.md`). Đây là bản BETA, không thay bản chính thức.
+
+**Điều chính cần biết**
+- **Tạo đề từ Ngân hàng** theo ba bước: *Chọn câu* → *Kết quả* → *Cấu hình & Xuất*.
+- **Lưới chọn câu theo Dạng × mức độ (N/H/V/C)**: gõ số câu vào ô, cạnh ô có số câu đang có trong kho; lọc theo lớp, loại câu, tìm Dạng, “Chỉ hiện đã chọn”. Vẫn thêm được dòng theo cả chương/cả lớp; ma trận đã chọn nhóm theo Phần I–IV, có số câu và điểm.
+- **Nhiều mã đề**: trộn câu và phương án (mã đầu giữ nguyên), đáp án theo phép hoán vị, bảng đáp án các mã; khóa câu, đổi câu, ngẫu nhiên lại.
+- **Mẫu ma trận**: lưu, áp dụng (thay/thêm, hoàn tác), đổi tên, nhân bản, xóa; có trong bản chụp `.db` và sao lưu JSON.
+- **Tránh câu đã dùng** (mặc định tắt): theo thư mục, năm học, loại đề hoặc đề chọn riêng; đề trong Thùng rác không tính. Thiếu câu thì báo rõ, chỉ dùng lại khi thầy/cô xác nhận; đề nhập tay không có UID được báo “chưa thể đối chiếu đầy đủ”.
+- **Xuất PDF từng mã và gói ZIP**: gói học sinh chỉ có PDF đề (không đáp án, lời giải); gói giáo viên có PDF đề, PDF lời giải (tùy chọn), CSV đáp án từng mã, **Excel đáp án** (trang “Theo mã đề” và “Theo câu”), nguồn LaTeX kèm đủ gói khai báo để biên dịch lại, `manifest.json`. Có nút **“Chỉ xuất Excel đáp án”**.
+- **Gói `ex_test` nâng lên 3.3.4** (cùng bản bộ đề MathHub dùng), kèm vá tiêu đề “Lời giải” trong `shared-content.tex`. Hình và PDF đã dịch sẽ được dịch lại một lần.
+
+**Đã kiểm tự động (không thay cho nghiệm thu)**
+- Test giao diện và Rust (204), CI Windows; biên dịch thật bằng TeX Live 2026: đề nhiều mã, bản Đề không có chữ lời giải trong PDF, gói ZIP, Excel mở lại đúng.
+- App thử riêng (`vn.hedu.app.thu`, dữ liệu giả lập) cho phần tránh câu đã dùng.
+
+**Chưa làm / giới hạn**
+- Xuất Word, Excel theo mẫu riêng của TNMaker/AZOTA/OLM/SmartTest, mã QR đáp án, phiếu tô, Excel ma trận kèm đặc tả, trình chiếu, thi online: chưa làm.
+- Chưa có nhãn “câu đã sửa sau khi dùng”.
+- Hộp xác nhận khi đưa câu chưa duyệt vào đề (OK / Hủy / “Cần sửa”) và việc mở từng PDF học sinh chưa được thử tay trên máy thật.
+- **Trước khi nâng cấp:** nên dùng Cài đặt → Lưu trữ SQLite → “Lưu bản chụp .db…”. HEdu cũng tự sao lưu trước khi cập nhật. Bản này thêm tệp phụ lưu mẫu ma trận; chưa thử quay về beta.35 trên dữ liệu có mẫu, nên nếu cần quay lại nguyên trạng hãy khôi phục từ bản chụp `.db` chụp trước khi nâng cấp. Bộ cài beta.35 và beta.34 vẫn còn trên trang Releases.
+
 ## Có gì mới trong beta.35 (kênh beta): xác minh ID đáng tin
 Gồm PR #128–#132 (so với beta.34; commit trên main `ada2f89`). Không đổi schema ngân hàng (3), cấu trúc ID6, UID, LaTeX/TikZ gốc, cây chương trình, thuật toán dò trùng. **Chưa nghiệm thu máy Windows thật.** Đây là bản BETA, không thay bản chính thức.
 
