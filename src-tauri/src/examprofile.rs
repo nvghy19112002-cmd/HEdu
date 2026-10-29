@@ -295,6 +295,25 @@ mod tests {
     }
 
     #[test]
+    fn nhan_dien_cau_truc_hedu_sty() {
+        // từ 10/2026: khaibaochung.tex chỉ \usepackage{hedu}; hedu.sty \input hedu-khaibao.tex (nơi có dòng ex_test)
+        let (d, rels) = proj("hedusty", &[
+            ("main.tex", "\\documentclass{book}\n\\input{khaibaochung}\n%\\anloigiai\n\\begin{document}\n\\end{document}\n"),
+            ("khaibaochung.tex", "% nap goi\n\\usepackage{hedu}\n"),
+            ("hedu.sty", "\\ProvidesPackage{hedu}\n\\makeatother\n\\input{hedu-khaibao.tex}\n\\makeatletter\n\\IfFileExists{hedu-goithem.tex}{\\input{hedu-goithem.tex}}{}\n"),
+            ("hedu-khaibao.tex", "\\usepackage{amsmath}\n\\usepackage[loigiai]{ex_test}\n%\\usepackage[dethi]{ex_test}\n"),
+            ("hedu-goithem.tex", "\\makeatletter\n\\@ifpackageloaded{siunitx}{}{\\usepackage{siunitx}}\n\\makeatother\n"),
+        ]);
+        let p = detect(&d, &rels);
+        assert_eq!((p.available, p.file.as_deref(), p.line), (true, Some("hedu-khaibao.tex"), Some(2)), "{p:?}");
+        let de = derive(&d, &rels, MODE_DE).unwrap();
+        assert_eq!(de.files.len(), 1);
+        assert_eq!(de.files[0].0, "hedu-khaibao.tex");
+        assert!(de.files[0].1.contains("\\usepackage[dethi]{ex_test}") && !de.files[0].1.contains("[loigiai]{ex_test}"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
     fn che_do_de_va_loi_giai_chi_doi_dung_mot_cho_va_khong_dung_nguon() {
         let src = "\\documentclass{book}\r\n\\usepackage[book, loigiai ,color]{ex_test}\r\n\\begin{document}\r\nX\r\n\\end{document}\r\n";
         let (d, rels) = proj("modes", &[("main.tex", src)]);

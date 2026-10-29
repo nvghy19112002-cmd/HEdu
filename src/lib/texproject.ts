@@ -7,6 +7,7 @@ import { latexForExport } from './idsync';
 import type { Question, Taxonomy } from './types';
 import { extractDecls, evidenceOf, fileOf, type DeclKind } from './packages';
 import { KHAIBAOCHUNG_TEX } from './texproject.template';
+import { heduFiles } from './hedusty';
 
 /** Tệp đi kèm do app Windows chép vào thư mục (khớp danh sách nhúng trong src-tauri/src/support.rs). */
 export const BUNDLED_FILES = ['ex_test.sty', 'ex_tkz-euclide.sty', 'tkz-linknodes.sty', 'tkz-tab-vn.sty', 'twemojis.sty', 'shared-content.tex'] as const;
@@ -82,9 +83,9 @@ export function requirementsMd(qs: readonly Question[], sharedContent: string, f
   L.push(`# Cần gì để biên dịch thư mục "${folder}"`, '');
   L.push(`Bộ này có ${qs.length} câu hỏi (file \`cauhoi.tex\`, chép nguyên văn từ ngân hàng HEdu).`, '');
   L.push('## Cách biên dịch', '');
-  L.push('1. Cài TeX Live (hoặc MiKTeX) đầy đủ.', '2. Mở thư mục này, biên dịch file `main.tex` bằng **pdfLaTeX**: `pdflatex main.tex`.', '3. Chạy **2 lần** để số trang và tham chiếu đúng.', '4. Muốn in cả lời giải: bỏ dấu `%` trước `\\anloigiai` trong `main.tex`; muốn đề thuần: đổi `[loigiai]` thành `[dethi]` trong `khaibaochung.tex`.', '');
+  L.push('1. Cài TeX Live (hoặc MiKTeX) đầy đủ.', '2. Mở thư mục này, biên dịch file `main.tex` bằng **pdfLaTeX**: `pdflatex main.tex`.', '3. Chạy **2 lần** để số trang và tham chiếu đúng.', '4. Muốn in cả lời giải: bỏ dấu `%` trước `\\anloigiai` trong `main.tex`; muốn đề thuần: đổi `[loigiai]` thành `[dethi]` trong `hedu-khaibao.tex`.', '');
   L.push('## Các file trong thư mục', '');
-  L.push('- `main.tex` — file gốc để biên dịch.', '- `khaibaochung.tex` — khai báo chung (gói, khổ giấy, tiêu đề, đầu/chân trang). Thông tin giáo viên ở đầu/chân trang là chỗ trống, thầy/cô tự điền.', '- `cauhoi.tex` — các câu hỏi, chép nguyên văn từ ngân hàng.', '- `shared-content.tex` — gói dùng chung cho nội dung câu hỏi (TikZ, pgfplots, hộp màu…).');
+  L.push('- `main.tex` — file gốc để biên dịch.', '- `khaibaochung.tex` — nạp gói `hedu.sty` (khai báo đề thi của HEdu).', '- `hedu-khaibao.tex` — khai báo chung (gói, khổ giấy, tiêu đề, đầu/chân trang). Thông tin giáo viên ở đầu/chân trang là chỗ trống, thầy/cô tự điền.', '- `hedu-goithem.tex` — gói riêng mà các câu hỏi của bộ này cần (HEdu tự sinh; thiếu gói thì thêm \\usepackage vào đây).', '- `cauhoi.tex` — các câu hỏi, chép nguyên văn từ ngân hàng.', '- `shared-content.tex` — gói dùng chung cho nội dung câu hỏi (TikZ, pgfplots, hộp màu…).');
   L.push(`- ${BUNDLED_FILES.filter((f) => f.endsWith('.sty')).map((f) => '`' + f + '`').join(', ')} — gói riêng đi kèm, **để cùng thư mục với main.tex**, không cần cài.`, '');
   L.push('## Gói cần có sẵn trong TeX Live', '');
   L.push('Bản TeX Live đầy đủ đã có hết. Nếu dùng bản rút gọn, cài thêm bằng lệnh:', '');
@@ -109,7 +110,7 @@ export function requirementsMd(qs: readonly Question[], sharedContent: string, f
 export function buildProject(qs: readonly Question[], sharedContent: string, folder: string): ProjectFile[] {
   return [
     { path: 'main.tex', text: MAIN_TEX },
-    { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
+    ...heduFiles(qs, sharedContent),
     { path: 'cauhoi.tex', text: verbatimTex(qs) },
     { path: 'CAN-CO-GI.md', text: requirementsMd(qs, sharedContent, folder) },
   ];
