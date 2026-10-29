@@ -1,3 +1,17 @@
+## Có gì mới trong beta.38 (kênh beta): chuẩn bị nhập hàng loạt
+Gồm PR #148–#149 (so với beta.37). Không đổi schema ngân hàng, ID6, UID hay LaTeX gốc của câu. **Chưa thử với tệp thật trên Windows thật.** Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Duyệt theo lô nguồn tin cậy** (màn Nhập liệu, bước rà soát): bật ô “Lô từ nguồn đã kiểm” và xác nhận một lần. HEdu chỉ đánh dấu “Đã duyệt” cho câu đủ điều kiện: không trùng hay mâu thuẫn đáp án, mã không lỗi, xem trước dựng chuẩn, đọc chắc đáp án, ID hợp lệ không bất đồng. Câu khác giữ “Chưa kiểm tra”. Câu được duyệt mang nhãn “Duyệt theo lô: <tên lô>” để lọc xem lại hoặc đưa cả lô về “Chưa kiểm tra”.
+- **Bảng mã**: tệp UTF-16 đọc được ngay; tệp Windows-1258 hiện chữ mẫu, thầy/cô bấm “Chữ đúng, nhập tệp này” mới nhập; tệp TCVN3/VNI được hướng dẫn chuyển sang UTF-8 bằng Unikey.
+- **Tự chia lô**: chọn quá 5.000 câu thì bấm “Chia tự động thành N lô” (không tách tệp); nhập xong lô này bấm “Tiếp lô sau”. Mỗi lô được rà soát lại và có điểm khôi phục riêng.
+- **Xem trước** dựng đúng `\centerline`, `multicols`; bỏ qua `\allowdisplaybreaks` (trước đây báo “Chưa hiểu”). Trên 1.500 câu mẫu: lỗi xem trước 30 → 0.
+
+**Lời khuyên khi nhập**
+- Lưu bản chụp `.db` trước mỗi đợt; nhập thử lô nhỏ (khoảng 200 câu) trước lô lớn.
+- Xử lý hết các câu “Mâu thuẫn đáp án” mà màn Nhập liệu báo.
+- Danh sách lô chỉ giữ trong phiên đang mở; tắt app giữa chừng thì chọn lại các tệp chưa nhập.
+
 ## Có gì mới trong beta.37 (kênh beta): màn Ngân hàng mới
 Gồm PR #145–#146 (so với beta.36). Chỉ đổi giao diện; không đổi dữ liệu ngân hàng, ID6, UID, LaTeX hay trạng thái duyệt/xác minh. **Chưa nghiệm thu thủ công trên Windows thật.** Đây là bản BETA.
 
