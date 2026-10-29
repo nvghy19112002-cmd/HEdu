@@ -21,7 +21,7 @@ import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
 import { KHAIBAOCHUNG_TEX } from '../lib/texproject.template';
 import { invoke, isDesktop } from '../lib/platform';
-import { plainSnippet } from '../lib/snippet';
+import { stemSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
 import { LEVELS, LEVEL_LABEL, TYPES, TYPE_LABEL, type Level, type QType, type Question } from '../lib/types';
 
@@ -387,7 +387,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                           {candidates.length === 0 ? <p className="te-note">Không còn câu nào khác khớp dòng này ở mức “{POLICY_SHORT[d.policy]}”.</p> : (
                             <ul>
                               {candidates.slice(0, 40).map((c) => (
-                                <li key={c.uid}><span className="te-snip">{plainSnippet(c.latex, 120)}{usedAtLabel(idx, c.uid) && <em className="te-note"> · Đã dùng ở: {usedAtLabel(idx, c.uid)} (bạn đã cho phép dùng lại)</em>}</span><button type="button" className="btn btn-sm" onClick={() => replace(s.q.uid, c.uid)}>Dùng câu này</button></li>
+                                <li key={c.uid}><span className="te-snip">{stemSnippet(c.latex, 140)}{usedAtLabel(idx, c.uid) && <em className="te-note"> · Đã dùng ở: {usedAtLabel(idx, c.uid)} (bạn đã cho phép dùng lại)</em>}</span><button type="button" className="btn btn-sm" onClick={() => replace(s.q.uid, c.uid)}>Dùng câu này</button></li>
                               ))}
                               {candidates.length > 40 && <li className="te-note">Còn {candidates.length - 40} câu nữa; thu hẹp dòng ma trận để xem.</li>}
                             </ul>

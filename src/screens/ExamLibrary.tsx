@@ -15,6 +15,7 @@ import { examCompileAll, MODE_NOTE, modeLabel, type ExamMode, type GoodInfo } fr
 import { allFolders } from '../lib/examfacets';
 import { CAT_LABEL, catOfType, examCounts, examTrail, examTree, filterByNode, nodeTrail, placementOf, type ExamCat } from '../lib/examtree';
 import { isDesktop } from '../lib/platform';
+import { scanUsage } from '../lib/examusage';
 import {
   bundleFolderName, chooseProjectFolder, chooseTexFile, dateText, describeScan, examBundleExport, examBundleImport, examCreate, examDuplicate, examGet, examImport, examList, examMetaUpdate,
   examReveal, examScan, examTrash, examVerify, filterExams, formatBytes, needsMainChoice, SORT_LABEL, sortExams, STATUS_LABEL,
@@ -88,6 +89,9 @@ export function ExamLibraryScreen() {
     catch (e) { setLoad('error'); setErr(msg(e)); }
   }, []);
   useEffect(() => { if (desktop) void reload(); }, [desktop, reload]);
+  /** số câu của từng đề (đề tạo bằng Tạo đề có danh sách câu nguồn) */
+  const [qn, setQn] = useState<ReadonlyMap<string, number>>(new Map());
+  useEffect(() => { if (!desktop || !items.length) return; scanUsage().then((u) => setQn(new Map(u.projects.map((p) => [p.id, p.uids.length] as const)))).catch(() => undefined); }, [desktop, items]);
 
   const loadDetail = useCallback((id: string) => {
     examGet(id).then(setDetail).catch((e) => toast(`Không đọc được đề: ${msg(e)}`));
@@ -210,7 +214,7 @@ export function ExamLibraryScreen() {
         <span className="xc-where">{at.length ? at.filter((x) => !HIDE_IN_WHERE.has(x)).join(' › ') : 'Chưa xếp lớp'}{e.folder ? ` · 📁 ${e.folder}` : ''}</span>
         <span className="xc-foot">
           <span title="Năm học">{e.metadata.schoolYear ?? '—'}</span>
-          <span>{e.fileCount} tệp · {formatBytes(e.totalBytes)}</span>
+          <span title={`${e.fileCount} tệp · ${formatBytes(e.totalBytes)}`}>{qn.get(e.id) ? `${qn.get(e.id)} câu` : e.fileCount > 1 ? `${e.fileCount} tệp` : 'Đề soạn tay'}</span>
           <span>Sửa {dateText(e.updatedAt).split(' ')[0]}</span>
         </span>
         {flags.length > 0 && <span className="xc-flag">⚠ {flags.join(' · ')}</span>}
@@ -381,7 +385,7 @@ export function ExamLibraryScreen() {
           <b className="xm-name">{detail.name}</b>
           <span className={`xc-st st-${detail.status}`}>{STATUS_LABEL[detail.status]}</span>
         </> : <b>Đang đọc…</b>} foot={detail && <>
-          <button type="button" className="btn btn-sm" disabled={busy} onClick={() => setAsk('trash')}>Chuyển vào Thùng rác…</button>
+          <button type="button" className="btn btn-sm btn-danger-soft" disabled={busy} onClick={() => setAsk('trash')}>Chuyển vào Thùng rác…</button>
           <span className="qm-nav">
             <button type="button" className="btn btn-sm" disabled={busy} onClick={() => activeId && void examReveal(activeId).catch((e) => toast(msg(e)))}>Hiện trong Explorer</button>
             <button type="button" className="btn btn-sm" disabled={busy} onClick={exportBundle}>Xuất gói…</button>
