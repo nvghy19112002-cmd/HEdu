@@ -1,3 +1,14 @@
+## Có gì mới trong beta.40 (kênh beta): Gán ID nhờ Claude, chọn nhiều loại câu ở Ngân hàng
+Gồm PR #159–#160 (so với beta.39). Không đổi schema ngân hàng, ID6, UID hay LaTeX gốc của câu. Đã thử trên app thử với dữ liệu giả lập; **chưa thử phân loại thật trên ngân hàng thật.** Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Gán ID nhờ Claude** (Ngân hàng → “Gán ID nhờ Claude…”): bấm *Xuất lô* (lô lấy từ danh sách đang lọc, lưu thẳng vào thư mục trao đổi `D:\HEdu-gan-id`) → nhắn Claude “làm lô mới nhất” → bấm *Nhập đề xuất mới nhất*. HEdu báo độ đúng trên các câu đối chứng (câu thầy/cô đã xác minh, trộn ngầm ~10%), rồi đưa đề xuất vào hàng đợi **Xác minh**: Claude đồng ý Dạng đang lưu ⇒ “Máy phân loại”; đề xuất Dạng khác ⇒ “Cần xem lại”. Trong hàng đợi bấm **P** để dùng Dạng đề xuất (Y xác nhận, U hoàn tác). **Không câu nào bị đổi Dạng hay ID khi chưa có thầy/cô xác nhận.**
+- **Ngân hàng giữ lựa chọn khi đổi bộ lọc**: chọn vài câu Trắc nghiệm, lọc sang Đúng/Sai chọn tiếp, đổi cây mục lục hay gõ tìm vẫn giữ; thanh chọn báo số câu ở bộ lọc khác và có nút “Bỏ câu ngoài bộ lọc”. Chọn xong bấm “Thêm vào đề” là đủ các câu.
+
+**Lời khuyên**
+- Trước khi nhờ Claude gán ID, xác minh tay khoảng 100 câu rải đều các chương để HEdu đo được độ đúng.
+- Mỗi lô khoảng 200–300 câu (hạn mức sử dụng của gói Claude theo phiên).
+
 ## Có gì mới trong beta.39 (kênh beta): đề thi làm lại, kiểm tra trùng đầy đủ, hedu.sty
 Gồm PR #151–#158 (so với beta.38). Không đổi schema ngân hàng, ID6, UID hay LaTeX gốc của câu. Đã thử trên app thử với dữ liệu giả lập và TeX Live 2026; **chưa nghiệm thu thủ công trên Windows thật.** Đây là bản BETA.
 
