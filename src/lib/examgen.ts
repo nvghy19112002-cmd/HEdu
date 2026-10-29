@@ -494,8 +494,8 @@ export function variantTex(info: ExamInfo, v: Variant): string {
     L.push('', head[p], '');
     L.push(v.parts[p].map((s) => s.latex.replace(/\s+$/, '')).join('\n\n'));
   }
-  // Chân trang của khaibaochung in “Trang x/y” theo nhãn này.
-  L.push('', '\\zlabel{\\made-lastpage}');
+  // Dòng HẾT (hedu.sty); đề dùng khai báo cũ không có lệnh này thì bỏ qua. Chân trang in “Trang x/y” theo nhãn sau.
+  L.push('', '\\ifdefined\\hetde\\hetde\\fi', '\\zlabel{\\made-lastpage}');
   return L.join('\n') + '\n';
 }
 

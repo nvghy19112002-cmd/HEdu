@@ -19,7 +19,7 @@ import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usage
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
-import { KHAIBAOCHUNG_TEX } from '../lib/texproject.template';
+import { heduFiles } from '../lib/hedusty';
 import { invoke, isDesktop } from '../lib/platform';
 import { stemSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
@@ -226,7 +226,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
     const fileHashes = await sourceHashes(tex);
     return [
       ...tex,
-      { path: 'khaibaochung.tex', text: KHAIBAOCHUNG_TEX },
+      ...heduFiles(picks, ''),
       { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes, tranhCauDaDung: traceOf(d.usage, idx, d.reuse, new Date().toISOString(), lockedSet) }) },
       { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
     ];

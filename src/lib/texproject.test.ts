@@ -14,8 +14,8 @@ ok(!verbatimTex([q1]).includes('HEdu') && !verbatimTex([q1]).includes('\\documen
 
 console.log('Kiểu 2: thư mục');
 const files = buildProject([q1, q2], '\\usepackage{tikz}\\usepackage{esvect}', 'bo-de');
-ok(files.map((f) => f.path).join() === 'main.tex,khaibaochung.tex,cauhoi.tex,CAN-CO-GI.md', 'đủ 4 file văn bản');
-ok(files[2].text === verbatimTex([q1, q2]), 'cauhoi.tex = đúng kiểu 1');
+ok(files.map((f) => f.path).join() === 'main.tex,khaibaochung.tex,hedu.sty,hedu-khaibao.tex,hedu-goithem.tex,cauhoi.tex,CAN-CO-GI.md', 'đủ file văn bản (khai báo qua hedu.sty)');
+ok(files.find((f) => f.path === 'cauhoi.tex')!.text === verbatimTex([q1, q2]), 'cauhoi.tex = đúng kiểu 1');
 ok(MAIN_TEX.includes('\\input{khaibaochung}') && MAIN_TEX.includes('\\input{cauhoi}'), 'main.tex nạp khai báo và câu hỏi');
 ok(!/0812|Nhất Linh/.test(KHAIBAOCHUNG_TEX), 'khai báo không chứa thông tin cá nhân');
 ok(KHAIBAOCHUNG_TEX.indexOf('\\input{shared-content}') < KHAIBAOCHUNG_TEX.indexOf('{mathpazo}'), 'shared-content nạp trước mathpazo');

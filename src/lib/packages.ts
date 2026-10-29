@@ -100,6 +100,24 @@ const EVIDENCE: { re: RegExp; pkg: string; why: string }[] = [
   { re: /\\resizebox\b|\\scalebox\b|\\rotatebox\b/, pkg: 'graphicx', why: 'dùng \\resizebox / \\scalebox' },
   { re: /\\(?:definecolor|textcolor|colorbox)\b/, pkg: 'xcolor', why: 'dùng lệnh màu (\\definecolor, \\textcolor…)' },
   { re: /\\begin\{tikzpicture\}/, pkg: 'tikz', why: 'có hình tikzpicture' },
+  // gói hay gặp trong đề Toán / Lý / Hoá: lệnh đặc trưng, không trùng gói khác
+  { re: /\\(?:SI|si|qty|unit|num|ang)\s*\{/, pkg: 'siunitx', why: 'dùng lệnh đơn vị \\SI / \\num… (siunitx)' },
+  { re: /\\[bx]?cancel\s*\{/, pkg: 'cancel', why: 'dùng \\cancel (gạch chéo rút gọn)' },
+  { re: /\\ce\s*\{/, pkg: 'mhchem', why: 'dùng \\ce (công thức hoá học)' },
+  { re: /\\begin\{tikzcd\}/, pkg: 'tikz-cd', why: 'dùng môi trường tikzcd' },
+  { re: /\\begin\{circuitikz\}/, pkg: 'circuitikz', why: 'dùng môi trường circuitikz (mạch điện)' },
+  { re: /\\multirow\s*[{[]/, pkg: 'multirow', why: 'dùng \\multirow trong bảng' },
+  { re: /\\(?:toprule|midrule|bottomrule)\b/, pkg: 'booktabs', why: 'dùng \\toprule / \\midrule (bảng)' },
+  { re: /\\begin\{tabularx\}/, pkg: 'tabularx', why: 'dùng môi trường tabularx' },
+  { re: /\\begin\{longtable\}/, pkg: 'longtable', why: 'dùng môi trường longtable' },
+  { re: /\\diagbox\b/, pkg: 'diagbox', why: 'dùng \\diagbox (ô chéo trong bảng)' },
+  { re: /\\ding\s*\{/, pkg: 'pifont', why: 'dùng \\ding (ký hiệu)' },
+  { re: /\\polylongdiv\b|\\polyhornerscheme\b/, pkg: 'polynom', why: 'dùng phép chia đa thức (polynom)' },
+  { re: /\\op(?:add|sub|mul|div)\b/, pkg: 'xlop', why: 'dùng phép tính đặt cột (xlop)' },
+  { re: /\\begin\{dcases\*?\}|\\coloneqq\b|\\mathclap\b/, pkg: 'mathtools', why: 'dùng dcases / \\coloneqq (mathtools)' },
+  { re: /\\xlongequal\b/, pkg: 'extarrows', why: 'dùng \\xlongequal' },
+  { re: /\\systeme\s*\{/, pkg: 'systeme', why: 'dùng \\systeme (hệ phương trình)' },
+  { re: /\\begin\{CD\}/, pkg: 'amscd', why: 'dùng môi trường CD' },
 ];
 
 export interface Evidence { pkg: string; file: string; why: string }
