@@ -1,3 +1,17 @@
+## Có gì mới trong beta.39 (kênh beta): đề thi làm lại, kiểm tra trùng đầy đủ, hedu.sty
+Gồm PR #151–#158 (so với beta.38). Không đổi schema ngân hàng, ID6, UID hay LaTeX gốc của câu. Đã thử trên app thử với dữ liệu giả lập và TeX Live 2026; **chưa nghiệm thu thủ công trên Windows thật.** Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Kiểm tra trùng quét đầy đủ** ở mọi phạm vi (toàn kho, trong phạm vi, đối chiếu cả kho) và khi nhập: so mọi cặp có thể trùng, không còn giới hạn ứng viên. Trên 1.500 câu mẫu, kết quả khớp tuyệt đối với so từng cặp (bản cũ sót một nửa cặp “cùng mẫu”). Hai câu giống hệt chỉ khác hình nay xếp “Có thể trùng” để xem lại. Duyệt theo lô: bản đầu của câu trùng trong lô được duyệt như câu mới.
+- **Thư viện đề thi mới**: cây mục lục theo Lớp → Ôn tập theo bài học (Chương → Bài) · Đề kiểm tra (Giữa kỳ 1, Cuối kỳ 1, Giữa kỳ 2, Cuối kỳ 2) · Đề ôn tập · Đề thi thử, cùng Thư mục riêng; lưới thẻ đề có màu theo loại, bấm thẻ mở cửa sổ chi tiết; tạo/nhập đề ngay tại mục đang chọn (tự điền lớp, loại, chương, bài).
+- **Ma trận Tạo đề theo từng câu (kiểu TIAD)**: bảng Câu 1…N mỗi phần, chọn Dạng bài và mức độ từng câu, xem số câu trong kho và câu đang chọn; Ngẫu nhiên hoặc Tự chọn; Form THPT 2025 (12/4/6) hoặc Tùy chỉnh; sửa nhiều câu một lần; bảng **Thống kê và đánh giá đề** (tỉ lệ NB–TH / VD–VDC, độ khó 0–10).
+- **hedu.sty**: đề tạo mới dùng gói khai báo có phiên bản; cuối mỗi mã đề có dòng **“HẾT”**; gói riêng mà câu hỏi cần được tự nạp (hedu-goithem.tex). Nếu biên dịch vẫn báo thiếu gói, màn Biên tập gợi ý gói và có nút **“Thêm … và biên dịch lại”**.
+- **Giao diện**: một màu nút chính, ô chọn/ô nhập đồng bộ, màu mức độ không còn cam/đỏ, nhãn loại câu trung tính; thống kê một dòng; danh sách chọn câu hiện đề đọc được (x⁴, uₙ) thay cho mã LaTeX thô.
+
+**Lưu ý**
+- Đề đã lưu trước bản này giữ nguyên khai báo cũ (không có dòng HẾT); đề tạo mới mới dùng hedu.sty.
+- Kho rất lớn có nhiều câu gần y hệt nhau thì quét trùng toàn kho có thể mất vài phút; luôn bấm Dừng được.
+
 ## Có gì mới trong beta.38 (kênh beta): chuẩn bị nhập hàng loạt
 Gồm PR #148–#149 (so với beta.37). Không đổi schema ngân hàng, ID6, UID hay LaTeX gốc của câu. **Chưa thử với tệp thật trên Windows thật.** Đây là bản BETA.
 
