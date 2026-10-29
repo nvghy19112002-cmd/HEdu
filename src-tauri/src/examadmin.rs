@@ -47,10 +47,20 @@ pub struct MetaIn {
     pub tags: Vec<String>,
     /// draft | needs_review | finalized
     pub status: String,
+    #[serde(default)]
+    pub chapter_id: Option<String>,
+    #[serde(default)]
+    pub lesson_id: Option<String>,
 }
 
 fn clean(s: &str, max: usize) -> String {
     s.chars().filter(|c| !c.is_control()).collect::<String>().trim().chars().take(max).collect()
+}
+
+/// Mã chương/bài của cây câu hỏi: chữ, số, '-', '_', '.', tối đa 40 ký tự; khác thì bỏ.
+fn node_id(s: Option<&str>) -> Option<String> {
+    let t = s?.trim();
+    (!t.is_empty() && t.len() <= 40 && t.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))).then(|| t.to_string())
 }
 
 /// Thư mục ảo: tối đa 4 cấp, mỗi cấp ≤ 60 ký tự, không rỗng, không chứa '/' '\\' ký tự điều khiển.
@@ -110,6 +120,8 @@ pub fn update_meta(root: &Path, id: &str, inp: &MetaIn) -> Result<Summary, Strin
         school_year: inp.school_year.as_deref().map(|s| clean(s, 20)).filter(|s| !s.is_empty()),
         exam_type: inp.exam_type.as_deref().map(|s| clean(s, 30)).filter(|s| !s.is_empty()),
         tags: inp.tags.iter().map(|t| clean(t, 30)).collect(),
+        chapter_id: node_id(inp.chapter_id.as_deref()),
+        lesson_id: node_id(inp.lesson_id.as_deref()).filter(|_| inp.chapter_id.is_some()),
     };
     m.status = inp.status.clone();
     m.updated_at = iso_now();
@@ -754,7 +766,7 @@ mod tests {
         examlib::import(&root.join("exam-library"), &t, name, Some("main.tex")).unwrap().id
     }
     fn meta(name: &str, status: &str) -> MetaIn {
-        MetaIn { name: name.into(), folder: None, grade: None, school_year: None, exam_type: None, tags: vec![], status: status.into() }
+        MetaIn { name: name.into(), folder: None, grade: None, school_year: None, exam_type: None, tags: vec![], status: status.into(), chapter_id: None, lesson_id: None }
     }
     fn on_disk(root: &Path, id: &str, rel: &str) -> Vec<u8> {
         fs::read(projects_dir(&root.join("exam-library")).join(id).join(rel)).unwrap()
@@ -786,6 +798,14 @@ mod tests {
         let s = update_meta(&root, &id, &m).unwrap();
         assert_eq!((s.name.as_str(), s.folder.as_deref(), s.metadata.grade, s.status.as_str()), ("Đề HKI Toán 12", Some("Lớp 12/Học kỳ 1"), Some(12), "needs_review"));
         assert_eq!(examlib::list(&root.join("exam-library"))[0].folder.as_deref(), Some("Lớp 12/Học kỳ 1"));
+        // vị trí theo bài học: bài chỉ giữ khi có chương; mã lạ bị bỏ
+        let s = update_meta(&root, &id, &MetaIn { chapter_id: Some("c2D1".into()), lesson_id: Some("l2D11".into()), ..m.clone() }).unwrap();
+        assert_eq!((s.metadata.chapter_id.as_deref(), s.metadata.lesson_id.as_deref()), (Some("c2D1"), Some("l2D11")));
+        let s = update_meta(&root, &id, &MetaIn { chapter_id: None, lesson_id: Some("l2D11".into()), ..m.clone() }).unwrap();
+        assert_eq!((s.metadata.chapter_id, s.metadata.lesson_id), (None, None));
+        let s = update_meta(&root, &id, &MetaIn { chapter_id: Some("c 1/../x".into()), ..m.clone() }).unwrap();
+        assert_eq!(s.metadata.chapter_id, None);
+        update_meta(&root, &id, &m).unwrap();
         for bad in [meta("", "draft"), meta("x", "khac"), MetaIn { grade: Some(13), ..meta("x", "draft") }, MetaIn { folder: Some("a/../b".into()), ..meta("x", "draft") }, MetaIn { folder: Some("a//b".into()), ..meta("x", "draft") }, MetaIn { folder: Some("1/2/3/4/5".into()), ..meta("x", "draft") }, MetaIn { tags: vec!["".into()], ..meta("x", "draft") }, MetaIn { tags: (0..11).map(|i| format!("t{i}")).collect(), ..meta("x", "draft") }] {
             assert!(update_meta(&root, &id, &bad).is_err(), "{bad:?}");
         }

@@ -1611,3 +1611,44 @@ span.bt-caret { cursor: default; }
 .enc-ask li { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
 .enc-ask q { quotes: none; font-size: 13px; color: var(--ink); }
 .enc-ask .btn { align-self: flex-start; margin-top: 4px; }
+
+/* ---------- Thư viện đề thi (bố cục giống Ngân hàng: cây · thanh công cụ · thống kê · lưới thẻ · cửa sổ chi tiết) ---------- */
+.xl-note { margin: 0 32px 12px; }
+.xl-menu { position: relative; display: inline-flex; }
+.xl-pop { min-width: 290px; z-index: 30; }
+.xl-pop button { flex-direction: column; align-items: flex-start; gap: 1px; }
+.xl-pop button b { font-weight: 600; }
+.xl-pop button small { font-size: 12px; color: var(--ink-3); }
+.xl-pop hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.xl-filter { left: 0; right: auto; padding: 12px; gap: 10px; min-width: 250px; }
+.xl-filter label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.xl-filter .xl-in { height: 32px; }
+.xl-crumb { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 15px; min-height: 30px; }
+.xl-crumb b { font-weight: 700; }
+.xc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+.xc { --tone: #6B7280; all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 12px; min-height: 168px; background: var(--paper); border: 1px solid var(--line); border-top: 4px solid var(--tone); border-radius: 12px; cursor: pointer; transition: box-shadow .12s, border-color .12s, transform .12s; }
+.xc:hover { box-shadow: 0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent); transform: translateY(-1px); }
+.xc:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
+.tone-gk { --tone: #1F4FBF; } .tone-ck { --tone: #7C3AED; } .tone-tt { --tone: #C2410C; } .tone-ot { --tone: #1F6B4A; } .tone-kt { --tone: #0E7490; } .tone-na { --tone: #6B7280; }
+.xc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.xc-type { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; color: var(--tone); background: color-mix(in srgb, var(--tone) 12%, var(--paper)); white-space: nowrap; }
+.xc-st { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); white-space: nowrap; }
+.xc-st.st-needs_review { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-line); }
+.xc-st.st-finalized { color: var(--ok-ink); background: var(--ok-bg); border-color: var(--ok-line); }
+.xc-name { font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.xc-where { font-size: 12.5px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.xc-foot { margin-top: auto; display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.xc-flag { font-size: 12px; color: var(--warn); }
+.qs-btn.xs-needs_review span:last-child { color: var(--warn); }
+.qs-btn.xs-finalized span:last-child { color: var(--ok-ink); }
+.xm .xm-title { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.xm-name { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.qm.xm-sm { width: min(560px, 94vw); top: 12vh; }
+.xm-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.xm-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 18px; margin: 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.xm-facts dt { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.xm-facts dd { margin: 2px 0 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.xm-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.xm-field .xl-in { height: 34px; font-size: 14px; }
+.xl-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.xm .xl-info > summary { font-size: 14px; }
