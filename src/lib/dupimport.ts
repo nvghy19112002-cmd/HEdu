@@ -1,7 +1,8 @@
 // Rà soát trùng trước khi nhập: câu mới ↔ ngân hàng VÀ câu mới ↔ câu mới trong cùng lô.
 // CHỈ ĐỌC. Không đưa bản nháp vào ngân hàng; dùng chung bộ lõi dup2 + DupIndex với màn Kiểm tra trùng.
-import { DupIndex, getSharedIndex, type QLike } from './dupindex';
-import { fingerprint, DUP_KIND_RANK, type DupKind, type PairResult } from './dup2';
+import { getSharedIndex, type DupIndex, type QLike } from './dupindex';
+import { candidatePairs, Slicer } from './dupjoin';
+import { comparePair, fingerprint, DUP_KIND_RANK, type DupKind, type Fingerprint, type PairResult } from './dup2';
 
 export interface DraftIn { id: string; latex: string }
 export interface DraftHit {
@@ -36,34 +37,44 @@ export interface AnalyzeOptions {
 }
 export interface AnalyzeResult { rows: (DraftAnalysis | undefined)[]; complete: boolean }
 
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
-
-/** Phân tích cả lô. Chưa xong (huỷ giữa chừng) ⇒ complete=false và các dòng chưa xử lý là undefined — KHÔNG được coi là "không trùng". */
+/**
+ * Phân tích cả lô bằng phép nối ĐẦY ĐỦ (dupjoin.ts): mọi câu mới được so với MỌI câu trong kho và trong lô có thể trùng —
+ * không giới hạn ứng viên. Chưa xong (huỷ giữa chừng) ⇒ complete=false và các dòng chưa xử lý là undefined — KHÔNG được coi là "không trùng".
+ */
 export async function analyzeDrafts(drafts: DraftIn[], bank: QLike[], opt: AnalyzeOptions = {}): Promise<AnalyzeResult> {
-  const batch = opt.batch ?? 25;
   const idx = opt.index ?? getSharedIndex();
   const rows: (DraftAnalysis | undefined)[] = new Array(drafts.length).fill(undefined);
   if (!(await idx.sync(bank, { signal: opt.signal, onProgress: (d, t) => opt.onProgress?.(d, t, 'bank') }))) return { rows, complete: false };
 
-  // chỉ mục tạm riêng cho cặp mới↔mới (không lẫn vào kho)
-  const mine = new DupIndex();
-  for (const d of drafts) mine.upsert(d.id, d.latex);
-
+  // phía B = kho + lô; phía A = lô. Bản nháp KHÔNG được đưa vào chỉ mục dùng chung.
+  const nb = bank.length, n = nb + drafts.length;
+  const fps: Fingerprint[] = bank.map((q) => idx.get(q.uid)!);
+  const sl = new Slicer(opt.signal);
   for (let i = 0; i < drafts.length; i++) {
-    const d = drafts[i];
-    const f = fingerprint(d.latex);
-    const hits: DraftHit[] = [];
-    for (const h of idx.relatedFp(f)) if (KEEP.includes(h.result.kind)) hits.push({ with: 'bank', other: h.uid, kind: h.result.kind, result: h.result });
-    for (const h of mine.relatedFp(f, { exclude: d.id })) if (KEEP.includes(h.result.kind)) hits.push({ with: 'batch', other: h.uid, kind: h.result.kind, result: h.result });
-    hits.sort(cmp);
-    rows[i] = { id: d.id, hits: hits.slice(0, MAX_HITS), worst: hits[0]?.kind ?? null, unreadable: !f.complete };
-    if ((i + 1) % batch === 0) {
-      opt.onProgress?.(i + 1, drafts.length, 'draft');
-      await tick();
-      if (opt.signal?.aborted) return { rows, complete: false };
-    }
+    fps.push(fingerprint(drafts[i].latex));
+    if ((i & 63) === 0 && !(await sl.step())) return { rows, complete: false };
   }
-  opt.onProgress?.(drafts.length, drafts.length, 'draft');
+  const inA = new Uint8Array(n).fill(1, nb);
+  const SCALE = 1000;
+  const cand = await candidatePairs(fps, inA, { signal: opt.signal, onProgress: (f) => opt.onProgress?.(Math.round(f * SCALE * 0.8), SCALE, 'draft') });
+  if (!cand) return { rows, complete: false };
+
+  const hits: DraftHit[][] = drafts.map(() => []);
+  const add = (d: number, h: DraftHit) => { const l = hits[d]; l.push(h); if (l.length >= 4 * MAX_HITS) { l.sort(cmp); l.length = MAX_HITS; } };
+  for (let k = 0; k < cand.length; k++) {
+    if ((k & 1023) === 0) { opt.onProgress?.(Math.round(SCALE * (0.8 + (0.2 * k) / cand.length)), SCALE, 'draft'); if (!(await sl.step())) return { rows, complete: false }; }
+    const i = Math.floor(cand[k] / n), j = cand[k] - i * n; // i < j, j luôn là bản nháp
+    const r = comparePair(fps[i], fps[j]);
+    if (!KEEP.includes(r.kind)) continue;
+    const dj = j - nb;
+    if (i < nb) add(dj, { with: 'bank', other: bank[i].uid, kind: r.kind, result: r });
+    else { const di = i - nb; add(di, { with: 'batch', other: drafts[dj].id, kind: r.kind, result: r }); add(dj, { with: 'batch', other: drafts[di].id, kind: r.kind, result: r }); }
+  }
+  drafts.forEach((d, i) => {
+    const h = hits[i].sort(cmp);
+    rows[i] = { id: d.id, hits: h.slice(0, MAX_HITS), worst: h[0]?.kind ?? null, unreadable: !fps[nb + i].complete };
+  });
+  opt.onProgress?.(SCALE, SCALE, 'draft');
   return { rows, complete: true };
 }
 
@@ -86,6 +97,17 @@ export function defaultDecisions(drafts: DraftIn[], rows: (DraftAnalysis | undef
     out[d.id] = conflict ? 'hold' : sure ? 'skip' : near ? 'hold' : 'import';
   });
   return out;
+}
+
+/**
+ * Các nghi vấn dùng khi xét "Duyệt theo lô": bỏ các bản sao y hệt (raw/same) ĐỨNG SAU trong cùng lô — bản sau mặc định bị bỏ qua,
+ * nên bản đầu tiên coi như câu mới. Trả về null nếu danh sách bị cắt (MAX_HITS) mà lại vừa bỏ bớt: khi đó không chắc phần bị cắt
+ * không có nghi vấn khác ⇒ không duyệt.
+ */
+export function hitsForTrust(a: DraftAnalysis, i: number, orderOf: (draftId: string) => number): DraftHit[] | null {
+  const kept = a.hits.filter((h) => !(h.with === 'batch' && (h.kind === 'raw' || h.kind === 'same') && orderOf(h.other) > i));
+  if (kept.length < a.hits.length && a.hits.length >= MAX_HITS) return null;
+  return kept;
 }
 
 /** Dấu hiệu "kho có thêm câu trùng" dùng để phát hiện kho đã đổi giữa lúc rà soát và lúc bấm Nhập. */

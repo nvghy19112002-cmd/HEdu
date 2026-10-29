@@ -369,6 +369,12 @@ export function comparePair(a: Fingerprint, b: Fingerprint): PairResult {
 
   if (lex < NEAR_MIN && !stemEq) return res('unrelated', lex, flags, []);
 
+  // Đề, phương án, đáp án giống hệt; CHỈ khác mã hình: thường là cùng một câu được vẽ lại hình (đổi tỉ lệ, kiểu nét, gói vẽ).
+  // Không được coi là "biến thể" (sẽ nhập thẳng) mà phải để giáo viên xem — nhưng cũng không khẳng định trùng.
+  if (typeEq && stemEq && optEq && ansEq && flags.length === 1 && flags[0] === 'khác hình') {
+    return res('near', lex, flags, ['Đề, phương án và đáp án giống hệt; chỉ khác mã hình — có thể là cùng một câu được vẽ lại hình, cần xem.']);
+  }
+
   if (flags.length) return res('template', lex, flags, [`Giống khoảng ${Math.round(lex * 100)}% về chữ/công thức nhưng ${flags.join(', ')} — có thể là câu khác (biến thể), cần xem.`]);
 
   const notes = [`Cùng số liệu, dấu và hình; khác cách diễn đạt (mức tương đồng ${Math.round(lex * 100)}%).`];

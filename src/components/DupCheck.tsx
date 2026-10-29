@@ -77,7 +77,7 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
     const r = await idx.current.scan(questions.map((q) => ({ uid: q.uid, latex: q.latex })), {
       signal: abort.current, scope: uids, vsAll: mode === 'vsAll',
       keep: (k) => SHOWN.includes(k),
-      onProgress: (done, total, phase) => setBusy({ done, total, phase: phase === 'index' ? 'Đang lập chỉ mục' : 'Đang so sánh' }),
+      onProgress: (done, total, phase) => setBusy({ done, total, phase: phase === 'index' ? 'Đang lập chỉ mục' : 'Đang so toàn bộ các cặp' }),
     });
     setBusy(null);
     if (r.stats.aborted) return; // dừng giữa chừng: giữ kết quả cũ, KHÔNG coi là "không trùng"
@@ -187,7 +187,7 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
         </p>
       </div>
 
-      {busy && <div className="dc-prog" role="progressbar" aria-valuemin={0} aria-valuemax={busy.total} aria-valuenow={busy.done}><div style={{ width: `${Math.round((100 * busy.done) / Math.max(1, busy.total))}%` }} /><span>{busy.phase}… {busy.done}/{busy.total}</span></div>}
+      {busy && <div className="dc-prog" role="progressbar" aria-valuemin={0} aria-valuemax={busy.total} aria-valuenow={busy.done}><div style={{ width: `${Math.round((100 * busy.done) / Math.max(1, busy.total))}%` }} /><span>{busy.phase}… {Math.floor((100 * busy.done) / Math.max(1, busy.total))}%</span></div>}
       {changed > 0 && !busy && <p className="dc-stale" role="status">Có {changed} câu đã thêm/sửa/xoá sau lần quét này — danh sách bên dưới có thể đã lỗi thời. Bấm “Quét lại” để cập nhật.</p>}
       {scopeChanged && !busy && <p className="dc-stale" role="status">Phạm vi hoặc kiểu đối chiếu đã đổi so với lần quét ({scannedLabel}). Danh sách bên dưới thuộc lần quét cũ — bấm “Quét” để quét theo phạm vi mới.</p>}
 
@@ -196,7 +196,7 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
           <button type="button" className="btn btn-sm btn-primary" onClick={async () => { const j = plan.json; setPlan(null); try { const r = await importDecisions(j); setMsg({ ok: r.saved, text: `Đã nhập: thêm ${r.added}, cập nhật ${r.updated}, bỏ qua ${r.skipped}.${r.saved ? '' : ' Nhưng CHƯA lưu được vào tệp (đang giữ tạm).'}` }); } catch (err) { setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) }); } }}>Áp dụng</button>{' '}
           <button type="button" className="btn btn-sm" onClick={() => setPlan(null)}>Huỷ</button></p>
       )}
-      {stats && stats.candidatesCapped > 0 && pairs !== null && <p className="dc-stale" role="status">Lưu ý: với {stats.candidatesCapped} câu, HEdu chỉ so với một số ứng viên gần nhất (giới hạn để quét kịp). Đây là bộ dò gợi ý, không phải bảo đảm đã kiểm tra mọi cặp.</p>}
+      {stats && stats.templateTotal > stats.templateShown && pairs !== null && <p className="dc-stale" role="status">Có {stats.templateTotal.toLocaleString('vi-VN')} cặp “{DUP_KIND_LABEL.template}” (thường là câu khác nhau); danh sách chỉ giữ {stats.templateShown.toLocaleString('vi-VN')} cặp giống nhất. Các loại trùng khác hiện đầy đủ.</p>}
       {msg && <p className={msg.ok ? 'dc-ok' : 'dc-stale'} role="status">{msg.text} <button type="button" className="btn btn-sm" onClick={() => setMsg(null)}>Đóng</button></p>}
       {!isDecisionsWritable() && decisionsLoaded() && !msg && <p className="dc-stale" role="status">Tệp quyết định không ghi được — quyết định chỉ giữ tạm trong phiên này.</p>}
 
@@ -208,14 +208,14 @@ export function DupCheck({ questions, selected, initialSelection, onClose, onOpe
             <label className="dc-kindsel">Loại nghi vấn
               <select value={kindKey} onChange={(e) => { setKindKey(e.target.value); setPage(0); }}>
                 <option value="default">Cần xem — trùng chắc và gần trùng ({(counts.raw ?? 0) + (counts.conflict ?? 0) + (counts.same ?? 0) + (counts.near ?? 0)})</option>
-                {SHOWN.map((k) => <option key={k} value={k}>{DUP_KIND_LABEL[k]} ({counts[k] ?? 0})</option>)}
+                {SHOWN.map((k) => <option key={k} value={k}>{DUP_KIND_LABEL[k]} ({k === 'template' && stats && stats.templateTotal > stats.templateShown ? `${counts[k] ?? 0} / ${stats.templateTotal}` : counts[k] ?? 0})</option>)}
                 <option value="all">Tất cả loại, kể cả cùng mẫu ({pairs.length})</option>
               </select>
             </label>
             <div className="chips" role="tablist" aria-label="Trạng thái xử lý">
               {([['open', 'Chưa xử lý'], ['later', 'Xem sau'], ['done', 'Đã giữ']] as const).map(([k, l]) => <button key={k} type="button" role="tab" className="chip" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => { setTab(k); setPage(0); }}>{l}<span className="chip-n">{tabCounts[k]}</span></button>)}
             </div>
-            {stats && <details className="dc-stat"><summary>{pairs.length} cặp · {stats.comparisons} phép so · {(stats.ms / 1000).toFixed(1)} giây</summary>Phía A {stats.sideA} câu, phía đối chiếu {stats.sideB} câu. Ứng viên được chọn theo từ khoá hiếm nên có thể bỏ sót cặp chỉ giống ở các từ rất phổ biến.</details>}
+            {stats && <details className="dc-stat"><summary>{pairs.length} cặp · {stats.comparisons} phép so · {(stats.ms / 1000).toFixed(1)} giây</summary>Phía A {stats.sideA} câu, phía đối chiếu {stats.sideB} câu. Đã xét ĐẦY ĐỦ mọi cặp trong phạm vi: các cặp không được so là các cặp chắc chắn giống nhau dưới 50% cả về chữ lẫn công thức (không thể là trùng, gần trùng hay cùng mẫu).</details>}
             {!list.length && <p className="dc-empty">Không có cặp nào ở các nhóm đang chọn.</p>}
             <ul className="dc-list">
               {shown.map((p) => {

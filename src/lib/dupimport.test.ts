@@ -1,4 +1,4 @@
-import { analyzeDrafts, bankHitSignature, defaultDecisions, summarize, type DraftIn } from './dupimport';
+import { analyzeDrafts, bankHitSignature, defaultDecisions, hitsForTrust, summarize, type DraftIn } from './dupimport';
 import { DupIndex, type QLike } from './dupindex';
 
 let failed = 0;
@@ -91,6 +91,39 @@ const bank = (...l: string[]): QLike[] => l.map((latex, i) => ({ uid: 'b' + i, l
     console.log(`  ℹ ${M} câu mới × kho ${N}: ${ms} ms`);
     ok(hit === M / 3, `đủ ${M / 3}/${M / 3} câu cài sẵn trùng kho được tìm thấy`);
     ok(ms < 20000, 'dưới 20 giây');
+  }
+  console.log('Rà soát đầy đủ: khớp vét cạn từng câu mới với MỌI câu trong kho và trong lô');
+  {
+    const { compareLatex } = await import('./dup2');
+    const stems = [S1, S2, S3, 'Tìm giá trị lớn nhất của hàm số $y=x^4-2x^2+3$ trên đoạn $[0;2]$.', 'Cho cấp số cộng có $u_1=2$ và công sai $d=3$. Tính tổng mười số hạng đầu tiên.'];
+    const vary = (i: number) => {
+      const s = stems[i % stems.length].replace(/\d/, String(i % 4)).replace('Tìm', i % 3 ? 'Tìm' : 'Hãy tìm').replace('Tính', i % 5 ? 'Tính' : 'Hãy tính');
+      return E(s, i % 7 ? '\\choice{\\True $1$}{$2$}{$3$}{$4$}' : '\\choice{$1$}{\\True $2$}{$3$}{$4$}');
+    };
+    const bk = bank(...Array.from({ length: 120 }, (_, i) => vary(i)));
+    const dr = D(...Array.from({ length: 40 }, (_, i) => vary(i * 3 + 1)));
+    const r = await analyzeDrafts(dr, bk, { index: idx() });
+    const rank = { conflict: 0, raw: 1, same: 2, near: 3, insufficient: 4, template: 5, unrelated: 6 } as const;
+    let bad = 0;
+    dr.forEach((d, i) => {
+      const want: (keyof typeof rank)[] = [];
+      for (const b of bk) { const k = compareLatex(d.latex, b.latex).kind; if (k !== 'unrelated') want.push(k); }
+      dr.forEach((e, j) => { if (j !== i) { const k = compareLatex(d.latex, e.latex).kind; if (k !== 'unrelated') want.push(k); } });
+      const worst = want.sort((x, y) => rank[x] - rank[y])[0] ?? null;
+      const a = r.rows[i]!;
+      if (a.worst !== worst || a.hits.length !== Math.min(12, want.length)) bad++;
+    });
+    ok(bad === 0, `40 câu mới × kho 120 câu + trong lô: mức nặng nhất và số câu giống đúng như vét cạn (sai ${bad})`);
+  }
+  console.log('Duyệt theo lô: bản đầu tiên của câu trùng trong lô');
+  {
+    const dr = D(E(S1), E(S1.replace('Tìm', 'Tìm  ')), E(S2));
+    const r = await analyzeDrafts(dr, [], { index: idx() });
+    const ord = (id: string) => Number(id.slice(1));
+    ok(hitsForTrust(r.rows[0]!, 0, ord)!.length === 0, 'bản đầu: bỏ qua bản sao đứng sau ⇒ coi như câu mới');
+    ok(hitsForTrust(r.rows[1]!, 1, ord)!.some((h) => h.kind === 'same'), 'bản sau: vẫn là trùng chắc');
+    const bk = await analyzeDrafts(dr, bank(E(S1)), { index: idx() });
+    ok(hitsForTrust(bk.rows[0]!, 0, ord)!.some((h) => h.with === 'bank'), 'trùng với KHO thì bản đầu vẫn bị chặn');
   }
   if (failed) { console.log(`\n${failed} kiểm thử dupimport lỗi`); process.exit(1); }
   console.log('dupimport: đạt hết.');
