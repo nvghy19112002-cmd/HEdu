@@ -2,7 +2,7 @@
 // Nhập = sao chép vào thư viện HEdu; tệp gốc ngoài không bị đụng. Thiết kế: claude/thiet-ke-de-thi.md.
 import { invoke } from './platform';
 
-export interface ExamMeta { grade?: number | null; schoolYear?: string | null; examType?: string | null; tags: string[] }
+export interface ExamMeta { grade?: number | null; schoolYear?: string | null; examType?: string | null; tags: string[]; /** vị trí theo bài học (đề ôn tập chương/bài) */ chapterId?: string | null; lessonId?: string | null }
 export type ExamKind = 'single' | 'multi';
 export type ExamStatus = 'draft' | 'needs_review' | 'finalized';
 
@@ -105,7 +105,7 @@ export async function chooseProjectFolder(): Promise<string | null> {
 }
 
 // ---------- E4: thông tin, sao chép, Thùng rác đề, gói, sao lưu ----------
-export interface ExamMetaIn { name: string; folder: string | null; grade: number | null; schoolYear: string | null; examType: string | null; tags: string[]; status: ExamStatus }
+export interface ExamMetaIn { name: string; folder: string | null; grade: number | null; schoolYear: string | null; examType: string | null; tags: string[]; status: ExamStatus; chapterId?: string | null; lessonId?: string | null }
 export interface TrashItem { id: string; name: string; deletedAt: string; fileCount: number; totalBytes: number }
 export interface BackupInfo { name: string; createdAt: string; projects: [string, string][]; files: number; bytes: number; warnings: string[] }
 export interface BackupCheck { ok: boolean; missing: string[]; changed: string[] }

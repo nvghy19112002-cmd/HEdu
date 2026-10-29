@@ -50,6 +50,11 @@ pub struct Meta {
     pub exam_type: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// vị trí trong cây đề theo bài học (đề ôn tập theo chương / theo bài); mã chương/bài của cây câu hỏi
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chapter_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lesson_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
