@@ -86,3 +86,22 @@ export function tagsFor(row: Pick<BatchRow, 'file' | 'rel'>, info: BatchInfo): s
   for (const t of parseExtraTags(info.extra)) add(t);
   return out;
 }
+
+/**
+ * Chia các tệp đang chọn thành nhiều lô, mỗi lô ≤ `max` câu, GIỮ NGUYÊN TỆP (một tệp không bị tách ra hai lô) và giữ thứ tự tệp.
+ * Tệp một mình đã vượt `max` câu thành một lô riêng và được báo trong `tooBig` (giáo viên phải tách tệp đó).
+ */
+export function planLots(files: readonly { srcIdx: number; blocks: number }[], max = BATCH_MAX): { lots: number[][]; tooBig: number[] } {
+  const lots: number[][] = [];
+  const tooBig: number[] = [];
+  let cur: number[] = [];
+  let n = 0;
+  for (const f of files) {
+    if (f.blocks > max) { tooBig.push(f.srcIdx); continue; }
+    if (cur.length && n + f.blocks > max) { lots.push(cur); cur = []; n = 0; }
+    cur.push(f.srcIdx);
+    n += f.blocks;
+  }
+  if (cur.length) lots.push(cur);
+  return { lots, tooBig };
+}

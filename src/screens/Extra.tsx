@@ -9,7 +9,7 @@ import { chapters, firstLocation, getTaxonomy, grades, useTaxonomy } from '../li
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
-import { BATCH_MAX, buildRows, defaultBatchName, perFile, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
+import { BATCH_MAX, buildRows, defaultBatchName, perFile, planLots, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
 import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
 import { isDesktop } from '../lib/platform';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
@@ -75,6 +75,8 @@ export function ImportScreen() {
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const loadStop = useRef(false);
   const [result, setResult] = useState<{ report: ImportReport; logSaved: boolean } | null>(null);
+  /** nhập nhiều lô: các nhóm tệp (mỗi nhóm ≤ BATCH_MAX câu, nguyên tệp) và lô đang làm; giữ trong phiên này */
+  const [lots, setLots] = useState<{ list: number[][]; idx: number } | null>(null);
   const [fileF, setFileF] = useState<number | 'all'>('all');
   const [info, setInfo] = useState<BatchInfo>(() => ({ name: defaultBatchName(new Date()), tagFile: true, tagBatch: true, tagFolder: false, extra: '' }));
   const multi = srcs.length > 0;
@@ -87,7 +89,14 @@ export function ImportScreen() {
   const fileStats = useMemo(() => perFile(allRows, allSources), [allRows, allSources, taxRevNow]); // eslint-disable-line react-hooks/exhaustive-deps
   /** khoá của lô hiện tại: đổi nguồn/tick tệp ⇒ làm lại rà soát từ đầu */
   const batchKey = useMemo(() => (multi ? `f|${srcs.map((s) => `${s.name}:${s.text.length}`).join('|')}|${[...skip].sort().join(',')}` : `p|${text250}`), [multi, srcs, skip, text250]);
-  const clearAll = () => { setSrc(''); setSrcs([]); setSkip(new Set()); setEncAsk(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
+  /** bỏ tick mọi tệp ngoài lô `k` (tệp Windows-1258 chưa xác nhận vẫn bị loại) */
+  const showLot = (list: number[][], k: number) => {
+    const keep = new Set(list[k]);
+    setSkip(new Set(srcs.map((_, i) => i).filter((i) => !keep.has(i) || encAsk.has(i))));
+    setLots({ list, idx: k });
+  };
+  const lotPlan = useMemo(() => planLots(fileStats.filter((f) => !encAsk.has(f.srcIdx))), [fileStats, encAsk]);
+  const clearAll = () => { setLots(null); setSrc(''); setSrcs([]); setSkip(new Set()); setEncAsk(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
 
   const loadPaths = async (paths: string[]) => {
     if (!paths.length || loadProg) return;
@@ -309,25 +318,29 @@ export function ImportScreen() {
     const t = setTimeout(step, 0);
     return () => { stop = true; clearTimeout(t); };
   }, [idRows, questions, taxNow, reviewVer]); // eslint-disable-line react-hooks/exhaustive-deps
+  const vsum = summarizeVerify(idRows, verifOf, idDecOf, (i) => decOf(i) === 'import');
   // Duyệt theo lô nguồn tin cậy: chỉ câu đạt đủ điều kiện (importtrust.ts) mới được đánh dấu "Đã duyệt"
-  const [trust, setTrust] = useState(false);
-  useEffect(() => { setTrust(false); }, [rows]); // đổi lô (nguồn khác) thì phải xác nhận lại
+  /** câu đủ điều kiện ĐÚNG LÚC giáo viên xác nhận (null = chưa bật). Lúc ghi chỉ duyệt câu nằm trong tập này VÀ vẫn đủ điều kiện: không bao giờ nhiều hơn số đã hiện */
+  const [trust, setTrust] = useState<ReadonlySet<number> | null>(null);
+  useEffect(() => { setTrust(null); }, [rows]); // đổi lô (nguồn khác) thì phải xác nhận lại
   const trustOf = (i: number): TrustBlock | null => trustBlock({
     status: statusOf(i).key, issues: issues[i], p: edits[i] != null ? parseExTest(latexOf(i)) : rows[i].p,
     idOk: idStateOf(latexOf(i)) === 'ok' && verifOf(i)?.verdict !== 'bat-dong',
   });
+  /** chỉ tính khi đã kiểm xong (kiểm câu, kiểm chứng ID): đang kiểm thì số đủ điều kiện chưa chắc */
+  const trustReady = anaDone && !checking && vsum.unchecked === 0;
   const trustSum = (() => {
-    if (!anaDone) return { ok: 0, by: new Map<TrustBlock, number>() };
-    let n = 0; const by = new Map<TrustBlock, number>();
-    rows.forEach((_, i) => { if (decOf(i) !== 'import') return; const b = trustOf(i); if (b) by.set(b, (by.get(b) ?? 0) + 1); else n++; });
-    return { ok: n, by };
+    const ok: number[] = []; const by = new Map<TrustBlock, number>();
+    if (!trustReady) return { ok, by };
+    rows.forEach((_, i) => { if (decOf(i) !== 'import') return; const b = trustOf(i); if (b) by.set(b, (by.get(b) ?? 0) + 1); else ok.push(i); });
+    return { ok, by };
   })();
   const askTrust = (on: boolean) => {
-    if (!on) { setTrust(false); return; }
+    if (!on) { setTrust(null); return; }
+    if (!trustReady) return;
     const tag = trustTag(info.name, new Date());
-    if (window.confirm(`Xác nhận lô này lấy từ NGUỒN ĐÃ KIỂM (đề Sở, sách, bộ đề đã rà)?\n\nHEdu sẽ đánh dấu “Đã duyệt” cho ${trustSum.ok} câu đủ điều kiện: câu mới (không trùng), mã không lỗi, xem trước dựng chuẩn, đọc chắc được đáp án, ID hợp lệ và không bất đồng. Các câu còn lại giữ “Chưa kiểm tra”.\n\nMọi câu được duyệt mang nhãn “${tag}”: lọc theo nhãn này trong Ngân hàng để xem lại hoặc đưa cả lô về “Chưa kiểm tra”.`)) setTrust(true);
+    if (window.confirm(`Xác nhận lô này lấy từ NGUỒN ĐÃ KIỂM (đề Sở, sách, bộ đề đã rà)?\n\nHEdu sẽ đánh dấu “Đã duyệt” cho ${trustSum.ok.length} câu đủ điều kiện: câu mới (không trùng), mã không lỗi, xem trước dựng chuẩn, đọc chắc được đáp án, ID hợp lệ và không bất đồng. Các câu còn lại giữ “Chưa kiểm tra”.\n\nMọi câu được duyệt mang nhãn “${tag}”: lọc theo nhãn này trong Ngân hàng để xem lại hoặc đưa cả lô về “Chưa kiểm tra”.`)) setTrust(new Set(trustSum.ok));
   };
-  const vsum = summarizeVerify(idRows, verifOf, idDecOf, (i) => decOf(i) === 'import');
   const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0;
   /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
   const headIdNote = (latex: string): string | null => {
@@ -374,6 +387,8 @@ export function ImportScreen() {
   const finish = async (report: ImportReport | null) => {
     if (!report) { clearAll(); go({ screen: 'bank' }); return; }
     const logSaved = await appendLog(report);
+    // còn lô sau: giữ nguyên các tệp đã đọc, chỉ hiện báo cáo lô vừa xong kèm nút "Tiếp lô sau"
+    if (lots && lots.idx < lots.list.length - 1) { setResult({ report, logSaved }); return; }
     clearAll();
     setResult({ report, logSaved });
   };
@@ -409,7 +424,7 @@ export function ImportScreen() {
       rows.forEach((_, i) => {
         if (decOf(i) !== 'import') return;
         const d = built.drafts[k];
-        if (d && trustOf(i) === null) { built.drafts[k] = { ...d, review: 'approved', tags: d.tags.includes(tag) ? d.tags : [...d.tags, tag] }; approvedN++; }
+        if (d && trust.has(i) && trustOf(i) === null) { built.drafts[k] = { ...d, review: 'approved', tags: d.tags.includes(tag) ? d.tags : [...d.tags, tag] }; approvedN++; }
         k++;
       });
     }
@@ -448,7 +463,14 @@ export function ImportScreen() {
           })}
         </ol>
       </header>
-      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag! }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => setResult(null)} /></div>}
+      {result && lots && lots.idx < lots.list.length - 1 && (
+        <div className="simple"><div className="note" role="status"><div className="note-body">
+          <b>Xong lô {lots.idx + 1} / {lots.list.length}.</b>
+          <span>Lô tiếp theo có {lots.list[lots.idx + 1].length} tệp. HEdu sẽ rà soát lại từ đầu (trùng với các câu vừa nhập, ID, xem trước) trước khi nhập. Muốn dừng ở đây thì bấm Đóng; các lô sau không nhập.</span>
+          <div className="head-actions"><button type="button" className="btn btn-accent" onClick={() => { showLot(lots.list, lots.idx + 1); setResult(null); }}>Tiếp lô {lots.idx + 2} / {lots.list.length} →</button></div>
+        </div></div></div>
+      )}
+      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag! }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => { setResult(null); if (lots) clearAll(); }} /></div>}
       {!result && <div className="simple">
         <div className={`panel${rows.length ? ' is-compact' : ''}`}>
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>
@@ -510,7 +532,15 @@ export function ImportScreen() {
           )}
           {tooBig && (
             <div className="note bad" role="alert"><div className="note-body"><b>Lô có {usedRows.length.toLocaleString('vi-VN')} câu — vượt giới hạn {BATCH_MAX.toLocaleString('vi-VN')} câu mỗi lô</b>
-              <span>Hãy bỏ tick bớt tệp ở bảng trên (nhập phần còn lại ở lần sau). Tạm giới hạn vì rà soát trùng tốn nhiều bộ nhớ; sẽ nới khi bộ dò trùng được làm nhẹ hơn.</span></div></div>
+              <span>HEdu có thể tự chia thành {lotPlan.lots.length} lô (mỗi lô tối đa {BATCH_MAX.toLocaleString('vi-VN')} câu, không tách tệp), nhập lần lượt; mỗi lô vẫn được rà soát và có điểm khôi phục riêng.{lotPlan.tooBig.length > 0 && ` ${lotPlan.tooBig.length} tệp tự nó đã quá ${BATCH_MAX.toLocaleString('vi-VN')} câu nên không chia được: hãy tách tệp đó.`} Hoặc bỏ tick bớt tệp ở bảng trên.</span>
+              {lotPlan.lots.length > 1 && <div className="head-actions"><button type="button" className="btn btn-accent" onClick={() => showLot(lotPlan.lots, 0)}>Chia tự động thành {lotPlan.lots.length} lô</button></div>}</div></div>
+          )}
+          {lots && !tooBig && (
+            <div className="note" role="status"><div className="note-body">
+              <b>Đang nhập theo lô: lô {lots.idx + 1} / {lots.list.length} ({lots.list[lots.idx].length} tệp)</b>
+              <span>Nhập xong lô này, HEdu hiện báo cáo và nút sang lô tiếp theo.</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => { setLots(null); setSkip(new Set(encAsk)); }}>Bỏ chia lô</button></div>
+            </div></div>
           )}
         </div>
 
@@ -627,7 +657,7 @@ export function ImportScreen() {
               )}
               {anaDone && importCount > 0 && (
                 <div className={`trust${trust ? ' on' : ''}`}>
-                  <label><input type="checkbox" checked={trust} onChange={(e) => askTrust(e.target.checked)} /> <b>Lô từ nguồn đã kiểm</b>: đánh dấu “Đã duyệt” cho <b>{trustSum.ok}</b> / {importCount} câu đủ điều kiện</label>
+                  <label><input type="checkbox" checked={!!trust} disabled={!trustReady} onChange={(e) => askTrust(e.target.checked)} /> <b>Lô từ nguồn đã kiểm</b>: {trustReady ? <>đánh dấu “Đã duyệt” cho <b>{trust ? trust.size : trustSum.ok.length}</b> / {importCount} câu đủ điều kiện</> : <>đợi kiểm tra xong để đếm câu đủ điều kiện…</>}</label>
                   {trustSum.by.size > 0 && <span className="te-note">Không duyệt: {[...trustSum.by].map(([b, n]) => `${n} câu ${TRUST_BLOCK_LABEL[b]}`).join(' · ')}.</span>}
                 </div>
               )}
