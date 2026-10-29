@@ -23,7 +23,7 @@ import { commitRecs, effectiveOf, getRec, makeRec, useIdReview } from '../lib/id
 import { decide, effectiveDecision, isFresh, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
 import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
-import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
+import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, hitsForTrust, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
 import { PairCompare } from '../components/PairCompare';
 import { QuestionDrawer } from '../components/QuestionDrawer';
 import { seqLabel } from '../lib/id';
@@ -192,14 +192,17 @@ export function ImportScreen() {
   const decOf = (i: number): Decision => userDec[`d${i}`] ?? defaults[`d${i}`] ?? 'hold';
   const decisions = useMemo(() => Object.fromEntries(drafts.map((d, i) => [d.id, userDec[d.id] ?? defaults[d.id] ?? 'hold'])) as Record<string, Decision>, [drafts, defaults, userDec]);
   const sum = useMemo(() => summarize(drafts, ana ? ana.rows : drafts.map(() => undefined), decisions), [drafts, ana, decisions]);
-  const statusOf = (i: number): { key: typeof statusF; label: string } => {
+  /** forTrust: bỏ qua bản sao y hệt đứng SAU trong lô (bản sau bị bỏ qua, bản đầu coi như câu mới) */
+  const statusOf = (i: number, forTrust = false): { key: typeof statusF; label: string } => {
     const a = ana?.rows[i];
     if (!a) return { key: 'hold', label: 'Chưa phân tích' };
-    if (a.hits.some((h) => h.kind === 'conflict')) return { key: 'conflict', label: 'Mâu thuẫn đáp án' };
-    if (a.hits.some((h) => h.kind === 'raw' || h.kind === 'same')) return { key: 'sure', label: 'Trùng chắc' };
-    if (a.hits.some((h) => h.kind === 'near')) return { key: 'near', label: 'Có thể trùng' };
+    const hits = forTrust ? hitsForTrust(a, i, (id) => Number(id.slice(1))) : a.hits;
+    if (!hits) return { key: 'sure', label: 'Trùng chắc' };
+    if (hits.some((h) => h.kind === 'conflict')) return { key: 'conflict', label: 'Mâu thuẫn đáp án' };
+    if (hits.some((h) => h.kind === 'raw' || h.kind === 'same')) return { key: 'sure', label: 'Trùng chắc' };
+    if (hits.some((h) => h.kind === 'near')) return { key: 'near', label: 'Có thể trùng' };
     if (a.unreadable) return { key: 'unread', label: 'Mã chưa đọc đủ' };
-    if (a.hits.some((h) => h.kind === 'template')) return { key: 'template', label: 'Cùng mẫu khác dữ kiện' };
+    if (hits.some((h) => h.kind === 'template')) return { key: 'template', label: 'Cùng mẫu khác dữ kiện' };
     return { key: 'new', label: 'Mới' };
   };
   const statusCount = useMemo(() => {
@@ -324,7 +327,7 @@ export function ImportScreen() {
   const [trust, setTrust] = useState<ReadonlySet<number> | null>(null);
   useEffect(() => { setTrust(null); }, [rows]); // đổi lô (nguồn khác) thì phải xác nhận lại
   const trustOf = (i: number): TrustBlock | null => trustBlock({
-    status: statusOf(i).key, issues: issues[i], p: edits[i] != null ? parseExTest(latexOf(i)) : rows[i].p,
+    status: statusOf(i, true).key, issues: issues[i], p: edits[i] != null ? parseExTest(latexOf(i)) : rows[i].p,
     idOk: idStateOf(latexOf(i)) === 'ok' && verifOf(i)?.verdict !== 'bat-dong',
   });
   /** chỉ tính khi đã kiểm xong (kiểm câu, kiểm chứng ID): đang kiểm thì số đủ điều kiện chưa chắc */
@@ -628,7 +631,7 @@ export function ImportScreen() {
             )}
             <div className="dup-sum" role="group" aria-label="Rà soát trùng trước khi nhập">
               <div className="chk-sum">
-                {anaProg && <span className="chk-pill" role="status">Rà soát trùng: {anaProg.phase} {anaProg.done}/{anaProg.total}…</span>}
+                {anaProg && <span className="chk-pill" role="status">Rà soát trùng: {anaProg.phase} {Math.floor((100 * anaProg.done) / Math.max(1, anaProg.total))}%…</span>}
                 {!anaDone && !anaProg && rows.length > 0 && <span className="chk-pill warn" role="status">Chưa rà soát trùng xong — chưa thể nhập</span>}
                 {anaDone && <span className="chk-pill ok">Đã rà soát trùng xong</span>}
               </div>

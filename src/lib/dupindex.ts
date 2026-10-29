@@ -1,7 +1,9 @@
-// Quét toàn Ngân hàng tìm cặp nghi trùng. CHỈ ĐỌC: không sửa câu, không ghi dữ liệu.
-// Không so mọi cặp: mỗi câu chỉ được so với "ứng viên" lấy từ
+// Quét Ngân hàng tìm cặp nghi trùng. CHỈ ĐỌC: không sửa câu, không ghi dữ liệu.
+// scan(): quét ĐẦY ĐỦ, chính xác (dupjoin.ts) — mọi cặp có thể là trùng/gần trùng/cùng mẫu đều được so.
+// related()/relatedFp(): tra nhanh gần đúng cho MỘT câu (gợi ý ID, Trình sửa) — lấy ứng viên từ
 //  (1) nhóm cùng nội dung (cùng loại + đề + phương án + hình) và nhóm cùng mã nguồn;
 //  (2) chỉ mục đảo trên các từ/cụm công thức hiếm, lấy top-K theo số mục chung.
+import { candidatePairs, Slicer } from './dupjoin';
 import { comparePair, DUP_KIND_RANK, fingerprint, tokenText, type DupKind, type Fingerprint, type PairResult } from './dup2';
 
 export interface QLike { uid: string; latex: string }
@@ -21,10 +23,19 @@ export interface ScanOptions {
   scope?: ReadonlySet<string>;
   /** true: phía B là toàn ngân hàng (đối chiếu phạm vi với kho). false/bỏ trống: phía B cũng nằm trong phạm vi. */
   vsAll?: boolean;
+  /** số cặp "cùng mẫu" tối đa giữ lại để hiển thị (mặc định TEMPLATE_SHOWN); vẫn đếm đủ trong stats.templateTotal */
+  templateCap?: number;
   /** mặc định: ẩn 'unrelated'; thêm 'insufficient' nếu muốn */
   keep?: (k: DupKind) => boolean;
 }
-export interface ScanStats { sideA: number; sideB: number; questions: number; comparisons: number; candidatesCapped: number; ms: number; aborted: boolean }
+export interface ScanStats {
+  sideA: number; sideB: number; questions: number;
+  /** số cặp đã so bằng comparePair (mọi cặp còn lại chắc chắn "không liên quan") */
+  comparisons: number;
+  /** tổng số cặp "cùng mẫu" tìm được / số cặp được giữ để hiển thị */
+  templateTotal: number; templateShown: number;
+  ms: number; aborted: boolean;
+}
 export interface ScanResult { pairs: DupPairHit[]; stats: ScanStats }
 
 /** số ứng viên tối đa lấy từ nhóm cùng dữ kiện cho mỗi câu (bảo vệ khi nhiều câu trùng dữ kiện) */
@@ -147,43 +158,61 @@ export class DupIndex {
     return sortPairs(hits);
   }
 
-  /** Quét cả ngân hàng theo từng lượt nhỏ; huỷ được; thứ tự kết quả ổn định. */
+  /**
+   * Quét ĐẦY ĐỦ theo phạm vi: mọi cặp có thể khác "không liên quan" đều được so (phép nối chính xác, xem dupjoin.ts) —
+   * không giới hạn ứng viên, không bỏ từ phổ biến. Chia lượt nhỏ; huỷ được; thứ tự kết quả ổn định.
+   */
   async scan(qs: QLike[], opt: ScanOptions = {}): Promise<ScanResult> {
     const t0 = Date.now();
     const batch = opt.batch ?? 200;
     const keep = opt.keep ?? defaultKeep;
-    const sideA = opt.scope ? qs.filter((q) => opt.scope!.has(q.uid)).length : qs.length;
-    const stats: ScanStats = { sideA, sideB: opt.scope && !opt.vsAll ? sideA : qs.length, questions: qs.length, comparisons: 0, candidatesCapped: 0, ms: 0, aborted: false };
-    if (!(await this.sync(qs, { batch, signal: opt.signal, onProgress: (d, t) => opt.onProgress?.(d, t, 'index') }))) { stats.aborted = true; stats.ms = Date.now() - t0; return { pairs: [], stats }; }
-    const rank = new Map(qs.map((q, i) => [q.uid, i] as const));
+    const inScope = (u: string) => !opt.scope || opt.scope.has(u);
+    const sideA = opt.scope ? qs.filter((q) => inScope(q.uid)).length : qs.length;
+    const stats: ScanStats = { sideA, sideB: opt.scope && !opt.vsAll ? sideA : qs.length, questions: qs.length, comparisons: 0, templateTotal: 0, templateShown: 0, ms: 0, aborted: false };
+    const stop = (pairs: DupPairHit[] = []) => { stats.aborted = true; stats.ms = Date.now() - t0; return { pairs, stats }; };
+    if (!(await this.sync(qs, { batch, signal: opt.signal, onProgress: (d, t) => opt.onProgress?.(d, t, 'index') }))) return stop();
+    // "trong phạm vi": chỉ xét câu thuộc phạm vi; "đối chiếu": phía B là cả kho
+    const U = opt.scope && !opt.vsAll ? qs.filter((q) => inScope(q.uid)) : qs;
+    const fps = U.map((q) => this.fps.get(q.uid)!);
+    const inA = Uint8Array.from(U, (q) => (inScope(q.uid) ? 1 : 0));
+    const SCALE = 1000;
+    const cand = await candidatePairs(fps, inA, { signal: opt.signal, onProgress: (f) => opt.onProgress?.(Math.round(f * SCALE), SCALE, 'scan') });
+    if (!cand) return stop();
+    const n = U.length;
     const pairs: DupPairHit[] = [];
-    const inA = (u: string) => !opt.scope || opt.scope.has(u);
-    for (let i = 0; i < qs.length; i++) {
-      const uid = qs[i].uid;
-      if (!inA(uid)) { if ((i + 1) % batch === 0) { opt.onProgress?.(i + 1, qs.length, 'scan'); await yieldUi(); if (opt.signal?.aborted) { stats.aborted = true; stats.ms = Date.now() - t0; return { pairs: sortPairs(pairs, rank), stats }; } } continue; }
-      const f = this.fps.get(uid)!;
-      const c = this.candidates(uid, f, opt.topK, opt.probe, opt.minShared);
-      if (c.capped) stats.candidatesCapped++;
-      for (const u of c.ids) {
-        const j = rank.get(u);
-        if (j === undefined) continue;
-        const bothA = inA(u);
-        if (!bothA && !opt.vsAll) continue;           // “trong phạm vi”: phía B cũng phải thuộc phạm vi
-        if (bothA && j <= i) continue;                // mỗi cặp chỉ xét một lần khi cả hai cùng thuộc phạm vi
-        stats.comparisons++;
-        const r = comparePair(f, this.fps.get(u)!);
-        if (keep(r.kind)) pairs.push({ a: uid, b: u, result: r });
-      }
-      if ((i + 1) % batch === 0) {
-        opt.onProgress?.(i + 1, qs.length, 'scan');
-        await yieldUi();
-        if (opt.signal?.aborted) { stats.aborted = true; stats.ms = Date.now() - t0; return { pairs: sortPairs(pairs, rank), stats }; }
-      }
+    const templates = new TopPairs(opt.templateCap ?? TEMPLATE_SHOWN);
+    const sl = new Slicer(opt.signal);
+    for (let k = 0; k < cand.length; k++) {
+      if ((k & 1023) === 0 && !(await sl.step())) return stop(sortPairs(pairs.concat(templates.list()), this.rankOf(qs)));
+      const i = Math.floor(cand[k] / n), j = cand[k] - i * n;
+      stats.comparisons++;
+      const r = comparePair(fps[i], fps[j]);
+      if (!keep(r.kind)) continue;
+      // thứ tự cặp theo danh sách đầu vào (ổn định); câu thuộc phạm vi đứng trước khi đối chiếu với kho
+      const [x, y] = inA[i] || !inA[j] ? [i, j] : [j, i];
+      const hit = { a: U[x].uid, b: U[y].uid, result: r };
+      if (r.kind === 'template') { stats.templateTotal++; templates.add(hit); } else pairs.push(hit);
     }
-    opt.onProgress?.(qs.length, qs.length, 'scan');
+    opt.onProgress?.(SCALE, SCALE, 'scan');
+    const tl = templates.list();
+    stats.templateShown = tl.length;
     stats.ms = Date.now() - t0;
-    return { pairs: sortPairs(pairs, rank), stats };
+    return { pairs: sortPairs(pairs.concat(tl), this.rankOf(qs)), stats };
   }
+  private rankOf(qs: QLike[]): Map<string, number> { return new Map(qs.map((q, i) => [q.uid, i] as const)); }
+}
+
+/**
+ * Cặp "cùng mẫu, khác dữ kiện" (thường là câu khác nhau) có thể lên tới hàng triệu trong kho lớn: vẫn so ĐỦ và đếm đủ,
+ * nhưng chỉ giữ lại để hiển thị các cặp giống nhất.
+ */
+export const TEMPLATE_SHOWN = 20000;
+class TopPairs {
+  private a: DupPairHit[] = [];
+  constructor(private cap: number) {}
+  add(h: DupPairHit) { this.a.push(h); if (this.a.length >= 2 * this.cap) this.trim(); }
+  private trim() { this.a.sort((x, y) => y.result.score - x.result.score || (x.a < y.a ? -1 : x.a > y.a ? 1 : x.b < y.b ? -1 : 1)); this.a.length = Math.min(this.a.length, this.cap); }
+  list(): DupPairHit[] { this.trim(); return this.a; }
 }
 
 const defaultKeep = (k: DupKind) => k !== 'unrelated' && k !== 'insufficient';

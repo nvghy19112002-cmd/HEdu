@@ -64,21 +64,35 @@ function recall(pairs: { a: string; b: string }[], pl: { a: string; b: string; k
   ok(new Set(r1.pairs.map((x) => x.a + '|' + x.b)).size === r1.pairs.length, 'mỗi cặp chỉ xuất hiện một lần');
 
 
-  console.log('Độ phủ ứng viên (candidate recall) so với vét cạn');
+  console.log('Quét đầy đủ: trùng khớp TUYỆT ĐỐI với vét cạn mọi cặp (mọi loại, kể cả cùng mẫu / chưa đủ bằng chứng)');
   {
     const { qs: sq, pl } = templated(700, 60);
-    const ex: Set<string> = new Set();
+    const all = (k: string) => k !== 'unrelated';
+    const ex = new Map<string, string>();
     for (let i = 0; i < sq.length; i++) for (let j = i + 1; j < sq.length; j++) {
       const k = compareLatex(sq[i].latex, sq[j].latex).kind;
-      if (k === 'raw' || k === 'same' || k === 'conflict' || k === 'near') ex.add(sq[i].uid + '|' + sq[j].uid);
+      if (all(k)) ex.set(sq[i].uid + '|' + sq[j].uid, k);
     }
-    const ix = new DupIndex(); ix.dfCapOverride = 5; // ép "ngân hàng lớn": mọi từ khoá chung đều bị coi là quá phổ biến
-    const rs = await ix.scan(sq, { batch: 100 });
-    const gotAll = new Set(rs.pairs.map((p) => p.a + '|' + p.b));
-    const missed = [...ex].filter((k) => !gotAll.has(k) && !gotAll.has(k.split('|').reverse().join('|')));
-    ok(ex.size >= 60, `vét cạn thấy ${ex.size} cặp cùng câu/gần trùng/mâu thuẫn (gồm ${pl.length} cặp cài sẵn)`);
-    ok(missed.length === 0, `chỉ mục không bỏ sót cặp nào so với vét cạn (bỏ sót ${missed.length}/${ex.size}) ở chế độ ép từ khoá phổ biến`);
-    ok(recall(rs.pairs, pl) === 1, 'độ phủ cặp cài sẵn = 100% khi từ khoá phổ biến bị loại');
+    const rs = await new DupIndex().scan(sq, { batch: 100, keep: all, templateCap: Infinity });
+    const capped = await new DupIndex().scan(sq, { keep: all, templateCap: 50 });
+    ok(capped.stats.templateTotal === [...ex.values()].filter((k) => k === 'template').length && capped.stats.templateShown === 50, 'giới hạn hiển thị cặp cùng mẫu vẫn đếm đủ tổng số');
+    ok(capped.pairs.filter((p) => p.result.kind !== 'template').length === [...ex.values()].filter((k) => k !== 'template').length, 'giới hạn cùng mẫu không làm mất cặp loại khác');
+    const got = new Map(rs.pairs.map((p) => [p.a + '|' + p.b, p.result.kind] as const));
+    const missed = [...ex.keys()].filter((k) => !got.has(k));
+    const extra = [...got.keys()].filter((k) => !ex.has(k));
+    ok(ex.size >= 60, `vét cạn thấy ${ex.size} cặp (gồm ${pl.length} cặp cài sẵn)`);
+    ok(missed.length === 0 && extra.length === 0, `quét đầy đủ = vét cạn (thiếu ${missed.length}, thừa ${extra.length} / ${ex.size})`);
+    ok([...ex].every(([k, v]) => got.get(k) === v), 'cùng kết luận cho từng cặp');
+    ok(recall(rs.pairs, pl) === 1, 'độ phủ cặp cài sẵn = 100%');
+    // phạm vi: một phần câu, đối chiếu với cả kho / chỉ trong phạm vi
+    const scope = new Set(sq.filter((_, i) => i % 7 === 0).map((q) => q.uid));
+    for (const vsAll of [true, false]) {
+      const want = [...ex.keys()].filter((k) => { const [a, b] = k.split('|'); return vsAll ? scope.has(a) || scope.has(b) : scope.has(a) && scope.has(b); });
+      const r = await new DupIndex().scan(sq, { scope, vsAll, keep: all, templateCap: Infinity });
+      const g = new Set(r.pairs.map((p) => [p.a, p.b].sort().join('|')));
+      const w = new Set(want.map((k) => k.split('|').sort().join('|')));
+      ok(g.size === w.size && [...w].every((k) => g.has(k)), `phạm vi ${scope.size} câu, ${vsAll ? 'đối chiếu cả kho' : 'trong phạm vi'}: đúng ${w.size} cặp như vét cạn (được ${g.size})`);
+    }
   }
   if (process.env.DUP_BENCH) {
     const { qs: bq, pl } = templated(30000, 150);
@@ -108,8 +122,7 @@ function recall(pairs: { a: string; b: string }[], pl: { a: string; b: string; k
     const s = await new DupIndex().scan(b, { batch: 500 });
     const ms = Date.now() - t;
     const full = (n * (n - 1)) / 2;
-    console.log(`  ℹ ${n} câu: ${ms} ms, ${s.stats.comparisons} phép so (so toàn bộ cặp sẽ là ${full}), ${s.pairs.length} cặp nghi, ${s.stats.candidatesCapped} câu bị cắt ứng viên`);
-    if (n === 3000) ok(s.stats.comparisons < full / 20, '3.000 câu: số phép so ít hơn 1/20 so toàn bộ cặp');
+    console.log(`  ℹ ${n} câu: ${ms} ms, ${s.stats.comparisons} phép so (so toàn bộ cặp sẽ là ${full}), ${s.pairs.length} cặp nghi, cùng mẫu ${s.stats.templateTotal}`);
     if (n === 3000) ok(ms < 30000, '3.000 câu quét dưới 30 giây');
   }
   if (failed) { console.log(`\n${failed} kiểm thử dupindex lỗi`); process.exit(1); }

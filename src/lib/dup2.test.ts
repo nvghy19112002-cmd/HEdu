@@ -57,8 +57,9 @@ ok(cmp('Cho hàm số $y=2x+1$. Tìm giá trị tại $x=1$.\\shortans{3}', 'Cho
   const after = (f: string) => ex(`Tính diện tích hình tròn.\\choice{\\True $1$}{$2$}{$3$}{$4$}\n\\begin{tikzpicture}${f}\\end{tikzpicture}`);
   const inSol = (f: string) => ex(`Tính diện tích.\\shortans{1}\\loigiai{Ta có \\begin{tikzpicture}${f}\\end{tikzpicture} nên bằng 1.}`);
   const withDef = (d: string) => `\\begin{ex}\n\\def\\r{${d}}\nTính diện tích hình tròn.\\choice{\\True $1$}{$2$}{$3$}{$4$}\n\\end{ex}`;
-  ok(compareLatex(im(f1), im(f2)).kind === 'template', '10a. hình trong \\immini được so');
-  ok(compareLatex(after(f1), after(f2)).kind === 'template', '10b. hình sau \\choice được so');
+  // chỉ khác hình, còn lại giống hệt ⇒ "gần trùng" (cần xem), không phải "cùng mẫu"
+  ok(compareLatex(im(f1), im(f2)).kind === 'near', '10a. hình trong \\immini được so');
+  ok(compareLatex(after(f1), after(f2)).kind === 'near', '10b. hình sau \\choice được so');
   ok(compareLatex(withDef('1'), withDef('2')).kind !== 'same', '10c. \\def phụ thuộc không bị bỏ qua');
   ok(compareLatex(inSol(f1), inSol(f2)).kind === 'same', '10d. hình chỉ nằm trong lời giải không làm đổi nhãn đề');
 }
