@@ -1825,3 +1825,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .cid-row .sel { width: auto; height: 30px; }
 .cid-sum { display: flex; flex-direction: column; gap: 8px; }
 .vq-prop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cid-dir { font-size: 13px; padding: 8px 12px; background: var(--bg); border-radius: 8px; }
+.cid-dir code { overflow-wrap: anywhere; }
+.cid-lots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cid-lots li { display: grid; grid-template-columns: minmax(150px, auto) auto 1fr auto; align-items: center; gap: 10px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.cid-st { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink-2); white-space: nowrap; }
+.cid-st.st-co-de-xuat { background: var(--pri-soft); color: var(--pri-ink); }
+.cid-st.st-da-nhap { background: var(--ok-bg); color: var(--ok-ink); }

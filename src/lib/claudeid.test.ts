@@ -1,5 +1,5 @@
 // Gán ID nhờ AI ngoài: lô xuất (bỏ ID, trộn câu đối chứng), đọc tệp đề xuất, kế hoạch nhập (đo độ đúng, không đụng câu đã xác minh).
-import { buildLot, parseProposal, planImport, PROPOSAL_FORMAT, type ProposalFile } from './claudeid';
+import { buildLot, latestPending, lotRows, parseProposal, planImport, PROPOSAL_FORMAT, type ProposalFile } from './claudeid';
 import { contentKeys, type Effective } from './idreview';
 import { buildDefault, indexOf } from './taxonomy';
 import { taxRevision } from './taxpath';
@@ -57,5 +57,18 @@ ok(plan.skip['doi-noi-dung'] === 1 && plan.skip['dang-la'] === 1 && plan.skip.tr
 ok(plan.gold.n === 2 && plan.gold.dang === 1 && plan.gold.chuong >= 1 && plan.gold.muc === 1 && plan.gold.sai[0].uid === 'u7', 'đo độ đúng trên câu đối chứng, không đổi câu đã xác minh');
 ok(!plan.recs.some(([u]) => gv.has(u)), 'câu giáo viên đã xác minh không bị đặt bản ghi');
 
+console.log('Thư mục trao đổi');
+{
+  const files = [
+    { name: 'hedu-gan-id-L1.json', bytes: 1, mtimeMs: 100 }, { name: 'de-xuat-L1.json', bytes: 1, mtimeMs: 300 },
+    { name: 'hedu-gan-id-L2.json', bytes: 1, mtimeMs: 200 },
+    { name: 'hedu-gan-id-L3.json', bytes: 1, mtimeMs: 400 }, { name: 'de-xuat-L3.json', bytes: 1, mtimeMs: 500 },
+    { name: 'ghi-chu.json', bytes: 1, mtimeMs: 999 },
+  ];
+  const rows = lotRows(files, new Set(['L3']));
+  ok(rows.map((r) => `${r.lo}:${r.state}`).join() === 'L3:da-nhap,L1:co-de-xuat,L2:cho-claude', `gom theo lô, trạng thái đúng, mới nhất trước: ${rows.map((r) => r.lo + ':' + r.state).join()}`);
+  ok(latestPending(rows)?.lo === 'L1' && latestPending(lotRows(files, new Set(['L1', 'L3']))) === null, 'lô mới nhất có đề xuất CHƯA nhập');
+  ok(lot.huongDan.some((x) => x.includes('de-xuat-<lo>.json')), 'hướng dẫn nói rõ tên và nơi ghi tệp đề xuất');
+}
 if (fail) { console.log(`\n${fail} kiểm thử claudeid lỗi`); process.exit(1); }
 console.log('claudeid: đạt hết.');

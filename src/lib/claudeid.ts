@@ -55,6 +55,7 @@ export const HUONG_DAN = [
   'Không đoán bừa: phân vân giữa nhiều Dạng thì chọn Dạng hợp nhất và để "chac":"thap"; ghi "lyDo" một câu ngắn (vì sao chọn Dạng này).',
   'Trả về MỘT tệp JSON: {"format":"hedu-gan-id-de-xuat","v":1,"lo":<giống "lo">,"boi":"Claude","cau":[{"k":<k>,"fp":<fp>,"dang":<id Dạng>,"muc":"NB|TH|VD|VDC","chac":"cao|vua|thap","lyDo":"…"}]}.',
   'Chép NGUYÊN "k" và "fp" của từng câu. Đủ một dòng cho mỗi câu; không thêm câu, không đổi đề.',
+  'Ghi tệp kết quả tên "de-xuat-<lo>.json" (thay <lo> bằng giá trị "lo") vào CÙNG thư mục với tệp lô này.',
 ];
 
 export interface BuildOpts { tax: Taxonomy; ix: TaxIndex; taxRev: string; effOf: (q: Question) => Effective; size: number; goldShare: number; lo: string; seed?: number; now?: Date }
@@ -176,3 +177,26 @@ export function lotReadme(lot: LotFile, need: number, gold: number): string {
     'không câu nào bị đổi Dạng hay ID cho tới khi thầy/cô xác nhận.',
   ].join('\n') + '\n';
 }
+
+// ---------- thư mục trao đổi cố định (Claude Code đọc/ghi cùng thư mục) ----------
+export interface XFile { name: string; bytes: number; mtimeMs: number }
+export type LotState = 'cho-claude' | 'co-de-xuat' | 'da-nhap';
+export const LOT_STATE_LABEL: Record<LotState, string> = { 'cho-claude': 'Chờ Claude làm', 'co-de-xuat': 'Claude đã làm — chờ nhập', 'da-nhap': 'Đã nhập' };
+export interface LotRow { lo: string; lotFile: string | null; propFile: string | null; state: LotState; at: number }
+export const lotFileName = (lo: string): string => `hedu-gan-id-${lo}.json`;
+export const proposalFileName = (lo: string): string => `de-xuat-${lo}.json`;
+
+/** Gom tệp trong thư mục trao đổi thành từng lô (mới nhất trước). `imported` = các lô đã nhập (lưu ở máy). */
+export function lotRows(files: readonly XFile[], imported: ReadonlySet<string>): LotRow[] {
+  const m = new Map<string, LotRow>();
+  const row = (lo: string) => { let r = m.get(lo); if (!r) m.set(lo, (r = { lo, lotFile: null, propFile: null, state: 'cho-claude', at: 0 })); return r; };
+  for (const f of files) {
+    const a = /^hedu-gan-id-(.+)\.json$/i.exec(f.name), b = /^de-xuat-(.+)\.json$/i.exec(f.name);
+    if (a) { const r = row(a[1]); r.lotFile = f.name; r.at = Math.max(r.at, f.mtimeMs); }
+    else if (b) { const r = row(b[1]); r.propFile = f.name; r.at = Math.max(r.at, f.mtimeMs); }
+  }
+  for (const r of m.values()) r.state = imported.has(r.lo) ? 'da-nhap' : r.propFile ? 'co-de-xuat' : 'cho-claude';
+  return [...m.values()].sort((x, y) => y.at - x.at || (x.lo < y.lo ? 1 : -1));
+}
+/** Lô mới nhất có đề xuất chưa nhập (để nút "Nhập đề xuất mới nhất"). */
+export const latestPending = (rows: readonly LotRow[]): LotRow | null => rows.find((r) => r.state === 'co-de-xuat') ?? null;
