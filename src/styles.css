@@ -1816,3 +1816,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .pill.t-tn, .pill.t-ds, .pill.t-tln, .pill.t-tl { background: var(--paper); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; }
 .pill.t-tn::before, .pill.t-ds::before, .pill.t-tln::before, .pill.t-tl::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .pill.t-tn::before { background: var(--c-tn-fg); } .pill.t-ds::before { background: var(--c-ds-fg); } .pill.t-tln::before { background: var(--c-tln-fg); } .pill.t-tl::before { background: var(--c-tl-fg); }
+/* Gán ID nhờ Claude */
+.cid.xl-panel { width: min(760px, calc(100vw - 32px)); }
+.cid .xl-panel-body { max-height: 68vh; }
+.cid-step { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.cid-step > b { font-size: 14px; }
+.cid-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.cid-row .sel { width: auto; height: 30px; }
+.cid-sum { display: flex; flex-direction: column; gap: 8px; }
+.vq-prop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

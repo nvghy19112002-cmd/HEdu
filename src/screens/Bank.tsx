@@ -36,6 +36,7 @@ import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
 import { ReviewBadge } from '../components/ReviewControl';
 import { IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
 import { VerifyQueue } from '../components/VerifyQueue';
+import { ClaudeIdDialog } from '../components/ClaudeIdDialog';
 import { scopeCounts } from '../lib/verifyqueue';
 import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPES, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 
@@ -137,6 +138,7 @@ export function BankScreen() {
   const list = facets.list;
   const resultUids = useMemo(() => new Set(list.map((q) => q.uid)), [list]);
   const [vqOpen, setVqOpen] = useState(false); // hàng đợi xác minh từng câu (PR 1E)
+  const [cidOpen, setCidOpen] = useState(false); // Gán ID nhờ Claude (AI ngoài)
   const vqCount = useMemo(() => scopeCounts(list, effOf)['tat-ca'], [list, effOf]);
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
@@ -538,6 +540,7 @@ export function BankScreen() {
               </span>
               <span className="qtools-r">
                 <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
+                <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
                 <label className="qsel" title="Sắp xếp">
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
                     {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}
@@ -586,6 +589,7 @@ export function BankScreen() {
         </>
       )}
       {vqOpen && <VerifyQueue pool={list} onClose={() => setVqOpen(false)} />}
+      {cidOpen && <ClaudeIdDialog pool={list} all={questions} tax={tax} effOf={effOf} toast={toast} onClose={() => setCidOpen(false)} onOpenQueue={() => setVqOpen(true)} />}
       {dupOpen && <DupCheck questions={questions} selected={sel} initialSelection={dupSel} onClose={() => { setDupOpen(false); setDupSel(false); }} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
       {undo && (
         <div className="undo-bar" role="status">
