@@ -322,9 +322,9 @@ function PairView({ hit, A, B, snap, onOpen, onGoto, onTrash, onMsg, beforeDecid
             <input type="text" list="dc-why-list" value={why} maxLength={120} placeholder="chọn hoặc tự gõ" onChange={(e) => setWhy(e.target.value)} />
             <datalist id="dc-why-list">{WHY_CHOICES.map((w) => <option key={w} value={w} />)}</datalist>
           </label>
-          {(['not_duplicate', 'legit_variant', 'review_later'] as const).map((d) => <button key={d} type="button" className="btn btn-sm" disabled={st.status === 'valid' && st.rec!.d === d} onClick={() => decide(d)}>{DECISION_LABEL[d]}</button>)}
+          {(['not_duplicate', 'legit_variant', 'review_later'] as const).map((d) => <button key={d} type="button" className={`btn btn-sm${d === 'review_later' ? ' btn-ghost' : ''}`} disabled={st.status === 'valid' && st.rec!.d === d} onClick={() => decide(d)}>{DECISION_LABEL[d]}</button>)}
           <span className="dc-del">
-            <button type="button" className="btn btn-sm" aria-expanded={del} onClick={() => { setDel(!del); setAsk(null); }}>Loại một câu… ▾</button>
+            <button type="button" className="btn btn-sm btn-danger-soft" aria-expanded={del} onClick={() => { setDel(!del); setAsk(null); }}>Loại một câu… ▾</button>
             {del && (
               <span className="dc-del-pop" role="group" aria-label="Chuyển một câu vào thùng rác">
                 <small>Câu được chuyển vào <b>thùng rác</b> (mở màn Thùng rác ở thanh bên trái), không mất hẳn: có thể khôi phục. Cặp còn lại không bị ảnh hưởng.</small>

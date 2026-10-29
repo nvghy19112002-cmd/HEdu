@@ -148,9 +148,9 @@ export const SlotMatrix = memo(function SlotMatrix(p: Props) {
             ? <button type="button" className="ico" title="Bỏ khóa (máy được chọn câu khác)" aria-label="Bỏ khóa" onClick={() => p.onUnlock(r.id)}><IcLock /></button>
             : <button type="button" className="ico" title="Khóa câu này" aria-label="Khóa" onClick={() => p.onLock(r.id, q.uid)}><IcUnlock /></button>)}
           {q && mode === 'random' && <button type="button" className="ico" title="Đổi ngẫu nhiên câu khác" aria-label="Đổi ngẫu nhiên" onClick={() => p.onReroll(q.uid)}><IcDice /></button>}
-          <button type="button" className="ico" title="Lên" aria-label="Lên" onClick={() => p.onMove(r.id, -1)}>↑</button>
-          <button type="button" className="ico" title="Xuống" aria-label="Xuống" onClick={() => p.onMove(r.id, 1)}>↓</button>
-          <button type="button" className="ico" title="Bỏ câu này khỏi ma trận" aria-label="Bỏ câu" onClick={() => p.onDelete(r.id)}><IcX /></button>
+          <button type="button" className="ico sm-more" title="Lên" aria-label="Lên" onClick={() => p.onMove(r.id, -1)}>↑</button>
+          <button type="button" className="ico sm-more" title="Xuống" aria-label="Xuống" onClick={() => p.onMove(r.id, 1)}>↓</button>
+          <button type="button" className="ico sm-more sm-del" title="Bỏ câu này khỏi ma trận" aria-label="Bỏ câu" onClick={() => p.onDelete(r.id)}><IcX /></button>
         </span>
         {scopeFor === r.id && (
           <div className="sm-pop">

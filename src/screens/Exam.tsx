@@ -437,7 +437,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
           <div className="panel te-sum" aria-live="polite">
             <div className="te-big"><b>{total}</b><span>câu</span><b>{fmtScore(centi)}</b><span>điểm</span></div>
             <div className="te-parts">{PARTS.filter((p) => counts[p] > 0).map((p) => <span key={p} className="code-tag">{PART_NAME[p].split(' · ')[0]}: {counts[p]}</span>)}</div>
-            {total > 0 && (
+            {total > 0 && step !== 1 && (
               <div className="te-lv" role="img" aria-label={byLevel.map((x) => `${LEVEL_LABEL[x.l]} ${x.n}`).join(', ')}>
                 <div className="te-lv-bar">{byLevel.filter((x) => x.n).map((x) => <i key={x.l} style={{ flexGrow: x.n, background: LEVEL_COLOR[x.l] }} />)}</div>
                 <div className="te-lv-key">{byLevel.map((x) => <span key={x.l}><i style={{ background: LEVEL_COLOR[x.l] }} />{x.l} {x.n}</span>)}</div>
