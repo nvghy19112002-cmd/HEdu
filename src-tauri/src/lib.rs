@@ -13,6 +13,7 @@ mod examprofile;
 mod examsources;
 mod examusage;
 mod examxlsx;
+mod idexchange;
 mod importfs;
 mod jsonmig;
 mod proc;
@@ -429,6 +430,10 @@ pub fn run() {
             tex_check_files,
             tex_find_package,
             save_text_file,
+            idexchange::id_exchange_default,
+            idexchange::id_exchange_list,
+            idexchange::id_exchange_write,
+            idexchange::id_exchange_read,
             export_tex_folder,
             ai_key_set,
             ai_key_clear,

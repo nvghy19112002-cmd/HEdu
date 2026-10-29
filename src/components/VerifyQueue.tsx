@@ -102,6 +102,7 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
       if (k === 'y' || k === 'enter') act({ kind: 'xac-nhan-dang' });
       else if (k === 'm') act({ kind: 'xac-nhan-muc-do' }, false);
       else if (k === 'n') act({ kind: 'can-xem-lai' });
+      else if ((k === 'p' || k === 'P') && eff?.rec?.prop && q && eff.rec.prop !== q.formId) act({ kind: 'doi-dang', formId: eff.rec.prop });
       else if (k === '1' || k === '2' || k === '3') { const o = options[Number(k) - 1]; if (o) act({ kind: 'doi-dang', formId: o.formId }); }
       else if (k === 'u') { e.preventDefault(); void doUndo(); }
       else if (k === 's' || k === 'arrowright') { e.preventDefault(); setIdx((i) => Math.min(i + 1, Math.max(uids.length - 1, 0))); setMsg(null); }
@@ -164,7 +165,12 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
                 </span>
                 {eff.src && <small className="sys-hint">Nguồn: {SOURCE_LABEL[eff.src]}{eff.why ? ` · ${eff.why}` : ''}</small>}
                 {eff.rec?.orig && <small className="sys-hint">ID nguyên bản trong tệp: <span className="mono">{eff.rec.orig}</span></small>}
-                {eff.rec?.prop && eff.rec.prop !== q.formId && <small className="sys-hint">Máy từng đề xuất: {where(eff.rec.prop)}</small>}
+                {eff.rec?.prop && eff.rec.prop !== q.formId && (
+                  <span className="vq-prop">
+                    <small className="sys-hint">{eff.src === 'ai-ngoai' ? 'AI ngoài đề xuất' : 'Máy từng đề xuất'}: <b>{where(eff.rec.prop)}</b></small>
+                    <button type="button" className="btn btn-sm btn-accent" disabled={busy} title="Đổi sang Dạng đề xuất (phím P)" onClick={() => void run({ kind: 'doi-dang', formId: eff.rec!.prop! }, true)}><kbd>P</kbd> Dùng Dạng đề xuất</button>
+                  </span>
+                )}
               </div>
               <div className="vq-card">
                 <b>Gợi ý tham khảo</b>
