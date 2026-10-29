@@ -66,7 +66,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
             <span className="bt-n">{nf.format(x.count)}</span>
           </button>
         </div>
-        {isOpen && <ul role="group">{x.children.map((c) => row(c, depth + 1))}</ul>}
+        {isOpen && <ul role="group" style={{ ["--guide" as string]: `${14 + depth * 12}px` }}>{x.children.map((c) => row(c, depth + 1))}</ul>}
       </li>
     );
   };

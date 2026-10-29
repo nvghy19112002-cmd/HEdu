@@ -383,7 +383,7 @@ export function BankScreen() {
             <span className="mono card-no">{seqLabel(q.seq)}</span>
             <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
             <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-            <span className="code-tag">{questionCode(q, q.level)}</span>
+            <span className="code-tag" title={questionCode(q, q.level)}>{questionCode(q, q.level)}</span>
             <div className="card-acts">
               <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => { setViewUid(q.uid); setViewEdit(true); }}><IcEdit size={17} /></button>
               <div className="more">

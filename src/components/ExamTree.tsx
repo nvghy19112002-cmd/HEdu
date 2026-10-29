@@ -69,7 +69,7 @@ export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, on
             <span className="bt-n">{nf.format(x.count)}</span>
           </button>
         </div>
-        {isOpen && <ul role="group">{x.children.map((c) => row(c, depth + 1))}</ul>}
+        {isOpen && <ul role="group" style={{ ["--guide" as string]: `${14 + depth * 12}px` }}>{x.children.map((c) => row(c, depth + 1))}</ul>}
       </li>
     );
   };
