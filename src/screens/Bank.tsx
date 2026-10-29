@@ -312,19 +312,8 @@ export function BankScreen() {
     toast(r.strayInTrash ? `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng. Lưu ý: còn bản trong Thùng rác (không mất gì), có thể dọn ở màn Thùng rác.` : `Đã khôi phục ${nf.format(r.restored)} câu về Ngân hàng.`);
   };
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 30000); return () => clearTimeout(t); }, [undo]);
-  // Đổi bộ lọc hoặc chữ tìm ⇒ bỏ chọn các câu ngoài kết quả mới (mọi câu đang chọn luôn nhìn thấy được). Đổi trang/sắp xếp/kiểu xem thì giữ.
-  const filterSeen = useRef(false);
-  useEffect(() => {
-    if (!filterSeen.current) { filterSeen.current = true; return; }
-    setSel((s) => {
-      if (s.size === 0) return s;
-      const kept = new Set<string>();
-      for (const u of s) if (resultUids.has(u)) kept.add(u);
-      if (kept.size === s.size) return s;
-      toast(`Đã bỏ chọn ${nf.format(s.size - kept.size)} câu nằm ngoài bộ lọc mới.`);
-      return kept;
-    });
-  }, [f0, text, wideOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Đổi bộ lọc / chữ tìm GIỮ NGUYÊN lựa chọn (chọn vài câu Trắc nghiệm rồi lọc sang Đúng/Sai để chọn tiếp). Thanh chọn báo rõ số câu nằm ngoài
+  // bộ lọc hiện tại; mọi thao tác hàng loạt đều nêu tổng số câu sẽ bị tác động trước khi chạy.
   // Menu "Thao tác khác": bấm ra ngoài hoặc Esc thì đóng (Esc trả focus về nút)
   useEffect(() => {
     if (!moreSel) return;
@@ -471,7 +460,7 @@ export function BankScreen() {
             <div className="selbar" role="region" aria-label="Thao tác với các câu đã chọn">
               <span className="selbar-n">
                 <b>Đã chọn {nf.format(counts.total)} câu</b>
-                <small>{nf.format(counts.inPage)} ở trang này · {nf.format(counts.outPage)} ngoài trang{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} ngoài bộ lọc` : ''}</small>
+                <small>{nf.format(counts.inPage)} ở trang này{counts.outPage - counts.outScope > 0 ? ` · ${nf.format(counts.outPage - counts.outScope)} ở trang khác` : ''}{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} ở bộ lọc khác (vẫn giữ)` : ''}</small>
               </span>
               <div className="selbar-grp">
                 <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo kiểu sắp xếp đang chọn">Xuất .tex</button>
@@ -492,6 +481,7 @@ export function BankScreen() {
                 </span>
                 <span className="selbar-sep" aria-hidden="true" />
                 {counts.inPage > 0 && <button type="button" className="btn btn-sm" onClick={deselectPage} title="Chỉ bỏ các câu của trang này, giữ các trang khác">Bỏ chọn trang</button>}
+                {counts.outScope > 0 && <button type="button" className="btn btn-sm" onClick={() => setSel((x) => new Set([...x].filter((u) => resultUids.has(u))))} title="Bỏ các câu đang chọn nằm ngoài bộ lọc hiện tại">Bỏ câu ngoài bộ lọc</button>}
                 <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
               </div>
             </div>
