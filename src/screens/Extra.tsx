@@ -35,6 +35,7 @@ import { DEFAULT_SORT } from '../lib/qsort';
 import { ImportReportView } from '../components/ImportReportView';
 import { appendLog, buildReport, type IdPlace, type ImportReport, type ReportRow } from '../lib/importreport';
 import { addMany, flushSave, getState, isLastSaveOk, useBank, type Draft } from '../lib/store';
+import { TRUST_BLOCK_LABEL, trustBlock, trustTag, type TrustBlock } from '../lib/importtrust';
 import { LEVEL_LABEL, LEVELS, TYPE_LABEL, type Level, type Location } from '../lib/types';
 
 function readFile(file: File): Promise<string> {
@@ -300,6 +301,24 @@ export function ImportScreen() {
     const t = setTimeout(step, 0);
     return () => { stop = true; clearTimeout(t); };
   }, [idRows, questions, taxNow, reviewVer]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Duyệt theo lô nguồn tin cậy: chỉ câu đạt đủ điều kiện (importtrust.ts) mới được đánh dấu "Đã duyệt"
+  const [trust, setTrust] = useState(false);
+  useEffect(() => { setTrust(false); }, [rows]); // đổi lô (nguồn khác) thì phải xác nhận lại
+  const trustOf = (i: number): TrustBlock | null => trustBlock({
+    status: statusOf(i).key, issues: issues[i], p: edits[i] != null ? parseExTest(latexOf(i)) : rows[i].p,
+    idOk: idStateOf(latexOf(i)) === 'ok' && verifOf(i)?.verdict !== 'bat-dong',
+  });
+  const trustSum = (() => {
+    if (!anaDone) return { ok: 0, by: new Map<TrustBlock, number>() };
+    let n = 0; const by = new Map<TrustBlock, number>();
+    rows.forEach((_, i) => { if (decOf(i) !== 'import') return; const b = trustOf(i); if (b) by.set(b, (by.get(b) ?? 0) + 1); else n++; });
+    return { ok: n, by };
+  })();
+  const askTrust = (on: boolean) => {
+    if (!on) { setTrust(false); return; }
+    const tag = trustTag(info.name, new Date());
+    if (window.confirm(`Xác nhận lô này lấy từ NGUỒN ĐÃ KIỂM (đề Sở, sách, bộ đề đã rà)?\n\nHEdu sẽ đánh dấu “Đã duyệt” cho ${trustSum.ok} câu đủ điều kiện: câu mới (không trùng), mã không lỗi, xem trước dựng chuẩn, đọc chắc được đáp án, ID hợp lệ và không bất đồng. Các câu còn lại giữ “Chưa kiểm tra”.\n\nMọi câu được duyệt mang nhãn “${tag}”: lọc theo nhãn này trong Ngân hàng để xem lại hoặc đưa cả lô về “Chưa kiểm tra”.`)) setTrust(true);
+  };
   const vsum = summarizeVerify(idRows, verifOf, idDecOf, (i) => decOf(i) === 'import');
   const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0;
   /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
@@ -374,6 +393,18 @@ export function ImportScreen() {
     }
     const built = buildDrafts((i) => freshVer.get(i));
     if ('error' in built) { toast(`Chưa ghi gì. ${built.error}`); return; }
+    // Duyệt theo lô: thứ tự bản ghi = thứ tự các câu được nhập; kiểm lại điều kiện ngay lúc ghi
+    let approvedN = 0;
+    if (trust) {
+      const tag = trustTag(info.name, new Date());
+      let k = 0;
+      rows.forEach((_, i) => {
+        if (decOf(i) !== 'import') return;
+        const d = built.drafts[k];
+        if (d && trustOf(i) === null) { built.drafts[k] = { ...d, review: 'approved', tags: d.tags.includes(tag) ? d.tags : [...d.tags, tag] }; approvedN++; }
+        k++;
+      });
+    }
     // SQLite: nhập hàng loạt (từ 20 câu) tự chụp điểm khôi phục trước; không chụp được thì KHÔNG nhập
     const rp = await ensureRestorePoint('nhap-hang-loat', sum.importN >= BIG_OP);
     if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
@@ -388,7 +419,7 @@ export function ImportScreen() {
       setSaveErr(`Đã đưa ${added.length} câu vào ngân hàng trong phiên này nhưng CHƯA ghi được xuống đĩa. Đừng đóng app. Nội dung dán vẫn được giữ lại; các câu đã thêm sẽ hiện là “trùng chắc”, nên thử lại không bị nhân đôi.`);
       return;
     }
-    toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.`);
+    toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.${approvedN ? ` Đã duyệt theo lô ${approvedN} câu.` : ''}`);
     finish(report);
   };
   const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); finish(pendingReport.current); } };
@@ -572,6 +603,12 @@ export function ImportScreen() {
                   Kế hoạch nhập: <b>nhập {sum.importN}</b> · <b>bỏ qua {sum.skipN}</b>{sum.holdN > 0 && <> · <b className="dup-hold">{sum.holdN} câu chưa quyết định</b></>}
                   {sum.keptSuspect > 0 && <> · {sum.keptSuspect} câu nghi trùng được bạn chọn nhập</>}
                 </p>
+              )}
+              {anaDone && importCount > 0 && (
+                <div className={`trust${trust ? ' on' : ''}`}>
+                  <label><input type="checkbox" checked={trust} onChange={(e) => askTrust(e.target.checked)} /> <b>Lô từ nguồn đã kiểm</b>: đánh dấu “Đã duyệt” cho <b>{trustSum.ok}</b> / {importCount} câu đủ điều kiện</label>
+                  {trustSum.by.size > 0 && <span className="te-note">Không duyệt: {[...trustSum.by].map(([b, n]) => `${n} câu ${TRUST_BLOCK_LABEL[b]}`).join(' · ')}.</span>}
+                </div>
               )}
               {anaDone && sureRows.length > 0 && (
                 <div className="head-actions">

@@ -210,7 +210,7 @@ function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
-export interface Draft extends Location { latex: string; level: Level; tags: string[] }
+export interface Draft extends Location { latex: string; level: Level; tags: string[]; /** chỉ khi nhập: duyệt theo lô nguồn tin cậy (importtrust.ts) */ review?: ReviewStatus }
 
 /** Lưu câu mới (uid rỗng) hoặc cập nhật câu cũ. Trả về câu đã lưu. */
 export function saveQuestion(draft: Draft, existingUid?: string): Question {
