@@ -1810,3 +1810,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .cards-grid .card-meta { flex-wrap: wrap; overflow: visible; }
 .cards-grid .card-meta > .code-tag { flex: none; overflow: visible; }
 .qtools .qtools-r { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+/* Nhãn (pill): chữ luôn nằm giữa theo chiều dọc. Nhãn LOẠI CÂU trung tính (chữ xám, viền mảnh, chấm màu nhỏ) để không tranh với nhãn MỨC ĐỘ tô màu */
+.pill { display: inline-flex; align-items: center; gap: 5px; line-height: 1; box-sizing: border-box; }
+.cards-grid .card-meta .pill { height: 22px; padding: 0 9px; }
+.pill.t-tn, .pill.t-ds, .pill.t-tln, .pill.t-tl { background: var(--paper); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; }
+.pill.t-tn::before, .pill.t-ds::before, .pill.t-tln::before, .pill.t-tl::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.pill.t-tn::before { background: var(--c-tn-fg); } .pill.t-ds::before { background: var(--c-ds-fg); } .pill.t-tln::before { background: var(--c-tln-fg); } .pill.t-tl::before { background: var(--c-tl-fg); }
