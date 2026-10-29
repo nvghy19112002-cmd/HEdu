@@ -7,6 +7,8 @@ import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
 import { ExamExportDialog } from '../components/ExamExportDialog';
 import { ExamUsagePanel, useUsageScan } from '../components/ExamUsagePanel';
 import { ExamMatrixGrid } from '../components/ExamMatrixGrid';
+import { SlotMatrix, SlotStats } from '../components/SlotMatrix';
+import { applyForm, expandRows, levelStats, moveSlot, patchSlots } from '../lib/examslots';
 import { stockIndex } from '../lib/examgrid';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
@@ -63,93 +65,6 @@ const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exce
   );
 });
 
-/** Chọn lại phạm vi cho một dòng đã mất/đổi vị trí. Chỉ chọn trong cây hiện có; không tự đoán. */
-function ScopePicker({ defaultGrade, onPick, onCancel }: { defaultGrade: number; onPick(scope: Row['scope']): void; onCancel(): void }) {
-  const [grade, setGrade] = useState(defaultGrade);
-  const [chap, setChap] = useState('');
-  const [les, setLes] = useState('');
-  const [form, setForm] = useState('');
-  const chs = chaptersOf(grade);
-  const lessons = chs.find((c) => c.id === chap)?.lessons ?? [];
-  const forms = lessons.find((l) => l.id === les)?.forms ?? [];
-  const scope: Row['scope'] = form ? { kind: 'form', id: form } : les ? { kind: 'lesson', id: les } : chap ? { kind: 'chapter', id: chap } : { kind: 'grade', id: String(grade) };
-  return (
-    <div className="te-pick" role="group" aria-label="Chọn lại phạm vi cho dòng">
-      <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
-      <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-      <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">Cả chương</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
-      <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">Mọi dạng</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-      <div className="te-pick-acts">
-        <button type="button" className="btn btn-dark btn-sm" onClick={() => onPick(scope)}>Dùng phạm vi này</button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Hủy</button>
-      </div>
-    </div>
-  );
-}
-
-const LEVEL_SHORT: Record<Level | 'any', string> = { NB: 'Nhận biết', TH: 'Thông hiểu', VD: 'Vận dụng', VDC: 'Vận dụng cao', any: 'Mọi mức' };
-
-/**
- * Thêm một yêu cầu vào ma trận. Chia hai nhóm: PHẠM VI (lớp → chương → bài → dạng) và YÊU CẦU (loại câu, mức độ, số câu).
- * Hiện ngay số câu trong kho khớp yêu cầu (đúng chính sách lấy câu đang chọn) để giáo viên biết trước có đủ hay không.
- */
-function RowAdder({ initialGrade, stock, onAdd, onClose }: { initialGrade: number; stock(r: Row): number; onAdd(r: Row): void; onClose(): void }) {
-  const [grade, setGrade] = useState(initialGrade);
-  const [chap, setChap] = useState('');
-  const [les, setLes] = useState('');
-  const [form, setForm] = useState('');
-  const [type, setType] = useState<QType>('tn');
-  const [level, setLevel] = useState<Level | 'any'>('NB');
-  const [count, setCount] = useState(4);
-  const [added, setAdded] = useState<string | null>(null);
-  const chs = chaptersOf(grade);
-  const lessons = chs.find((c) => c.id === chap)?.lessons ?? [];
-  const forms = lessons.find((l) => l.id === les)?.forms ?? [];
-  const scope: Row['scope'] = form ? { kind: 'form', id: form } : les ? { kind: 'lesson', id: les } : chap ? { kind: 'chapter', id: chap } : { kind: 'grade', id: String(grade) };
-  const row: Row = { id: '', scope, type, level: type === 'tn' ? level : 'any', count };
-  const have = stock(row);
-  const where = form ? forms.find((f) => f.id === form)?.name : les ? lessons.find((l) => l.id === les)?.name : chap ? chs.find((c) => c.id === chap)?.name : `cả lớp ${grade}`;
-  const add = () => {
-    onAdd({ ...row, id: newRowId() });
-    setAdded(`Đã thêm: ${count} câu ${TYPE_LABEL[type].toLowerCase()}${type === 'tn' && level !== 'any' ? ` ${LEVEL_SHORT[level].toLowerCase()}` : ''} ở ${where}.`);
-  };
-  return (
-    <div className="te-add" role="group" aria-label="Thêm dòng ma trận">
-      <div className="te-add-h"><b>Thêm dòng vào ma trận</b><button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>Đóng</button></div>
-      <fieldset className="te-add-g">
-        <legend>1 · Phạm vi kiến thức</legend>
-        <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
-        <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp {grade}</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-        <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">{chap ? 'Cả chương' : '— chọn chương trước'}</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
-        <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">{les ? 'Mọi dạng của bài' : '— chọn bài trước'}</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
-      </fieldset>
-      <fieldset className="te-add-g">
-        <legend>2 · Yêu cầu</legend>
-        <div className="lbl">Loại câu
-          <div className="seg sm" role="group" aria-label="Loại câu">{TYPES.map((t) => <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)}>{TYPE_LABEL[t]}</button>)}</div>
-        </div>
-        <div className="lbl">Mức độ
-          {type === 'tn'
-            ? <div className="seg sm" role="group" aria-label="Mức độ">{([...LEVELS, 'any'] as (Level | 'any')[]).map((l) => <button key={l} type="button" aria-pressed={level === l} onClick={() => setLevel(l)}>{l === 'any' ? 'Mọi mức' : l}</button>)}</div>
-            : <span className="te-muted">Mọi mức (câu {TYPE_LABEL[type].toLowerCase()} không chia mức độ trong ma trận)</span>}
-        </div>
-        <div className="lbl">Số câu
-          <div className="stepper" role="group" aria-label="Số câu">
-            <button type="button" aria-label="Bớt một câu" onClick={() => setCount(Math.max(1, count - 1))}>−</button>
-            <span aria-live="polite">{count}</span>
-            <button type="button" aria-label="Thêm một câu" onClick={() => setCount(Math.min(100, count + 1))}>+</button>
-          </div>
-        </div>
-      </fieldset>
-      <div className="te-add-foot">
-        <span className={have >= count ? 'okmark' : 'te-lack'} aria-live="polite">{have >= count ? <IcCheck /> : <IcAlert size={14} />}Kho có {have} câu phù hợp{have < count ? ` · thiếu ${count - have}` : ''}</span>
-        <button type="button" className="btn btn-dark" onClick={add}><IcPlus />Thêm vào ma trận</button>
-      </div>
-      {added && <p className="te-note" role="status">{added} Có thể chọn tiếp để thêm dòng khác.</p>}
-    </div>
-  );
-}
-
 export function ExamScreen({ pick }: { pick?: string[] }) {
   const { go, toast, showFile } = useApp();
   const { questions } = useBank();
@@ -204,17 +119,24 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const exceptions = useMemo(() => new Set(Object.keys(d.exceptions)), [d.exceptions]);
   /** Dòng dùng thật: dòng có cờ hoặc có nút phạm vi không còn trong cây KHÔNG khớp câu nào và chặn xuất */
   const rows = useMemo(() => effectiveRows(d.rows, tax), [d.rows, tax]);
-  const alloc = useMemo(() => allocate(questions, rows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions, avoid }), [questions, rows, d.policy, d.seed, d.locked, exclude, exceptions, avoid, effOf]);
-  const picked = useMemo(() => collect(rows, alloc.picks, byUid), [rows, alloc, byUid]);
+  // ma trận theo từng câu: dòng nhiều câu (bản nháp cũ, mẫu, câu đưa từ Ngân hàng) được tách thành từng câu
+  useEffect(() => { const e = expandRows(d.rows, d.locked, newRowId); if (e.changed) setD((x) => ({ ...x, rows: e.rows, locked: e.locked })); }, [d.rows, d.locked]);
+  /** Tự chọn: chỉ các câu giáo viên đã chọn (khóa) vào đề; ô chưa chọn để trống, không để máy điền */
+  const allocRows = useMemo(() => (d.mode === 'manual' ? rows.filter((r) => d.locked[r.id]?.length) : rows), [rows, d.mode, d.locked]);
+  const unchosen = rows.length - allocRows.length;
+  const alloc = useMemo(() => allocate(questions, allocRows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions, avoid }), [questions, allocRows, d.policy, d.seed, d.locked, exclude, exceptions, avoid, effOf]);
+  const picked = useMemo(() => collect(allocRows, alloc.picks, byUid), [allocRows, alloc, byUid]);
+  /** mức độ của đề cho bảng thống kê: mức câu đã chọn, ô chưa có câu thì mức yêu cầu */
+  const slotLevels = useMemo(() => levelStats(rows.map((r) => { const u = alloc.picks[r.id]?.[0]; return (u && byUid.get(u)?.level) || r.level; })), [rows, alloc, byUid]);
   const counts = countsOf(picked);
   const total = counts.p1 + counts.p2 + counts.p3 + counts.p4;
   const variants = useMemo(() => makeVariants(picked, { count: d.count, firstCode: d.firstCode, shuffleQuestions: d.shuffleQuestions, shuffleOptions: d.shuffleOptions, seed: d.seed, keepFirstOriginal: true }), [picked, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.seed]);
   const variant = variants[Math.min(shown, variants.length - 1)];
   const rowOf = useMemo(() => { const m = new Map<string, string>(); for (const [rid, us] of Object.entries(alloc.picks)) for (const u of us) m.set(u, rid); return m; }, [alloc]);
   const lockedSet = useMemo(() => new Set(Object.values(d.locked).flat()), [d.locked]);
-  const missing = rows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
+  const missing = allocRows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
   const flaggedN = rows.filter((r) => r.flag).length;
-  const issues = useMemo(() => [...checkVariants(variants), ...reconcile(rows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, rows, alloc, picked, d.scoring]);
+  const issues = useMemo(() => [...checkVariants(variants), ...reconcile(allocRows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, allocRows, alloc, picked, d.scoring]);
   const lostLocks = alloc.lost;
   /** dòng thiếu câu mà có ứng viên bị loại vì đã dùng: báo rõ số lượng, giáo viên tự quyết dùng lại */
   const shortUsed = useMemo(() => rows.flatMap((r) => {
@@ -243,10 +165,17 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
 
   const gridStock = useMemo(() => stockIndex(questions, (q) => !exclude.has(q.uid) && !avoid.has(q.uid) && eligible(q, effOf, d.policy)), [questions, exclude, avoid, effOf, d.policy]);
   const goStep = (n: 1 | 2 | 3) => { setStep(n); window.scrollTo({ top: 0 }); };
+  /** câu khác có thể đặt vào một ô: đúng Dạng bài + loại + mức, đạt mức lấy câu, chưa nằm ở ô khác */
+  const candidatesOf = (r: Row): Question[] => {
+    const taken = new Set(Object.entries(alloc.picks).filter(([k]) => k !== r.id).flatMap(([, v]) => v));
+    return candidatesFor(questions, r, { policy: d.policy, eff: effOf, avoid }, taken).filter((q) => !exclude.has(q.uid));
+  };
+  const dropLocks = (ids: readonly string[]): Record<string, string[]> => Object.fromEntries(Object.entries(d.locked).filter(([k]) => !ids.includes(k)));
   const stockOf = (r: Row): number => questions.reduce((a, q) => a + (!exclude.has(q.uid) && !avoid.has(q.uid) && rowMatches(r, q) && eligible(q, effOf, d.policy) ? 1 : 0), 0);
   /** lý do chưa lưu/xuất được, hiện ngắn gọn cạnh nút Lưu */
   const blockers = [
-    total === 0 && missing === 0 ? 'ma trận chưa có câu' : '',
+    total === 0 && missing === 0 && unchosen === 0 ? 'ma trận chưa có câu' : '',
+    unchosen > 0 ? `${unchosen} câu chưa chọn (Tự chọn)` : '',
     missing > 0 ? `thiếu ${missing} câu` : '',
     flaggedN > 0 ? `${flaggedN} dòng cần chọn lại phạm vi` : '',
     lostLocks.length > 0 ? `${lostLocks.length} câu khóa không vào được đề` : '',
@@ -281,7 +210,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const refExport = useRef<HTMLDivElement>(null);
   const desktop = isDesktop();
   const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys, d.usage, d.reuse]), [d]);
-  const canExport = !usageBlocked && total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
+  const canExport = !usageBlocked && unchosen === 0 && total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   /** Bộ tệp của đề, kèm dấu vân SHA-256 từng tệp nguồn trong hedu-de.json (để về sau biết tệp có bị sửa tay không). */
@@ -359,7 +288,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
           {step === 1 && <section className="mx-sec" aria-label="Ma trận đề" ref={refMatrix}>
             <div className="mx-head">
               <h2>Chọn câu theo ma trận</h2>
-              <button type="button" className="btn btn-sm" onClick={() => setTplDlg(true)} title="Lưu ma trận thành mẫu có tên, hoặc áp dụng mẫu đã lưu">Mẫu ma trận…</button>
+              <button type="button" className="btn btn-sm" onClick={() => setTplDlg(true)} title="Lưu ma trận vào kho (có tên), hoặc lấy ma trận đã lưu">Kho ma trận…</button>
               <div className="seg" role="group" aria-label="Câu đủ điều kiện">
                 {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
               </div>
@@ -368,86 +297,24 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{broken.length > 0 && <span className="te-bad"> {broken.length} câu có ký tự điều khiển lạ trong LaTeX nên bị loại khỏi tập ứng viên (vẫn còn nguyên trong Ngân hàng).</span>}</p>
             <ExamUsagePanel scope={d.usage} onScope={(usage) => upd({ usage })} usage={usage} idx={idx} />
             {broken.length > 0 && <details className="te-broken"><summary>Xem câu bị loại và nguyên nhân</summary><ul>{broken.slice(0, 50).map((b) => <li key={b.uid}>Câu #{b.seq} · <code>{b.uid}</code> · {b.why}</li>)}{broken.length > 50 && <li>… và {broken.length - 50} câu nữa</li>}</ul></details>}
-            <ExamMatrixGrid tax={tax} stock={gridStock} rows={d.rows} defaultGrade={defaultGrade} onChange={(next) => upd({ rows: next, locked: Object.fromEntries(Object.entries(d.locked).filter(([k]) => next.some((r) => r.id === k))) })} />
-            <h3 className="mx-sub">Ma trận đã chọn <span className="te-note">gồm các ô đã nhập ở lưới và các dòng theo chương/lớp</span></h3>
-            {rowsEmpty && !adding ? (
-              <div className="te-empty">
-                <b>Ma trận đang trống.</b>
-                <span>Gõ số câu vào các ô ở lưới phía trên, hoặc lấy câu rộng hơn theo cả chương/cả lớp: dùng mẫu HEdu (12 trắc nghiệm, 4 đúng/sai, 6 trả lời ngắn; chỉ là gợi ý, không phải quy định của Bộ) hay tự thêm dòng.</span>
-                <div className="te-empty-acts">
-                  <button type="button" className="btn btn-dark" onClick={() => upd({ rows: template2025(defaultGrade) })}>Dùng mẫu HEdu 12/4/6 cho lớp {defaultGrade}</button>
-                  <button type="button" className="btn" onClick={() => setAdding(true)}><IcPlus />Tự thêm dòng</button>
-                </div>
-              </div>
-            ) : !rowsEmpty && (
-              <div className="te-rows" role="table" aria-label="Các dòng của ma trận">
-                <div className="te-row te-row-h" role="row"><span role="columnheader">Phạm vi</span><span role="columnheader">Mức độ</span><span role="columnheader">Số câu</span><span role="columnheader">Kho câu</span><span /></div>
-                {PARTS.map((p) => {
-                  const rs = rows.filter((r) => partOf(r.type) === p);
-                  if (!rs.length) return null;
-                  const n = rs.reduce((a, r) => a + r.count, 0);
-                  const lack = rs.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
-                  return (
-                    <div key={p} className="te-part-g" role="rowgroup" aria-label={PART_NAME[p]}>
-                      <div className="te-part-h" role="row">
-                        <b>{PART_NAME[p]}</b>
-                        <span>{n} câu · {fmtScore(n * d.scoring[p])} điểm</span>
-                        {lack > 0 && <span className="te-lack"><IcAlert size={14} />thiếu {lack}</span>}
-                      </div>
-                      {rs.map((r) => {
-                  const pool = alloc.pool[r.id] ?? 0, def = alloc.deficit[r.id] ?? 0;
-                  const parts = scopeParts(r.scope, tax);
-                  const name = parts ? [...parts.path, parts.main].join(' › ') : (r.label ? `${r.label} (đã lưu trong mẫu)` : null);
-                  return (
-                    <div key={r.id} className={`te-row${def ? ' short' : ''}${r.flag ? ' flagged' : ''}`} role="row">
-                      <span className="te-scope" role="cell" title={name ?? ''}>
-                        {parts ? <><b>{parts.main}</b>{parts.path.length > 0 && <small>{parts.path.join(' › ')}</small>}</> : <em>{name ?? 'Mục này không còn trong cây'}</em>}
-                        {r.flag === 'mat' && <span className="te-flag warn" title="Chương/Bài/Dạng của dòng này đã bị xóa khỏi cây chương trình. HEdu không tự chuyển sang mục khác: hãy chọn lại phạm vi hoặc xóa dòng. Chưa xuất được đề khi còn dòng này.">không còn trong cây <button type="button" className="linkbtn" onClick={() => setRescope(rescope === r.id ? null : r.id)}>Chọn lại phạm vi…</button></span>}
-                        {r.flag === 'doi-vi-tri' && <span className="te-flag warn" title="Mục này đã đổi vị trí trong cây kể từ khi lưu mẫu. Xem phạm vi cũ và mới rồi xác nhận giữ ID hiện tại. Chưa xuất được đề khi chưa xác nhận.">đã đổi vị trí <button type="button" className="linkbtn" onClick={() => {
-                          const now = scopeLabel(r.scope, tax);
-                          if (!window.confirm(`Mục này đã đổi vị trí trong cây chương trình kể từ khi lưu mẫu.\n\nLúc lưu mẫu: ${r.label ?? '(không ghi)'}\nHiện nay: ${now ?? '(không còn)'}\n\nGiữ nguyên mục hiện tại (cùng ID) cho dòng này?`)) return;
-                          const fx = confirmRow(r, tax);
-                          if (fx.ok) upd({ rows: d.rows.map((x) => (x.id === r.id ? fx.row : x)) }); else toast(fx.why);
-                        }}>Xem và xác nhận…</button> <button type="button" className="linkbtn" onClick={() => setRescope(rescope === r.id ? null : r.id)}>Chọn lại…</button></span>}
-                      </span>
-                      {r.type === 'tn'
-                        ? <select className="sel" aria-label="Mức độ" value={r.level} onChange={(e) => setRow(r.id, { level: e.target.value as Level | 'any' })}><option value="any">Mọi mức</option>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select>
-                        : <span className="te-muted" role="cell">Mọi mức</span>}
-                      <div className="stepper" role="group" aria-label="Số câu">
-                        <button type="button" aria-label="Bớt một câu" onClick={() => setRow(r.id, { count: Math.max(0, r.count - 1) })}>−</button>
-                        <span aria-live="polite">{r.count}</span>
-                        <button type="button" aria-label="Thêm một câu" onClick={() => setRow(r.id, { count: Math.min(200, r.count + 1) })}>+</button>
-                      </div>
-                      <div className="te-stock">
-                        <div className="te-bar" aria-hidden="true"><i style={{ width: `${r.count ? Math.min(100, (pool / r.count) * 100) : 100}%` }} className={def ? 'bad' : pool < r.count * 2 ? 'low' : 'ok'} /></div>
-                        {def ? <span className="te-lack"><IcAlert size={14} />Thiếu {def} · kho {pool}</span> : <span className="okmark"><IcCheck />Đủ · kho {pool}</span>}
-                      </div>
-                      <button type="button" className="ico" style={{ width: 32, height: 32 }} aria-label={`Bỏ dòng ${name ?? ''}`} onClick={() => delRow(r.id)}><IcX /></button>
-                      {rescope === r.id && (
-                        <ScopePicker defaultGrade={defaultGrade} onCancel={() => setRescope(null)} onPick={(sc) => {
-                          const fx = rescopeRow(r, sc, tax);
-                          if (!fx.ok) { toast(fx.why); return; }
-                          upd({ rows: d.rows.map((x) => (x.id === r.id ? fx.row : x)) });
-                          setRescope(null);
-                        }} />
-                      )}
-                    </div>
-                  );
-                })}
-                    </div>
-                  );
-                })}
-                <div className="te-total" role="row"><b>Tổng</b><span>{rows.reduce((a, r) => a + r.count, 0)} câu · {fmtScore(rows.reduce((a, r) => a + r.count * d.scoring[partOf(r.type)], 0))} điểm{rows.some((r) => r.type === 'tl') ? ' (tự luận tính theo điểm tối đa mỗi câu)' : ''}</span></div>
+            <SlotMatrix rows={rows} tax={tax} defaultGrade={defaultGrade} scoring={d.scoring} mode={d.mode} picks={alloc.picks} locked={d.locked} byUid={byUid}
+              stockOf={stockOf} candidatesOf={candidatesOf} onMode={(mode) => upd({ mode })}
+              onForm={(f) => { const r = applyForm(d.rows, f, { kind: 'grade', id: String(defaultGrade) }, newRowId); upd({ rows: r.rows, locked: dropLocks(r.removed) }); }}
+              onPatch={(ids, patch) => { const r = patchSlots(d.rows, ids, patch); upd({ rows: r.rows, locked: dropLocks(r.touched) }); }}
+              onDelete={delRow} onMove={(id, dir) => upd({ rows: moveSlot(d.rows, id, dir) })}
+              onChoose={(rid, uid) => { const base = withoutLock(uid); upd({ locked: { ...base, [rid]: [uid] }, rejected: d.rejected.filter((u) => u !== uid) }); }}
+              onLock={(rid, uid) => upd({ locked: { ...withoutLock(uid), [rid]: [uid] } })}
+              onUnlock={(rid) => upd({ locked: dropLocks([rid]) })}
+              onReroll={reroll} />
+            <details className="mx-quick">
+              <summary>Nhập nhanh theo bảng Dạng × mức độ <span className="te-note">gõ số câu cho từng Dạng; mỗi số thành bấy nhiêu câu trong ma trận ở trên</span></summary>
+              <ExamMatrixGrid tax={tax} stock={gridStock} rows={d.rows} defaultGrade={defaultGrade} onChange={(next) => upd({ rows: next, locked: Object.fromEntries(Object.entries(d.locked).filter(([k]) => next.some((r) => r.id === k))) })} />
+            </details>
+            {!rowsEmpty && (
+              <div className="mx-foot">
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã chọn/khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Làm lại từ đầu</button>
               </div>
             )}
-            {adding
-              ? <RowAdder initialGrade={lastGrade(d.rows, tax, defaultGrade)} stock={stockOf} onAdd={(r) => upd({ rows: [...d.rows, r] })} onClose={() => setAdding(false)} />
-              : !rowsEmpty && (
-                <div className="mx-foot">
-                  <button type="button" className="btn btn-sm" onClick={() => setAdding(true)}><IcPlus />Thêm dòng</button>
-                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Xóa ma trận</button>
-                </div>
-              )}
             <div className="te-next"><button type="button" className="btn btn-dark" disabled={total === 0} onClick={() => goStep(2)}>Tiếp: Xem kết quả →</button></div>
           </section>}
 
@@ -577,6 +444,8 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               </div>
             )}
           </div>
+
+          {step === 1 && rows.length > 0 && <SlotStats s={slotLevels} filled={rows.filter((r) => alloc.picks[r.id]?.length).length} total={rows.length} />}
 
           {step === 3 && <div className="panel">
             <h2>Thông tin đề</h2>

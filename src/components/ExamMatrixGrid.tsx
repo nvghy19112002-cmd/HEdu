@@ -1,9 +1,11 @@
 // Lưới chọn câu theo Dạng: mỗi hàng là một (Dạng, loại câu), mỗi cột một mức độ N/H/V/C; ô nhập số câu, bên cạnh là số câu
 // đang có trong kho (đã tính chính sách lấy câu, câu bị loại và câu đã dùng). Giáo viên gõ số là xong, không phải dựng từng dòng.
-// Mỗi ô khác 0 là MỘT dòng ma trận phạm vi Dạng (id cố định theo ô), nên vẫn đi qua đúng bộ phân bổ, khóa câu, mẫu ma trận như cũ.
+// Mỗi số trong ô = bấy nhiêu câu (ô câu) có phạm vi Dạng + loại + mức đó trong ma trận theo từng câu (examslots.ts).
 import { memo, useMemo, useState } from 'react';
 import type { Row } from '../lib/examgen';
-import { cellId, setCell } from '../lib/examgrid';
+import { cellId } from '../lib/examgrid';
+import { gridCounts, setGridCell } from '../lib/examslots';
+import { newRowId } from '../lib/examdraft';
 import { LEVELS, TYPES, type Level, type QType, type Taxonomy } from '../lib/types';
 
 export const TYPE_SHORT: Record<QType, string> = { tn: 'TN', ds: 'Đ/S', tln: 'Ngắn', tl: 'TL' };
@@ -28,7 +30,7 @@ export const ExamMatrixGrid = memo(function ExamMatrixGrid({ tax, stock, rows, d
   const [onlyPicked, setOnlyPicked] = useState(false);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
 
-  const picked = useMemo(() => { const m = new Map<string, number>(); for (const r of rows) if (r.id.startsWith('g|')) m.set(r.id, r.count); return m; }, [rows]);
+  const picked = useMemo(() => gridCounts(rows), [rows]);
   const pickedTotal = useMemo(() => [...picked.values()].reduce((a, b) => a + b, 0), [picked]);
 
   const chapters = useMemo<GridChapter[]>(() => {
@@ -56,7 +58,7 @@ export const ExamMatrixGrid = memo(function ExamMatrixGrid({ tax, stock, rows, d
     return out;
   }, [tax, grade, type, q, onlyPicked, stock, picked]);
 
-  const set = (formId: string, t: QType, lv: Level, v: number) => onChange(setCell(rows, formId, t, lv, v));
+  const set = (formId: string, t: QType, lv: Level, v: number) => onChange(setGridCell(rows, formId, t, lv, v, newRowId).rows);
   const toggle = (id: string) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const expanded = (id: string) => open.has(id) || onlyPicked || !!q.trim();
 

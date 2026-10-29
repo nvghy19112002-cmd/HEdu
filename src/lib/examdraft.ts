@@ -28,6 +28,8 @@ export interface Draft {
   reuse: ReuseOk;
   /** chữ ký lần đưa câu từ Ngân hàng sang gần nhất, để không thêm lặp khi mở lại màn */
   pickSig: string;
+  /** ma trận theo từng câu: máy chọn ngẫu nhiên (khóa được) hay giáo viên tự chọn từng câu */
+  mode: 'random' | 'manual';
 }
 
 export const KEY = 'hedu.examdraft.v1';
@@ -35,7 +37,7 @@ export const KEY = 'hedu.examdraft.v1';
 export const DEFAULT_INFO: ExamInfo = { dept: '', school: '', group: '', title: 'Kiểm tra cuối học kì I', subject: 'Môn: Toán 12', minutes: 90, note: '' };
 
 export function newDraft(seed = Math.floor(Math.random() * 1e9)): Draft {
-  return { v: 1, rows: [], policy: 'duyet', seed, locked: {}, rejected: [], exceptions: {}, info: { ...DEFAULT_INFO }, count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, withKeys: true, scoring: { ...SCORING_2025 }, usage: defaultScope(), reuse: {}, pickSig: '' };
+  return { v: 1, rows: [], policy: 'duyet', seed, locked: {}, rejected: [], exceptions: {}, info: { ...DEFAULT_INFO }, count: 4, firstCode: 101, shuffleQuestions: true, shuffleOptions: true, withKeys: true, scoring: { ...SCORING_2025 }, usage: defaultScope(), reuse: {}, pickSig: '', mode: 'random' };
 }
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -82,6 +84,7 @@ export function parseDraft(raw: string | null): Draft {
   }
   if (isObj(j.reuse)) for (const [k, v] of Object.entries(j.reuse)) if (isObj(v) && typeof v.at === 'number') d.reuse[k] = { at: v.at, from: Array.isArray(v.from) ? v.from.filter((x): x is string => typeof x === 'string').slice(0, 500) : [] };
   d.pickSig = typeof j.pickSig === 'string' ? j.pickSig : '';
+  d.mode = j.mode === 'manual' ? 'manual' : 'random';
   return d;
 }
 
