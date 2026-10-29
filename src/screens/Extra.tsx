@@ -484,7 +484,7 @@ export function ImportScreen() {
           <div className="head-actions">
             {isDesktop() && <button type="button" className="btn btn-sm btn-accent" disabled={!!loadProg} onClick={() => { void chooseFiles().then(loadPaths); }}>Chọn nhiều tệp…</button>}
             {isDesktop() && <button type="button" className="btn btn-sm btn-accent" disabled={!!loadProg} onClick={() => { void chooseFolder().then((d) => (d ? loadPaths([d]) : undefined)); }}>Chọn thư mục…</button>}
-            {multi && <button type="button" className="btn btn-sm" disabled={!!loadProg} onClick={clearAll}>Bỏ các tệp, quay lại dán trực tiếp</button>}
+            {multi && <button type="button" className="btn btn-sm btn-danger-soft" disabled={!!loadProg} onClick={clearAll}>Bỏ các tệp, quay lại dán trực tiếp</button>}
             <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}>Mở file .tex</button>
             <button type="button" className="btn btn-sm" onClick={() => toast('Nhập từ Word (.docx có Equation) sẽ có ở bản cài trên Windows.')}>Mở file Word</button>
             <input ref={file} type="file" accept=".tex,.txt" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setSrc(await readFile(f)); e.target.value = ''; }} />

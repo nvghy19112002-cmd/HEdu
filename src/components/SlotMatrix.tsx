@@ -8,13 +8,12 @@ import { chapters as chaptersOf, grades } from '../lib/curriculum';
 import { fmtScore, PART_NAME, PARTS, partOf, type PartKey, type Row, type Scoring } from '../lib/examgen';
 import { scopeParts } from '../lib/examdraft';
 import { difficultyLabel, formOf, FORM_THPT, MAX_PER_PART, partSlots, sameForm, type LevelStats } from '../lib/examslots';
-import { plainSnippet } from '../lib/snippet';
+import { stemSnippet } from '../lib/snippet';
 import { LEVELS, LEVEL_LABEL, type Level, type Question, type Taxonomy } from '../lib/types';
 
 export type PickMode = 'random' | 'manual';
 const LV_SHORT: Record<Level | 'any', string> = { NB: 'NB', TH: 'TH', VD: 'VD', VDC: 'VDC', any: 'Mọi mức' };
-/** đoạn đầu của câu, bỏ phần \begin{ex}%[ID] */
-const snip = (latex: string, n: number) => plainSnippet(latex.replace(/^\s*\\begin\{ex\}(?:%\[[^\]\n]*\])?/, '').replace(/\\end\{ex\}\s*$/, ''), n);
+const snip = stemSnippet;
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
 
 /** Chọn phạm vi (Dạng bài) cho một hay nhiều câu. Chỉ chọn trong cây hiện có; không tự đoán. */
