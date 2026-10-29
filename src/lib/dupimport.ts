@@ -122,7 +122,9 @@ export function summarize(drafts: DraftIn[], rows: (DraftAnalysis | undefined)[]
   let importN = 0, skipN = 0, holdN = 0, keptSuspect = 0;
   drafts.forEach((d, i) => {
     const x = dec[d.id] ?? 'hold';
-    if (x === 'import') { importN++; if (rows[i]?.hits.some((h) => BLOCKING.includes(h.kind))) keptSuspect++; } else if (x === 'skip') skipN++; else holdN++;
+    // nghi trùng còn hiệu lực: với kho, hoặc với câu trong lô CŨNG được nhập (bản sao bị bỏ qua thì bản đầu không còn trùng)
+    const live = (h: DraftHit) => BLOCKING.includes(h.kind) && (h.with === 'bank' || (dec[h.other] ?? 'hold') === 'import');
+    if (x === 'import') { importN++; if (rows[i]?.hits.some(live)) keptSuspect++; } else if (x === 'skip') skipN++; else holdN++;
   });
   // cặp trong lô mà cả hai đều được nhập
   let keptPairs = 0;

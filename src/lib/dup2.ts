@@ -320,7 +320,7 @@ function jaccard(a: Int32Array, b: Int32Array): number {
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 export const NEAR_MIN = 0.5;
 
-function lexical(a: Fingerprint, b: Fingerprint): { text: number; math: number; lex: number } {
+export function lexical(a: Fingerprint, b: Fingerprint): { text: number; math: number; lex: number } {
   const text = jaccard(a.words, b.words);
   const math = jaccard(a.mathGrams, b.mathGrams);
   const hasMath = a.mathGrams.length > 0 && b.mathGrams.length > 0;

@@ -9,7 +9,7 @@
 // (3), (4) dùng phép nối tương đồng "lọc tiền tố" (PPJoin, Xiao và cộng sự 2008): xếp token theo độ hiếm; hai tập có Jaccard ≥ t
 // BẮT BUỘC chung ít nhất một token trong phần đầu của nhau, nên chỉ cần lập chỉ mục phần đầu. Mọi ứng viên được kiểm lại bằng
 // phần giao chính xác. Đây là phép nối CHÍNH XÁC: không sót cặp nào, chỉ bỏ qua các cặp chắc chắn dưới ngưỡng.
-import { NEAR_MIN, type Fingerprint } from './dup2';
+import { lexical, NEAR_MIN, type Fingerprint } from './dup2';
 
 /**
  * Mọi cặp (i, j) cần so, với i hoặc j thuộc phía A. `fps` là toàn bộ câu (phía B); `inA[i]` = 1 nếu câu i thuộc phía A.
@@ -55,8 +55,10 @@ export async function candidatePairs(fps: readonly Fingerprint[], inA: Uint8Arra
   group((f) => (f.complete ? f.stemKey : ''));
   // (3) chữ, công thức (chỉ câu đọc đủ); (4) tập thô (chỉ cặp có câu đọc chưa đủ)
   const prog = (base: number, w: number) => (f: number) => opt.onProgress?.(base + w * f);
-  if (!(await simJoin(fps.map((f) => (f.complete ? f.words : EMPTY)), inA, t, both, sl, prog(0, 0.6)))) return null;
-  if (!(await simJoin(fps.map((f) => (f.complete ? f.mathGrams : EMPTY)), inA, t, both, sl, prog(0.6, 0.3)))) return null;
+  // chữ hoặc công thức giống ≥ t mới là ứng viên; chỉ giữ cặp có lex ≥ t ĐÚNG như comparePair (cùng đề đã gom ở trên)
+  const lexOk = (i: number, j: number) => { if (lexical(fps[i], fps[j]).lex >= t) both(i, j); };
+  if (!(await simJoin(fps.map((f) => (f.complete ? f.words : EMPTY)), inA, t, lexOk, sl, prog(0, 0.6)))) return null;
+  if (!(await simJoin(fps.map((f) => (f.complete ? f.mathGrams : EMPTY)), inA, t, lexOk, sl, prog(0.6, 0.3)))) return null;
   // cặp có câu đọc chưa đủ: lấy câu đọc chưa đủ làm "phía A" của phép nối (thường rất ít), rồi lọc theo phía A thật
   const incomplete = Uint8Array.from(fps, (f) => (f.complete ? 0 : 1));
   if (incomplete.includes(1) && !(await simJoin(fps.map((f) => f.loose), incomplete, t, both, sl, prog(0.9, 0.1)))) return null;
@@ -139,7 +141,7 @@ async function simJoin(sets: readonly Int32Array[], inA: Uint8Array, t: number, 
     }
     touched.length = 0;
   };
-  const tick = async (q: number) => { if ((q & 255) === 0) { onProgress((done + q) / Math.max(1, total)); return sl.step(); } return true; };
+  const tick = async (q: number) => { if ((q & 511) === 0) onProgress((done + q) / Math.max(1, total)); return (q & 15) === 0 ? sl.step() : true; };
 
   // A×A: tự nối
   {
