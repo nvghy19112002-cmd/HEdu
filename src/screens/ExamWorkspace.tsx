@@ -15,6 +15,7 @@ import {
   type Draft, type FileEntry, type ListOut, type TabInfo, type TreeNode,
 } from '../lib/examfiles';
 import { getSettings } from '../lib/tikz';
+import { addToGoiThem, missingPackages } from '../lib/missingpkg';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Pane = 'files' | 'edit' | 'pdf' | 'log';
@@ -259,6 +260,24 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
     } catch (e) { setNote(msg(e)); } finally { setCompiling(false); }
   };
 
+  /** Biên dịch lỗi vì thiếu gói: thêm gói vào hedu-goithem.tex (hedu.sty tự nạp) rồi biên dịch lại. */
+  const addPackages = async (pkgs: string[]) => {
+    setNote(null);
+    try {
+      const rel = 'hedu-goithem.tex';
+      const has = list.files.some((x) => x.rel === rel);
+      const cur = has ? await fileRead(id, rel) : null;
+      const r = addToGoiThem(cur?.text ?? null, pkgs);
+      if (!r.added.length) { setNote('Các gói này đã có trong hedu-goithem.tex. Nếu vẫn lỗi, có thể gói chưa được cài trong TeX Live.'); return; }
+      if (cur) {
+        const w = await fileWrite(id, rel, r.text, cur.eol === 'crlf' ? 'crlf' : 'lf', cur.bom, cur.sha256);
+        if (w.status === 'conflict') { setNote('hedu-goithem.tex vừa bị sửa ở nơi khác; mở tệp để thêm tay.'); return; }
+      } else await fileCreate(id, rel, r.text);
+      await reloadList();
+      await compile();
+    } catch (e) { setNote(msg(e)); }
+  };
+
   const jump = async (file: string, line: number) => {
     const f = list.files.find((x) => x.rel === file);
     if (!f) return;
@@ -301,6 +320,8 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   const tree = useMemo(() => buildTree(list.files), [list.files]);
   const badge = saveBadge(tabs, saving);
   const groups = useMemo(() => (result ? groupDiagnostics(result.diagnostics) : []), [result]);
+  const pkgHints = useMemo(() => (result && result.status === 'failed' ? missingPackages(result.diagnostics, result.rawLog ?? '') : []), [result]);
+  const heduSty = list.files.some((x) => x.rel === 'hedu.sty');
   const stale = !!result && result.status !== 'ok';
 
   const requestClose = () => { if (anyDirty(tabsRef.current)) setLeave(true); else onClose(); };
@@ -439,6 +460,15 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
           {compiling && <p className="aid-wait" role="status">Đang lưu và biên dịch…</p>}
           {!result && !compiling && <p className="xl-meta">Kết quả biên dịch sẽ hiện ở đây.</p>}
           {result && (() => { const sm = summarize(result); return <div className={`note ${sm.tone === 'bad' ? 'bad' : sm.tone}`} role="status"><div className="note-body"><b>{sm.text}</b>{result.warnings.map((w, i) => <span key={i}>{w}</span>)}{result.texVersion && <span className="xl-meta">{result.texVersion} · {result.runs} lượt · {Math.round(result.ms / 100) / 10} giây</span>}</div></div>; })()}
+          {pkgHints.length > 0 && (
+            <div className="note warn" role="status"><div className="note-body">
+              <b>Có vẻ đề thiếu gói LaTeX</b>
+              {pkgHints.map((h) => <span key={h.pkg}><code>{h.pkg}</code> — {h.why}{h.installed ? '' : ` (chưa cài trong TeX: mở “TeX Live Shell” hoặc chạy “tlmgr install ${h.pkg}”)`}</span>)}
+              {heduSty
+                ? <span><button type="button" className="btn btn-sm btn-accent" disabled={compiling} onClick={() => void addPackages(pkgHints.filter((h) => h.installed).map((h) => h.pkg))}>Thêm {pkgHints.filter((h) => h.installed).map((h) => h.pkg).join(', ')} vào hedu-goithem.tex và biên dịch lại</button></span>
+                : <span>Đề này dùng khai báo cũ (chưa có hedu.sty): thêm <code>{pkgHints.map((h) => `\\usepackage{${h.pkg}}`).join(' ')}</code> vào khaibaochung.tex.</span>}
+            </div></div>
+          )}
           {groups.map((g) => (
             <details key={g.file ?? '?'} open={g.items.some((d) => d.severity === 'error')}>
               <summary>{g.file ?? 'Không rõ tệp'} ({g.items.length})</summary>
