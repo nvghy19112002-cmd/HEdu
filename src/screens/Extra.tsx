@@ -10,7 +10,7 @@ import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
 import { BATCH_MAX, buildRows, defaultBatchName, perFile, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
-import { chooseFiles, chooseFolder, describeScan, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
+import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
 import { isDesktop } from '../lib/platform';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { draftLocation, optionsOf, suggestDrafts, useByDefault, type DraftIdPick } from '../lib/iddraft';
@@ -69,6 +69,8 @@ export function ImportScreen() {
   const [skip, setSkip] = useState<ReadonlySet<number>>(new Set()); // tệp bị bỏ tick (không nhập)
   const [scanInfo, setScanInfo] = useState<string[]>([]);
   const [readFailed, setReadFailed] = useState<{ name: string; rel: string; message: string }[]>([]);
+  /** tệp đọc theo Windows-1258 (đoán) CHƯA được giáo viên xác nhận chữ đúng: không được nhập */
+  const [encAsk, setEncAsk] = useState<ReadonlySet<number>>(new Set());
   const [loadProg, setLoadProg] = useState<{ done: number; total: number; phase: string } | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const loadStop = useRef(false);
@@ -85,7 +87,7 @@ export function ImportScreen() {
   const fileStats = useMemo(() => perFile(allRows, allSources), [allRows, allSources, taxRevNow]); // eslint-disable-line react-hooks/exhaustive-deps
   /** khoá của lô hiện tại: đổi nguồn/tick tệp ⇒ làm lại rà soát từ đầu */
   const batchKey = useMemo(() => (multi ? `f|${srcs.map((s) => `${s.name}:${s.text.length}`).join('|')}|${[...skip].sort().join(',')}` : `p|${text250}`), [multi, srcs, skip, text250]);
-  const clearAll = () => { setSrc(''); setSrcs([]); setSkip(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
+  const clearAll = () => { setSrc(''); setSrcs([]); setSkip(new Set()); setEncAsk(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
 
   const loadPaths = async (paths: string[]) => {
     if (!paths.length || loadProg) return;
@@ -101,7 +103,13 @@ export function ImportScreen() {
       if (!r.read.length) { setLoadErr(r.failed.length ? 'Không đọc được tệp nào (xem lý do bên dưới).' : 'Không có tệp .tex/.txt nào để đọc.'); }
       setScanInfo(lines);
       setReadFailed(r.failed.map((x) => ({ name: x.file.name, rel: x.file.rel, message: x.message })));
-      if (r.read.length) { setSrcs(r.read.map((x) => ({ name: x.file.name, rel: x.file.rel, text: x.text, bytes: x.file.bytes }))); setSkip(new Set()); setFileF('all'); setInfo((i) => ({ ...i, name: defaultBatchName(new Date()) })); }
+      if (r.read.length) {
+        setSrcs(r.read.map((x) => ({ name: x.file.name, rel: x.file.rel, text: x.text, bytes: x.file.bytes })));
+        const guess = new Set(r.read.flatMap((x, k) => (x.encoding === 'windows-1258' ? [k] : [])));
+        const u16 = r.read.filter((x) => x.encoding === 'utf-16').length;
+        if (u16) lines.push(`${u16} tệp lưu dạng UTF-16: đã đọc chính xác (không cần làm gì).`);
+        setEncAsk(guess); setSkip(new Set(guess)); setFileF('all'); setInfo((i) => ({ ...i, name: defaultBatchName(new Date()) }));
+      }
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : String(e));
     }
@@ -468,6 +476,19 @@ export function ImportScreen() {
             <div className="note warn" role="status"><div className="note-body"><b>{readFailed.length} tệp không đọc được (không ảnh hưởng các tệp khác)</b>
               <ul className="imp-fail">{readFailed.slice(0, 8).map((f) => <li key={`${f.rel}/${f.name}`}><span className="mono">{f.rel ? `${f.rel}/` : ''}{f.name}</span>: {f.message}</li>)}{readFailed.length > 8 && <li>… và {readFailed.length - 8} tệp khác.</li>}</ul></div></div>
           )}
+          {encAsk.size > 0 && (
+            <div className="note warn" role="status"><div className="note-body">
+              <b>{encAsk.size} tệp không phải UTF-8: HEdu đã đọc THỬ theo bảng mã Windows-1258</b>
+              <span>Xem chữ mẫu. Đúng tiếng Việt thì bấm “Chữ đúng, nhập tệp này”. Chữ lạ (ví dụ “Cho hµm sè”) là tệp TCVN3/VNI: đừng nhập, hãy chuyển sang UTF-8 bằng Unikey (Công cụ chuyển mã) rồi mở lại. Tệp chưa xác nhận sẽ không được nhập.</span>
+              <ul className="enc-ask">{[...encAsk].map((k) => (
+                <li key={k}>
+                  <span className="mono">{srcs[k]?.rel ? `${srcs[k].rel}/` : ''}{srcs[k]?.name}</span>
+                  {encodingSample(srcs[k]?.text ?? '').map((t, j) => <q key={j}>{t}</q>)}
+                  <button type="button" className="btn btn-sm" onClick={() => { setEncAsk((s) => { const n = new Set(s); n.delete(k); return n; }); setSkip((s) => { const n = new Set(s); n.delete(k); return n; }); }}>Chữ đúng, nhập tệp này</button>
+                </li>
+              ))}</ul>
+            </div></div>
+          )}
           {multi && (
             <div className="aid-scroll aid-scroll-sm" aria-label="Theo tệp">
               <table className="aid-table">
@@ -477,7 +498,7 @@ export function ImportScreen() {
                     const dup = anaDone ? rows.reduce((n, r, i) => (r.srcIdx === f.srcIdx && ['sure', 'near', 'conflict'].includes(statusOf(i).key) ? n + 1 : n), 0) : 0;
                     return (
                       <tr key={f.srcIdx} className={skip.has(f.srcIdx) ? '' : 'is-on'}>
-                        <td><input type="checkbox" checked={!skip.has(f.srcIdx)} aria-label={`Nhập tệp ${f.name}`} onChange={(e) => setSkip((s) => { const n = new Set(s); if (e.target.checked) n.delete(f.srcIdx); else n.add(f.srcIdx); return n; })} /></td>
+                        <td><input type="checkbox" checked={!skip.has(f.srcIdx)} disabled={encAsk.has(f.srcIdx)} title={encAsk.has(f.srcIdx) ? 'Xác nhận bảng mã ở khung phía trên trước' : undefined} aria-label={`Nhập tệp ${f.name}`} onChange={(e) => setSkip((s) => { const n = new Set(s); if (e.target.checked) n.delete(f.srcIdx); else n.add(f.srcIdx); return n; })} /></td>
                         <td className="aid-q"><span className="mono">{f.rel ? `${f.rel}/` : ''}{f.name}</span>{f.blocks === 0 && <small className="aid-bad">0 câu (không có \begin{'{ex}'}…\end{'{ex}'})</small>}</td>
                         <td>{f.blocks}</td><td>{f.idOk}</td><td>{f.idNoForm}</td><td>{f.idInvalid}</td><td>{f.idMissing}</td>{anaDone && <td>{skip.has(f.srcIdx) ? '—' : dup}</td>}
                       </tr>

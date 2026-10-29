@@ -1,16 +1,17 @@
-import { chooseFiles, chooseFolder, describeScan, IMPORT_LIMITS, readAll, scanSources, type ScanFile } from './importfiles';
+import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources, type ScanFile } from './importfiles';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 const g = globalThis as unknown as { window?: unknown };
 
 const calls: [string, unknown][] = [];
-const texts: Record<string, string | Error> = { 'a.tex': '\\begin{ex}A\\end{ex}', 'b.tex': new Error('Tệp không phải UTF-8'), 'c.tex': '\\begin{ex}C\\end{ex}' };
+const texts: Record<string, string | Error> = { 'a.tex': '\\begin{ex}A\\end{ex}', 'b.tex': new Error('Tệp không phải UTF-8'), 'c.tex': '\\begin{ex}C\\end{ex}', 'w.tex': 'Tính ễ' };
+const encs: Record<string, string> = { 'w.tex': 'windows-1258' };
 let picked: string | string[] | null = ['x.tex', 'y.tex'];
 g.window = { __TAURI__: {
   core: { async invoke(cmd: string, args: { path?: string; paths?: string[] }) {
     calls.push([cmd, args]);
     if (cmd === 'import_scan') return { files: [], skipped: [], truncated: false };
-    if (cmd === 'import_read') { const t = texts[args.path!]; if (t instanceof Error) throw t.message; return { text: t, bytes: String(t).length, hadBom: false }; }
+    if (cmd === 'import_read') { const t = texts[args.path!]; if (t instanceof Error) throw t.message; return { text: t, bytes: String(t).length, hadBom: false, encoding: encs[args.path!] ?? 'utf-8' }; }
     throw new Error('lệnh lạ');
   } },
   dialog: { async open() { return picked; } },
@@ -41,6 +42,16 @@ console.log('Đọc lần lượt');
   let stop = false;
   const r2 = await readAll([f('a.tex'), f('c.tex'), f('a.tex')], { onProgress: (d) => { if (d === 1) stop = true; }, shouldStop: () => stop });
   ok(r2.cancelled && r2.read.length === 1 && calls.length === 1, 'bấm Dừng ⇒ không đọc thêm tệp nào');
+}
+
+console.log('Bảng mã');
+{
+  const r = await readAll([f('w.tex'), f('a.tex')]);
+  ok(r.read[0].encoding === 'windows-1258' && r.read[0].text === 'Tính ễ' && r.read[0].text.length === 6, 'Windows-1258: giữ nhãn "đoán", dấu thanh tổ hợp được chuẩn hoá NFC');
+  ok(r.read[1].encoding === 'utf-8' && r.read[1].text === texts['a.tex'], 'UTF-8: nguyên văn');
+  const smp = encodingSample('\\begin{ex}\n  Cho hàm số $y=x$.\n  \\choice\n  {Đúng}\n  {Sai}\n' + 'Rất dài '.repeat(40));
+  ok(smp.length === 3 && smp[0] === 'Cho hàm số $y=x$.' && smp[1] === '{Đúng}' && smp[2].endsWith('…') && smp[2].length <= 141, 'chữ mẫu: tối đa 3 dòng có dấu, rút gọn dòng dài');
+  ok(encodingSample('abc\nxyz').length === 0, 'không có chữ có dấu ⇒ không có mẫu');
 }
 
 console.log('Tóm tắt quét');
