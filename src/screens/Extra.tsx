@@ -9,8 +9,8 @@ import { chapters, firstLocation, getTaxonomy, grades, useTaxonomy } from '../li
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
-import { BATCH_MAX, buildRows, defaultBatchName, perFile, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
-import { chooseFiles, chooseFolder, describeScan, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
+import { BATCH_MAX, buildRows, defaultBatchName, perFile, planLots, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
+import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
 import { isDesktop } from '../lib/platform';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { draftLocation, optionsOf, suggestDrafts, useByDefault, type DraftIdPick } from '../lib/iddraft';
@@ -35,6 +35,7 @@ import { DEFAULT_SORT } from '../lib/qsort';
 import { ImportReportView } from '../components/ImportReportView';
 import { appendLog, buildReport, type IdPlace, type ImportReport, type ReportRow } from '../lib/importreport';
 import { addMany, flushSave, getState, isLastSaveOk, useBank, type Draft } from '../lib/store';
+import { TRUST_BLOCK_LABEL, trustBlock, trustTag, type TrustBlock } from '../lib/importtrust';
 import { LEVEL_LABEL, LEVELS, TYPE_LABEL, type Level, type Location } from '../lib/types';
 
 function readFile(file: File): Promise<string> {
@@ -68,10 +69,14 @@ export function ImportScreen() {
   const [skip, setSkip] = useState<ReadonlySet<number>>(new Set()); // tệp bị bỏ tick (không nhập)
   const [scanInfo, setScanInfo] = useState<string[]>([]);
   const [readFailed, setReadFailed] = useState<{ name: string; rel: string; message: string }[]>([]);
+  /** tệp đọc theo Windows-1258 (đoán) CHƯA được giáo viên xác nhận chữ đúng: không được nhập */
+  const [encAsk, setEncAsk] = useState<ReadonlySet<number>>(new Set());
   const [loadProg, setLoadProg] = useState<{ done: number; total: number; phase: string } | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const loadStop = useRef(false);
   const [result, setResult] = useState<{ report: ImportReport; logSaved: boolean } | null>(null);
+  /** nhập nhiều lô: các nhóm tệp (mỗi nhóm ≤ BATCH_MAX câu, nguyên tệp) và lô đang làm; giữ trong phiên này */
+  const [lots, setLots] = useState<{ list: number[][]; idx: number } | null>(null);
   const [fileF, setFileF] = useState<number | 'all'>('all');
   const [info, setInfo] = useState<BatchInfo>(() => ({ name: defaultBatchName(new Date()), tagFile: true, tagBatch: true, tagFolder: false, extra: '' }));
   const multi = srcs.length > 0;
@@ -84,7 +89,14 @@ export function ImportScreen() {
   const fileStats = useMemo(() => perFile(allRows, allSources), [allRows, allSources, taxRevNow]); // eslint-disable-line react-hooks/exhaustive-deps
   /** khoá của lô hiện tại: đổi nguồn/tick tệp ⇒ làm lại rà soát từ đầu */
   const batchKey = useMemo(() => (multi ? `f|${srcs.map((s) => `${s.name}:${s.text.length}`).join('|')}|${[...skip].sort().join(',')}` : `p|${text250}`), [multi, srcs, skip, text250]);
-  const clearAll = () => { setSrc(''); setSrcs([]); setSkip(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
+  /** bỏ tick mọi tệp ngoài lô `k` (tệp Windows-1258 chưa xác nhận vẫn bị loại) */
+  const showLot = (list: number[][], k: number) => {
+    const keep = new Set(list[k]);
+    setSkip(new Set(srcs.map((_, i) => i).filter((i) => !keep.has(i) || encAsk.has(i))));
+    setLots({ list, idx: k });
+  };
+  const lotPlan = useMemo(() => planLots(fileStats.filter((f) => !encAsk.has(f.srcIdx))), [fileStats, encAsk]);
+  const clearAll = () => { setLots(null); setSrc(''); setSrcs([]); setSkip(new Set()); setEncAsk(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
 
   const loadPaths = async (paths: string[]) => {
     if (!paths.length || loadProg) return;
@@ -100,7 +112,13 @@ export function ImportScreen() {
       if (!r.read.length) { setLoadErr(r.failed.length ? 'Không đọc được tệp nào (xem lý do bên dưới).' : 'Không có tệp .tex/.txt nào để đọc.'); }
       setScanInfo(lines);
       setReadFailed(r.failed.map((x) => ({ name: x.file.name, rel: x.file.rel, message: x.message })));
-      if (r.read.length) { setSrcs(r.read.map((x) => ({ name: x.file.name, rel: x.file.rel, text: x.text, bytes: x.file.bytes }))); setSkip(new Set()); setFileF('all'); setInfo((i) => ({ ...i, name: defaultBatchName(new Date()) })); }
+      if (r.read.length) {
+        setSrcs(r.read.map((x) => ({ name: x.file.name, rel: x.file.rel, text: x.text, bytes: x.file.bytes })));
+        const guess = new Set(r.read.flatMap((x, k) => (x.encoding === 'windows-1258' ? [k] : [])));
+        const u16 = r.read.filter((x) => x.encoding === 'utf-16').length;
+        if (u16) lines.push(`${u16} tệp lưu dạng UTF-16: đã đọc chính xác (không cần làm gì).`);
+        setEncAsk(guess); setSkip(new Set(guess)); setFileF('all'); setInfo((i) => ({ ...i, name: defaultBatchName(new Date()) }));
+      }
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : String(e));
     }
@@ -301,6 +319,28 @@ export function ImportScreen() {
     return () => { stop = true; clearTimeout(t); };
   }, [idRows, questions, taxNow, reviewVer]); // eslint-disable-line react-hooks/exhaustive-deps
   const vsum = summarizeVerify(idRows, verifOf, idDecOf, (i) => decOf(i) === 'import');
+  // Duyệt theo lô nguồn tin cậy: chỉ câu đạt đủ điều kiện (importtrust.ts) mới được đánh dấu "Đã duyệt"
+  /** câu đủ điều kiện ĐÚNG LÚC giáo viên xác nhận (null = chưa bật). Lúc ghi chỉ duyệt câu nằm trong tập này VÀ vẫn đủ điều kiện: không bao giờ nhiều hơn số đã hiện */
+  const [trust, setTrust] = useState<ReadonlySet<number> | null>(null);
+  useEffect(() => { setTrust(null); }, [rows]); // đổi lô (nguồn khác) thì phải xác nhận lại
+  const trustOf = (i: number): TrustBlock | null => trustBlock({
+    status: statusOf(i).key, issues: issues[i], p: edits[i] != null ? parseExTest(latexOf(i)) : rows[i].p,
+    idOk: idStateOf(latexOf(i)) === 'ok' && verifOf(i)?.verdict !== 'bat-dong',
+  });
+  /** chỉ tính khi đã kiểm xong (kiểm câu, kiểm chứng ID): đang kiểm thì số đủ điều kiện chưa chắc */
+  const trustReady = anaDone && !checking && vsum.unchecked === 0;
+  const trustSum = (() => {
+    const ok: number[] = []; const by = new Map<TrustBlock, number>();
+    if (!trustReady) return { ok, by };
+    rows.forEach((_, i) => { if (decOf(i) !== 'import') return; const b = trustOf(i); if (b) by.set(b, (by.get(b) ?? 0) + 1); else ok.push(i); });
+    return { ok, by };
+  })();
+  const askTrust = (on: boolean) => {
+    if (!on) { setTrust(null); return; }
+    if (!trustReady) return;
+    const tag = trustTag(info.name, new Date());
+    if (window.confirm(`Xác nhận lô này lấy từ NGUỒN ĐÃ KIỂM (đề Sở, sách, bộ đề đã rà)?\n\nHEdu sẽ đánh dấu “Đã duyệt” cho ${trustSum.ok.length} câu đủ điều kiện: câu mới (không trùng), mã không lỗi, xem trước dựng chuẩn, đọc chắc được đáp án, ID hợp lệ và không bất đồng. Các câu còn lại giữ “Chưa kiểm tra”.\n\nMọi câu được duyệt mang nhãn “${tag}”: lọc theo nhãn này trong Ngân hàng để xem lại hoặc đưa cả lô về “Chưa kiểm tra”.`)) setTrust(new Set(trustSum.ok));
+  };
   const canImport = anaDone && !checking && sum.holdN === 0 && importCount > 0 && vsum.unchecked === 0;
   /** Câu có ID nhưng không dùng được: "%[2D1H1] — Mã thiếu Dạng" (lý do từ bộ đọc chung). */
   const headIdNote = (latex: string): string | null => {
@@ -347,6 +387,8 @@ export function ImportScreen() {
   const finish = async (report: ImportReport | null) => {
     if (!report) { clearAll(); go({ screen: 'bank' }); return; }
     const logSaved = await appendLog(report);
+    // còn lô sau: giữ nguyên các tệp đã đọc, chỉ hiện báo cáo lô vừa xong kèm nút "Tiếp lô sau"
+    if (lots && lots.idx < lots.list.length - 1) { setResult({ report, logSaved }); return; }
     clearAll();
     setResult({ report, logSaved });
   };
@@ -374,6 +416,18 @@ export function ImportScreen() {
     }
     const built = buildDrafts((i) => freshVer.get(i));
     if ('error' in built) { toast(`Chưa ghi gì. ${built.error}`); return; }
+    // Duyệt theo lô: thứ tự bản ghi = thứ tự các câu được nhập; kiểm lại điều kiện ngay lúc ghi
+    let approvedN = 0;
+    if (trust) {
+      const tag = trustTag(info.name, new Date());
+      let k = 0;
+      rows.forEach((_, i) => {
+        if (decOf(i) !== 'import') return;
+        const d = built.drafts[k];
+        if (d && trust.has(i) && trustOf(i) === null) { built.drafts[k] = { ...d, review: 'approved', tags: d.tags.includes(tag) ? d.tags : [...d.tags, tag] }; approvedN++; }
+        k++;
+      });
+    }
     // SQLite: nhập hàng loạt (từ 20 câu) tự chụp điểm khôi phục trước; không chụp được thì KHÔNG nhập
     const rp = await ensureRestorePoint('nhap-hang-loat', sum.importN >= BIG_OP);
     if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
@@ -388,7 +442,7 @@ export function ImportScreen() {
       setSaveErr(`Đã đưa ${added.length} câu vào ngân hàng trong phiên này nhưng CHƯA ghi được xuống đĩa. Đừng đóng app. Nội dung dán vẫn được giữ lại; các câu đã thêm sẽ hiện là “trùng chắc”, nên thử lại không bị nhân đôi.`);
       return;
     }
-    toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.`);
+    toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.${approvedN ? ` Đã duyệt theo lô ${approvedN} câu.` : ''}`);
     finish(report);
   };
   const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); finish(pendingReport.current); } };
@@ -409,7 +463,14 @@ export function ImportScreen() {
           })}
         </ol>
       </header>
-      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag! }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => setResult(null)} /></div>}
+      {result && lots && lots.idx < lots.list.length - 1 && (
+        <div className="simple"><div className="note" role="status"><div className="note-body">
+          <b>Xong lô {lots.idx + 1} / {lots.list.length}.</b>
+          <span>Lô tiếp theo có {lots.list[lots.idx + 1].length} tệp. HEdu sẽ rà soát lại từ đầu (trùng với các câu vừa nhập, ID, xem trước) trước khi nhập. Muốn dừng ở đây thì bấm Đóng; các lô sau không nhập.</span>
+          <div className="head-actions"><button type="button" className="btn btn-accent" onClick={() => { showLot(lots.list, lots.idx + 1); setResult(null); }}>Tiếp lô {lots.idx + 2} / {lots.list.length} →</button></div>
+        </div></div></div>
+      )}
+      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag! }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => { setResult(null); if (lots) clearAll(); }} /></div>}
       {!result && <div className="simple">
         <div className={`panel${rows.length ? ' is-compact' : ''}`}>
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>
@@ -437,6 +498,19 @@ export function ImportScreen() {
             <div className="note warn" role="status"><div className="note-body"><b>{readFailed.length} tệp không đọc được (không ảnh hưởng các tệp khác)</b>
               <ul className="imp-fail">{readFailed.slice(0, 8).map((f) => <li key={`${f.rel}/${f.name}`}><span className="mono">{f.rel ? `${f.rel}/` : ''}{f.name}</span>: {f.message}</li>)}{readFailed.length > 8 && <li>… và {readFailed.length - 8} tệp khác.</li>}</ul></div></div>
           )}
+          {encAsk.size > 0 && (
+            <div className="note warn" role="status"><div className="note-body">
+              <b>{encAsk.size} tệp không phải UTF-8: HEdu đã đọc THỬ theo bảng mã Windows-1258</b>
+              <span>Xem chữ mẫu. Đúng tiếng Việt thì bấm “Chữ đúng, nhập tệp này”. Chữ lạ (ví dụ “Cho hµm sè”) là tệp TCVN3/VNI: đừng nhập, hãy chuyển sang UTF-8 bằng Unikey (Công cụ chuyển mã) rồi mở lại. Tệp chưa xác nhận sẽ không được nhập.</span>
+              <ul className="enc-ask">{[...encAsk].map((k) => (
+                <li key={k}>
+                  <span className="mono">{srcs[k]?.rel ? `${srcs[k].rel}/` : ''}{srcs[k]?.name}</span>
+                  {encodingSample(srcs[k]?.text ?? '').map((t, j) => <q key={j}>{t}</q>)}
+                  <button type="button" className="btn btn-sm" onClick={() => { setEncAsk((s) => { const n = new Set(s); n.delete(k); return n; }); setSkip((s) => { const n = new Set(s); n.delete(k); return n; }); }}>Chữ đúng, nhập tệp này</button>
+                </li>
+              ))}</ul>
+            </div></div>
+          )}
           {multi && (
             <div className="aid-scroll aid-scroll-sm" aria-label="Theo tệp">
               <table className="aid-table">
@@ -446,7 +520,7 @@ export function ImportScreen() {
                     const dup = anaDone ? rows.reduce((n, r, i) => (r.srcIdx === f.srcIdx && ['sure', 'near', 'conflict'].includes(statusOf(i).key) ? n + 1 : n), 0) : 0;
                     return (
                       <tr key={f.srcIdx} className={skip.has(f.srcIdx) ? '' : 'is-on'}>
-                        <td><input type="checkbox" checked={!skip.has(f.srcIdx)} aria-label={`Nhập tệp ${f.name}`} onChange={(e) => setSkip((s) => { const n = new Set(s); if (e.target.checked) n.delete(f.srcIdx); else n.add(f.srcIdx); return n; })} /></td>
+                        <td><input type="checkbox" checked={!skip.has(f.srcIdx)} disabled={encAsk.has(f.srcIdx)} title={encAsk.has(f.srcIdx) ? 'Xác nhận bảng mã ở khung phía trên trước' : undefined} aria-label={`Nhập tệp ${f.name}`} onChange={(e) => setSkip((s) => { const n = new Set(s); if (e.target.checked) n.delete(f.srcIdx); else n.add(f.srcIdx); return n; })} /></td>
                         <td className="aid-q"><span className="mono">{f.rel ? `${f.rel}/` : ''}{f.name}</span>{f.blocks === 0 && <small className="aid-bad">0 câu (không có \begin{'{ex}'}…\end{'{ex}'})</small>}</td>
                         <td>{f.blocks}</td><td>{f.idOk}</td><td>{f.idNoForm}</td><td>{f.idInvalid}</td><td>{f.idMissing}</td>{anaDone && <td>{skip.has(f.srcIdx) ? '—' : dup}</td>}
                       </tr>
@@ -458,7 +532,15 @@ export function ImportScreen() {
           )}
           {tooBig && (
             <div className="note bad" role="alert"><div className="note-body"><b>Lô có {usedRows.length.toLocaleString('vi-VN')} câu — vượt giới hạn {BATCH_MAX.toLocaleString('vi-VN')} câu mỗi lô</b>
-              <span>Hãy bỏ tick bớt tệp ở bảng trên (nhập phần còn lại ở lần sau). Tạm giới hạn vì rà soát trùng tốn nhiều bộ nhớ; sẽ nới khi bộ dò trùng được làm nhẹ hơn.</span></div></div>
+              <span>HEdu có thể tự chia thành {lotPlan.lots.length} lô (mỗi lô tối đa {BATCH_MAX.toLocaleString('vi-VN')} câu, không tách tệp), nhập lần lượt; mỗi lô vẫn được rà soát và có điểm khôi phục riêng.{lotPlan.tooBig.length > 0 && ` ${lotPlan.tooBig.length} tệp tự nó đã quá ${BATCH_MAX.toLocaleString('vi-VN')} câu nên không chia được: hãy tách tệp đó.`} Hoặc bỏ tick bớt tệp ở bảng trên.</span>
+              {lotPlan.lots.length > 1 && <div className="head-actions"><button type="button" className="btn btn-accent" onClick={() => showLot(lotPlan.lots, 0)}>Chia tự động thành {lotPlan.lots.length} lô</button></div>}</div></div>
+          )}
+          {lots && !tooBig && (
+            <div className="note" role="status"><div className="note-body">
+              <b>Đang nhập theo lô: lô {lots.idx + 1} / {lots.list.length} ({lots.list[lots.idx].length} tệp)</b>
+              <span>Nhập xong lô này, HEdu hiện báo cáo và nút sang lô tiếp theo.</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => { setLots(null); setSkip(new Set(encAsk)); }}>Bỏ chia lô</button></div>
+            </div></div>
           )}
         </div>
 
@@ -572,6 +654,12 @@ export function ImportScreen() {
                   Kế hoạch nhập: <b>nhập {sum.importN}</b> · <b>bỏ qua {sum.skipN}</b>{sum.holdN > 0 && <> · <b className="dup-hold">{sum.holdN} câu chưa quyết định</b></>}
                   {sum.keptSuspect > 0 && <> · {sum.keptSuspect} câu nghi trùng được bạn chọn nhập</>}
                 </p>
+              )}
+              {anaDone && importCount > 0 && (
+                <div className={`trust${trust ? ' on' : ''}`}>
+                  <label><input type="checkbox" checked={!!trust} disabled={!trustReady} onChange={(e) => askTrust(e.target.checked)} /> <b>Lô từ nguồn đã kiểm</b>: {trustReady ? <>đánh dấu “Đã duyệt” cho <b>{trust ? trust.size : trustSum.ok.length}</b> / {importCount} câu đủ điều kiện</> : <>đợi kiểm tra xong để đếm câu đủ điều kiện…</>}</label>
+                  {trustSum.by.size > 0 && <span className="te-note">Không duyệt: {[...trustSum.by].map(([b, n]) => `${n} câu ${TRUST_BLOCK_LABEL[b]}`).join(' · ')}.</span>}
+                </div>
               )}
               {anaDone && sureRows.length > 0 && (
                 <div className="head-actions">

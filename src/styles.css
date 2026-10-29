@@ -1602,3 +1602,12 @@ span.bt-caret { cursor: default; }
 .tx-cols { column-gap: 24px; }
 .tx-cols-2 { column-count: 2; } .tx-cols-3 { column-count: 3; } .tx-cols-4 { column-count: 4; } .tx-cols-5 { column-count: 5; } .tx-cols-6 { column-count: 6; }
 .tx-cols .tx-item { break-inside: avoid; }
+
+/* Nhập liệu: duyệt theo lô nguồn tin cậy */
+.trust { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px dashed var(--line-2, var(--line)); border-radius: 10px; background: var(--paper); font-size: 13.5px; }
+.trust.on { border-style: solid; border-color: var(--ok); background: color-mix(in srgb, var(--ok) 8%, var(--paper)); }
+.trust label { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.enc-ask { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.enc-ask li { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.enc-ask q { quotes: none; font-size: 13px; color: var(--ink); }
+.enc-ask .btn { align-self: flex-start; margin-top: 4px; }

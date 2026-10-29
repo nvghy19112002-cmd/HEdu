@@ -1,4 +1,4 @@
-import { BATCH_MAX, buildRows, defaultBatchName, parseExtraTags, PASTE_SOURCE_NAME, perFile, tagsFor, type BatchInfo, type ImportSource } from './importbatch';
+import { BATCH_MAX, buildRows, defaultBatchName, parseExtraTags, PASTE_SOURCE_NAME, perFile, planLots, tagsFor, type BatchInfo, type ImportSource } from './importbatch';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 
@@ -32,6 +32,18 @@ console.log('Nhãn nguồn');
   ok(parseExtraTags(Array.from({ length: 30 }, (_, i) => `n${i}`).join(',')).length === 20 && parseExtraTags(' , ;\n ').length === 0, 'tối đa 20 nhãn thêm; chuỗi rỗng ⇒ không nhãn');
   ok(defaultBatchName(new Date(2026, 9, 5, 7, 3)) === '2026-10-05 07:03', 'tên lô mặc định theo giờ máy');
   ok(BATCH_MAX === 5000, 'giới hạn lô tạm thời 5.000 câu');
+}
+
+console.log('Chia lô tự động');
+{
+  const fs = (a: number[]) => a.map((blocks, srcIdx) => ({ srcIdx, blocks }));
+  const r = planLots(fs([3000, 1500, 600, 4000, 100]), 5000);
+  ok(JSON.stringify(r.lots) === '[[0,1],[2,3,4]]' && r.tooBig.length === 0, 'gom tệp liền nhau tới sát giới hạn, không tách tệp, giữ thứ tự');
+  ok(r.lots.every((l) => l.reduce((n, k) => n + [3000, 1500, 600, 4000, 100][k], 0) <= 5000), 'mỗi lô ≤ giới hạn');
+  const big = planLots(fs([200, 6000, 300]), 5000);
+  ok(JSON.stringify(big.lots) === '[[0,2]]' && JSON.stringify(big.tooBig) === '[1]', 'tệp một mình vượt giới hạn: báo riêng, không nhét vào lô');
+  ok(planLots([], 5000).lots.length === 0, 'không có tệp ⇒ không có lô');
+  ok(JSON.stringify(planLots(fs([0, 5000, 0]), 5000).lots) === '[[0,1,2]]', 'tệp 0 câu không làm tách lô');
 }
 
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }

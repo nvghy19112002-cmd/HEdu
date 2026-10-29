@@ -172,9 +172,53 @@ pub struct ReadOut {
     pub text: String,
     pub bytes: u64,
     pub had_bom: bool,
+    /// utf-8 | utf-16 (đọc chắc chắn) | windows-1258 (ĐOÁN: giáo viên phải xem chữ mẫu và xác nhận trước khi nhập)
+    pub encoding: String,
 }
 
-/// Đọc một tệp `.tex`/`.txt` thành chữ. Không đoán bảng mã: không phải UTF-8 ⇒ trả lỗi giải thích cách khắc phục.
+/// Windows-1258 (tiếng Việt): byte 0x80–0xFF → mã Unicode; 0 = byte không có trong bảng mã này.
+/// Dấu thanh là ký tự tổ hợp (U+0300, U+0301, U+0303, U+0309, U+0323): phía giao diện chuẩn hoá NFC sau khi đọc.
+const CP1258_HI: [u16; 128] = [
+    0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0, 0x2039, 0x0152, 0, 0, 0,
+    0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0, 0x203A, 0x0153, 0, 0, 0x0178,
+    0x00A0, 0x00A1, 0x00A2, 0x00A3, 0x00A4, 0x00A5, 0x00A6, 0x00A7, 0x00A8, 0x00A9, 0x00AA, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x00AF,
+    0x00B0, 0x00B1, 0x00B2, 0x00B3, 0x00B4, 0x00B5, 0x00B6, 0x00B7, 0x00B8, 0x00B9, 0x00BA, 0x00BB, 0x00BC, 0x00BD, 0x00BE, 0x00BF,
+    0x00C0, 0x00C1, 0x00C2, 0x0102, 0x00C4, 0x00C5, 0x00C6, 0x00C7, 0x00C8, 0x00C9, 0x00CA, 0x00CB, 0x0300, 0x00CD, 0x00CE, 0x00CF,
+    0x0110, 0x00D1, 0x0309, 0x00D3, 0x00D4, 0x01A0, 0x00D6, 0x00D7, 0x00D8, 0x00D9, 0x00DA, 0x00DB, 0x00DC, 0x01AF, 0x0303, 0x00DF,
+    0x00E0, 0x00E1, 0x00E2, 0x0103, 0x00E4, 0x00E5, 0x00E6, 0x00E7, 0x00E8, 0x00E9, 0x00EA, 0x00EB, 0x0301, 0x00ED, 0x00EE, 0x00EF,
+    0x0111, 0x00F1, 0x0323, 0x00F3, 0x00F4, 0x01A1, 0x00F6, 0x00F7, 0x00F8, 0x00F9, 0x00FA, 0x00FB, 0x00FC, 0x01B0, 0x20AB, 0x00FF,
+];
+
+/// Đọc theo Windows-1258. Gặp byte không có trong bảng mã ⇒ None (có thể là TCVN3/VNI hoặc tệp nhị phân: không đoán tiếp).
+pub fn decode_cp1258(b: &[u8]) -> Option<String> {
+    let mut out = String::with_capacity(b.len());
+    for &c in b {
+        if c < 0x80 {
+            out.push(c as char);
+        } else {
+            let u = CP1258_HI[(c - 0x80) as usize];
+            if u == 0 {
+                return None;
+            }
+            out.push(char::from_u32(u as u32)?);
+        }
+    }
+    Some(out)
+}
+
+/// UTF-16 có dấu BOM (FF FE hoặc FE FF). Lẻ byte hoặc cặp thay thế hỏng ⇒ None.
+pub fn decode_utf16_bom(b: &[u8]) -> Option<String> {
+    let le = b.starts_with(&[0xFF, 0xFE]);
+    let body = &b[2..];
+    if body.len() % 2 != 0 {
+        return None;
+    }
+    let units: Vec<u16> = body.chunks_exact(2).map(|p| if le { u16::from_le_bytes([p[0], p[1]]) } else { u16::from_be_bytes([p[0], p[1]]) }).collect();
+    String::from_utf16(&units).ok()
+}
+
+/// Đọc một tệp `.tex`/`.txt` thành chữ: UTF-8 (có/không BOM), UTF-16 có BOM (chắc chắn); không phải UTF-8 thì THỬ Windows-1258 và
+/// đánh dấu là đoán (`encoding = windows-1258`) để giao diện bắt giáo viên xem chữ mẫu, xác nhận rồi mới nhập. Không đọc được ⇒ lỗi kèm cách khắc phục.
 pub fn read_text(p: &Path) -> Result<ReadOut, String> {
     if !ext_ok(p) {
         return Err("Chỉ đọc tệp .tex hoặc .txt.".into());
@@ -188,15 +232,21 @@ pub fn read_text(p: &Path) -> Result<ReadOut, String> {
     }
     let bytes = fs::read(p).map_err(|e| format!("Không đọc được tệp: {e}"))?;
     if bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
-        return Err("Tệp được lưu dạng UTF-16. Hãy mở bằng trình soạn thảo và lưu lại bằng UTF-8 rồi nhập lại.".into());
+        return match decode_utf16_bom(&bytes) {
+            Some(text) => Ok(ReadOut { text, bytes: bytes.len() as u64, had_bom: true, encoding: "utf-16".into() }),
+            None => Err("Tệp lưu dạng UTF-16 nhưng bị hỏng nên không đọc được. Hãy mở bằng trình soạn thảo, lưu lại bằng UTF-8 rồi nhập lại.".into()),
+        };
     }
     let (body, had_bom) = match bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
         Some(b) => (b, true),
         None => (&bytes[..], false),
     };
     match std::str::from_utf8(body) {
-        Ok(s) => Ok(ReadOut { text: s.to_string(), bytes: bytes.len() as u64, had_bom }),
-        Err(_) => Err("Tệp không phải UTF-8 (có thể là Windows-1258 hoặc bảng mã cũ) nên HEdu không đoán để tránh làm sai chữ. Hãy lưu lại tệp bằng UTF-8 rồi nhập lại.".into()),
+        Ok(s) => Ok(ReadOut { text: s.to_string(), bytes: bytes.len() as u64, had_bom, encoding: "utf-8".into() }),
+        Err(_) => match decode_cp1258(body) {
+            Some(text) => Ok(ReadOut { text, bytes: bytes.len() as u64, had_bom, encoding: "windows-1258".into() }),
+            None => Err("Tệp không phải UTF-8 và cũng không phải Windows-1258 (có thể là bảng mã cũ TCVN3/VNI) nên HEdu không đoán để tránh làm sai chữ. Hãy chuyển tệp sang UTF-8 (ví dụ bằng Unikey: Công cụ chuyển mã) rồi nhập lại.".into()),
+        },
     }
 }
 
@@ -311,17 +361,29 @@ mod tests {
     }
 
     #[test]
-    fn khong_doan_bang_ma_va_tu_choi_dung_loai() {
+    fn bang_ma_utf16_windows1258_va_tu_choi_dung_loai() {
         let d = dir("loi");
-        // Windows-1258 / byte lạ
-        fs::write(d.join("cu.tex"), [b'T', 0xED, b'n', b'h', 0xFF, 0xFE, 0x41]).unwrap();
-        let e = read_text(&d.join("cu.tex")).unwrap_err();
-        assert!(e.contains("UTF-16") || e.contains("không phải UTF-8"), "{e}");
-        // UTF-16 có BOM
-        fs::write(d.join("u16.tex"), [0xFF, 0xFE, b'a', 0]).unwrap();
-        assert!(read_text(&d.join("u16.tex")).unwrap_err().contains("UTF-16"));
-        fs::write(d.join("cu2.tex"), [b'T', 0xED, b'n', b'h']).unwrap();
-        assert!(read_text(&d.join("cu2.tex")).unwrap_err().contains("không phải UTF-8"));
+        // Windows-1258: "Tính đúng" — í là 0xED; "đ" là 0xF0; "ú" là 0xFA. Đọc được nhưng đánh dấu là ĐOÁN (giao diện bắt xác nhận)
+        fs::write(d.join("cu.tex"), [b'T', 0xED, b'n', b'h', b' ', 0xF0, 0xFA, b'n', b'g']).unwrap();
+        let r = read_text(&d.join("cu.tex")).unwrap();
+        assert_eq!((r.text.as_str(), r.encoding.as_str()), ("Tính đúng", "windows-1258"));
+        // dấu thanh tổ hợp: "ê" + dấu ngã (0xDE → U+0303) giữ nguyên dạng tổ hợp, giao diện chuẩn hoá NFC
+        assert_eq!(decode_cp1258(&[0xEA, 0xDE]).unwrap(), "ê\u{0303}");
+        // byte không có trong Windows-1258 (0x81) ⇒ không đoán tiếp, báo cách chuyển mã
+        fs::write(d.join("tcvn.tex"), [b'T', 0x81, b'n']).unwrap();
+        let e = read_text(&d.join("tcvn.tex")).unwrap_err();
+        assert!(e.contains("TCVN3/VNI") && e.contains("UTF-8"), "{e}");
+        // UTF-16 có BOM (LE và BE) đọc chắc chắn
+        fs::write(d.join("u16.tex"), [0xFF, 0xFE, b'a', 0, 0xBF, 0x1E]).unwrap();
+        let r = read_text(&d.join("u16.tex")).unwrap();
+        assert_eq!((r.text.as_str(), r.encoding.as_str()), ("aế", "utf-16"));
+        fs::write(d.join("u16be.tex"), [0xFE, 0xFF, 0, b'b']).unwrap();
+        assert_eq!(read_text(&d.join("u16be.tex")).unwrap().text, "b");
+        fs::write(d.join("u16le.tex"), [0xFF, 0xFE, b'a']).unwrap();
+        assert!(read_text(&d.join("u16le.tex")).unwrap_err().contains("UTF-16"), "UTF-16 lẻ byte ⇒ lỗi, không đoán");
+        // UTF-8 vẫn là utf-8
+        put(&d.join("u8.tex"), "Tính");
+        assert_eq!(read_text(&d.join("u8.tex")).unwrap().encoding, "utf-8");
         // sai đuôi, thư mục, không tồn tại
         put(&d.join("a.pdf"), "x");
         assert!(read_text(&d.join("a.pdf")).is_err());
