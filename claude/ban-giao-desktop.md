@@ -1,27 +1,29 @@
-# Bàn giao HEdu sang phiên Claude Code mới (26/10/2026, sau E6 Ngân hàng đề thi LaTeX)
+# Bàn giao HEdu sang phiên Claude Code mới (30/10/2026, sau beta.44)
 
-## Git (26/10/2026)
-- `main` đã có (26/10/2026): E0 (#112), E1 (#113), E2a (#116), E2b (#118), E3 (#121), E4 (#122), E5 (#124); #125 (E6: kiểm thử hiệu năng + tài liệu) là PR cuối. `v0.1.0-beta.33` vẫn là bản phát hành gần nhất; chưa có bản phát hành nào chứa Ngân hàng đề thi.
-- Chưa phát hành. Phát hành chỉ khi chủ dự án ra lệnh riêng (`release.yml`, nhập `tag`); chủ dự án nói sẽ ra lệnh ở cuộc trò chuyện khác sau khi kênh khác cập nhật GitHub.
+## Git và phát hành (30/10/2026)
+- `main` = `ec1c051` (PR #166). Bản phát hành gần nhất: `v0.1.0-beta.44` (kênh beta, 30/10/2026). Trong ngày đã ra beta.41 (#162) → beta.42 (#164) → beta.43 (#165) → beta.44 (#166); nội dung từng bản ở `GHI-CHU-PHAT-HANH.md` và mục "Trạng thái" của `AGENTS.md`.
+- Ngân hàng đề thi E0–E6 (#112–#125) đã nằm trong các bản phát hành từ beta.34 trở đi.
+- PR đang mở: #123 (chỉ sửa `AGENTS.md`: quy tắc phối hợp 3 phiên Claude Code, mở từ 26/10) — chờ chủ dự án quyết gộp hay đóng.
+- Issue đang mở: #1 (còn 3 mục: lưu đầu file theo từng câu — đổi schema, cần duyệt riêng; huỷ hẳn tiến trình con TeX trên Windows; nghiệm thu máy thật).
 
-## Đọc gì trước
-`claude/thiet-ke-de-thi.md` (thiết kế đã duyệt + mục 6 trạng thái/điểm khác), `claude/nghiem-thu-de-thi.md` (danh sách nghiệm thu Windows, giới hạn đã biết, nháp ghi chú phát hành), `AGENTS.md`.
+## Chưa nghiệm thu trên máy Windows thật
+- Ngân hàng đề thi theo `claude/nghiem-thu-de-thi.md`; lưu trữ SQLite (mục G, H, I của `claude/nghiem-thu-beta30.md`).
+- beta.42–44 với tệp .tex và ngân hàng thật của chủ dự án (chuẩn hoá khi nạp, mục "Chưa có ID", nhãn `label=` trong xem trước và khi biên dịch).
 
-## Module mới (Rust `src-tauri/src/`, giao diện `src/`)
-- `examlib.rs` (nhập/sổ/chỉ mục/kiểm tra, `open_inside` an toàn liên kết), `examcompile.rs` (biên dịch, chế độ, PDF tốt gần nhất), `examprofile.rs` (nhận diện ex_test, bản dẫn xuất Đề/Lời giải), `examfiles.rs` (đọc/ghi tệp giữ byte, bản nháp), `examadmin.rs` (thông tin, sao chép, Thùng rác đề, sao lưu/khôi phục, gói), `examsources.rs` (nguồn UID, tạo đề từ tệp), `proc.rs` (`run_job`, Job Object).
-- TS: `lib/examlib.ts`, `examcompile.ts`, `examfiles.ts`, `examfacets.ts`, `examsources.ts`, `pdfview.ts`; màn `screens/ExamLibrary.tsx`, `ExamWorkspace.tsx`; thành phần `PdfViewer`, `CodeEditor`, `BankPicker`, `SourcesPanel`, `ExamAdminPanels`, `ExamInfoForm`.
-- Mục thanh bên "Đề thi" (không dùng cờ `FEATURES.exam`; cờ đó vẫn tắt màn Tạo đề).
+## Đang chờ quyết định / chưa được làm
+- Đề án cây KNTT + Gán ID V4: đã duyệt bộ chữ A/G/S/T và trả lời Q3–Q9, nhưng CHƯA được viết mã (phải qua Cổng A → B → C).
+- Màn Tạo đề cũ vẫn tắt (`FEATURES.exam=false`); không bật lại khi chưa được duyệt.
+- Trước nhập hàng loạt: trạng thái duyệt khi nhập nguồn tin cậy, chuyển bảng mã tệp không phải UTF-8, nhập lớn chạy nền (giới hạn 5.000 câu/lô, 2.000 tệp, 20 MB/tệp, gán ID tự động 200 câu/lượt).
+- Backlog: đổi tên/xoá/di chuyển tệp trong cây tệp đề thi; BibTeX/Biber; giao dịch chung Thùng rác + Ngân hàng (S6); hồ sơ người dùng / nhiều nguồn (S5–S7).
 
-## Kiểm thử đã chạy (tại máy phát triển)
-`cargo test --lib --locked`, `npm test`, `npm run build`, typecheck; kiểm tay với TeX Live 2026 (`HEDU_TEX_BIN=<thư mục bin> cargo test --lib --locked tex_live_that -- --ignored --nocapture`). Giao diện đã thử bằng trình duyệt với dữ liệu giả lập; **chưa bấm thử trong cửa sổ Tauri thật, chưa nghiệm thu Windows thật**.
-
-## Việc tiếp
-1. Chủ dự án nghiệm thu theo `claude/nghiem-thu-de-thi.md` trên bản chạy thử.
-2. Backlog: đổi tên/xoá/di chuyển từng tệp trong cây tệp; BibTeX/Biber; bật lại màn Tạo đề (kiểm cấu trúc trước khi trộn mã); nghiệm thu mục G, H, I của beta.30; đo lô nhập lớn (giới hạn 5.000 câu/lô).
-3. Mẹo kỹ thuật: Bash heredoc làm hỏng dấu `\` của LaTeX/Rust: dùng công cụ Write hoặc Edit cho tệp có `\`. Typecheck cần `@types/node` (dùng `--typeRoots`). `node_modules` do `npm ci`; `Cargo.lock`/`package-lock.json` được theo dõi (dùng `--locked`).
+## Mẹo kỹ thuật
+- Máy này không có `gh`: đọc GitHub qua REST (`curl https://api.github.com/repos/nvghy19112002-cmd/HEdu/...`); mở PR bằng REST với token từ `git credential fill`.
+- Bash heredoc làm hỏng dấu `\` của LaTeX/Rust: dùng công cụ Write hoặc Edit cho tệp có `\`.
+- Typecheck cần `@types/node` (dùng `--typeRoots`). `node_modules` do `npm ci`; `Cargo.lock`/`package-lock.json` được theo dõi (dùng `--locked`).
+- Kiểm tay với TeX Live: `HEDU_TEX_BIN=<thư mục bin> cargo test --lib --locked tex_live_that -- --ignored --nocapture`.
 
 ## Quy tắc không đổi
 - Không đổi schema (3), ID6, UID, LaTeX/TikZ gốc; không tự xoá/duyệt câu; repo công khai nên không commit dữ liệu thật, khoá API, thông tin cá nhân.
 - Không bao giờ chạy app thử bằng identifier thật: `npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu)"}'`.
-- Chỉ phát hành khi chủ dự án nói rõ; chỉ gộp PR khi chủ dự án đồng ý đúng PR đó. PR qua REST GitHub (không có `gh`), token từ `git credential fill`.
+- Chỉ phát hành khi chủ dự án nói rõ; chỉ gộp PR khi chủ dự án đồng ý đúng PR đó.
 - Chủ dự án là giáo viên Toán không viết code: trả lời tiếng Việt dễ hiểu; nghiệp vụ chưa rõ thì hỏi.
