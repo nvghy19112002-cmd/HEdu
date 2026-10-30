@@ -22,8 +22,10 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const when = (ms: number) => (ms ? new Date(ms).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
 
 interface Props {
-  /** câu đang lọc ở Ngân hàng (lô lấy từ đây) */
+  /** câu lô lấy từ đây: các câu đang tick ở Ngân hàng, hoặc danh sách đang lọc khi không tick câu nào */
   pool: readonly Question[];
+  /** `pool` là các câu đang tick (không phải danh sách đang lọc) */
+  fromSelection?: boolean;
   /** toàn bộ ngân hàng (đề xuất được đối chiếu với câu hiện có) */
   all: readonly Question[];
   tax: Taxonomy;
@@ -33,7 +35,7 @@ interface Props {
   onOpenQueue(): void;
 }
 
-export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQueue }: Props) {
+export function ClaudeIdDialog({ pool, fromSelection = false, all, tax, effOf, toast, onClose, onOpenQueue }: Props) {
   const desktop = isDesktop();
   const ix = useMemo(() => indexOf(tax), [tax]);
   const taxRev = useMemo(() => taxRevision(tax), [tax]);
@@ -126,8 +128,8 @@ export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQu
 
           <section className="cid-step">
             <b>1 · Xuất lô {recheck ? 'kiểm tra lại' : 'cần gán ID'}</b>
-            <span className="xl-meta">Lấy từ {nf.format(pool.length)} câu đang lọc: {nf.format(need)} câu chưa được giáo viên xác minh Dạng (ưu tiên câu “Cần xem lại”), {nf.format(verified)} câu đã xác minh.</span>
-            <label className="sw"><input type="checkbox" checked={recheck} onChange={(e) => setRecheck(e.target.checked)} /> Kiểm tra lại cả câu đã xác minh (Claude soát Dạng và mức độ của mọi câu đang lọc; câu không bị xoá hay đổi)</label>
+            <span className="xl-meta">Lấy từ {nf.format(pool.length)} câu {fromSelection ? 'đang chọn (tick)' : 'đang lọc'}: {nf.format(need)} câu chưa được giáo viên xác minh Dạng (ưu tiên câu “Cần xem lại”), {nf.format(verified)} câu đã xác minh.</span>
+            <label className="sw"><input type="checkbox" checked={recheck} onChange={(e) => setRecheck(e.target.checked)} /> Kiểm tra lại cả câu đã xác minh (Claude soát Dạng và mức độ của mọi câu {fromSelection ? 'đang chọn' : 'đang lọc'}; câu không bị xoá hay đổi)</label>
             <div className="cid-row">
               <label className="sm-n">Số câu mỗi lô
                 <select className="sel" value={size} onChange={(e) => setSize(Number(e.target.value))}>{SIZES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
@@ -135,7 +137,7 @@ export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQu
               <label className="sw"><input type="checkbox" checked={gold && !recheck} disabled={verified === 0 || recheck} onChange={(e) => setGold(e.target.checked)} /> Trộn ngầm ~10% câu đã xác minh để đo độ đúng</label>
               <button type="button" className="btn btn-accent btn-sm" disabled={recheck ? pool.length === 0 : need === 0} onClick={() => void exportLot()}>Xuất lô</button>
             </div>
-            {recheck && pool.length > size && <span className="xl-meta">Đang lọc {nf.format(pool.length)} câu, lô chỉ lấy {nf.format(size)} câu đầu. Hãy chọn mục nhỏ hơn trong Cây mục lục (từng Bài hoặc Dạng) để kiểm hết.</span>}
+            {recheck && pool.length > size && <span className="xl-meta">{fromSelection ? 'Đang chọn' : 'Đang lọc'} {nf.format(pool.length)} câu, lô chỉ lấy {nf.format(size)} câu đầu. Hãy {fromSelection ? 'chọn bớt câu' : 'chọn mục nhỏ hơn trong Cây mục lục (từng Bài hoặc Dạng)'} để kiểm hết.</span>}
             <span className="xl-meta">Rồi nhắn Claude trong cuộc trò chuyện: <b>“làm lô mới nhất”</b>. Claude đọc lô trong thư mục trên và ghi tệp đề xuất vào cùng chỗ; danh sách bên dưới tự cập nhật.</span>
           </section>
 
