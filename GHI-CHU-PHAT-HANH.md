@@ -1,3 +1,17 @@
+## Có gì mới trong beta.43 (kênh beta): mục “Chưa có ID”, câu không ID không còn mang ID giả
+Gồm PR #165 (so với beta.42). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đã thử trên bản thử với dữ liệu giả lập; chưa thử với ngân hàng thật. Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Mục “Chưa có ID” ở Cây mục lục** (ngay dưới “Tất cả”, có số câu, chia theo lớp): câu nhập không có ID nằm ở đây, không bị xếp vào Lớp 12 hay Dạng nào, không cộng vào số câu của Chương/Bài/Dạng. Thẻ câu ghi “Chưa có ID” thay cho mã giả kiểu `2D1H1-1`.
+- **Câu cũ đã nhập không ID** (vd các câu “Nguồn: dán trực tiếp”) tự vào mục này, ở nhóm “Chưa rõ lớp”. Không câu nào bị xoá, LaTeX giữ nguyên.
+- **Sửa câu không tự ghi ID**: bấm Lưu câu Chưa có ID không thêm `%[…]`. Muốn gán thì mở Thuộc tính chọn Lớp → Chương → Bài → Dạng; lúc đó câu rời mục và mới được ghi ID.
+- **Màn Nhập**: bỏ vị trí mặc định Lớp 12; chỉ còn ô Lớp (mặc định “Chưa rõ lớp”) cho câu không có ID.
+- **Gán ID nhờ Claude**: lô xuất đúng lớp chọn khi nhập (chưa rõ lớp thì Claude chọn Dạng ở lớp phù hợp); đề xuất Dạng lớp 10 không còn bị loại vì “khác lớp”.
+- “Thêm ID”, “Gán ID tự động”, “Xác nhận Dạng” bỏ qua câu Chưa có ID (tránh ghi ID giả).
+
+**Lời khuyên**
+- Bấm mục “Chưa có ID” → “Chọn cả n câu” → “Gán ID nhờ Claude…” để ra đúng lô cần gán.
+
 ## Có gì mới trong beta.42 (kênh beta): chuẩn hoá khi nạp file .tex
 Gồm bước chuẩn hoá ở màn Nhập liệu (so với beta.41). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đây là bản BETA, chưa thử với tệp .tex thật của bạn.
 
