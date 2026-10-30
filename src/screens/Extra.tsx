@@ -9,7 +9,7 @@ import { chapters, firstLocation, getTaxonomy, grades, useTaxonomy } from '../li
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
-import { BATCH_MAX, buildRows, defaultBatchName, perFile, planLots, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
+import { BATCH_MAX, buildRows, defaultBatchName, perFile, planLots, sourceIssues, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
 import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
 import { isDesktop } from '../lib/platform';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
@@ -87,6 +87,8 @@ export function ImportScreen() {
   const tooBig = usedRows.length > BATCH_MAX;
   const rows = useMemo(() => (tooBig ? [] : usedRows), [tooBig, usedRows]);
   const fileStats = useMemo(() => perFile(allRows, allSources), [allRows, allSources, taxRevNow]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** cảnh báo của bước chuẩn hoá .tex (chỉ bốc \begin{ex}…\end{ex}); nguồn sạch không có */
+  const fixes = useMemo(() => sourceIssues(allSources), [allSources]);
   /** khoá của lô hiện tại: đổi nguồn/tick tệp ⇒ làm lại rà soát từ đầu */
   const batchKey = useMemo(() => (multi ? `f|${srcs.map((s) => `${s.name}:${s.text.length}`).join('|')}|${[...skip].sort().join(',')}` : `p|${text250}`), [multi, srcs, skip, text250]);
   /** bỏ tick mọi tệp ngoài lô `k` (tệp Windows-1258 chưa xác nhận vẫn bị loại) */
@@ -532,6 +534,20 @@ export function ImportScreen() {
                 </tbody>
               </table>
             </div>
+          )}
+          {fixes.length > 0 && (
+            <div className="note warn" role="status"><div className="note-body">
+              <b>Chuẩn hoá: chỉ nạp các khối \begin{'{ex}'}…\end{'{ex}'} hoàn chỉnh — {fixes.reduce((n, f) => n + f.issues.length, 0)} chỗ đã được bỏ qua</b>
+              <ul className="enc-ask">{fixes.slice(0, 8).map((f) => (
+                <li key={f.srcIdx}>
+                  {f.name && <span className="mono">{f.rel ? `${f.rel}/` : ''}{f.name}</span>}
+                  {f.issues.slice(0, 4).map((x, j) => <small key={j} className="aid-bad">{x.line ? `dòng ${x.line}: ` : ''}{x.message}</small>)}
+                  {f.issues.length > 4 && <small>… và {f.issues.length - 4} chỗ khác</small>}
+                </li>
+              ))}</ul>
+              {fixes.length > 8 && <span>… và {fixes.length - 8} tệp khác.</span>}
+              <span>Khối thiếu \end{'{ex}'} hay nằm trong chú thích % không vào ngân hàng; sửa tệp nguồn rồi mở lại nếu cần những câu đó.</span>
+            </div></div>
           )}
           {tooBig && (
             <div className="note bad" role="alert"><div className="note-body"><b>Lô có {usedRows.length.toLocaleString('vi-VN')} câu — vượt giới hạn {BATCH_MAX.toLocaleString('vi-VN')} câu mỗi lô</b>

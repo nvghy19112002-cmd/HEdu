@@ -1,6 +1,6 @@
 // Lô nhập nhiều nguồn (PR N2; phương án: claude/thiet-ke-nhap-nhieu-tep.md). Phần THUẦN: gộp câu từ nhiều tệp, thống kê theo tệp, dựng nhãn nguồn.
 // Mỗi câu nhớ tệp + số dòng TRONG tệp đó; các chỗ khác của màn Nhập liệu vẫn đánh theo thứ tự câu toàn lô.
-import { splitExBlocksAt, parseExTest, type ParsedQuestion } from './extest';
+import { normalizeEx, splitExBlocksAt, parseExTest, type ExIssue, type ParsedQuestion } from './extest';
 import { idFromLatex, idStateOf } from './importid';
 
 /** Giới hạn tạm một lô (đến khi dò trùng nhẹ hơn): rà trùng tốn ~40 KB RAM mỗi câu nhập mới. */
@@ -29,6 +29,16 @@ export function buildRows(sources: readonly ImportSource[]): BatchRow[] {
       const p = parseExTest(latex);
       out.push({ latex, line, file: s.name, rel: s.rel, srcIdx, p, fromId: idFromLatex(latex) });
     }
+  });
+  return out;
+}
+
+/** Cảnh báo của bước chuẩn hoá (khối dở, end thừa, bị comment, nội dung ngoài khối) theo từng nguồn; nguồn sạch không có mặt. */
+export function sourceIssues(sources: readonly ImportSource[]): { srcIdx: number; name: string; rel: string; issues: ExIssue[] }[] {
+  const out: { srcIdx: number; name: string; rel: string; issues: ExIssue[] }[] = [];
+  sources.forEach((s, srcIdx) => {
+    const { issues } = normalizeEx(s.text);
+    if (issues.length) out.push({ srcIdx, name: s.name, rel: s.rel, issues });
   });
   return out;
 }
