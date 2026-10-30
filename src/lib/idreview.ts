@@ -11,7 +11,7 @@ import { invoke, isDesktop } from './platform';
 import { getStorageMode } from './storage';
 import type { TaxIndex } from './taxonomy';
 import { checkLocation } from './taxpath';
-import type { Level, Question } from './types';
+import { LEVELS, type Level, type Question } from './types';
 
 export type FormState = 'chua' | 'may' | 'gv' | 'xem-lai';
 export type LevelState = 'chua' | 'may' | 'gv';
@@ -44,6 +44,8 @@ export interface ReviewRec {
   orig?: string;
   /** Dạng (formId) mà máy đề xuất lúc nhập/soát, khác Dạng đang lưu (câu bất đồng chờ xác minh) */
   prop?: string;
+  /** mức độ máy/AI đề xuất, khác mức đang lưu: chỉ để giáo viên bấm dùng, không tự ghi vào câu */
+  propLevel?: Level;
   /** lịch sử quyết định, mới nhất trước (tối đa HIST_MAX); không bao giờ bị xoá khi đổi trạng thái */
   hist?: HistEntry[];
 }
@@ -88,9 +90,9 @@ export const keepNoId = (e: Effective): { unclassified?: true; lop?: number } =>
 export const isEvidence = (_q: Question, eff: Effective): boolean => !eff.unclassified && eff.form === 'gv';
 
 /** Bản ghi mới cho một câu (đọc `q` ở thời điểm ghi). */
-export function makeRec(q: Question, o: { form: FormState; level?: LevelState; src: IdSource; taxRev: string; unclassified?: boolean; lop?: number; why?: string; at?: number; orig?: string; prop?: string }): ReviewRec {
+export function makeRec(q: Question, o: { form: FormState; level?: LevelState; src: IdSource; taxRev: string; unclassified?: boolean; lop?: number; why?: string; at?: number; orig?: string; prop?: string; propLevel?: Level }): ReviewRec {
   const k = contentKeys(q.latex);
-  return { form: o.form, level: o.level ?? 'chua', src: o.src, formId: q.formId, level0: q.level, f: k.f, i: k.i, taxRev: o.taxRev, at: o.at ?? Date.now(), ...(o.unclassified ? { unclassified: true, ...(o.lop != null ? { lop: o.lop } : {}) } : {}), ...(o.why ? { why: o.why } : {}), ...(o.orig ? { orig: o.orig } : {}), ...(o.prop ? { prop: o.prop } : {}) };
+  return { form: o.form, level: o.level ?? 'chua', src: o.src, formId: q.formId, level0: q.level, f: k.f, i: k.i, taxRev: o.taxRev, at: o.at ?? Date.now(), ...(o.unclassified ? { unclassified: true, ...(o.lop != null ? { lop: o.lop } : {}) } : {}), ...(o.why ? { why: o.why } : {}), ...(o.orig ? { orig: o.orig } : {}), ...(o.prop ? { prop: o.prop } : {}), ...(o.propLevel ? { propLevel: o.propLevel } : {}) };
 }
 
 // ---------- kho trong bộ nhớ + tệp phụ ----------
@@ -122,7 +124,7 @@ const isRec = (r: unknown): r is ReviewRec => {
   const x = r as ReviewRec;
   return !!x && FORMS.includes(x.form) && LEVELS_.includes(x.level) && SRC.includes(x.src) && typeof x.formId === 'string' && typeof x.level0 === 'string'
     && typeof x.f === 'string' && typeof x.i === 'string' && typeof x.taxRev === 'string' && typeof x.at === 'number'
-    && (x.orig === undefined || typeof x.orig === 'string') && (x.lop === undefined || typeof x.lop === 'number') && (x.prop === undefined || typeof x.prop === 'string') && (x.hist === undefined || (Array.isArray(x.hist) && x.hist.every(isHist)));
+    && (x.orig === undefined || typeof x.orig === 'string') && (x.lop === undefined || typeof x.lop === 'number') && (x.prop === undefined || typeof x.prop === 'string') && (x.propLevel === undefined || LEVELS.includes(x.propLevel)) && (x.hist === undefined || (Array.isArray(x.hist) && x.hist.every(isHist)));
 };
 /**
  * Quy tắc khi CÙNG MỘT uid có nhiều bản ghi (xác định, không phụ thuộc thứ tự duyệt): bản có `at` MỚI hơn thắng; bằng nhau thì bản có lịch sử dài hơn;

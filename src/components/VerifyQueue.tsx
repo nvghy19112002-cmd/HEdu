@@ -15,7 +15,7 @@ import { ReviewControl } from './ReviewControl';
 
 const SCOPES: QueueScope[] = ['tat-ca', 'can-xem', 'chua-phan-loai', 'may', 'chua'];
 const KEYS: [string, string][] = [
-  ['Y / Enter', 'Xác nhận Dạng hiện tại'], ['M', 'Xác nhận mức độ'], ['N', 'Cần xem lại'], ['1 · 2 · 3', 'Đổi sang Dạng gợi ý 1, 2, 3 (rồi xác nhận)'],
+  ['Y / Enter', 'Xác nhận Dạng hiện tại'], ['M', 'Xác nhận mức độ đang lưu'], ['K', 'Dùng mức độ đề xuất'], ['N', 'Cần xem lại'], ['1 · 2 · 3', 'Đổi sang Dạng gợi ý 1, 2, 3 (rồi xác nhận)'],
   ['D', 'Chọn Dạng khác trong danh sách'], ['U', 'Hoàn tác'], ['S / →', 'Bỏ qua, sang câu sau'], ['←', 'Về câu trước'], ['L', 'Hiện/ẩn lời giải'], ['?', 'Hiện/ẩn bảng phím'], ['Esc', 'Đóng hàng đợi'],
 ];
 
@@ -56,6 +56,8 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
   const eff = q ? effOf(q) : null;
   // lớp đáng tin: câu Chưa có ID dùng lớp chọn khi nhập (null = chưa rõ ⇒ không gợi ý, cho chọn Dạng mọi lớp), không dùng vị trí giữ chỗ
   const qGrade = q && eff ? gradeOfEff(q, eff) : null;
+  // mức độ AI/máy đề xuất khác mức đang lưu, mức độ chưa được giáo viên xác minh
+  const propLv = q && eff?.rec?.propLevel && eff.rec.propLevel !== q.level && eff.level !== 'gv' ? eff.rec.propLevel : null;
 
   // gợi ý tham khảo: dựng MỘT lần khi mở (kho đổi theo từng thao tác nhưng gợi ý cũ vẫn đủ để tham khảo)
   const sug = useRef<{ tax: typeof tax; s: IdSuggester } | null>(null);
@@ -104,6 +106,7 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
       const act = (a: QueueAction | null, adv = true) => { e.preventDefault(); if (a) void run(a, adv); };
       if (k === 'y' || k === 'enter') act(eff?.unclassified ? null : { kind: 'xac-nhan-dang' });
       else if (k === 'm') act({ kind: 'xac-nhan-muc-do' }, false);
+      else if (k === 'k') act(propLv ? { kind: 'dung-muc', level: propLv } : null, false);
       else if (k === 'n') act({ kind: 'can-xem-lai' });
       else if ((k === 'p' || k === 'P') && eff?.rec?.prop && q && (eff.unclassified || eff.rec.prop !== q.formId)) act({ kind: 'doi-dang', formId: eff.rec.prop });
       else if (k === '1' || k === '2' || k === '3') { const o = options[Number(k) - 1]; if (o) act({ kind: 'doi-dang', formId: o.formId }); }
@@ -172,6 +175,12 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
                   <span className="vq-prop">
                     <small className="sys-hint">{eff.src === 'ai-ngoai' ? 'AI ngoài đề xuất' : 'Máy từng đề xuất'}: <b>{where(eff.rec.prop)}</b></small>
                     <button type="button" className="btn btn-sm btn-accent" disabled={busy} title="Đổi sang Dạng đề xuất (phím P)" onClick={() => void run({ kind: 'doi-dang', formId: eff.rec!.prop! }, true)}><kbd>P</kbd> Dùng Dạng đề xuất</button>
+                  </span>
+                )}
+                {propLv && (
+                  <span className="vq-prop">
+                    <small className="sys-hint">{eff.src === 'ai-ngoai' ? 'AI ngoài đề xuất' : 'Máy đề xuất'} mức độ: <b>{LEVEL_LABEL[propLv]}</b> (đang lưu: {LEVEL_LABEL[q.level]})</small>
+                    <button type="button" className="btn btn-sm" disabled={busy} title="Đổi mức độ sang mức đề xuất và xác minh mức độ (phím K)" onClick={() => void run({ kind: 'dung-muc', level: propLv }, false)}><kbd>K</kbd> Dùng mức đề xuất ({LEVEL_LABEL[propLv]})</button>
                   </span>
                 )}
               </div>

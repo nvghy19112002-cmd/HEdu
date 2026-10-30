@@ -54,6 +54,8 @@ export const HUONG_DAN = [
   'Với mỗi câu trong "cau": đọc đề (LaTeX, đã bỏ ID cũ), chọn Dạng ("id" trong "dang") cùng lớp với câu ("lop"; nếu "lop" là null thì chọn ở lớp phù hợp nhất); đề xuất mức độ NB/TH/VD/VDC.',
   'Căn cứ chính là KIẾN THỨC câu hỏi kiểm tra (không phải chữ trong đề). "vd" là đề mẫu giáo viên đã xác minh của Dạng đó để tham khảo.',
   'Không đoán bừa: phân vân giữa nhiều Dạng thì chọn Dạng hợp nhất và để "chac":"thap"; ghi "lyDo" một câu ngắn (vì sao chọn Dạng này).',
+  'Mức độ theo YÊU CẦU TƯ DUY của câu (không theo loại câu hay tên Dạng): NB = nhớ/nhận ra định nghĩa, kí hiệu, công thức, đọc kết quả trực tiếp (1 bước); TH = áp dụng trực tiếp một kiến thức trong tình huống quen thuộc, 2–3 bước, chuyển cách biểu diễn; VD = phối hợp nhiều kiến thức, có tham số phải lập điều kiện, đặt ẩn/mô hình hoá bài thực tế quen thuộc; VDC = tình huống mới, biện luận nhiều trường hợp, phối hợp nhiều bài/chương.',
+  'Xét bước khó nhất BẮT BUỘC để ra đáp án; hai mức kề nhau đều hợp lý thì chọn mức thấp hơn. Câu nhiều ý (Đúng/Sai, tự luận a/b/c…): đề xuất mức của ý khó nhất và ghi "nhiều ý" trong "lyDo" — giáo viên sẽ chốt mức.',
   'Trả về MỘT tệp JSON: {"format":"hedu-gan-id-de-xuat","v":1,"lo":<giống "lo">,"boi":"Claude","cau":[{"k":<k>,"fp":<fp>,"dang":<id Dạng>,"muc":"NB|TH|VD|VDC","chac":"cao|vua|thap","lyDo":"…"}]}.',
   'Chép NGUYÊN "k" và "fp" của từng câu. Đủ một dòng cho mỗi câu; không thêm câu, không đổi đề.',
   'Ghi tệp kết quả tên "de-xuat-<lo>.json" (thay <lo> bằng giá trị "lo") vào CÙNG thư mục với tệp lô này.',
@@ -159,10 +161,11 @@ export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: 
     }
     const why = `${who} (${CONF_LABEL[it.chac]}): ${it.lyDo || 'không ghi lý do'}${it.muc && it.muc !== q.level ? ` · đề xuất mức ${it.muc}` : ''}`;
     const same = it.dang === q.formId && !e.unclassified;
+    const pl = it.muc && it.muc !== q.level ? { propLevel: it.muc } : {}; // mức đề xuất chỉ giữ để giáo viên bấm dùng (phím K), không ghi vào câu
     if (same) { plan.dongY++; plan.theoChac[it.chac].dongY++; } else { plan.khac++; plan.theoChac[it.chac].khac++; }
     plan.recs.push([q.uid, same
-      ? makeRec(q, { form: 'may', src: 'ai-ngoai', taxRev: o.taxRev, why, ...(o.now ? { at: o.now } : {}) })
-      : makeRec(q, { form: 'xem-lai', src: 'ai-ngoai', taxRev: o.taxRev, why, prop: it.dang, ...keepNoId(e), ...(o.now ? { at: o.now } : {}) })]);
+      ? makeRec(q, { form: 'may', src: 'ai-ngoai', taxRev: o.taxRev, why, ...pl, ...(o.now ? { at: o.now } : {}) })
+      : makeRec(q, { form: 'xem-lai', src: 'ai-ngoai', taxRev: o.taxRev, why, prop: it.dang, ...pl, ...keepNoId(e), ...(o.now ? { at: o.now } : {}) })]);
   }
   return plan;
 }
