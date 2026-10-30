@@ -238,5 +238,41 @@ console.log('Đóng/mở lại và khởi động lại; căn cứ hết hiệu 
   ok(!ev().includes(w.uid), 'bỏ xác minh (hoàn tác) ⇒ không còn là căn cứ');
 }
 
+console.log('Dùng mức độ đề xuất (phím K)');
+{
+  // câu có ID: đổi mức độ ⇒ ghi lại chữ mức độ trong %[ID] cùng lúc, Dạng giữ nguyên, Dạng đề xuất đang chờ vẫn còn
+  const w = fresh1('muc-de-xuat');
+  putRecs([[w.uid, makeRec(w, { form: 'xem-lai', src: 'ai-ngoai', taxRev: rev, why: 'AI ngoài: lý do', prop: A.formId, propLevel: 'VD' })]]);
+  const r = await applyQueueAction(w.uid, { kind: 'dung-muc', level: 'VD' }, ctx, w.latex);
+  const n = cur(w.uid);
+  ok(r.ok && n.level === 'VD' && readHead(n.latex).ids.map((x) => x.code).join() === code(B, 'VD') && n.formId === B.formId, 'đổi mức độ và ID6 cùng lúc, Dạng giữ nguyên');
+  const e = eff(n);
+  ok(e.level === 'gv' && e.form === 'xem-lai' && getRec(w.uid)!.prop === A.formId && getRec(w.uid)!.propLevel === undefined && e.why === 'AI ngoài: lý do', 'mức độ ⇒ giáo viên xác minh; Dạng đề xuất và lý do vẫn còn để chọn tiếp');
+  const u = await undoQueueAction(mustUndo(r));
+  ok(u.ok && cur(w.uid).latex === w.latex && cur(w.uid).level === 'TH' && getRec(w.uid)!.propLevel === 'VD', 'hoàn tác ⇒ trả lại LaTeX, mức độ cũ và mức đề xuất');
+  // đổi Dạng trước, mức đề xuất vẫn giữ để bấm sau
+  const d = await applyQueueAction(w.uid, { kind: 'doi-dang', formId: A.formId }, ctx);
+  ok(d.ok && getRec(w.uid)!.propLevel === 'VD' && getRec(w.uid)!.prop === undefined, 'đổi Dạng xong vẫn còn mức đề xuất (mức độ chưa xác minh)');
+  const k = await applyQueueAction(w.uid, { kind: 'dung-muc', level: 'VD' }, ctx);
+  ok(k.ok && readHead(cur(w.uid).latex).ids.map((x) => x.code).join() === code(A, 'VD') && eff(cur(w.uid)).form === 'gv' && eff(cur(w.uid)).level === 'gv', 'sau khi đổi Dạng, dùng mức đề xuất ⇒ ID theo Dạng mới và mức mới');
+}
+{
+  // câu Chưa có ID: chỉ đổi mức độ lưu kèm câu, KHÔNG thêm ID giả
+  const z = addMany([{ ...B, latex: ex('Câu chưa có ID về mức độ'), level: 'TH' as Level, tags: [] }])[0];
+  putRecs([[z.uid, makeRec(z, { form: 'xem-lai', src: 'ai-ngoai', taxRev: rev, unclassified: true, prop: A.formId, propLevel: 'NB' })]]);
+  const r = await applyQueueAction(z.uid, { kind: 'dung-muc', level: 'NB' }, ctx);
+  ok(r.ok && cur(z.uid).level === 'NB' && cur(z.uid).latex === z.latex && readHead(cur(z.uid).latex).ids.length === 0, 'câu Chưa có ID: đổi mức độ, LaTeX không thêm ID');
+  ok(eff(cur(z.uid)).unclassified && eff(cur(z.uid)).level === 'gv' && getRec(z.uid)!.prop === A.formId, 'vẫn ở mục Chưa có ID, Dạng đề xuất còn nguyên');
+}
+{
+  // ghi trạng thái lỗi ⇒ câu trở về như cũ
+  const w = fresh1('muc-loi');
+  disk.failSave = true;
+  const r = await applyQueueAction(w.uid, { kind: 'dung-muc', level: 'VDC' }, ctx);
+  disk.failSave = false;
+  ok(!r.ok && cur(w.uid).level === 'TH' && cur(w.uid).latex === w.latex, 'ghi tệp phụ lỗi ⇒ không đổi mức độ lẫn ID');
+  ok(!(await applyQueueAction(w.uid, { kind: 'dung-muc', level: 'XX' as Level }, ctx)).ok, 'mức độ lạ bị từ chối');
+}
+
 if (fail) process.exit(1);
 console.log('verifyqueue: đạt hết.');

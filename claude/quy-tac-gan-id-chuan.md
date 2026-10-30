@@ -34,7 +34,7 @@ Trạng thái: **Phần A–D** đã có trong mã (tài liệu hoá lại). **P
 9. Luôn **xem trước → giáo viên chọn → kiểm lại ngay trước khi ghi**. Câu đã đổi (so với ảnh chụp lúc xem trước) thì không ghi đè.
 10. "Gán ID" = **gán vị trí đúng trong cây VÀ ghi ID6 vào vùng `%[ID]` của LaTeX — cả hai hoặc không gì**.
 11. Ngoài vùng ID: `uid`, `seq`, nội dung LaTeX, loại câu, nhãn, kiểm duyệt, ngày tạo/sửa **không đổi**.
-12. **Mức độ không tự đổi**; chỉ đổi khi giáo viên tick riêng. Mức độ AI trả về chỉ là gợi ý.
+12. **Mức độ không tự đổi**; chỉ đổi khi giáo viên tick riêng. Mức độ AI trả về chỉ là gợi ý. Cách xác định mức: `claude/quy-tac-muc-do.md` (4 mức, đã duyệt 30/10/2026).
 13. Tối đa **200 câu mỗi lượt** (`AUTO_ID_MAX`); có Hoàn tác trong phiên (`undoAutoId`).
 14. Nhập .tex: ID có sẵn trong tệp chỉ được dùng khi qua `resolveCode`; mã sai/thiếu/trùng không được tự sửa lặng lẽ.
 

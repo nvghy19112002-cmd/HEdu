@@ -8,7 +8,7 @@ import { placeWithId } from './idsync';
 import { getState, updateMany } from './store';
 import type { TaxIndex } from './taxonomy';
 import { checkLocation, locationOfForm } from './taxpath';
-import type { Level, Location, Question, Taxonomy } from './types';
+import { LEVEL_LABEL, LEVELS, type Level, type Location, type Question, type Taxonomy } from './types';
 
 /** Nhóm cần xử lý trong hàng đợi, theo thứ tự ưu tiên: cần xem lại → chưa phân loại → máy phân loại → chưa xác minh. */
 export type QueueScope = 'can-xem' | 'chua-phan-loai' | 'may' | 'chua' | 'tat-ca';
@@ -48,12 +48,14 @@ export type QueueAction =
   | { kind: 'xac-nhan-dang' }
   | { kind: 'xac-nhan-muc-do' }
   | { kind: 'can-xem-lai' }
-  | { kind: 'doi-dang'; formId: string };
+  | { kind: 'doi-dang'; formId: string }
+  /** đổi mức độ của câu sang mức đề xuất (câu có ID thì ghi lại chữ mức độ trong %[ID]) rồi xác minh mức độ */
+  | { kind: 'dung-muc'; level: Level };
 
 /** Một lần hoàn tác: trả lại câu (nếu action đã đổi câu) và bản ghi trạng thái. */
 export interface QueueUndo {
   uid: string;
-  /** vị trí + LaTeX trước khi đổi Dạng; chỉ có khi action là doi-dang */
+  /** vị trí + LaTeX trước khi đổi Dạng/mức độ; chỉ có khi action đổi câu (doi-dang, dung-muc) */
   before?: Pick<Question, 'grade' | 'chapterId' | 'lessonId' | 'formId' | 'latex' | 'level'>;
   /** câu ngay sau khi đổi (để biết câu có bị sửa tiếp sau đó không) */
   after?: Pick<Question, 'grade' | 'chapterId' | 'lessonId' | 'formId' | 'latex' | 'level'>;
@@ -75,7 +77,32 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
   const prevRec = getRec(uid);
   const eff = effectiveOf(q, prevRec, { ix: ctx.ix, taxRev: ctx.taxRev });
   const mk = (qq: Question, o: { form: FormState; level: Effective['level']; src: 'tay'; noId?: boolean; why?: string }) =>
-    makeRec(qq, { form: o.form, level: o.level, src: o.src, taxRev: ctx.taxRev, ...(o.noId ? keepNoId(eff) : {}), ...(o.why ? { why: o.why } : {}), ...(prevRec?.orig ? { orig: prevRec.orig } : {}) });
+    makeRec(qq, {
+      form: o.form, level: o.level, src: o.src, taxRev: ctx.taxRev, ...(o.noId ? keepNoId(eff) : {}), ...(o.why ? { why: o.why } : {}), ...(prevRec?.orig ? { orig: prevRec.orig } : {}),
+      // đề xuất còn chờ giáo viên chọn thì giữ lại: Dạng đề xuất khi trạng thái Dạng không đổi, mức đề xuất khi mức độ chưa được xác minh
+      ...(prevRec?.prop && o.form === eff.form && o.form !== 'gv' ? { prop: prevRec.prop } : {}),
+      ...(prevRec?.propLevel && o.level !== 'gv' ? { propLevel: prevRec.propLevel } : {}),
+    });
+  /** Đổi câu (vị trí/mức độ/LaTeX) rồi ghi trạng thái — cả hai hoặc không gì: ghi trạng thái lỗi ⇒ trả câu về như cũ. */
+  const changeThenRecord = async (patch: Partial<Question>, rec: (nq: Question) => ReviewRec, okMsg: string): Promise<QueueResult> => {
+    const before = snap(q);
+    let after: ReturnType<typeof snap> | undefined;
+    const r = await updateMany([uid], (x) => {
+      if (!sameSnap(x, before)) return null; // câu đã bị sửa giữa chừng
+      const n = { ...x, ...patch };
+      after = snap(n);
+      return n;
+    });
+    if (!r.ok) return { ok: false, message: 'Chưa ghi được dữ liệu nên chưa đổi gì.' };
+    if (!r.changed || !after) return { ok: false, message: 'Câu vừa được sửa ở nơi khác nên chưa đổi gì. Hãy xem lại câu.' };
+    const nq = getState().questions.find((x) => x.uid === uid)!;
+    if (!(await commitRecs([[uid, rec(nq)]]))) {
+      // câu đã đổi nhưng trạng thái chưa lưu được ⇒ trả câu về đúng như cũ (không để câu mang vị trí/mức mới mà thiếu xác minh)
+      const back = await updateMany([uid], (x) => (after && sameSnap(x, after) ? { ...x, ...before } : null));
+      return { ok: false, message: back.ok && back.changed ? 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' : 'Chưa ghi được trạng thái xác minh và chưa trả được câu về như cũ: hãy kiểm tra câu này.' };
+    }
+    return { ok: true, undo: { uid, before, after, prevRec }, message: okMsg };
+  };
 
   if (action.kind === 'xac-nhan-dang') {
     // câu Chưa có ID: vị trí lưu chỉ là chỗ giữ ⇒ không có Dạng nào để xác nhận
@@ -92,29 +119,27 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
     const saved = await commitRecs([[uid, mk(q, { form: 'xem-lai', level: eff.level, src: 'tay', noId: true, why: 'Giáo viên đánh dấu cần xem lại' })]]);
     return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã đánh dấu cần xem lại' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
+  if (action.kind === 'dung-muc') {
+    if (!LEVELS.includes(action.level)) return { ok: false, message: 'Mức độ đề xuất không hợp lệ.' };
+    const lv = action.level;
+    const keep = (nq: Question) => mk(nq, { form: eff.form, level: 'gv', src: 'tay', noId: true, ...(eff.why ? { why: eff.why } : {}) });
+    if (lv === q.level) {
+      const saved = await commitRecs([[uid, keep(q)]]);
+      return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh mức độ' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
+    }
+    // câu Chưa có ID: không có ID nào để sửa, chỉ đổi mức độ lưu kèm câu
+    if (eff.unclassified) return changeThenRecord({ level: lv }, keep, `Đã đổi mức độ sang ${LEVEL_LABEL[lv]} và xác minh`);
+    // câu có ID: chữ mức độ nằm trong ID6 ⇒ đổi mức độ và ID cùng lúc (quy tắc 10)
+    const w = placeWithId(q.latex, { grade: q.grade, chapterId: q.chapterId, lessonId: q.lessonId, formId: q.formId }, lv, ctx.tax, true);
+    if ('problem' in w) return { ok: false, message: `Không ghi được ID mới vào LaTeX (${w.problem}) nên chưa đổi gì.` };
+    return changeThenRecord({ level: lv, latex: w.latex }, keep, `Đã đổi mức độ và xác minh (${w.code})`);
+  }
   // đổi Dạng: vị trí + ID6 cùng lúc, mức độ giữ nguyên
   const to: Location | null = locationOfForm(ctx.ix, action.formId);
   if (!to) return { ok: false, message: 'Dạng chọn không còn trong cây.' };
   const w = placeWithId(q.latex, to, q.level as Level, ctx.tax, true);
   if ('problem' in w) return { ok: false, message: `Không ghi được ID mới vào LaTeX (${w.problem}) nên chưa đổi gì.` };
-  const before = snap(q);
-  let after: ReturnType<typeof snap> | undefined;
-  const r = await updateMany([uid], (x) => {
-    if (!sameSnap(x, before)) return null; // câu đã bị sửa giữa chừng
-    const n = { ...x, grade: to.grade, chapterId: to.chapterId, lessonId: to.lessonId, formId: to.formId, latex: w.latex };
-    after = snap(n);
-    return n;
-  });
-  if (!r.ok) return { ok: false, message: 'Chưa ghi được dữ liệu nên chưa đổi gì.' };
-  if (!r.changed || !after) return { ok: false, message: 'Câu vừa được sửa ở nơi khác nên chưa đổi gì. Hãy xem lại câu.' };
-  const nq = getState().questions.find((x) => x.uid === uid)!;
-  const saved = await commitRecs([[uid, mk(nq, { form: 'gv', level: eff.level, src: 'tay', why: 'Giáo viên đổi Dạng trong hàng đợi xác minh' })]]);
-  if (!saved) {
-    // câu đã đổi nhưng trạng thái chưa lưu được ⇒ trả câu về đúng như cũ (không để câu mang vị trí mới mà thiếu xác minh)
-    const back = await updateMany([uid], (x) => (after && sameSnap(x, after) ? { ...x, ...before } : null));
-    return { ok: false, message: back.ok && back.changed ? 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' : 'Chưa ghi được trạng thái xác minh và chưa trả được câu về như cũ: hãy kiểm tra câu này.' };
-  }
-  return { ok: true, undo: { uid, before, after, prevRec }, message: `Đã đổi Dạng và xác minh (${w.code})` };
+  return changeThenRecord({ grade: to.grade, chapterId: to.chapterId, lessonId: to.lessonId, formId: to.formId, latex: w.latex }, (nq) => mk(nq, { form: 'gv', level: eff.level, src: 'tay', why: 'Giáo viên đổi Dạng trong hàng đợi xác minh' }), `Đã đổi Dạng và xác minh (${w.code})`);
 }
 
 /** Hoàn tác một hành động: trả lại câu nếu còn y như lúc đổi, và trả lại đúng bản ghi trạng thái trước đó. */
