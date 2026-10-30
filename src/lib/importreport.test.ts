@@ -53,7 +53,7 @@ console.log('CSV / Markdown');
   ok(full.trim().split('\r\n').length === 6, 'một dòng tiêu đề + mỗi câu một dòng');
   ok(!/begin\{ex\}|Câu số/.test(full) && !/begin\{ex\}/.test(reportMd(r)), 'không chứa nội dung câu hỏi');
   const md = reportMd(buildReport({ at: 1, name: 'Đề thi thử', paste: false, restorePoint: true, rows }));
-  ok(md.includes('# Báo cáo nhập: Đề thi thử') && md.includes('Đã nhập: 3 câu') && md.includes('Vào vị trí chung (cần xếp lại sau): 1') && md.includes('Lop12/Hàm số/de2.tex'), 'Markdown có tổng quát, vị trí chung và bảng theo tệp');
+  ok(md.includes('# Báo cáo nhập: Đề thi thử') && md.includes('Đã nhập: 3 câu') && md.includes('Vào mục Chưa có ID (gán Dạng sau): 1') && md.includes('Lop12/Hàm số/de2.tex'), 'Markdown có tổng quát, vị trí chung và bảng theo tệp');
 }
 
 console.log('Nhật ký nhập');

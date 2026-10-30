@@ -5,7 +5,7 @@
 // Đo độ đúng: lô trộn NGẦM một phần câu giáo viên đã xác minh (cùng định dạng, đã bỏ ID cũ) — AI không biết câu nào là câu đối chứng;
 // khi nhập, HEdu so đề xuất với Dạng giáo viên đã xác minh để báo tỉ lệ đúng theo Chương / Bài / Dạng.
 // Quy tắc nền: claude/quy-tac-gan-id-chuan.md (nguồn "ai-ngoai", "máy" không tự thành "gv").
-import { contentKeys, makeRec, type Effective, type ReviewRec } from './idreview';
+import { contentKeys, gradeOfEff, keepNoId, makeRec, type Effective, type ReviewRec } from './idreview';
 import { idlessVariants } from './idtex';
 import { stemSnippet } from './snippet';
 import { locationOfForm } from './taxpath';
@@ -18,7 +18,8 @@ export type Conf = 'cao' | 'vua' | 'thap';
 const CONFS: Conf[] = ['cao', 'vua', 'thap'];
 export const CONF_LABEL: Record<Conf, string> = { cao: 'chắc chắn cao', vua: 'khá chắc', thap: 'chưa chắc' };
 
-export interface LotItem { k: string; fp: string; lop: number; loai: string; latex: string }
+/** `lop` null = câu Chưa có ID chưa rõ lớp (AI chọn Dạng ở lớp hợp nhất) */
+export interface LotItem { k: string; fp: string; lop: number | null; loai: string; latex: string }
 export interface LotForm { id: string; ma: string; duong: string; vd: string[] }
 export interface LotFile {
   format: typeof LOT_FORMAT; v: 1; lo: string; taoLuc: string; taxRev: string;
@@ -50,7 +51,7 @@ function formRows(tax: Taxonomy, grades: ReadonlySet<number>): (LotForm & { grad
 
 export const HUONG_DAN = [
   'Bạn phân loại câu hỏi Toán (Chương trình GDPT 2018) vào đúng MỘT Dạng trong danh sách "dang" của tệp này — đây là cây chương trình của giáo viên.',
-  'Với mỗi câu trong "cau": đọc đề (LaTeX, đã bỏ ID cũ), chọn Dạng ("id" trong "dang") cùng lớp với câu ("lop"); đề xuất mức độ NB/TH/VD/VDC.',
+  'Với mỗi câu trong "cau": đọc đề (LaTeX, đã bỏ ID cũ), chọn Dạng ("id" trong "dang") cùng lớp với câu ("lop"; nếu "lop" là null thì chọn ở lớp phù hợp nhất); đề xuất mức độ NB/TH/VD/VDC.',
   'Căn cứ chính là KIẾN THỨC câu hỏi kiểm tra (không phải chữ trong đề). "vd" là đề mẫu giáo viên đã xác minh của Dạng đó để tham khảo.',
   'Không đoán bừa: phân vân giữa nhiều Dạng thì chọn Dạng hợp nhất và để "chac":"thap"; ghi "lyDo" một câu ngắn (vì sao chọn Dạng này).',
   'Trả về MỘT tệp JSON: {"format":"hedu-gan-id-de-xuat","v":1,"lo":<giống "lo">,"boi":"Claude","cau":[{"k":<k>,"fp":<fp>,"dang":<id Dạng>,"muc":"NB|TH|VD|VDC","chac":"cao|vua|thap","lyDo":"…"}]}.',
@@ -68,12 +69,15 @@ export function buildLot(pool: readonly Question[], o: BuildOpts): { lot: LotFil
   const verified = (e: Effective) => e.form === 'gv' && !e.unclassified;
   const rank = (e: Effective) => (e.form === 'xem-lai' ? 0 : e.unclassified ? 1 : e.form === 'chua' ? 2 : 3);
   const needAll = pool.map((q) => ({ q, e: o.effOf(q) })).filter((x) => !verified(x.e)).sort((a, b) => rank(a.e) - rank(b.e));
-  const need = needAll.slice(0, Math.max(1, o.size)).map((x) => x.q);
-  const grades = new Set(need.map((q) => q.grade));
+  const needX = needAll.slice(0, Math.max(1, o.size));
+  const need = needX.map((x) => x.q);
+  // Lớp của câu: câu Chưa có ID dùng lớp chọn khi nhập (không dùng lớp của vị trí giữ chỗ); chưa rõ lớp ⇒ gửi Dạng của mọi lớp
+  const lopOf = new Map(needX.map((x) => [x.q.uid, gradeOfEff(x.q, x.e)] as const));
+  const grades = new Set([...lopOf.values()].some((g) => g == null) ? o.tax.grades.map((g) => g.grade) : [...lopOf.values()].filter((g): g is number => g != null));
   const goldPool = pool.filter((q) => grades.has(q.grade) && verified(o.effOf(q)));
   const goldN = Math.min(goldPool.length, Math.round(need.length * o.goldShare));
   const gold = shuffle([...goldPool], (o.seed ?? 7) + 1).slice(0, goldN);
-  const items = shuffle([...need, ...gold], o.seed ?? 7).map((q): LotItem => ({ k: q.uid, fp: contentKeys(q.latex).i, lop: q.grade, loai: TYPE_LABEL[q.type], latex: (idlessVariants(q.latex)[0] ?? q.latex).trim() }));
+  const items = shuffle([...need, ...gold], o.seed ?? 7).map((q): LotItem => ({ k: q.uid, fp: contentKeys(q.latex).i, lop: lopOf.has(q.uid) ? lopOf.get(q.uid)! : q.grade, loai: TYPE_LABEL[q.type], latex: (idlessVariants(q.latex)[0] ?? q.latex).trim() }));
   // đề mẫu cho mỗi Dạng: tối đa 2 câu giáo viên đã xác minh (không lấy câu đối chứng đang nằm trong lô)
   const inLot = new Set(items.map((x) => x.k));
   const forms = formRows(o.tax, grades);
@@ -140,8 +144,9 @@ export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: 
     if (contentKeys(q.latex).i !== it.fp) { skip('doi-noi-dung'); continue; }
     const loc = locationOfForm(o.ix, it.dang);
     if (!loc) { skip('dang-la'); continue; }
-    if (loc.grade !== q.grade) { skip('sai-lop'); continue; }
     const e = o.effOf(q);
+    const lop = gradeOfEff(q, e); // câu Chưa có ID: lớp chọn khi nhập, chưa rõ ⇒ nhận mọi lớp
+    if (lop != null && loc.grade !== lop) { skip('sai-lop'); continue; }
     if (e.form === 'gv' && !e.unclassified) {
       // câu đối chứng: chỉ để đo, không đổi gì
       const g = plan.gold;
@@ -157,7 +162,7 @@ export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: 
     if (same) { plan.dongY++; plan.theoChac[it.chac].dongY++; } else { plan.khac++; plan.theoChac[it.chac].khac++; }
     plan.recs.push([q.uid, same
       ? makeRec(q, { form: 'may', src: 'ai-ngoai', taxRev: o.taxRev, why, ...(o.now ? { at: o.now } : {}) })
-      : makeRec(q, { form: 'xem-lai', src: 'ai-ngoai', taxRev: o.taxRev, why, prop: it.dang, ...(e.unclassified ? { unclassified: true } : {}), ...(o.now ? { at: o.now } : {}) })]);
+      : makeRec(q, { form: 'xem-lai', src: 'ai-ngoai', taxRev: o.taxRev, why, prop: it.dang, ...keepNoId(e), ...(o.now ? { at: o.now } : {}) })]);
   }
   return plan;
 }

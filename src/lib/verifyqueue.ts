@@ -3,7 +3,7 @@
 //   - Duyệt NỘI DUNG (`Question.review`) là việc khác: hàng đợi này không đổi nó.
 //   - Chỉ hành động xác nhận của giáo viên tạo trạng thái "giáo viên xác minh"; mọi lần đổi đều lưu lịch sử (idreview.putRecs).
 //   - Đổi Dạng = đổi vị trí VÀ ghi ID6 mới vào `%[ID]` cùng lúc (quy tắc 10), mức độ giữ nguyên (quy tắc 12); không ghi được thì không đổi gì.
-import { commitRecs, effectiveOf, getRec, makeRec, type Effective, type FormState, type ReviewRec } from './idreview';
+import { commitRecs, effectiveOf, getRec, keepNoId, makeRec, type Effective, type FormState, type ReviewRec } from './idreview';
 import { placeWithId } from './idsync';
 import { getState, updateMany } from './store';
 import type { TaxIndex } from './taxonomy';
@@ -14,7 +14,7 @@ import type { Level, Location, Question, Taxonomy } from './types';
 export type QueueScope = 'can-xem' | 'chua-phan-loai' | 'may' | 'chua' | 'tat-ca';
 export const SCOPE_LABEL: Record<QueueScope, string> = {
   'can-xem': 'Cần xem lại',
-  'chua-phan-loai': 'Chưa phân loại',
+  'chua-phan-loai': 'Chưa có ID',
   may: 'Máy phân loại',
   chua: 'Chưa xác minh',
   'tat-ca': 'Tất cả chưa được giáo viên xác minh',
@@ -74,20 +74,22 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
   if (seenLatex !== undefined && q.latex !== seenLatex) return { ok: false, message: 'Câu vừa được sửa ở nơi khác nên chưa đổi gì. Hãy xem lại câu rồi thử lại.' };
   const prevRec = getRec(uid);
   const eff = effectiveOf(q, prevRec, { ix: ctx.ix, taxRev: ctx.taxRev });
-  const mk = (qq: Question, o: { form: FormState; level: Effective['level']; src: 'tay'; unclassified?: boolean; why?: string }) =>
-    makeRec(qq, { form: o.form, level: o.level, src: o.src, taxRev: ctx.taxRev, ...(o.unclassified ? { unclassified: true } : {}), ...(o.why ? { why: o.why } : {}), ...(prevRec?.orig ? { orig: prevRec.orig } : {}) });
+  const mk = (qq: Question, o: { form: FormState; level: Effective['level']; src: 'tay'; noId?: boolean; why?: string }) =>
+    makeRec(qq, { form: o.form, level: o.level, src: o.src, taxRev: ctx.taxRev, ...(o.noId ? keepNoId(eff) : {}), ...(o.why ? { why: o.why } : {}), ...(prevRec?.orig ? { orig: prevRec.orig } : {}) });
 
   if (action.kind === 'xac-nhan-dang') {
+    // câu Chưa có ID: vị trí lưu chỉ là chỗ giữ ⇒ không có Dạng nào để xác nhận
+    if (eff.unclassified) return { ok: false, message: 'Câu chưa có ID: hãy chọn Dạng (đề xuất, gợi ý hoặc Dạng khác) thay vì xác nhận.' };
     if (!checkLocation(ctx.ix, q).ok) return { ok: false, message: 'Vị trí của câu không còn đúng đường dẫn cây: hãy đổi sang Dạng đúng thay vì xác nhận.' };
     const saved = await commitRecs([[uid, mk(q, { form: 'gv', level: eff.level, src: 'tay', why: 'Giáo viên xác nhận Dạng' })]]);
     return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh Dạng' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   if (action.kind === 'xac-nhan-muc-do') {
-    const saved = await commitRecs([[uid, mk(q, { form: eff.form, level: 'gv', src: 'tay', unclassified: eff.unclassified, ...(eff.why ? { why: eff.why } : {}) })]]);
+    const saved = await commitRecs([[uid, mk(q, { form: eff.form, level: 'gv', src: 'tay', noId: true, ...(eff.why ? { why: eff.why } : {}) })]]);
     return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh mức độ' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   if (action.kind === 'can-xem-lai') {
-    const saved = await commitRecs([[uid, mk(q, { form: 'xem-lai', level: eff.level, src: 'tay', why: 'Giáo viên đánh dấu cần xem lại' })]]);
+    const saved = await commitRecs([[uid, mk(q, { form: 'xem-lai', level: eff.level, src: 'tay', noId: true, why: 'Giáo viên đánh dấu cần xem lại' })]]);
     return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã đánh dấu cần xem lại' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   // đổi Dạng: vị trí + ID6 cùng lúc, mức độ giữ nguyên

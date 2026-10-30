@@ -5,7 +5,7 @@ import { compileBatch, CATEGORY_ORDER, type Category, type Failure } from '../li
 import { isTikzReady } from '../lib/tikz';
 import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
-import { chapters, firstLocation, getTaxonomy, grades, useTaxonomy } from '../lib/curriculum';
+import { firstLocation, getTaxonomy, grades, useTaxonomy } from '../lib/curriculum';
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
@@ -53,7 +53,9 @@ export function ImportScreen() {
   /** Trạng thái xác minh CÓ HIỆU LỰC của câu trong ngân hàng (căn cứ kiểm chứng không lấy câu chưa phân loại / cần xem lại). */
   const effOf = (q: (typeof questions)[number]) => effectiveOf(q, getRec(q.uid), { ix: taxIx, taxRev: taxRevNow });
   const [src, setSrc] = useState('');
-  const [loc, setLoc] = useState<Location>(firstLocation(12));
+  // Câu không có ID vào mục "Chưa có ID" (không vào Dạng nào). Giáo viên chỉ chọn Lớp nếu biết; vị trí lưu kèm câu chỉ là chỗ giữ, không hiện, không thành ID.
+  const [noIdGrade, setNoIdGrade] = useState<number | null>(null);
+  const loc = useMemo<Location>(() => firstLocation(noIdGrade ?? undefined), [noIdGrade, taxNow]); // eslint-disable-line react-hooks/exhaustive-deps
   const [level, setLevel] = useState<Level>('TH');
   const file = useRef<HTMLInputElement>(null);
 
@@ -146,7 +148,7 @@ export function ImportScreen() {
   const [refused, setRefused] = useState<ReadonlySet<number>>(new Set());
   const [ackRefused, setAckRefused] = useState(false);
   useEffect(() => { if (!idPicks) setRefused(new Set()); }, [idPicks]);
-  useEffect(() => { setIdPicks(null); }, [loc.grade, taxRevNow]);
+  useEffect(() => { setIdPicks(null); }, [noIdGrade, taxRevNow]);
   const pickIx = useMemo(() => (idPicks ? indexOf(getTaxonomy()) : null), [idPicks]);
   /** Hỏi AI cho các câu đang có gợi ý (câu không có ID): AI dẫn đầu, gợi ý ngân hàng làm bằng chứng. */
   const draftAiJobs = () => {
@@ -286,9 +288,6 @@ export function ImportScreen() {
     .filter(({ i }) => !texOnlyBad || tex[i]?.ok === false)
     .filter(({ i }) => statusF === 'all' || (statusF === 'hold' ? decOf(i) === 'hold' : statusOf(i).key === statusF));
 
-  const chs = chapters(loc.grade);
-  const chapter = chs.find((c) => c.id === loc.chapterId) ?? chs[0];
-  const lesson = chapter?.lessons.find((l) => l.id === loc.lessonId) ?? chapter?.lessons[0];
 
   const importCount = sum.importN;
   // ID đọc theo cây HIỆN TẠI cho từng câu (không dùng kết quả đọc cũ lưu trong dòng của lô): cây đổi ⇒ đọc lại
@@ -353,8 +352,9 @@ export function ImportScreen() {
     return r.raw && r.state !== 'hop-le' ? `%[${r.raw}] — ${LATEX_ID_LABEL[r.state]}` : null;
   };
   const runIdSuggest = () => {
+    if (noIdGrade == null) return;
     const tax = getTaxonomy();
-    setIdPicks(suggestDrafts(noIdRows.map((i) => ({ index: i, latex: latexOf(i) })), new IdSuggester(tax, getState().questions), loc.grade));
+    setIdPicks(suggestDrafts(noIdRows.map((i) => ({ index: i, latex: latexOf(i) })), new IdSuggester(tax, getState().questions), noIdGrade));
   };
   const setPick = (i: number, formId: string | null) => { if (formId) setRefused((r) => { if (!r.has(i)) return r; const x = new Set(r); x.delete(i); return x; }); setIdPicks((m) => { if (!m?.has(i)) return m; const n = new Map(m); n.set(i, { ...m.get(i)!, formId }); return n; }); };
   /** Vị trí của câu không có ID: gợi ý đã chọn (nếu còn hợp lệ) hoặc vị trí chung. */
@@ -438,7 +438,7 @@ export function ImportScreen() {
     if (!rp.ok) { setSaveErr(null); toast(rp.message); return; }
     const added = addMany(built.drafts);
     // Trạng thái xác minh (tệp phụ). Thiếu/ghi lỗi chỉ làm câu thành "chưa xác minh" (an toàn), không làm sai dữ liệu câu.
-    const recsToSave = added.map((qq, k) => [qq.uid, makeRec(qq, { form: built.meta[k].form, src: built.meta[k].src, taxRev: taxRevNow, unclassified: built.meta[k].unclassified, ...(built.meta[k].why ? { why: built.meta[k].why } : {}), ...(built.meta[k].orig ? { orig: built.meta[k].orig } : {}), ...(built.meta[k].prop ? { prop: built.meta[k].prop } : {}) })] as const);
+    const recsToSave = added.map((qq, k) => [qq.uid, makeRec(qq, { form: built.meta[k].form, src: built.meta[k].src, taxRev: taxRevNow, unclassified: built.meta[k].unclassified, ...(noIdGrade != null ? { lop: noIdGrade } : {}), ...(built.meta[k].why ? { why: built.meta[k].why } : {}), ...(built.meta[k].orig ? { orig: built.meta[k].orig } : {}), ...(built.meta[k].prop ? { prop: built.meta[k].prop } : {}) })] as const);
     const report = makeReport(added, rp.taken);
     await flushSave();
     const reviewSaved = await commitRecs(recsToSave);
@@ -582,22 +582,21 @@ export function ImportScreen() {
 
         {rows.length > 0 && (
           <div className="panel">
-            <h2>Vị trí cho câu không có ID</h2>
+            <h2>Câu không có ID</h2>
+            <p className="sys-hint">Vào mục <b>Chưa có ID</b> ở Ngân hàng, không vào Chương/Bài/Dạng nào và không bị ghi ID. Chọn Lớp nếu biết (để gợi ý và Gán ID nhờ Claude chỉ tìm Dạng trong lớp đó).</p>
             <div className="grid2 grid4">
-              <label className="lbl">Lớp<select className="sel" value={loc.grade} onChange={(e) => setLoc(firstLocation(Number(e.target.value)))}>{grades().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
-              <label className="lbl">Chương<select className="sel" value={chapter?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, e.target.value))}>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-              <label className="lbl">Bài<select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>{(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{shortName(l.name)}</option>)}</select></label>
+              <label className="lbl">Lớp<select className="sel" value={noIdGrade ?? ''} onChange={(e) => setNoIdGrade(e.target.value ? Number(e.target.value) : null)}><option value="">Chưa rõ lớp</option>{grades().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
               <label className="lbl">Mức độ<select className="sel" value={level} onChange={(e) => setLevel(e.target.value as Level)}>{LEVELS.map((l) => <option key={l} value={l}>{LEVEL_LABEL[l]}</option>)}</select></label>
             </div>
             {noIdRows.length > 0 && (
               <div className="aid-draft">
                 <div className="head-actions">
-                  <button type="button" className="btn btn-sm" onClick={runIdSuggest}>{idPicks ? 'Gợi ý lại' : `Gán ID tự động cho ${noIdRows.length} câu không có ID`}</button>
-                  {idPicks && <button type="button" className="btn btn-sm" onClick={() => setIdPicks(null)}>Bỏ gợi ý, dùng vị trí chung</button>}
+                  <button type="button" className="btn btn-sm" disabled={noIdGrade == null} title={noIdGrade == null ? 'Chọn Lớp ở trên để gợi ý Dạng' : undefined} onClick={runIdSuggest}>{idPicks ? 'Gợi ý lại' : `Gán ID tự động cho ${noIdRows.length} câu không có ID`}</button>
+                  {idPicks && <button type="button" className="btn btn-sm" onClick={() => setIdPicks(null)}>Bỏ gợi ý, để vào Chưa có ID</button>}
                   {idPicks && pendingPicks > 0 && <button type="button" className="btn btn-sm" onClick={acceptAllPicks} title="Dùng Dạng đề xuất (★) cho mọi câu đang có đề xuất mà thầy/cô chưa chọn. Câu AI không đủ căn cứ vẫn để trống.">Nhận mọi đề xuất ({pendingPicks} câu)</button>}
                 </div>
                 {idPicks && <AiAskBar count={draftAiJobs().length} buildJobs={draftAiJobs} onResults={onDraftAi} />}
-                <span className="sys-hint">Tuỳ chọn. Gợi ý Chương/Bài/Dạng trong <b>Lớp {loc.grade}</b> theo các câu đã có trong ngân hàng — không gửi dữ liệu ra ngoài. Câu có %[ID] hợp lệ giữ nguyên ID; mức độ theo ô Mức độ. HEdu chỉ tự điền gợi ý ngân hàng tin cậy cao; đề xuất của AI thầy/cô tự nhận (từng câu hoặc “Nhận mọi đề xuất”). Câu chưa chọn dùng vị trí chung ở trên. Khi nhập, ID theo vị trí được ghi vào LaTeX lưu trong ngân hàng.</span>
+                <span className="sys-hint">Tuỳ chọn. Gợi ý Chương/Bài/Dạng trong <b>{noIdGrade == null ? 'lớp đã chọn (chọn Lớp trước)' : `Lớp ${noIdGrade}`}</b> theo các câu đã có trong ngân hàng — không gửi dữ liệu ra ngoài. Câu có %[ID] hợp lệ giữ nguyên ID; mức độ theo ô Mức độ. HEdu chỉ tự điền gợi ý ngân hàng tin cậy cao; đề xuất của AI thầy/cô tự nhận (từng câu hoặc “Nhận mọi đề xuất”). Câu chưa chọn vào mục Chưa có ID. Khi nhập, ID theo vị trí được ghi vào LaTeX lưu trong ngân hàng.</span>
                 {idPicks && (
                   <div className="aid-scroll aid-scroll-sm">
                     <table className="aid-table">
@@ -616,7 +615,7 @@ export function ImportScreen() {
                                   </select>
                                 )}
                                 {p.suggestion.notes.map((t) => <small key={t} className="aid-note">{t}</small>)}
-                                {refused.has(i) && !p.formId && <small className="aid-note aid-bad">Chưa chọn Dạng — nếu nhập, câu này vào vị trí chung ở trên.</small>}
+                                {refused.has(i) && !p.formId && <small className="aid-note aid-bad">Chưa chọn Dạng — nếu nhập, câu này vào mục Chưa có ID.</small>}
                               </td>
                               <td><span className={`aid-conf c-${p.suggestion.confidence}`}>{CONFIDENCE_LABEL[p.suggestion.confidence]}</span></td>
                             </tr>
@@ -737,7 +736,7 @@ export function ImportScreen() {
                           <option value="cho">Chờ xác minh (hàng đợi, mặc định)</option>
                           <option value="giu">Giữ ID trong tệp ({questionCode(fromIdOf(i)!.loc, fromIdOf(i)!.level)})</option>
                           <option value="goi-y" disabled={!verifOf(i)!.suggested}>Theo gợi ý ({verifOf(i)!.suggested ? questionCode(verifOf(i)!.suggested!.location, fromIdOf(i)!.level) : '—'})</option>
-                          <option value="chung">Chưa phân loại (vị trí chung, không ghi ID)</option>
+                          <option value="chung">Chưa có ID (không ghi ID)</option>
                         </select>
                       </label>
                       {idDecOf(i) && (idDecOf(i)!.choice === 'goi-y' || idDecOf(i)!.choice === 'chung') && (
@@ -855,8 +854,8 @@ export function ImportScreen() {
                     {idSum.needTeacher.missing > 0 && <>{idSum.needTeacher.missing} câu không có ID{' '}</>}
                     {idSum.needTeacher.invalid > 0 && <>{idSum.needTeacher.invalid} câu có ID không hợp lệ{' '}</>}
                     {idSum.needTeacher.noForm > 0 && <>{idSum.needTeacher.noForm} câu có ID thiếu mã Dạng{' '}</>}
-                    (thầy/cô chưa chọn Dạng{refused.size > 0 ? ', gồm cả câu AI chưa đủ căn cứ' : ''}) sẽ vào <b>vị trí chung</b> đang chọn ở trên.{' '}
-                    <>Các câu này được đánh dấu <b>Chưa phân loại</b> và giữ nguyên mã LaTeX (HEdu không ghi ID giả); câu có ID lỗi giữ nguyên mã để thầy/cô sửa sau. Câu thầy/cô đã nhận gợi ý được ghi ID theo gợi ý (tệp gốc không đổi). </>
+                    (thầy/cô chưa chọn Dạng{refused.size > 0 ? ', gồm cả câu AI chưa đủ căn cứ' : ''}) sẽ vào mục <b>Chưa có ID</b> ở Ngân hàng.{' '}
+                    <>Các câu này không thuộc Chương/Bài/Dạng nào và giữ nguyên mã LaTeX (HEdu không ghi ID giả); câu có ID lỗi giữ nguyên mã để thầy/cô sửa sau. Câu thầy/cô đã nhận gợi ý được ghi ID theo gợi ý (tệp gốc không đổi). </>
                     Tôi đã xem lại và xác nhận.
                   </span></label>
                 )}

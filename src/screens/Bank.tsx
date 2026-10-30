@@ -30,7 +30,8 @@ import { verbatimTex } from '../lib/texproject';
 import { ExportChoiceDialog } from '../components/ExportChoiceDialog';
 import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
-import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
+import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, NOID_UNKNOWN, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
+import { getRec } from '../lib/idreview';
 import { DupCheck } from '../components/DupCheck';
 import { QuestionModal } from '../components/QuestionModal';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
@@ -120,6 +121,12 @@ export function BankScreen() {
   const effOf = useEffectiveOf();
   const [idF, setIdF] = useState<IdFilter>('all');
   const qByUid = useMemo(() => new Map(questions.map((q) => [q.uid, q])), [questions]);
+  /** Câu thuộc mục "Chưa có ID" ⇒ lớp chọn khi nhập (NOID_UNKNOWN = chưa rõ); câu khác ⇒ null. Lọc nhanh theo bản ghi trước khi tính hiệu lực. */
+  const noIdOf = useMemo(() => (q: Question): number | null => {
+    if (!getRec(q.uid)?.unclassified) return null;
+    const e = effOf(q);
+    return e.unclassified ? e.rec?.lop ?? NOID_UNKNOWN : null;
+  }, [effOf]);
   /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
   const facets = useMemo(() => {
     const words = fold(text.trim()).split(/\s+/).filter(Boolean);
@@ -130,8 +137,8 @@ export function BankScreen() {
       const e = effOf(q);
       return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF;
     };
-    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)) && idOk(uid), wideOn, sort));
-  }, [questions, f, text, wideOn, tax, index, sort, idF, qByUid, effOf]);
+    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)) && idOk(uid), wideOn, sort, noIdOf));
+  }, [questions, f, text, wideOn, tax, index, sort, idF, qByUid, effOf, noIdOf]);
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
   useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
@@ -174,6 +181,15 @@ export function BankScreen() {
     const q = questions.find((x) => x.uid === uid);
     if (!q) return;
     setDupOpen(false); setWide(false); setText('');
+    const ni = noIdOf(q);
+    if (ni !== null) {
+      setF0({ ...emptyFilters(), noId: 'all' });
+      const sc = questions.filter((x) => noIdOf(x) !== null).sort((a, b) => b.updatedAt - a.updatedAt);
+      setPage(Math.floor(Math.max(0, sc.findIndex((x) => x.uid === uid)) / PER_PAGE));
+      setFlashUid(uid);
+      toast(`Đã chuyển tới ${seqLabel(q.seq)} (Chưa có ID). Muốn xoá: nút ⋯ → Xoá câu (có hỏi lại).`);
+      return;
+    }
     const tm = taxMaps(tax);
     setF0({ ...emptyFilters(), gradeId: tm.chapterGrade.get(q.chapterId) ?? tm.gradeByNum.get(q.grade) ?? null, branchId: chapterBranchMap(tax).get(q.chapterId) ?? null, chapterId: q.chapterId || null, lessonId: q.lessonId || null });
     const sc = questions.filter((x) => x.grade === q.grade && (!q.chapterId || x.chapterId === q.chapterId) && (!q.lessonId || x.lessonId === q.lessonId)).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -184,7 +200,7 @@ export function BankScreen() {
 
   /** Câu mới ở vị trí đang duyệt: chỉ khi đã chọn Lớp và không đang tìm toàn kho; mức độ chỉ gợi ý khi chọn đúng một mức. */
   const newHere = () => {
-    if (wideOn || !gradeObj) { go({ screen: 'editor', fromBank: true }); return; }
+    if (wideOn || !gradeObj || f.noId != null) { go({ screen: 'editor', fromBank: true }); return; }
     const branch = gradeObj.branches.find((b) => b.id === f.branchId);
     const ch = chapter ?? (branch ?? gradeObj.branches[0])?.chapters[0] ?? null;
     const ls = lesson ?? ch?.lessons[0] ?? null;
@@ -207,7 +223,7 @@ export function BankScreen() {
   const clearFilters = () => setF(clearAttrs(f));
   const resetEverything = () => { setF(emptyFilters()); setText(''); setWide(false); };
   const nAttr = attrCount(f);
-  const canReset = f.gradeId != null || nAttr > 0 || hasText || wide;
+  const canReset = f.gradeId != null || f.noId != null || nAttr > 0 || hasText || wide;
 
   // Thanh trái: gắn cố định khi đủ rộng và đang mở; ngược lại là ngăn trượt (cùng một thành phần, cùng trạng thái).
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
@@ -226,7 +242,7 @@ export function BankScreen() {
     return () => document.removeEventListener('keydown', k);
   }, [drawerOpen]);
 
-  const noFilter = f.gradeId == null && nAttr === 0 && !hasText;
+  const noFilter = f.gradeId == null && f.noId == null && nAttr === 0 && !hasText;
   const resultsName = noFilter ? 'toàn bộ ngân hàng' : 'kết quả đang lọc';
   const selectPage = () => setSel(addMany(sel, shownUids));
   const deselectPage = () => setSel(removeMany(sel, shownUids));
@@ -266,13 +282,17 @@ export function BankScreen() {
     setAsk({ title: `Hoàn tác cập nhật ID cho ${nf.format(u.items.length - n)} câu?`, body: `${nf.format(n)} câu đã bị sửa tiếp (vị trí, mức độ hoặc nội dung) hoặc đã xoá sau lần gán — các câu đó GIỮ NGUYÊN, không bị ghi đè.`, label: 'Hoàn tác', run: () => { void runAutoUndo(u); } });
   };
   /** Dữ liệu cũ: thêm `%[ID]` theo vị trí vào LaTeX của câu chưa có ID. Câu có ID (khớp, lệch hay lỗi) không bị đụng. */
+  /** câu đang chọn đã có vị trí thật (câu Chưa có ID không bao giờ được thêm ID theo vị trí giữ chỗ) */
+  const placedSel = useMemo(() => selectedQs.filter((q) => noIdOf(q) === null), [selectedQs, noIdOf]);
+  const noIdSel = selectedQs.length - placedSel.length;
+  const noIdNote = noIdSel ? ` ${nf.format(noIdSel)} câu Chưa có ID: KHÔNG đụng (chọn Dạng cho từng câu hoặc dùng Gán ID nhờ Claude).` : '';
   const askIdSync = () => {
-    const n = syncCounts(selectedQs);
+    const n = syncCounts(placedSel);
     const other = n.lech + n['id-loi'] + n['vi-tri-loi'];
-    if (n['chua-co-id'] === 0) { toast(`Không có câu nào cần thêm ID: ${nf.format(n.khop)} câu đã khớp${other ? `, ${nf.format(other)} câu có ID lệch/lỗi — mở từng câu để chọn bên đúng` : ''}.`); return; }
+    if (n['chua-co-id'] === 0) { toast(`Không có câu nào cần thêm ID: ${nf.format(n.khop)} câu đã khớp${other ? `, ${nf.format(other)} câu có ID lệch/lỗi — mở từng câu để chọn bên đúng` : ''}.${noIdNote}`); return; }
     setAsk({
       title: `Thêm ID vào LaTeX cho ${nf.format(n['chua-co-id'])} câu?`,
-      body: `HEdu ghi %[ID] theo vị trí + mức độ đang lưu ngay sau \\begin{ex} của ${nf.format(n['chua-co-id'])} câu chưa có ID; nội dung câu, kiểm duyệt, nhãn không đổi. ${nf.format(n.khop)} câu đã khớp: giữ nguyên.${other ? ` ${nf.format(n.lech)} câu có ID khác vị trí, ${nf.format(n['id-loi'])} câu có ID lỗi, ${nf.format(n['vi-tri-loi'])} câu có vị trí chưa ra được ID: KHÔNG đụng — mở từng câu để xử lý.` : ''} Có thể Hoàn tác ngay sau đó.`,
+      body: `HEdu ghi %[ID] theo vị trí + mức độ đang lưu ngay sau \\begin{ex} của ${nf.format(n['chua-co-id'])} câu chưa có ID; nội dung câu, kiểm duyệt, nhãn không đổi. ${nf.format(n.khop)} câu đã khớp: giữ nguyên.${other ? ` ${nf.format(n.lech)} câu có ID khác vị trí, ${nf.format(n['id-loi'])} câu có ID lỗi, ${nf.format(n['vi-tri-loi'])} câu có vị trí chưa ra được ID: KHÔNG đụng — mở từng câu để xử lý.` : ''}${noIdNote} Có thể Hoàn tác ngay sau đó.`,
       label: `Thêm ID cho ${nf.format(n['chua-co-id'])} câu`,
       run: () => { void runIdSync(); },
     });
@@ -300,7 +320,7 @@ export function BankScreen() {
     if (busyRef.current) return;
     busyRef.current = true;
     setBatchBusy(true);
-    const r = await applyIdSync(sel);
+    const r = await applyIdSync(placedSel.map((q) => q.uid));
     busyRef.current = false;
     setBatchBusy(false);
     if (!r.ok) { toast('Chưa lưu được — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi thử lại.'); return; }
@@ -385,7 +405,8 @@ export function BankScreen() {
   const renderCard = (q: Question) => {
     const p = parseExTest(q.latex);
     const on = sel.has(q.uid);
-    const at = place(q.lessonId) ?? place(q.chapterId);
+    const ni = noIdOf(q);
+    const at = ni !== null ? undefined : place(q.lessonId) ?? place(q.chapterId);
     return (
       <article key={q.uid} data-uid={q.uid} className={`card${on ? ' is-selected' : ''}${flashUid === q.uid ? ' is-flash' : ''}`}>
         <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
@@ -394,7 +415,9 @@ export function BankScreen() {
             <span className="mono card-no">{seqLabel(q.seq)}</span>
             <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
             <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-            <span className="code-tag" title={questionCode(q, q.level)}>{questionCode(q, q.level)}</span>
+            {noIdOf(q) !== null
+              ? <span className="code-tag is-noid" title="Chưa được đặt vào Dạng nào — không có ID">Chưa có ID</span>
+              : <span className="code-tag" title={questionCode(q, q.level)}>{questionCode(q, q.level)}</span>}
             <div className="card-acts">
               <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => { setViewUid(q.uid); setViewEdit(true); }}><IcEdit size={17} /></button>
               <div className="more">
@@ -410,7 +433,7 @@ export function BankScreen() {
               </div>
             </div>
           </div>
-          <div className="card-where" title={at ? `${at.chapter?.name ?? ''} › ${at.lesson?.name ?? ''}` : undefined}><span className="cw-path">{at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span><ReviewBadge q={q} /><IdStateBadge eff={effOf(q)} />{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
+          <div className="card-where" title={at ? `${at.chapter?.name ?? ''} › ${at.lesson?.name ?? ''}` : undefined}><span className="cw-path">{ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span><ReviewBadge q={q} />{ni === null && <IdStateBadge eff={effOf(q)} />}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
           <div className="card-content" role="button" tabIndex={0} aria-label={`Xem đầy đủ câu ${seqLabel(q.seq)}`} title="Bấm để xem đầy đủ"
             onClick={() => setViewUid(q.uid)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewUid(q.uid); } }}>
             <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />
@@ -439,7 +462,7 @@ export function BankScreen() {
   };
 
 
-  const heading = wideOn ? 'Kết quả tìm trong toàn kho' : chapter && gradeObj ? `${gradeLabel(gradeObj)} · ${chapter.name}` : gradeObj ? gradeLabel(gradeObj) : 'Toàn bộ ngân hàng';
+  const heading = wideOn ? 'Kết quả tìm trong toàn kho' : f.noId != null ? `Chưa có ID${f.noId === 'all' ? '' : f.noId === NOID_UNKNOWN ? ' · chưa rõ lớp' : ` · Lớp ${f.noId}`}` : chapter && gradeObj ? `${gradeLabel(gradeObj)} · ${chapter.name}` : gradeObj ? gradeLabel(gradeObj) : 'Toàn bộ ngân hàng';
 
   return (
     <>
@@ -487,7 +510,7 @@ export function BankScreen() {
               <div className="selbar-grp">
                 <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo kiểu sắp xếp đang chọn">Xuất .tex</button>
                 <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
-                <button type="button" className="btn btn-sm" onClick={() => { if (sel.size > AUTO_ID_MAX) toast(`Gán ID tự động: mỗi lượt tối đa ${nf.format(AUTO_ID_MAX)} câu (đang chọn ${nf.format(sel.size)}). Hãy bỏ bớt rồi làm từng lượt.`); else setBatch('autoid'); }} title={`Gợi ý vị trí (ID) theo các câu đã có trong ngân hàng, xem trước rồi mới áp dụng — tối đa ${AUTO_ID_MAX} câu/lượt`}>Gán ID tự động</button>
+                <button type="button" className="btn btn-sm" onClick={() => { if (sel.size > AUTO_ID_MAX) toast(`Gán ID tự động: mỗi lượt tối đa ${nf.format(AUTO_ID_MAX)} câu (đang chọn ${nf.format(sel.size)}). Hãy bỏ bớt rồi làm từng lượt.`); else if (!placedSel.length) toast('Các câu đang chọn đều Chưa có ID: Gán ID tự động không áp dụng — dùng Gán ID nhờ Claude hoặc chọn Dạng trong Sửa câu.'); else setBatch('autoid'); }} title={`Gợi ý vị trí (ID) theo các câu đã có trong ngân hàng, xem trước rồi mới áp dụng — tối đa ${AUTO_ID_MAX} câu/lượt`}>Gán ID tự động</button>
                 {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
                 <span className="selbar-more">
                   <button ref={moreBtnRef} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
@@ -615,7 +638,7 @@ export function BankScreen() {
           <button type="button" className="ico" aria-label="Đóng" onClick={() => setUndo(null)}>×</button>
         </div>
       )}
-      {batch === 'autoid' && <AutoIdDialog qs={selectedQs} onClose={() => setBatch(null)} onDone={(m) => { setBatch(null); setAutoUndo(getAutoIdUndo()); toast(m); }} />}
+      {batch === 'autoid' && <AutoIdDialog qs={placedSel} onClose={() => setBatch(null)} onDone={(m) => { setBatch(null); setAutoUndo(getAutoIdUndo()); toast(m); }} />}
       {autoUndo && !undo && (
         <div className="undo-bar" role="status">
           <span>Đã cập nhật ID (vị trí/LaTeX) cho <b>{nf.format(autoUndo.items.length)}</b> câu. <small>Hoàn tác được trong phiên này.</small></span>

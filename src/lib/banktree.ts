@@ -77,4 +77,4 @@ export function pathKeys(f: NodePath): Set<string> {
 }
 
 /** Áp đường dẫn của một mục vào bộ lọc (giữ nguyên các bộ lọc thuộc tính). */
-export const pickPath = (f: BankFilters, p: NodePath): BankFilters => ({ ...f, ...p });
+export const pickPath = (f: BankFilters, p: NodePath): BankFilters => ({ ...f, ...p, noId: null });

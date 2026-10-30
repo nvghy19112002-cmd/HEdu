@@ -136,7 +136,7 @@ export function reportMd(r: ImportReport): string {
   L.push(`- Tìm thấy: ${r.found} câu`, `- Đã nhập: ${r.imported} câu`, `- Bỏ qua vì nghi trùng: ${r.skippedDup} câu`, `- Bỏ qua theo lựa chọn của bạn: ${r.skippedUser} câu`);
   L.push(`- Điểm khôi phục trước khi nhập: ${r.restorePoint ? 'đã chụp' : 'không áp dụng (chế độ lưu cũ hoặc lô nhỏ)'}`, '');
   L.push('## Vị trí của các câu đã nhập', '');
-  L.push(`- Theo mã ID đủ: ${r.ids.ok}${r.ids.unverified ? ` (chưa kiểm chứng: ${r.ids.unverified})` : ''}${r.ids.kept ? ` (bất đồng ngân hàng, bạn giữ ID: ${r.ids.kept})` : ''}${r.ids.queued ? ` (bất đồng ngân hàng, chờ xác minh: ${r.ids.queued})` : ''}`, `- ID thiếu Dạng (vào Dạng đầu của Bài): ${r.ids.firstForm}`, `- Theo gợi ý bạn đã chọn: ${r.ids.ai}`, `- Vào vị trí chung (cần xếp lại sau): ${r.ids.general}`, '');
+  L.push(`- Theo mã ID đủ: ${r.ids.ok}${r.ids.unverified ? ` (chưa kiểm chứng: ${r.ids.unverified})` : ''}${r.ids.kept ? ` (bất đồng ngân hàng, bạn giữ ID: ${r.ids.kept})` : ''}${r.ids.queued ? ` (bất đồng ngân hàng, chờ xác minh: ${r.ids.queued})` : ''}`, `- ID thiếu Dạng (vào Dạng đầu của Bài): ${r.ids.firstForm}`, `- Theo gợi ý bạn đã chọn: ${r.ids.ai}`, `- Vào mục Chưa có ID (gán Dạng sau): ${r.ids.general}`, '');
   L.push('## Kiểm tra', '');
   L.push(`- Lỗi xem trước: ${r.previewErrors} câu; cảnh báo: ${r.previewWarnings} câu`);
   L.push(r.texChecked ? `- Biên dịch TeX Live: ${r.texChecked} câu đã thử, ${r.texFailed} câu lỗi` : '- Biên dịch TeX Live: chưa chạy', '');

@@ -75,9 +75,9 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
           <b className="qm-no">{seqLabel(q.seq)}</b>
           <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
           <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
-          <span className="code-tag">{questionCode(q, q.level)}</span>
+          {eff.unclassified ? <span className="code-tag is-noid">Chưa có ID</span> : <span className="code-tag">{questionCode(q, q.level)}</span>}
           <ReviewBadge q={q} />
-          <span className="qm-where" title={where}>{where}</span>
+          <span className="qm-where" title={eff.unclassified ? undefined : where}>{eff.unclassified ? `Chưa chọn Dạng${eff.rec?.lop != null ? ` · Lớp ${eff.rec.lop}` : ''}` : where}</span>
           <span className="qm-pos">{nf.format(index + 1)} / {nf.format(total)}</span>
           <button type="button" className="ico qm-x" aria-label="Đóng (Esc)" title="Đóng (Esc)" onClick={onClose}>✕</button>
         </header>

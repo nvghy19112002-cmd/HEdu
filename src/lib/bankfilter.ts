@@ -17,11 +17,17 @@ export interface BankFilters {
   review: ReviewFilter;
   /** nhãn (Question.tags) phải có; null = không lọc */
   tag: string | null;
+  /** mục "Chưa có ID": null = không chọn · 'all' = mọi câu chưa có ID · số = theo lớp giáo viên chọn khi nhập (0 = chưa rõ lớp). Loại trừ với vị trí. */
+  noId: NoIdPick;
 }
+
+export type NoIdPick = null | 'all' | number;
+/** lớp của câu Chưa có ID khi chưa biết */
+export const NOID_UNKNOWN = 0;
 
 export const emptyFilters = (): BankFilters => ({
   gradeId: null, branchId: null, chapterId: null, lessonId: null, formId: null,
-  levels: new Set(), types: new Set(), figure: 'all', review: 'all', tag: null,
+  levels: new Set(), types: new Set(), figure: 'all', review: 'all', tag: null, noId: null,
 });
 
 /** Chọn nhiều: chọn ĐỦ mọi giá trị ≡ "Tất cả" (không phải đang lọc). Rỗng cũng là không lọc. */
@@ -31,7 +37,7 @@ export const typesActive = (f: BankFilters) => f.types.size > 0 && f.types.size 
 export const attrCount = (f: BankFilters) => (levelsActive(f) ? f.levels.size : 0) + (typesActive(f) ? f.types.size : 0) + (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0);
 /** Số nhóm thuộc tính đang bật (để hiện trên đầu nhóm "Lọc câu hỏi"). */
 export const attrGroups = (f: BankFilters) => (levelsActive(f) ? 1 : 0) + (typesActive(f) ? 1 : 0) + (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0);
-export const posActive = (f: BankFilters) => f.gradeId != null;
+export const posActive = (f: BankFilters) => f.gradeId != null || f.noId != null;
 
 // ---- cascade ----
 const clearFrom = {
@@ -40,7 +46,9 @@ const clearFrom = {
   lesson: { lessonId: null, formId: null },
 } as const;
 
-export const pickGrade = (f: BankFilters, g: string | null): BankFilters => ({ ...f, gradeId: g, ...clearFrom.branch });
+export const pickGrade = (f: BankFilters, g: string | null): BankFilters => ({ ...f, gradeId: g, ...clearFrom.branch, noId: null });
+/** Chọn mục "Chưa có ID" (hoặc một lớp trong đó): bỏ vị trí trong cây. */
+export const pickNoId = (f: BankFilters, v: NoIdPick): BankFilters => ({ ...f, gradeId: null, ...clearFrom.branch, noId: v });
 export const pickBranch = (f: BankFilters, id: string | null): BankFilters => ({ ...f, ...clearFrom.branch, branchId: id });
 export const pickChapter = (tax: Taxonomy, f: BankFilters, id: string | null): BankFilters => ({
   ...f, ...clearFrom.chapter, chapterId: id,
@@ -82,6 +90,8 @@ export function chapterBranchMap(tax: Taxonomy): Map<string, string> { return ta
 
 /** Gỡ các giá trị vị trí không còn hợp lệ (vd cây bị sửa/đổi tên trong màn Chương trình): rơi về "Tất cả" ở cấp đó. */
 export function sanitize(tax: Taxonomy, f: BankFilters): BankFilters {
+  if (f.noId === undefined) f = { ...f, noId: null }; // phiên lưu từ bản cũ
+  if (f.noId != null) return f.gradeId || f.branchId || f.chapterId || f.lessonId || f.formId ? { ...f, gradeId: null, ...clearFrom.branch } : f;
   if (f.gradeId == null) return f.branchId || f.chapterId || f.lessonId || f.formId ? { ...f, ...clearFrom.branch } : f;
   const g = tax.grades.find((x) => x.id === f.gradeId);
   if (!g) return pickGrade(f, null);
@@ -108,10 +118,12 @@ export interface FilterCtx {
   wide: boolean;
   /** kiểu sắp xếp của danh sách (mặc định: mới cập nhật) */
   sort?: SortMode;
+  /** câu thuộc mục "Chưa có ID" ⇒ lớp giáo viên chọn khi nhập (NOID_UNKNOWN = chưa rõ); câu đã có vị trí thật ⇒ null */
+  noIdOf?: (q: Question) => number | null;
 }
 
 /** Dựng ngữ cảnh lọc từ cây. */
-export const facetCtx = (tax: Taxonomy, textOk: (uid: string) => boolean, wide: boolean, sort?: SortMode): FilterCtx => ({ ...taxMaps(tax), textOk, wide, sort });
+export const facetCtx = (tax: Taxonomy, textOk: (uid: string) => boolean, wide: boolean, sort?: SortMode, noIdOf?: (q: Question) => number | null): FilterCtx => ({ ...taxMaps(tax), textOk, wide, sort, noIdOf });
 
 export interface Facets {
   /** Các câu hiện ra (đã sắp theo mới sửa trước) */
@@ -135,6 +147,9 @@ export interface Facets {
   tag: Map<string, number>;
   /** số câu khi bỏ riêng bộ lọc Nhãn (một câu nhiều nhãn chỉ đếm một lần) */
   tagAll: number;
+  /** mục "Chưa có ID": tổng và theo lớp (NOID_UNKNOWN = chưa rõ lớp); theo chữ tìm + thuộc tính như `node` */
+  noId: number;
+  noIdBy: Map<number, number>;
 }
 
 const inc = <K,>(m: Map<K, number>, k: K) => m.set(k, (m.get(k) ?? 0) + 1);
@@ -149,18 +164,24 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
   const r: Facets = {
     list: [], scoped: 0, inScope: 0, grade: new Map(), gradeAll: 0, branch: new Map(), chapter: new Map(), lesson: new Map(), form: new Map(), node: new Map(),
     level: new Map(), type: new Map(), figure: { yes: 0, no: 0, unknown: 0 }, review: { unreviewed: 0, needs_fix: 0, approved: 0 }, tag: new Map(), tagAll: 0,
+    noId: 0, noIdBy: new Map(),
   };
   const lv = levelsActive(f), ty = typesActive(f);
+  const noIdSel = f.noId ?? null;
   for (const q of questions) {
-    const brOfQ = ctx.chapterBranch.get(q.chapterId);
+    // Câu "Chưa có ID": vị trí lưu chỉ là chỗ giữ ⇒ không thuộc Lớp/Chương/Bài/Dạng nào, không cộng vào số đếm của cây
+    const ni = ctx.noIdOf?.(q) ?? null;
+    const noId = ni !== null;
+    const brOfQ = noId ? undefined : ctx.chapterBranch.get(q.chapterId);
     // Lớp của câu: theo cây (qua chương); câu chưa gán chương thì dự phòng theo số lớp nếu số đó duy nhất
-    const gOfQ = ctx.chapterGrade.get(q.chapterId) ?? ctx.gradeByNum.get(q.grade);
+    const gOfQ = noId ? undefined : ctx.chapterGrade.get(q.chapterId) ?? ctx.gradeByNum.get(q.grade);
+    const chQ = noId ? '' : q.chapterId, lsQ = noId ? '' : q.lessonId, fmQ = noId ? '' : q.formId;
     const pos = [
-      f.gradeId == null || gOfQ === f.gradeId,
+      noIdSel != null ? noId && (noIdSel === 'all' || ni === noIdSel) : f.gradeId == null || gOfQ === f.gradeId,
       !f.branchId || brOfQ === f.branchId,
-      !f.chapterId || q.chapterId === f.chapterId,
-      !f.lessonId || q.lessonId === f.lessonId,
-      !f.formId || q.formId === f.formId,
+      !f.chapterId || chQ === f.chapterId,
+      !f.lessonId || lsQ === f.lessonId,
+      !f.formId || fmQ === f.formId,
     ];
     if (pos.every(Boolean)) r.inScope++;
     if (!ctx.textOk(q.uid)) continue;
@@ -183,14 +204,15 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
       if (gOfQ) inc(r.grade, gOfQ);
       r.gradeAll++;
       if (prefix >= 1 && brOfQ) inc(r.branch, brOfQ);
-      if (prefix >= 2 && q.chapterId) inc(r.chapter, q.chapterId);
-      if (prefix >= 3 && q.lessonId) inc(r.lesson, q.lessonId);
-      if (prefix >= 4 && q.formId) inc(r.form, q.formId);
+      if (prefix >= 2 && chQ) inc(r.chapter, chQ);
+      if (prefix >= 3 && lsQ) inc(r.lesson, lsQ);
+      if (prefix >= 4 && fmQ) inc(r.form, fmQ);
       if (gOfQ) inc(r.node, `g:${gOfQ}`);
       if (brOfQ) inc(r.node, `b:${brOfQ}`);
-      if (q.chapterId) inc(r.node, `c:${q.chapterId}`);
-      if (q.lessonId) inc(r.node, `l:${q.lessonId}`);
-      if (q.formId) inc(r.node, `f:${q.formId}`);
+      if (chQ) inc(r.node, `c:${chQ}`);
+      if (lsQ) inc(r.node, `l:${lsQ}`);
+      if (fmQ) inc(r.node, `f:${fmQ}`);
+      if (noId) { r.noId++; inc(r.noIdBy, ni); }
     }
     if (posOk) {
       if ((fails & ~B_LEVEL) === 0) inc(r.level, q.level);

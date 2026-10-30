@@ -35,8 +35,10 @@ export interface ReviewRec {
   /** phiên bản cây lúc ghi (chỉ trạng thái "máy" phụ thuộc) */
   taxRev: string;
   at: number;
-  /** câu chưa phân loại: vào vị trí chung, không ghi ID giả, không làm căn cứ cho câu khác */
+  /** câu Chưa có ID: nằm ở mục "Chưa có ID" (vị trí lưu chỉ là chỗ giữ, không phải Dạng), không ghi ID giả, không làm căn cứ cho câu khác */
   unclassified?: boolean;
+  /** lớp giáo viên chọn cho câu Chưa có ID lúc nhập; vắng = chưa rõ lớp (KHÔNG suy từ vị trí giữ chỗ) */
+  lop?: number;
   why?: string;
   /** mã ID NGUYÊN BẢN trong tệp nguồn lúc nhập (giữ để truy ngược khi LaTeX đã đổi ID) */
   orig?: string;
@@ -78,12 +80,17 @@ export function effectiveOf(q: Question, rec: ReviewRec | undefined, ctx: EffCtx
  * Câu có thể làm căn cứ kiểm chứng cho câu khác: CHỈ câu có Dạng "giáo viên xác minh" (và không chưa phân loại / cần xem lại).
  * Nội dung "Đã duyệt" là việc khác (đề, đáp án, lời giải, hình): chỉ để tham khảo, KHÔNG tự thành nhãn ID chuẩn.
  */
+/** Lớp đáng tin của câu: câu Chưa có ID dùng lớp giáo viên chọn khi nhập (null = chưa rõ), không dùng lớp của vị trí giữ chỗ. */
+export const gradeOfEff = (q: Question, e: Effective): number | null => (e.unclassified ? e.rec?.lop ?? null : q.grade);
+/** Giữ dấu "Chưa có ID" (+ lớp đã biết) khi ghi bản ghi mới cho câu chưa được đặt vào Dạng thật. */
+export const keepNoId = (e: Effective): { unclassified?: true; lop?: number } => (e.unclassified ? { unclassified: true, ...(e.rec?.lop != null ? { lop: e.rec.lop } : {}) } : {});
+
 export const isEvidence = (_q: Question, eff: Effective): boolean => !eff.unclassified && eff.form === 'gv';
 
 /** Bản ghi mới cho một câu (đọc `q` ở thời điểm ghi). */
-export function makeRec(q: Question, o: { form: FormState; level?: LevelState; src: IdSource; taxRev: string; unclassified?: boolean; why?: string; at?: number; orig?: string; prop?: string }): ReviewRec {
+export function makeRec(q: Question, o: { form: FormState; level?: LevelState; src: IdSource; taxRev: string; unclassified?: boolean; lop?: number; why?: string; at?: number; orig?: string; prop?: string }): ReviewRec {
   const k = contentKeys(q.latex);
-  return { form: o.form, level: o.level ?? 'chua', src: o.src, formId: q.formId, level0: q.level, f: k.f, i: k.i, taxRev: o.taxRev, at: o.at ?? Date.now(), ...(o.unclassified ? { unclassified: true } : {}), ...(o.why ? { why: o.why } : {}), ...(o.orig ? { orig: o.orig } : {}), ...(o.prop ? { prop: o.prop } : {}) };
+  return { form: o.form, level: o.level ?? 'chua', src: o.src, formId: q.formId, level0: q.level, f: k.f, i: k.i, taxRev: o.taxRev, at: o.at ?? Date.now(), ...(o.unclassified ? { unclassified: true, ...(o.lop != null ? { lop: o.lop } : {}) } : {}), ...(o.why ? { why: o.why } : {}), ...(o.orig ? { orig: o.orig } : {}), ...(o.prop ? { prop: o.prop } : {}) };
 }
 
 // ---------- kho trong bộ nhớ + tệp phụ ----------
@@ -115,7 +122,7 @@ const isRec = (r: unknown): r is ReviewRec => {
   const x = r as ReviewRec;
   return !!x && FORMS.includes(x.form) && LEVELS_.includes(x.level) && SRC.includes(x.src) && typeof x.formId === 'string' && typeof x.level0 === 'string'
     && typeof x.f === 'string' && typeof x.i === 'string' && typeof x.taxRev === 'string' && typeof x.at === 'number'
-    && (x.orig === undefined || typeof x.orig === 'string') && (x.prop === undefined || typeof x.prop === 'string') && (x.hist === undefined || (Array.isArray(x.hist) && x.hist.every(isHist)));
+    && (x.orig === undefined || typeof x.orig === 'string') && (x.lop === undefined || typeof x.lop === 'number') && (x.prop === undefined || typeof x.prop === 'string') && (x.hist === undefined || (Array.isArray(x.hist) && x.hist.every(isHist)));
 };
 /**
  * Quy tắc khi CÙNG MỘT uid có nhiều bản ghi (xác định, không phụ thuộc thứ tự duyệt): bản có `at` MỚI hơn thắng; bằng nhau thì bản có lịch sử dài hơn;
