@@ -32,6 +32,7 @@ import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
 import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, NOID_UNKNOWN, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { getRec } from '../lib/idreview';
+import { fold, parseBankQuery, queryOk } from '../lib/banksearch';
 import { DupCheck } from '../components/DupCheck';
 import { QuestionModal } from '../components/QuestionModal';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
@@ -41,10 +42,6 @@ import { VerifyQueue } from '../components/VerifyQueue';
 import { ClaudeIdDialog } from '../components/ClaudeIdDialog';
 import { scopeCounts } from '../lib/verifyqueue';
 import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPES, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
-
-function fold(s: string) {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
-}
 
 // Chữ tìm kiếm của từng câu được nhớ theo ĐỐI TƯỢNG câu: sửa/gắn nhãn hàng loạt chỉ tạo đối tượng mới cho câu bị đổi,
 // nên không phải dựng lại chỉ mục của cả 60.000 câu (~1 giây) sau mỗi thao tác.
@@ -112,7 +109,9 @@ export function BankScreen() {
   const f = useMemo(() => sanitize(tax, f0), [tax, f0]);
   const setF = (n: BankFilters) => { setPage(0); setF0(n); };
   const hasText = text.trim().length > 0;
-  const wideOn = wide && hasText;
+  const query = useMemo(() => parseBankQuery(text), [text]);
+  // gõ số thứ tự (#2086) là tìm đúng câu đó ⇒ luôn tìm trong toàn kho, không phụ thuộc mục đang chọn
+  const wideOn = (wide && hasText) || query.seqs.length > 0;
   const gradeObj = tax.grades.find((g) => g.id === f.gradeId) ?? null;
   const chapter = gradeObj?.branches.flatMap((b) => b.chapters).find((c) => c.id === f.chapterId) ?? null;
   const lesson = chapter?.lessons.find((l) => l.id === f.lessonId) ?? null;
@@ -129,7 +128,6 @@ export function BankScreen() {
   }, [effOf]);
   /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
   const facets = useMemo(() => {
-    const words = fold(text.trim()).split(/\s+/).filter(Boolean);
     const idOk = (uid: string) => {
       if (idF === 'all') return true;
       const q = qByUid.get(uid);
@@ -137,8 +135,8 @@ export function BankScreen() {
       const e = effOf(q);
       return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF;
     };
-    return computeFacets(questions, f, facetCtx(tax, (uid) => words.every((w) => index.get(uid)!.includes(w)) && idOk(uid), wideOn, sort, noIdOf));
-  }, [questions, f, text, wideOn, tax, index, sort, idF, qByUid, effOf, noIdOf]);
+    return computeFacets(questions, f, facetCtx(tax, (uid) => queryOk(query, index.get(uid)!, qByUid.get(uid)?.seq ?? -1) && idOk(uid), wideOn, sort, noIdOf));
+  }, [questions, f, query, wideOn, tax, index, sort, idF, qByUid, effOf, noIdOf]);
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
   useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
@@ -484,7 +482,7 @@ export function BankScreen() {
             <label className="search sm">
               <IcSearch size={16} />
               <span className="sr-only">Tìm câu hỏi</span>
-              <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu hoặc mã (vd 2D1H1) — phím /" />
+              <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu, mã (vd 2D1H1) hoặc số #2086 — phím /" />
               <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
                 <option value="here">mục này</option>
                 <option value="all">toàn kho</option>
