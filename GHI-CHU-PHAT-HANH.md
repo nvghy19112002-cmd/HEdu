@@ -1,3 +1,14 @@
+## Có gì mới trong beta.44 (kênh beta): xem trước hiểu nhãn danh sách `label=`
+Gồm một PR nhỏ (so với beta.43). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đã thử bằng bộ kiểm thử có sẵn và biên dịch thật bằng TeX Live; chưa thử với ngân hàng thật. Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Xem trước hiểu `\begin{enumerate}[label=\alph*)]`** (và `label=(\arabic*)`, `label=\Alph*.`, `label=\roman*)`, kể cả khi có thêm khóa khác như `leftmargin=*`, `itemsep=…`). Trước đây xem trước hiện chữ “label=a)”; khóa không phải nhãn không còn bị đọc nhầm thành nhãn.
+- **Mẫu `khaibaochung` của bộ đề xuất ra nạp `enumitem` (shortlabels) thay cho `enumerate`.** Nhãn ngắn cũ `[a)]`, `[(1)]`, `[\alph*)]` vẫn chạy như trước; dạng `label=` nay biên dịch đúng. Nếu bạn tự thêm gói `enumerate` trong khai báo riêng thì gói đó đè lên và `label=` sẽ in sai.
+- Lý do: câu nạp từ OCR dùng `label=\alph*)`, còn nhãn ngắn `[a)]` báo lỗi “Package enumitem Error: a) undefined” khi dự án nạp enumitem thường.
+
+**Lời khuyên**
+- Mở một câu có danh sách a) b) c) d) trong Ngân hàng và xem trước, rồi biên dịch thử bộ đề có câu đó.
+
 ## Có gì mới trong beta.43 (kênh beta): mục “Chưa có ID”, câu không ID không còn mang ID giả
 Gồm PR #165 (so với beta.42). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đã thử trên bản thử với dữ liệu giả lập; chưa thử với ngân hàng thật. Đây là bản BETA.
 
