@@ -1,3 +1,13 @@
+## Có gì mới trong beta.41 (kênh beta): sửa câu có ID ở cuối dòng đầu bị xếp nhầm chỗ
+Gồm PR #162 (so với beta.40). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Đọc được ID viết ở cuối dòng đầu**: câu kiểu `\begin{ex} Tìm tập xác định…%[0D3H1-2]` (ID nằm sau chữ đề, cùng dòng `\begin{ex}`) trước đây bị coi là “không có ID” nên vào vị trí mặc định của màn Nhập liệu (vd Lớp 12). Nay HEdu nhận đúng ID và xếp câu vào đúng vị trí.
+- **Sửa các câu đã nhập nhầm trước đây**: Ngân hàng hiện dải báo “N câu có ID trong LaTeX khác vị trí đang lưu” kèm nút **“Đưa về đúng vị trí theo ID…”** (có hỏi lại, Hoàn tác được). Vị trí và mức độ được đưa về đúng như ID; nội dung câu không đổi.
+
+**Lời khuyên**
+- Sau khi cập nhật, mở Ngân hàng xem dải báo trên và bấm nút để đưa các câu nhập nhầm về đúng chỗ trước khi nhập lô mới.
+
 ## Có gì mới trong beta.40 (kênh beta): Gán ID nhờ Claude, chọn nhiều loại câu ở Ngân hàng
 Gồm PR #159–#160 (so với beta.39). Không đổi schema ngân hàng, ID6, UID hay LaTeX gốc của câu. Đã thử trên app thử với dữ liệu giả lập; **chưa thử phân loại thật trên ngân hàng thật.** Đây là bản BETA.
 
