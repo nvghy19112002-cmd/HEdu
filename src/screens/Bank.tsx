@@ -22,7 +22,8 @@ import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AutoIdDialog } from '../components/AutoIdDialog';
 import { BatchTagDialog, BatchTrashDialog } from '../components/BatchDialogs';
-import { applyIdSync, AUTO_ID_MAX, clearAutoIdUndo, getAutoIdUndo, syncCounts, undoAutoId, undoConflicts, type AutoIdUndo } from '../lib/idapply';
+import { applyFollowId, applyIdSync, AUTO_ID_MAX, clearAutoIdUndo, getAutoIdUndo, syncCounts, undoAutoId, undoConflicts, type AutoIdUndo } from '../lib/idapply';
+import { idStatus } from '../lib/idsync';
 import { withReview } from '../lib/batchops';
 import { exportSizeMB } from '../lib/texexport';
 import { verbatimTex } from '../lib/texproject';
@@ -276,6 +277,25 @@ export function BankScreen() {
       run: () => { void runIdSync(); },
     });
   };
+  /** Câu có ID hợp lệ trong LaTeX nhưng nằm khác vị trí (thường do lúc nhập HEdu chưa đọc được ID, câu vào vị trí mặc định). */
+  const lechUids = useMemo(() => questions.filter((q) => idStatus(q, tax).state === 'lech').map((q) => q.uid), [questions, tax]);
+  const askFollowId = () => setAsk({
+    title: `Đưa ${nf.format(lechUids.length)} câu về vị trí theo ID trong LaTeX?`,
+    body: `Các câu này có ID hợp lệ trong mã LaTeX (vd %[0D3H1-2]) nhưng đang nằm ở vị trí khác — thường do lúc nhập HEdu chưa đọc được ID nên xếp vào vị trí mặc định. HEdu chuyển vị trí và mức độ về đúng như ID; nội dung LaTeX không đổi. Có thể Hoàn tác ngay sau đó.`,
+    label: `Đưa ${nf.format(lechUids.length)} câu về đúng vị trí`,
+    run: () => { void runFollowId(); },
+  });
+  const runFollowId = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBatchBusy(true);
+    const r = await applyFollowId(lechUids);
+    busyRef.current = false;
+    setBatchBusy(false);
+    if (!r.ok) { toast('Chưa lưu được — KHÔNG câu nào bị thay đổi. Hãy kiểm tra ổ đĩa rồi thử lại.'); return; }
+    setAutoUndo(getAutoIdUndo());
+    toast(r.changed ? `Đã đưa ${nf.format(r.changed)} câu về vị trí theo ID. Có thể Hoàn tác.` : 'Không có gì thay đổi.');
+  };
   const runIdSync = async () => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -487,6 +507,12 @@ export function BankScreen() {
                 <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
               </div>
             </div>
+          )}
+          {lechUids.length > 0 && (
+            <div className="note warn" role="status"><div className="note-body">
+              <b>{nf.format(lechUids.length)} câu có ID trong LaTeX khác vị trí đang lưu</b>
+              <span>Thường do lúc nhập HEdu chưa đọc được ID (ví dụ ID viết ở cuối dòng đầu) nên câu vào vị trí mặc định. <button type="button" className="linkbtn" disabled={batchBusy} onClick={askFollowId}>Đưa về đúng vị trí theo ID…</button></span>
+            </div></div>
           )}
           {(list.length > 0 || levelsActive(f) || f.types.size > 0) && (
             <div className="qstats" role="group" aria-label="Thống kê kết quả (bấm để lọc; bấm nhiều ô để chọn nhiều)">

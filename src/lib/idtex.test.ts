@@ -7,7 +7,7 @@ import { affectedByTaxChange, codeClashes, idStatus, placeWithId, readLatexId, r
 import { buildDefault, indexOf, setNodeCode } from './taxonomy';
 import { locationOfForm } from './taxpath';
 import { buildRows } from './importbatch';
-import { applyIdSync, getAutoIdUndo, syncCounts, undoAutoId } from './idapply';
+import { applyFollowId, applyIdSync, getAutoIdUndo, syncCounts, undoAutoId } from './idapply';
 import { getTaxonomy } from './curriculum';
 import { addMany, applyTaxonomyKeepIds, flushSave, getState, initStore, saveQuestion, setReview } from './store';
 import { verbatimTex } from './texproject';
@@ -26,6 +26,12 @@ console.log('Đọc ID chính');
   ok(readHead('\\begin{ex}%[2D1H1-1]\n Đề\n\\end{ex}').ids.map((c) => c.code).join() === '2D1H1-1', 'ID cùng dòng \\begin{ex}');
   ok(readHead('\\begin{ex}\n  %[2D1H1-1]\n Đề\n\\end{ex}').ids[0]?.code === '2D1H1-1', 'ID ở dòng ngay sau \\begin{ex}');
   ok(readHead('\\begin{ex}\n Đề\n %[2D1H1-1]\n\\end{ex}').ids.length === 0, 'ID nằm sau dòng đề ⇒ không phải ID chính');
+  // ID ở CUỐI dòng \begin{ex}, sau chữ đề (cách viết của nhiều tệp nguồn)
+  const tail = '\\begin{ex} Tìm tập xác định của các hàm số sau%[0D3H1-2]\n\\begin{enumerate}\n\\item $y=1$\n\\end{enumerate}\n\\end{ex}';
+  ok(readHead(tail).ids.map((c) => c.code).join() === '0D3H1-2', 'ID ở cuối dòng \\begin{ex} (sau chữ đề) được nhận');
+  ok(withoutHeadId(tail).startsWith('\\begin{ex} Tìm tập xác định của các hàm số sau\n'), 'bỏ ID cuối dòng: giữ nguyên chữ đề');
+  ok(writeHeadId(tail, '0D3H1-3', 'thay').latex === tail.replace('0D3H1-2', '0D3H1-3'), 'thay ID cuối dòng tại chỗ');
+  ok(readHead('\\begin{ex} Đề % ghi chú [không phải mã]\n\\end{ex}').ids.length === 0, 'chú thích thường cuối dòng đầu không phải ID');
   const h = readHead('\\begin{ex}%[Đề thi thử Sở HN 2025]%[ 2D1H1-1 ]\n Đề\n\\end{ex}');
   ok(h.ids.length === 1 && h.ids[0].code === '2D1H1-1' && h.labels[0] === 'Đề thi thử Sở HN 2025', 'nhãn nguồn + ID: nhận ID, nhãn giữ riêng; khoảng trắng trong ngoặc bỏ qua');
   ok(readHead('\uFEFF\\begin{ex}%[2D1H1-1]\r\n Đề\r\n\\end{ex}\r\n').ids[0]?.code === '2D1H1-1', 'BOM + CRLF');
@@ -205,6 +211,20 @@ console.log('Đồng bộ ID cho dữ liệu cũ + Hoàn tác');
   const u = getAutoIdUndo()!;
   const uz = await undoAutoId(u);
   ok(uz.ok && uz.restored === 1 && getState().questions.find((q) => q.uid === uids[0])!.latex === added[0].latex, 'Hoàn tác ⇒ LaTeX về đúng như cũ');
+
+  console.log('Đưa câu ID lệch về vị trí theo ID trong LaTeX');
+  {
+    const lech = getState().questions.find((q) => q.uid === uids[2])!;
+    const want = readLatexId(lech.latex, tax).resolved!;
+    const f = await applyFollowId(uids, tax);
+    const after = new Map(getState().questions.map((q) => [q.uid, q]));
+    const moved = after.get(uids[2])!;
+    ok(f.ok && f.changed === 1 && moved.formId === want.loc.formId && moved.level === want.level && moved.latex === lech.latex, 'chỉ câu lệch được đưa về vị trí + mức theo ID; LaTeX không đổi');
+    ok(idStatus(moved, tax).state === 'khop', 'sau khi đưa về: ID khớp vị trí');
+    ok([0, 1, 3].every((i) => after.get(uids[i])!.formId === getState().questions.find((q) => q.uid === uids[i])!.formId), 'câu khác không đụng');
+    const back = await undoAutoId(getAutoIdUndo()!);
+    ok(back.ok && getState().questions.find((q) => q.uid === uids[2])!.formId === lech.formId, 'Hoàn tác ⇒ về vị trí cũ');
+  }
 
   console.log('Đổi mã trong cây: ID trong LaTeX đổi theo trong cùng một lần cập nhật');
   await applyIdSync(uids, tax);
