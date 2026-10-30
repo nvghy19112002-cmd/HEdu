@@ -94,6 +94,13 @@ export function readHead(latex: string): HeadRead {
     if (nx < 0) i = -1;
     else { i = skipBlank(latex, nx); sameLine = false; if (latex[i] !== '%') i = -1; }
   }
+  // Cách viết hay gặp ở tệp nguồn: `\begin{ex} Đề …%[0D3H1-2]` — ID ở CUỐI dòng \begin{ex}, sau chữ đề. Nhận là chú thích đầu
+  // khi chú thích đó có cặp ngoặc đúng hình dạng mã (chú thích thường như `% ghi chú` vẫn không phải ID).
+  if (i < 0) {
+    const le = lineEnd(latex, out.beginEnd);
+    const cs = commentStart(latex, out.beginEnd, le);
+    if (cs >= 0 && [...latex.slice(cs, le).matchAll(BRACKET)].some((m) => ID_SHAPE.test(m[1].trim()))) { i = cs; sameLine = true; }
+  }
   if (i >= 0) {
     const end = lineEnd(latex, i);
     out.comment = { start: i, end, sameLine };

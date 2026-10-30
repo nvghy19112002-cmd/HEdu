@@ -268,3 +268,24 @@ export async function applyIdSync(uids: Iterable<string>, tax: Taxonomy = getTax
   if (r.ok && items.length) lastUndo = { at: Date.now(), items };
   return r;
 }
+
+// ---------- Câu có ID hợp lệ trong LaTeX nhưng nằm sai vị trí: đưa về vị trí THEO ID ----------
+
+/**
+ * Câu "ID lệch" (ID trong LaTeX hợp lệ, khác vị trí/mức đang lưu) — thường do lúc nhập HEdu chưa đọc được ID nên xếp câu vào
+ * vị trí mặc định. Đưa vị trí + mức độ về đúng theo ID trong LaTeX; LaTeX không đổi. Câu trạng thái khác: không đụng.
+ * Ghi một lần (lỗi ⇒ không câu nào đổi); Hoàn tác được trong phiên như Gán ID.
+ */
+export async function applyFollowId(uids: Iterable<string>, tax: Taxonomy = getTaxonomy()): Promise<BatchResult> {
+  const items: UndoItem[] = [];
+  const r = await updateMany(uids, (q) => {
+    const st = idStatus(q, tax);
+    const res = st.latex.resolved;
+    if (st.state !== 'lech' || !res) return null;
+    const n: Question = { ...q, grade: res.loc.grade, chapterId: res.loc.chapterId, lessonId: res.loc.lessonId, formId: res.loc.formId, level: res.level };
+    items.push({ uid: q.uid, before: placementOf(q), after: snapOf(n) });
+    return n;
+  });
+  if (r.ok && items.length) lastUndo = { at: Date.now(), items };
+  return r;
+}
