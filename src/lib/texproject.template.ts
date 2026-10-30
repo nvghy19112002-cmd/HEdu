@@ -6,7 +6,9 @@ export const KHAIBAOCHUNG_TEX = String.raw`% ===================================
 % Mẫu gốc do chủ dự án cung cấp; HEdu chỉ thay các thông tin cá nhân bằng chỗ trống để điền.
 % Biên dịch: pdflatex main.tex (chạy 2 lần để số trang/mục lục đúng). Xem CAN-CO-GI.md.
 % ============================================================================
-\usepackage{amsmath,amssymb,mathrsfs,fancyhdr,enumerate,currfile,venndiagram,pgf-pie,xparse}
+\usepackage{amsmath,amssymb,mathrsfs,fancyhdr,currfile,venndiagram,pgf-pie,xparse}
+% enumitem + shortlabels thay cho enumerate: nhận cả nhãn ngắn [a)], [\alph*)] lẫn dạng [label=\alph*)].
+\usepackage[shortlabels]{enumitem}
 \usepackage{etoolbox}
 \usepackage{zref-lastpage}
 \usepackage{zref-user}

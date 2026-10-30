@@ -201,6 +201,29 @@ function counterText(kind: string, n: number): string {
 }
 
 /**
+ * Nhãn trong đối số tùy chọn của danh sách. enumitem cho hai cách viết:
+ *  - nhãn ngắn: `[a)]`, `[\alph*)]`;
+ *  - dạng khóa=giá trị: `[label=\alph*)]`, `[leftmargin=*, label=(\arabic*)]` (khóa khác `label` bỏ qua).
+ * Trả về chuỗi nhãn để dựng xem trước, hoặc null khi không có nhãn (dùng nhãn mặc định).
+ */
+export function listLabelSpec(opt: string): string | null {
+  const parts: string[] = [];
+  let brace = 0, from = 0;
+  for (let i = 0; i < opt.length; i++) {
+    const c = opt[i];
+    if (c === '\\') { i++; continue; }
+    if (c === '{') brace++;
+    else if (c === '}') brace = Math.max(0, brace - 1);
+    else if (c === ',' && brace === 0) { parts.push(opt.slice(from, i)); from = i + 1; }
+  }
+  parts.push(opt.slice(from));
+  const keyed = parts.filter((s) => /^\s*[A-Za-z][A-Za-z*]*\s*=/.test(s));
+  if (!keyed.length) return opt;
+  const lab = keyed.find((s) => /^\s*label\s*=/.test(s));
+  return lab ? lab.slice(lab.indexOf('=') + 1).trim() : null;
+}
+
+/**
  * Nhãn mục theo enumitem, trả về MÃ LaTeX (để walk dựng tiếp: \it, \textbf, $..$ đều xử lý như văn bản thường).
  *  - `\alph*`, `\Alph*`, `\roman*`, `\Roman*`, `\arabic*` → giá trị bộ đếm.
  *  - nhãn ngắn: ký tự `1 a A i I` ĐẦU TIÊN nằm ngoài {} và ngoài tên lệnh (như enumitem; `\it TH1:` → `\it TH2:`).
@@ -503,7 +526,7 @@ function renderEnv(name: string, body: string, ctx: Ctx): string {
     for (let t = 0; t < 2; t++) {
       const o = readOptional(rest, p);
       if (!o || rest.slice(0, skipWs(rest, p)).trim()) break;
-      if (!/^\d+$/.test(o[0].trim())) opt = o[0];
+      if (!/^\d+$/.test(o[0].trim())) opt = listLabelSpec(o[0]);
       p = o[1];
     }
     rest = rest.slice(p);
