@@ -12,7 +12,7 @@ import { applyForm, expandRows, levelStats, moveSlot, patchSlots } from '../lib/
 import { stockIndex } from '../lib/examgrid';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
-import { chapters as chaptersOf, grades, useTaxonomy } from '../lib/curriculum';
+import { chapters as chaptersOf, useTaxonomy } from '../lib/curriculum';
 import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, partOf, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { confirmRow, effectiveRows, lastGrade, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, scopeParts, template2025, type Draft } from '../lib/examdraft';
 import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usageSig, usedAtLabel } from '../lib/examusage';
@@ -23,6 +23,8 @@ import { heduFiles } from '../lib/hedusty';
 import { invoke, isDesktop } from '../lib/platform';
 import { stemSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
+import { getRec } from '../lib/idreview';
+import { busiestGrade, scopeCounts } from '../lib/examscope';
 import { LEVELS, LEVEL_LABEL, TYPES, TYPE_LABEL, type Level, type QType, type Question } from '../lib/types';
 
 const PART_HEAD: Record<PartKey, string> = {
@@ -116,6 +118,11 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   /** đang bật mà chưa có kết quả quét thì KHÔNG được xuất (tránh đề tưởng đã lọc nhưng chưa lọc) */
   const usageBlocked = d.usage.on && (usage.loading || !!usage.error || usage.scannedAt === null);
   const exclude = useMemo(() => new Set(d.rejected), [d.rejected]);
+  /** Kho để bốc câu: câu "Chưa có ID" chưa có vị trí thật (vị trí lưu kèm chỉ là chỗ giữ) nên không được bốc theo phạm vi; câu đã khóa vẫn giữ. */
+  const pool = useMemo(() => {
+    const keep = new Set(Object.values(d.locked).flat());
+    return questions.filter((q) => keep.has(q.uid) || !(getRec(q.uid)?.unclassified && effOf(q).unclassified));
+  }, [questions, d.locked, effOf]);
   const exceptions = useMemo(() => new Set(Object.keys(d.exceptions)), [d.exceptions]);
   /** Dòng dùng thật: dòng có cờ hoặc có nút phạm vi không còn trong cây KHÔNG khớp câu nào và chặn xuất */
   const rows = useMemo(() => effectiveRows(d.rows, tax), [d.rows, tax]);
@@ -124,7 +131,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   /** Tự chọn: chỉ các câu giáo viên đã chọn (khóa) vào đề; ô chưa chọn để trống, không để máy điền */
   const allocRows = useMemo(() => (d.mode === 'manual' ? rows.filter((r) => d.locked[r.id]?.length) : rows), [rows, d.mode, d.locked]);
   const unchosen = rows.length - allocRows.length;
-  const alloc = useMemo(() => allocate(questions, allocRows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions, avoid }), [questions, allocRows, d.policy, d.seed, d.locked, exclude, exceptions, avoid, effOf]);
+  const alloc = useMemo(() => allocate(pool, allocRows, { policy: d.policy, eff: effOf, seed: d.seed, locked: d.locked, exclude, exceptions, avoid }), [pool, allocRows, d.policy, d.seed, d.locked, exclude, exceptions, avoid, effOf]);
   const picked = useMemo(() => collect(allocRows, alloc.picks, byUid), [allocRows, alloc, byUid]);
   /** mức độ của đề cho bảng thống kê: mức câu đã chọn, ô chưa có câu thì mức yêu cầu */
   const slotLevels = useMemo(() => levelStats(rows.map((r) => { const u = alloc.picks[r.id]?.[0]; return (u && byUid.get(u)?.level) || r.level; })), [rows, alloc, byUid]);
@@ -141,9 +148,9 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   /** dòng thiếu câu mà có ứng viên bị loại vì đã dùng: báo rõ số lượng, giáo viên tự quyết dùng lại */
   const shortUsed = useMemo(() => rows.flatMap((r) => {
     if (!(alloc.deficit[r.id] > 0) || !(alloc.avoided[r.id] > 0)) return [];
-    const qs = avoidedFor(questions, r, avoid, (q, row) => rowMatches(row, q) && eligible(q, effOf, d.policy) && !exclude.has(q.uid));
+    const qs = avoidedFor(pool, r, avoid, (q, row) => rowMatches(row, q) && eligible(q, effOf, d.policy) && !exclude.has(q.uid));
     return qs.length ? [{ row: r, qs }] : [];
-  }), [rows, alloc, questions, avoid, effOf, d.policy, exclude]);
+  }), [rows, alloc, pool, avoid, effOf, d.policy, exclude]);
   const lockedUsedList = useMemo(() => lockedUsed(idx, d.reuse, Object.values(alloc.picks).flat().filter((u) => lockedSet.has(u))), [idx, d.reuse, alloc, lockedSet]);
   const allowReuse = (qs: readonly Question[]) => {
     const froms = [...new Set(qs.flatMap((q) => (idx.used.get(q.uid) ?? []).map((p) => p.name)))];
@@ -160,18 +167,26 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const unreviewedN = picks.filter((q) => q.review !== 'approved').length;
   const keptN = variant ? PARTS.reduce((a, p) => a + variant.parts[p].filter((s) => s.note).length, 0) : 0;
   const byLevel = (['NB', 'TH', 'VD', 'VDC'] as Level[]).map((l) => ({ l, n: picks.filter((q) => q.level === l).length }));
-  const defaultGrade = grades()[grades().length - 1] ?? 12;
+  const defaultGrade = useMemo(() => busiestGrade(tax, pool), [tax, pool]);
+  /** số câu đạt từng mức lấy câu (ghi trên nút), để thấy ngay kho "Đã duyệt" có đủ không */
+  const policyN = useMemo(() => Object.fromEntries(POLICIES.map((pl) => [pl, pool.reduce((a, q) => a + (!exclude.has(q.uid) && eligible(q, effOf, pl) ? 1 : 0), 0)])) as Record<Policy, number>, [pool, exclude, effOf]);
+  /** số câu phù hợp ghi cạnh từng lựa chọn Lớp/Chương/Bài/Dạng: cùng loại câu, cùng mức độ (khi các ô cùng mức), đạt mức lấy câu */
+  const treeStock = (rs: readonly Row[]) => {
+    const types = new Set(rs.map((r) => r.type));
+    const lv = rs.length && rs.every((r) => r.level === rs[0].level) ? rs[0].level : 'any';
+    return scopeCounts(tax, pool.filter((q) => (!types.size || types.has(q.type)) && (lv === 'any' || q.level === lv) && !exclude.has(q.uid) && !avoid.has(q.uid) && eligible(q, effOf, d.policy)));
+  };
   const broken = useMemo(() => brokenQuestions(questions), [questions]);
 
-  const gridStock = useMemo(() => stockIndex(questions, (q) => !exclude.has(q.uid) && !avoid.has(q.uid) && eligible(q, effOf, d.policy)), [questions, exclude, avoid, effOf, d.policy]);
+  const gridStock = useMemo(() => stockIndex(pool, (q) => !exclude.has(q.uid) && !avoid.has(q.uid) && eligible(q, effOf, d.policy)), [pool, exclude, avoid, effOf, d.policy]);
   const goStep = (n: 1 | 2 | 3) => { setStep(n); window.scrollTo({ top: 0 }); };
   /** câu khác có thể đặt vào một ô: đúng Dạng bài + loại + mức, đạt mức lấy câu, chưa nằm ở ô khác */
   const candidatesOf = (r: Row): Question[] => {
     const taken = new Set(Object.entries(alloc.picks).filter(([k]) => k !== r.id).flatMap(([, v]) => v));
-    return candidatesFor(questions, r, { policy: d.policy, eff: effOf, avoid }, taken).filter((q) => !exclude.has(q.uid));
+    return candidatesFor(pool, r, { policy: d.policy, eff: effOf, avoid }, taken).filter((q) => !exclude.has(q.uid));
   };
   const dropLocks = (ids: readonly string[]): Record<string, string[]> => Object.fromEntries(Object.entries(d.locked).filter(([k]) => !ids.includes(k)));
-  const stockOf = (r: Row): number => questions.reduce((a, q) => a + (!exclude.has(q.uid) && !avoid.has(q.uid) && rowMatches(r, q) && eligible(q, effOf, d.policy) ? 1 : 0), 0);
+  const stockOf = (r: Row): number => pool.reduce((a, q) => a + (!exclude.has(q.uid) && !avoid.has(q.uid) && rowMatches(r, q) && eligible(q, effOf, d.policy) ? 1 : 0), 0);
   /** lý do chưa lưu/xuất được, hiện ngắn gọn cạnh nút Lưu */
   const blockers = [
     total === 0 && missing === 0 && unchosen === 0 ? 'ma trận chưa có câu' : '',
@@ -203,7 +218,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const resample = () => upd({ seed: Math.floor(Math.random() * 1e9), rejected: [] });
 
   const swapRow = swap ? rows.find((r) => r.id === rowOf.get(swap)) : undefined;
-  const candidates = useMemo<Question[]>(() => (swapRow ? candidatesFor(questions, swapRow, { policy: d.policy, eff: effOf, avoid }, new Set(picks.map((q) => q.uid))) : []), [swapRow, questions, d.policy, effOf, picks, avoid]);
+  const candidates = useMemo<Question[]>(() => (swapRow ? candidatesFor(pool, swapRow, { policy: d.policy, eff: effOf, avoid }, new Set(picks.map((q) => q.uid))) : []), [swapRow, pool, d.policy, effOf, picks, avoid]);
 
   const refMatrix = useRef<HTMLElement>(null);
   const refSheet = useRef<HTMLElement>(null);
@@ -290,15 +305,18 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
               <h2>Chọn câu theo ma trận</h2>
               <button type="button" className="btn btn-sm" onClick={() => setTplDlg(true)} title="Lưu ma trận vào kho (có tên), hoặc lấy ma trận đã lưu">Kho ma trận…</button>
               <div className="seg" role="group" aria-label="Câu đủ điều kiện">
-                {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]}</button>)}
+                {POLICIES.map((p) => <button key={p} type="button" aria-pressed={d.policy === p} title={POLICY_LABEL[p]} onClick={() => upd({ policy: p })}>{POLICY_SHORT[p]} <small className="te-pn">{policyN[p].toLocaleString('vi-VN')}</small></button>)}
               </div>
             </div>
             {undoTpl && <p className="te-hint" role="status">{undoTpl.note} <button type="button" className="linkbtn" onClick={() => { setD(undoTpl.prev); setUndoTpl(null); toast('Đã hoàn tác áp dụng mẫu.'); }}>Hoàn tác áp dụng mẫu</button></p>}
             <p className="te-hint">Lấy câu: <b>{POLICY_LABEL[d.policy]}</b>.{d.policy === 'duyet' && ' Chưa có câu nào được giáo viên xác minh Dạng thì cứ dùng mức này.'}{d.policy === 'tat-ca' && ' Câu chưa duyệt sẽ có cảnh báo trên đề.'}{broken.length > 0 && <span className="te-bad"> {broken.length} câu có ký tự điều khiển lạ trong LaTeX nên bị loại khỏi tập ứng viên (vẫn còn nguyên trong Ngân hàng).</span>}</p>
+            {missing > 0 && d.policy !== 'tat-ca' && policyN['tat-ca'] > policyN[d.policy] && (
+              <p className="te-hint te-short" role="status"><IcAlert size={14} /> Còn thiếu {missing} câu vì kho “{POLICY_SHORT[d.policy]}” chưa đủ ({policyN[d.policy].toLocaleString('vi-VN')} câu). <button type="button" className="btn btn-sm" onClick={() => upd({ policy: 'tat-ca' })}>Lấy từ Mọi câu ({policyN['tat-ca'].toLocaleString('vi-VN')} câu)</button> <span className="te-note">Câu chưa duyệt sẽ có cảnh báo trên đề.</span></p>
+            )}
             <ExamUsagePanel scope={d.usage} onScope={(usage) => upd({ usage })} usage={usage} idx={idx} />
             {broken.length > 0 && <details className="te-broken"><summary>Xem câu bị loại và nguyên nhân</summary><ul>{broken.slice(0, 50).map((b) => <li key={b.uid}>Câu #{b.seq} · <code>{b.uid}</code> · {b.why}</li>)}{broken.length > 50 && <li>… và {broken.length - 50} câu nữa</li>}</ul></details>}
             <SlotMatrix rows={rows} tax={tax} defaultGrade={defaultGrade} scoring={d.scoring} mode={d.mode} picks={alloc.picks} locked={d.locked} byUid={byUid}
-              stockOf={stockOf} candidatesOf={candidatesOf} onMode={(mode) => upd({ mode })}
+              stockOf={stockOf} candidatesOf={candidatesOf} treeStock={treeStock} onMode={(mode) => upd({ mode })}
               onForm={(f) => { const r = applyForm(d.rows, f, { kind: 'grade', id: String(defaultGrade) }, newRowId); upd({ rows: r.rows, locked: dropLocks(r.removed) }); }}
               onPatch={(ids, patch) => { const r = patchSlots(d.rows, ids, patch); upd({ rows: r.rows, locked: dropLocks(r.touched) }); }}
               onDelete={delRow} onMove={(id, dir) => upd({ rows: moveSlot(d.rows, id, dir) })}

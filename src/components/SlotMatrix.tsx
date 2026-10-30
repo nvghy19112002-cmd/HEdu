@@ -5,6 +5,7 @@
 import { memo, useMemo, useState } from 'react';
 import { IcAlert, IcDice, IcLock, IcUnlock, IcX } from './Icons';
 import { chapters as chaptersOf, grades } from '../lib/curriculum';
+import { nodeKey } from '../lib/banktree';
 import { fmtScore, PART_NAME, PARTS, partOf, type PartKey, type Row, type Scoring } from '../lib/examgen';
 import { scopeParts } from '../lib/examdraft';
 import { difficultyLabel, formOf, FORM_THPT, MAX_PER_PART, partSlots, sameForm, type LevelStats } from '../lib/examslots';
@@ -16,8 +17,10 @@ const LV_SHORT: Record<Level | 'any', string> = { NB: 'NB', TH: 'TH', VD: 'VD', 
 const snip = stemSnippet;
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
 
-/** Chọn phạm vi (Dạng bài) cho một hay nhiều câu. Chỉ chọn trong cây hiện có; không tự đoán. */
-export function ScopePicker({ defaultGrade, initial, title, onPick, onCancel }: { defaultGrade: number; initial?: Row['scope']; title?: string; onPick(scope: Row['scope']): void; onCancel(): void }) {
+/** Chọn phạm vi (Dạng bài) cho một hay nhiều câu. Chỉ chọn trong cây hiện có; không tự đoán. Mỗi lựa chọn ghi số câu phù hợp trong kho. */
+export function ScopePicker({ tax, stock, defaultGrade, initial, title, onPick, onCancel }: { tax: Taxonomy; stock: { counts: ReadonlyMap<string, number> }; defaultGrade: number; initial?: Row['scope']; title?: string; onPick(scope: Row['scope']): void; onCancel(): void }) {
+  const n = (k: string) => ` (${(stock.counts.get(k) ?? 0).toLocaleString('vi-VN')})`;
+  const gradeN = (g: number) => { const x = tax.grades.find((y) => y.grade === g); return x ? n(nodeKey('grade', x.id)) : ''; };
   const [grade, setGrade] = useState(initial?.kind === 'grade' ? Number(initial.id) : defaultGrade);
   const [chap, setChap] = useState(initial?.kind === 'chapter' ? initial.id : '');
   const [les, setLes] = useState('');
@@ -29,10 +32,10 @@ export function ScopePicker({ defaultGrade, initial, title, onPick, onCancel }: 
   return (
     <div className="te-pick" role="group" aria-label={title ?? 'Chọn Dạng bài'}>
       {title && <b className="te-pick-t">{title}</b>}
-      <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}</option>)}</select></label>
-      <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-      <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">Cả chương</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
-      <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">Mọi dạng</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+      <label className="lbl">Lớp<select className="sel" value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setChap(''); setLes(''); setForm(''); }}>{[...grades()].reverse().map((g) => <option key={g} value={g}>Lớp {g}{gradeN(g)}</option>)}</select></label>
+      <label className="lbl">Chương<select className="sel" value={chap} onChange={(e) => { setChap(e.target.value); setLes(''); setForm(''); }}><option value="">Cả lớp</option>{chs.map((c) => <option key={c.id} value={c.id}>{c.name}{n(nodeKey('chapter', c.id))}</option>)}</select></label>
+      <label className="lbl">Bài<select className="sel" value={les} disabled={!chap} onChange={(e) => { setLes(e.target.value); setForm(''); }}><option value="">Cả chương</option>{lessons.map((l) => <option key={l.id} value={l.id}>{l.name}{n(nodeKey('lesson', l.id))}</option>)}</select></label>
+      <label className="lbl">Dạng<select className="sel" value={form} disabled={!les} onChange={(e) => setForm(e.target.value)}><option value="">Mọi dạng</option>{forms.map((f) => <option key={f.id} value={f.id}>{f.name}{n(nodeKey('form', f.id))}</option>)}</select></label>
       <div className="te-pick-acts">
         <button type="button" className="btn btn-dark btn-sm" onClick={() => onPick(scope)}>Dùng phạm vi này</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Hủy</button>
@@ -68,6 +71,8 @@ interface Props {
   byUid: ReadonlyMap<string, Question>;
   stockOf(r: Row): number;
   candidatesOf(r: Row): Question[];
+  /** số câu phù hợp theo từng mục (Lớp/Chương/Bài/Dạng), cho các ô đang đặt Dạng bài */
+  treeStock(rows: readonly Row[]): { counts: ReadonlyMap<string, number>; total: number };
   onMode(m: PickMode): void;
   /** sửa danh sách ô; `removed` = id ô bị bỏ/đổi yêu cầu (gỡ câu khóa) */
   onForm(f: Record<PartKey, number>): void;
@@ -154,7 +159,7 @@ export const SlotMatrix = memo(function SlotMatrix(p: Props) {
         </span>
         {scopeFor === r.id && (
           <div className="sm-pop">
-            <ScopePicker defaultGrade={defaultGrade} initial={r.scope} title={`Dạng bài cho Câu ${i + 1}`} onCancel={() => setScopeFor(null)} onPick={(sc) => { p.onPatch(new Set([r.id]), { scope: sc }); setScopeFor(null); }} />
+            <ScopePicker tax={tax} stock={p.treeStock([r])} defaultGrade={defaultGrade} initial={r.scope} title={`Dạng bài cho Câu ${i + 1}`} onCancel={() => setScopeFor(null)} onPick={(sc) => { p.onPatch(new Set([r.id]), { scope: sc }); setScopeFor(null); }} />
           </div>
         )}
         {chooseFor === r.id && (
@@ -210,7 +215,7 @@ export const SlotMatrix = memo(function SlotMatrix(p: Props) {
             </select>
           </label>
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => setSel(new Set())}>Bỏ chọn</button>
-          {scopeFor === 'bulk' && <div className="sm-pop"><ScopePicker defaultGrade={defaultGrade} title={`Dạng bài cho ${selN} câu đã chọn`} onCancel={() => setScopeFor(null)} onPick={(sc) => { p.onPatch(new Set([...sel].filter((x) => ids.has(x))), { scope: sc }); setScopeFor(null); }} /></div>}
+          {scopeFor === 'bulk' && <div className="sm-pop"><ScopePicker tax={tax} stock={p.treeStock(rows.filter((x) => sel.has(x.id)))} defaultGrade={defaultGrade} title={`Dạng bài cho ${selN} câu đã chọn`} onCancel={() => setScopeFor(null)} onPick={(sc) => { p.onPatch(new Set([...sel].filter((x) => ids.has(x))), { scope: sc }); setScopeFor(null); }} /></div>}
         </div>
       )}
 
