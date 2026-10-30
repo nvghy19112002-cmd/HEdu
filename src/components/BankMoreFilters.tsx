@@ -9,7 +9,7 @@ const FIG_HINT = 'Phân tích mã LaTeX: có TikZ/ảnh ở đề, nhóm hình \
 
 /** Lọc theo trạng thái xác minh Dạng (áp sau bộ lọc chính). */
 export type IdFilter = 'all' | 'chua' | 'may' | 'gv' | 'xem-lai' | 'chua-phan-loai';
-const ID_LABEL: Record<Exclude<IdFilter, 'all'>, string> = { chua: 'Chưa xác minh', may: 'Máy phân loại', gv: 'Giáo viên xác minh', 'xem-lai': 'Cần xem lại', 'chua-phan-loai': 'Chưa phân loại' };
+const ID_LABEL: Record<Exclude<IdFilter, 'all'>, string> = { chua: 'Chưa xác minh', may: 'Máy phân loại', gv: 'Giáo viên xác minh', 'xem-lai': 'Cần xem lại', 'chua-phan-loai': 'Chưa có ID' };
 
 /** Số bộ lọc đang bật trong nút này. */
 export const moreCount = (f: BankFilters, idF: IdFilter = 'all'): number => (f.figure !== 'all' ? 1 : 0) + (f.review !== 'all' ? 1 : 0) + (f.tag ? 1 : 0) + (idF !== 'all' ? 1 : 0);

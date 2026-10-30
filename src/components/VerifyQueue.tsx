@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { place, useTaxonomy } from '../lib/curriculum';
 import { parseExTest } from '../lib/extest';
-import { FORM_STATE_LABEL, LEVEL_STATE_LABEL, SOURCE_LABEL } from '../lib/idreview';
+import { FORM_STATE_LABEL, gradeOfEff, LEVEL_STATE_LABEL, SOURCE_LABEL } from '../lib/idreview';
 import { questionCode, seqLabel } from '../lib/id';
 import { IdSuggester, CONFIDENCE_LABEL, type Suggestion } from '../lib/idsuggest';
 import { indexOf } from '../lib/taxonomy';
@@ -54,6 +54,8 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
   const uid = uids[idx];
   const q = uid ? byUid.get(uid) : undefined;
   const eff = q ? effOf(q) : null;
+  // lớp đáng tin: câu Chưa có ID dùng lớp chọn khi nhập (null = chưa rõ ⇒ không gợi ý, cho chọn Dạng mọi lớp), không dùng vị trí giữ chỗ
+  const qGrade = q && eff ? gradeOfEff(q, eff) : null;
 
   // gợi ý tham khảo: dựng MỘT lần khi mở (kho đổi theo từng thao tác nhưng gợi ý cũ vẫn đủ để tham khảo)
   const sug = useRef<{ tax: typeof tax; s: IdSuggester } | null>(null);
@@ -61,10 +63,11 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
     if (!q) return null;
     // cây đổi ⇒ dựng lại bộ gợi ý (không dùng gợi ý theo cây cũ); câu đổi nội dung/Dạng ⇒ gợi ý tính lại cho câu hiện tại
     if (!sug.current || sug.current.tax !== tax) sug.current = { tax, s: new IdSuggester(tax, getState().questions) };
-    return sug.current.s.suggest({ key: q.uid, latex: q.latex, grade: q.grade, excludeUid: q.uid });
-  }, [q?.uid, q?.latex, q?.formId, tax]); // eslint-disable-line react-hooks/exhaustive-deps
-  const options = useMemo(() => (suggestion ? [suggestion.best, ...suggestion.alternatives].filter((o): o is NonNullable<typeof o> => !!o && o.formId !== q?.formId).slice(0, 3) : []), [suggestion, q?.formId]);
-  const allForms = useMemo(() => (q ? (tax.grades.find((g) => g.grade === q.grade)?.branches ?? []).flatMap((b) => b.chapters.flatMap((c) => c.lessons.flatMap((l) => l.forms.map((f) => ({ id: f.id, label: `${c.name} › ${l.name} › ${f.name}` }))))) : []), [tax, q?.grade]);
+    if (qGrade == null) return null;
+    return sug.current.s.suggest({ key: q.uid, latex: q.latex, grade: qGrade, excludeUid: q.uid });
+  }, [q?.uid, q?.latex, q?.formId, tax, qGrade]); // eslint-disable-line react-hooks/exhaustive-deps
+  const options = useMemo(() => (suggestion ? [suggestion.best, ...suggestion.alternatives].filter((o): o is NonNullable<typeof o> => !!o && (!!eff?.unclassified || o.formId !== q?.formId)).slice(0, 3) : []), [suggestion, q?.formId, eff?.unclassified]);
+  const allForms = useMemo(() => (q ? tax.grades.filter((g) => qGrade == null || g.grade === qGrade).flatMap((g) => g.branches.flatMap((b) => b.chapters.flatMap((c) => c.lessons.flatMap((l) => l.forms.map((f) => ({ id: f.id, label: `${qGrade == null ? `Lớp ${g.grade} › ` : ''}${c.name} › ${l.name} › ${f.name}` })))))) : []), [tax, q, qGrade]);
 
   const run = async (action: QueueAction, advance: boolean) => {
     if (!q || busy) return;
@@ -99,10 +102,10 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
       if (document.querySelector('.vq-overlay [role="alertdialog"], .vq-overlay .rv-ask')) return;
       const k = e.key.toLowerCase();
       const act = (a: QueueAction | null, adv = true) => { e.preventDefault(); if (a) void run(a, adv); };
-      if (k === 'y' || k === 'enter') act({ kind: 'xac-nhan-dang' });
+      if (k === 'y' || k === 'enter') act(eff?.unclassified ? null : { kind: 'xac-nhan-dang' });
       else if (k === 'm') act({ kind: 'xac-nhan-muc-do' }, false);
       else if (k === 'n') act({ kind: 'can-xem-lai' });
-      else if ((k === 'p' || k === 'P') && eff?.rec?.prop && q && eff.rec.prop !== q.formId) act({ kind: 'doi-dang', formId: eff.rec.prop });
+      else if ((k === 'p' || k === 'P') && eff?.rec?.prop && q && (eff.unclassified || eff.rec.prop !== q.formId)) act({ kind: 'doi-dang', formId: eff.rec.prop });
       else if (k === '1' || k === '2' || k === '3') { const o = options[Number(k) - 1]; if (o) act({ kind: 'doi-dang', formId: o.formId }); }
       else if (k === 'u') { e.preventDefault(); void doUndo(); }
       else if (k === 's' || k === 'arrowright') { e.preventDefault(); setIdx((i) => Math.min(i + 1, Math.max(uids.length - 1, 0))); setMsg(null); }
@@ -147,7 +150,7 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
             <div className="vq-q">
               <div className="vq-meta">
                 <span className="mono">{seqLabel(q.seq)}</span>
-                <span className="code-tag">{questionCode(q, q.level)}</span>
+                <span className="code-tag">{eff?.unclassified ? 'Chưa có ID' : questionCode(q, q.level)}</span>
                 <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
                 <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
                 {q.tags.map((t) => <span key={t} className="tag">{t}</span>)}
@@ -157,15 +160,15 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
             <aside className="vq-side" aria-label="Thông tin xác minh">
               <div className="vq-card">
                 <b>Đang ở</b>
-                <span>{where(q.formId)}</span>
+                <span>{eff.unclassified ? `Chưa có ID${qGrade != null ? ` · Lớp ${qGrade}` : ' · chưa rõ lớp'}` : where(q.formId)}</span>
                 <span>
                   <span className={`rv-chip ${eff.form === 'gv' ? 'rv-approved' : eff.form === 'xem-lai' ? 'rv-needs_fix' : 'rv-unreviewed'}`}>Dạng: {FORM_STATE_LABEL[eff.form]}</span>{' '}
                   <span className={`rv-chip ${eff.level === 'gv' ? 'rv-approved' : 'rv-unreviewed'}`}>Mức độ: {LEVEL_STATE_LABEL[eff.level]}</span>{' '}
-                  {eff.unclassified && <span className="rv-chip rv-needs_fix">Chưa phân loại</span>}
+                  {eff.unclassified && <span className="rv-chip rv-needs_fix">Chưa có ID</span>}
                 </span>
                 {eff.src && <small className="sys-hint">Nguồn: {SOURCE_LABEL[eff.src]}{eff.why ? ` · ${eff.why}` : ''}</small>}
                 {eff.rec?.orig && <small className="sys-hint">ID nguyên bản trong tệp: <span className="mono">{eff.rec.orig}</span></small>}
-                {eff.rec?.prop && eff.rec.prop !== q.formId && (
+                {eff.rec?.prop && (eff.unclassified || eff.rec.prop !== q.formId) && (
                   <span className="vq-prop">
                     <small className="sys-hint">{eff.src === 'ai-ngoai' ? 'AI ngoài đề xuất' : 'Máy từng đề xuất'}: <b>{where(eff.rec.prop)}</b></small>
                     <button type="button" className="btn btn-sm btn-accent" disabled={busy} title="Đổi sang Dạng đề xuất (phím P)" onClick={() => void run({ kind: 'doi-dang', formId: eff.rec!.prop! }, true)}><kbd>P</kbd> Dùng Dạng đề xuất</button>
@@ -184,12 +187,12 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
                 <label className="qsel">Dạng khác (D)
                   <select ref={pick} value="" onChange={(e) => { if (e.target.value) void run({ kind: 'doi-dang', formId: e.target.value }, true); }} aria-label="Chọn Dạng khác">
                     <option value="">Chọn…</option>
-                    {allForms.filter((f) => f.id !== q.formId).map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                    {allForms.filter((f) => eff.unclassified || f.id !== q.formId).map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
                   </select>
                 </label>
               </div>
               <div className="vq-actions">
-                <button type="button" className="btn btn-accent" disabled={busy || eff.form === 'gv'} onClick={() => void run({ kind: 'xac-nhan-dang' }, true)}><kbd>Y</kbd> Xác nhận Dạng</button>
+                <button type="button" className="btn btn-accent" disabled={busy || eff.form === 'gv' || eff.unclassified} title={eff.unclassified ? 'Câu chưa có ID: chọn Dạng ở trên' : undefined} onClick={() => void run({ kind: 'xac-nhan-dang' }, true)}><kbd>Y</kbd> Xác nhận Dạng</button>
                 <button type="button" className="btn" disabled={busy || eff.level === 'gv'} onClick={() => void run({ kind: 'xac-nhan-muc-do' }, false)}><kbd>M</kbd> Xác nhận mức độ ({LEVEL_LABEL[q.level]})</button>
                 <button type="button" className="btn" disabled={busy || eff.form === 'xem-lai'} onClick={() => void run({ kind: 'can-xem-lai' }, true)}><kbd>N</kbd> Cần xem lại</button>
                 <button type="button" className="btn" disabled={busy || undo.length === 0} onClick={() => void doUndo()}><kbd>U</kbd> Hoàn tác</button>

@@ -1,6 +1,6 @@
 // Gán ID nhờ AI ngoài: lô xuất (bỏ ID, trộn câu đối chứng), đọc tệp đề xuất, kế hoạch nhập (đo độ đúng, không đụng câu đã xác minh).
 import { buildLot, latestPending, lotRows, parseProposal, planImport, PROPOSAL_FORMAT, type ProposalFile } from './claudeid';
-import { contentKeys, type Effective } from './idreview';
+import { contentKeys, makeRec, type Effective } from './idreview';
 import { buildDefault, indexOf } from './taxonomy';
 import { taxRevision } from './taxpath';
 import type { Question } from './types';
@@ -69,6 +69,32 @@ console.log('Thư mục trao đổi');
   ok(rows.map((r) => `${r.lo}:${r.state}`).join() === 'L3:da-nhap,L1:co-de-xuat,L2:cho-claude', `gom theo lô, trạng thái đúng, mới nhất trước: ${rows.map((r) => r.lo + ':' + r.state).join()}`);
   ok(latestPending(rows)?.lo === 'L1' && latestPending(lotRows(files, new Set(['L1', 'L3']))) === null, 'lô mới nhất có đề xuất CHƯA nhập');
   ok(lot.huongDan.some((x) => x.includes('de-xuat-<lo>.json')), 'hướng dẫn nói rõ tên và nơi ghi tệp đề xuất');
+}
+console.log('Câu Chưa có ID (vị trí giữ chỗ Lớp 12, thật ra là câu lớp 10)');
+{
+  const g10 = tax.grades.find((g) => g.grade === 10)!;
+  const f10 = g10.branches.flatMap((b) => b.chapters.flatMap((c) => c.lessons.flatMap((l) => l.forms.map((f) => ({ c, l, f })))));
+  const [X, Y] = [q(A), q(A)]; // nằm ở Dạng đầu Lớp 12 (chỗ giữ)
+  const recX = makeRec(X, { form: 'chua', src: 'tay', taxRev, unclassified: true, lop: 10 });
+  const recY = makeRec(Y, { form: 'chua', src: 'tay', taxRev, unclassified: true });
+  ok(recX.lop === 10 && recY.lop === undefined && makeRec(X, { form: 'chua', src: 'tay', taxRev, lop: 10 }).lop === undefined, 'lớp chỉ được ghi kèm dấu Chưa có ID');
+  const effN = (x: Question): Effective => (x.uid === X.uid ? { form: 'chua', level: 'chua', unclassified: true, rec: recX } : x.uid === Y.uid ? { form: 'chua', level: 'chua', unclassified: true, rec: recY } : eff(x));
+  const p2 = [...pool, X, Y];
+  const L = buildLot(p2, { tax, ix, taxRev, effOf: effN, size: 100, goldShare: 0, lo: 'L2', seed: 1 }).lot;
+  ok(L.cau.find((c) => c.k === X.uid)?.lop === 10, 'câu Chưa có ID xuất lớp chọn khi nhập (10), không lấy 12 của chỗ giữ');
+  ok(L.cau.find((c) => c.k === Y.uid)?.lop === null, 'chưa rõ lớp ⇒ "lop": null');
+  ok(L.dang.some((d) => d.duong.startsWith('Lớp 10 › ')) && L.dang.some((d) => d.duong.startsWith('Lớp 11 › ')), 'có câu chưa rõ lớp ⇒ gửi Dạng của mọi lớp');
+  const P: ProposalFile = { format: PROPOSAL_FORMAT, v: 1, lo: 'L2', boi: 'Claude', cau: [
+    { k: X.uid, fp: contentKeys(X.latex).i, dang: f10[0].f.id, chac: 'cao', lyDo: 'lớp 10' },
+    { k: Y.uid, fp: contentKeys(Y.latex).i, dang: f10[1].f.id, chac: 'vua', lyDo: 'lớp 10' },
+  ] };
+  const pl = planImport(P, p2, { ix, taxRev, effOf: effN, now: 1 });
+  ok(!pl.skip['sai-lop'] && pl.recs.length === 2, `đề xuất Dạng lớp 10 được nhận (không loại "sai-lop" theo chỗ giữ Lớp 12): ${JSON.stringify(pl.skip)}`);
+  const rx = pl.recs.find(([u]) => u === X.uid)![1];
+  ok(rx.form === 'xem-lai' && rx.prop === f10[0].f.id && rx.unclassified === true && rx.lop === 10, 'vào hàng đợi với Dạng đề xuất, vẫn ở mục Chưa có ID (giữ lớp) cho tới khi giáo viên chọn');
+  const f11 = tax.grades.find((g) => g.grade === 11)!.branches[0].chapters[0].lessons[0].forms[0];
+  const pl2 = planImport({ ...P, cau: [{ ...P.cau[0], dang: f11.id }] }, p2, { ix, taxRev, effOf: effN, now: 1 });
+  ok(pl2.skip['sai-lop'] === 1, 'đã biết lớp 10 ⇒ Dạng lớp 11 vẫn bị loại "sai-lop"');
 }
 if (fail) { console.log(`\n${fail} kiểm thử claudeid lỗi`); process.exit(1); }
 console.log('claudeid: đạt hết.');

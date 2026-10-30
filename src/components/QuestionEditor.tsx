@@ -10,6 +10,9 @@ import { buildExTest, parseExTest, TEMPLATES, type ParsedQuestion } from '../lib
 import { questionCode, seqLabel } from '../lib/id';
 import { idStatus, LATEX_ID_LABEL, strictCode } from '../lib/idsync';
 import { sameCode, writeHeadId } from '../lib/idtex';
+import { commitRecs, getRec, keepNoId, makeRec } from '../lib/idreview';
+import { taxRevision } from '../lib/taxpath';
+import { useEffectiveOf } from './IdReviewControl';
 import { saveQuestion, useBank } from '../lib/store';
 import { shortName } from '../lib/taxonomy';
 import { isTikzReady } from '../lib/tikz';
@@ -101,6 +104,12 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
   const [undo, setUndo] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<(() => void) | null>(null);
   const ed = useRef<LatexEditorHandle>(null);
+  // Câu "Chưa có ID": vị trí lưu chỉ là chỗ giữ. Chưa chọn vị trí thật thì không hiện mã, không ghi %[ID]; chọn Lớp/Chương/Bài/Dạng ⇒ thành vị trí thật.
+  const effOf = useEffectiveOf();
+  const noIdEff = useMemo(() => (editing ? effOf(editing) : null), [editing?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const wasNoId = !!noIdEff?.unclassified;
+  const [placed, setPlaced] = useState(!wasNoId);
+  const pickLoc = (l: Location) => { setLoc(l); setPlaced(true); };
 
   // Đọc, kiểm tra, xem trước theo bản “trễ”: gõ liên tục thì giao diện không bị khựng.
   const slow = useDeferredValue(latex);
@@ -122,16 +131,16 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
   const idConflict = ids.state === 'lech' && !movedFromSynced;
   /** Mã LaTeX sẽ lưu: thêm ID cho câu chưa có, thay ID khi giáo viên vừa đổi vị trí; còn lại giữ nguyên từng ký tự. */
   const latexToSave = (): string => {
-    if (!ids.meta.ok) return latex;
+    if (!placed || !ids.meta.ok) return latex;
     if (ids.state === 'chua-co-id') return writeHeadId(latex, ids.meta.code, 'them').latex;
     if (ids.state === 'lech' && movedFromSynced) return writeHeadId(latex, ids.meta.code, 'thay').latex;
     return latex;
   };
-  const useLatexId = () => { const r = ids.latex.resolved; if (r) { setLoc(r.loc); setLevel(r.level); } };
+  const useLatexId = () => { const r = ids.latex.resolved; if (r) { pickLoc(r.loc); setLevel(r.level); } };
   const useMetaId = () => { if (ids.meta.ok) setLatex(writeHeadId(latex, ids.meta.code, 'thay').latex); };
 
   const dirty = editing
-    ? latex !== editing.latex || level !== editing.level || loc.formId !== editing.formId || loc.lessonId !== editing.lessonId || tags.join('|') !== editing.tags.join('|')
+    ? latex !== editing.latex || level !== editing.level || loc.formId !== editing.formId || loc.lessonId !== editing.lessonId || placed !== !wasNoId || tags.join('|') !== editing.tags.join('|')
     : false;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
@@ -148,12 +157,18 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
     if (!parsed.stem) { toast('Đề bài đang trống — chưa lưu.'); return false; }
     const exact = dups.find((d) => d.score === 1);
     if (exact) { toast(`Câu này trùng hẳn với ${seqLabel(exact.question.seq)} — chưa lưu.`); return false; }
-    if (idConflict) { setAttrs(true); toast('ID trong LaTeX khác vị trí đang chọn — hãy chọn bên đúng (ngay dưới thanh vị trí) rồi lưu.'); return false; }
+    if (placed && idConflict) { setAttrs(true); toast('ID trong LaTeX khác vị trí đang chọn — hãy chọn bên đúng (ngay dưới thanh vị trí) rồi lưu.'); return false; }
     const hadReview = editing?.review;
-    const idWarn = ids.state === 'id-loi' ? ' — lưu ý: ID trong LaTeX đang lỗi, cần sửa' : ids.state === 'vi-tri-loi' ? ' — lưu ý: vị trí chưa ra được ID hợp lệ' : '';
+    const idWarn = !placed ? '' : ids.state === 'id-loi' ? ' — lưu ý: ID trong LaTeX đang lỗi, cần sửa' : ids.state === 'vi-tri-loi' ? ' — lưu ý: vị trí chưa ra được ID hợp lệ' : '';
     const q = saveQuestion({ latex: latexToSave(), level, tags, ...loc }, editing?.uid);
     if (!editing) saveDraft(null);
-    toast((editing ? `Đã cập nhật ${questionCode(q, q.level)} · ${seqLabel(q.seq)}${hadReview && !q.review ? ' — nội dung đổi nên trạng thái về “Chưa kiểm tra”' : ''}` : `Đã lưu vào ngân hàng: ${questionCode(q, q.level)} · ${seqLabel(q.seq)}`) + idWarn);
+    if (editing && wasNoId && noIdEff) {
+      // Vẫn chưa chọn vị trí ⇒ giữ câu trong mục "Chưa có ID" dù nội dung đổi. Đã chọn vị trí ⇒ rời mục: giáo viên chọn, chưa xác minh.
+      const prev = getRec(q.uid);
+      const keep = { ...(prev?.why ? { why: prev.why } : {}), ...(prev?.orig ? { orig: prev.orig } : {}), ...(prev?.prop ? { prop: prev.prop } : {}) };
+      void commitRecs([[q.uid, placed ? makeRec(q, { form: 'chua', src: 'tay', taxRev: taxRevision(getTaxonomy()), why: 'Giáo viên chọn vị trí trong Sửa câu', ...(prev?.orig ? { orig: prev.orig } : {}) }) : makeRec(q, { form: noIdEff.form === 'gv' ? 'chua' : noIdEff.form, src: noIdEff.src ?? 'tay', taxRev: taxRevision(getTaxonomy()), ...keepNoId(noIdEff), ...keep })]]);
+    }
+    toast((editing ? `Đã cập nhật ${!placed ? 'câu Chưa có ID' : questionCode(q, q.level)} · ${seqLabel(q.seq)}${hadReview && !q.review ? ' — nội dung đổi nên trạng thái về “Chưa kiểm tra”' : ''}` : `Đã lưu vào ngân hàng: ${questionCode(q, q.level)} · ${seqLabel(q.seq)}`) + idWarn);
     onSaved?.(q);
     return true;
   };
@@ -257,17 +272,27 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
 
       <div className="qe-ctx">
         <nav className="crumbs" aria-label="Vị trí trong khung chương trình">
-          <span>Lớp {loc.grade}</span><span aria-hidden="true">/</span>
-          <span>{chapter ? shortName(chapter.name) : '—'}</span><span aria-hidden="true">/</span>
-          <b>{lesson ? shortName(lesson.name) : '—'}</b>
+          {placed ? (
+            <>
+              <span>Lớp {loc.grade}</span><span aria-hidden="true">/</span>
+              <span>{chapter ? shortName(chapter.name) : '—'}</span><span aria-hidden="true">/</span>
+              <b>{lesson ? shortName(lesson.name) : '—'}</b>
+            </>
+          ) : <b>Chưa có ID{noIdEff?.rec?.lop != null ? ` · Lớp ${noIdEff.rec.lop}` : ''}</b>}
         </nav>
-        <span className="qe-chip mono" title="ID tự động theo Chương trình 2018">{code}</span>
+        {placed ? <span className="qe-chip mono" title="ID tự động theo Chương trình 2018">{code}</span> : <span className="qe-chip" title="Câu chưa được đặt vào Dạng nào">Chưa có ID</span>}
         <span className="qe-chip">{TYPE_LABEL[parsed.type]}</span>
         <span className="qe-chip">{LEVEL_LABEL[level]}</span>
         <button type="button" className="btn btn-sm qe-attrbtn" aria-expanded={attrs} onClick={() => setAttrs(!attrs)}>Thuộc tính {attrs ? '▴' : '▾'}</button>
       </div>
 
-      {ids.state !== 'khop' && (
+      {!placed && (
+        <div className="qe-idbar sys-hint" role="status" aria-label="ID trong LaTeX">
+          <span>Câu chưa có ID — khi lưu, HEdu <b>không</b> thêm ID vào LaTeX. Muốn gán: mở Thuộc tính, chọn Lớp → Chương → Bài → Dạng.</span>
+          {!attrs && <button type="button" className="btn btn-sm" onClick={() => setAttrs(true)}>Chọn vị trí</button>}
+        </div>
+      )}
+      {placed && ids.state !== 'khop' && (
         <div className={ids.state === 'chua-co-id' || movedFromSynced ? 'qe-idbar sys-hint' : 'qe-idbar qe-confirm'} role={idConflict ? 'alert' : 'status'} aria-label="ID trong LaTeX">
           {ids.state === 'chua-co-id' && ids.meta.ok && <span>LaTeX chưa có ID — khi lưu, HEdu ghi <b className="mono">%[{ids.meta.code}]</b> ngay sau <span className="mono">{'\\begin{ex}'}</span> (không đổi gì khác).</span>}
           {movedFromSynced && ids.meta.ok && <span>Thầy/cô vừa đổi vị trí/mức độ: khi lưu, ID trong LaTeX đổi <b className="mono">{ids.latex.raw}</b> → <b className="mono">{ids.meta.code}</b>.</span>}
@@ -294,13 +319,14 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
         <div className="qe-attrs" role="group" aria-label="Thuộc tính câu hỏi">
           <div className="qe-grid">
             <label className="lbl">Lớp
-              <select className="sel" value={loc.grade} onChange={(e) => setLoc(firstLocation(Number(e.target.value)))}>
+              <select className="sel" value={placed ? loc.grade : ''} onChange={(e) => { if (e.target.value) pickLoc(firstLocation(Number(e.target.value))); }}>
+                {!placed && <option value="">— Chưa có ID —</option>}
                 {grades().map((g) => <option key={g} value={g}>Lớp {g}</option>)}
               </select>
             </label>
             <label className="lbl">Chương
-              <select className="sel" value={chapter?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, e.target.value))}>
-                {Object.entries(byBranch).map(([mon, list]) => (
+              <select className="sel" disabled={!placed} value={placed ? chapter?.id ?? '' : ''} onChange={(e) => pickLoc(firstLocation(loc.grade, e.target.value))}>
+                {!placed ? <option value="">—</option> : Object.entries(byBranch).map(([mon, list]) => (
                   <optgroup key={mon} label={mon}>
                     {list.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </optgroup>
@@ -308,13 +334,13 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
               </select>
             </label>
             <label className="lbl">Bài
-              <select className="sel" value={lesson?.id ?? ''} onChange={(e) => setLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>
-                {(chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              <select className="sel" disabled={!placed} value={placed ? lesson?.id ?? '' : ''} onChange={(e) => pickLoc(firstLocation(loc.grade, chapter?.id, e.target.value))}>
+                {!placed ? <option value="">—</option> : (chapter?.lessons ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </label>
             <label className="lbl">Dạng toán
-              <select className="sel" value={loc.formId} onChange={(e) => setLoc({ ...loc, formId: e.target.value })}>
-                {(lesson?.forms ?? []).map((f) => <option key={f.id} value={f.id}>{shortName(f.name)}</option>)}
+              <select className="sel" disabled={!placed} value={placed ? loc.formId : ''} onChange={(e) => pickLoc({ ...loc, formId: e.target.value })}>
+                {!placed ? <option value="">—</option> : (lesson?.forms ?? []).map((f) => <option key={f.id} value={f.id}>{shortName(f.name)}</option>)}
               </select>
             </label>
           </div>
@@ -348,7 +374,7 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
             <div className="id-card">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <small>ID tự động</small>
-                <span className="mono">{code}</span>
+                <span className="mono">{placed ? code : 'Chưa có ID'}</span>
               </div>
               <small>{editing ? seqLabel(editing.seq) : 'Số thứ tự cấp khi lưu'}</small>
             </div>

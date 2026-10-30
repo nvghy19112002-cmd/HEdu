@@ -1,4 +1,5 @@
-import { attrChips, attrCount, attrGroups, clearAttrs, computeFacets, dropAttr, emptyFilters, emptyKind, facetCtx, pickBranch, pickChapter, pickForm, pickGrade, pickLesson, sanitize, type BankFilters } from './bankfilter';
+import { attrChips, attrCount, attrGroups, clearAttrs, computeFacets, dropAttr, emptyFilters, emptyKind, facetCtx, NOID_UNKNOWN, pickBranch, pickChapter, pickForm, pickGrade, pickLesson, pickNoId, sanitize, type BankFilters } from './bankfilter';
+import { pickPath } from './banktree';
 import { buildDefault } from './taxonomy';
 import { LEVELS, TYPES, type Grade, type Level, type QType, type Question } from './types';
 let fail = 0;
@@ -165,6 +166,32 @@ ok(chips.length === 2 && chips[0].key === 'level' && chips[1].key === 'review', 
 for (const c of chips) {
   const after = computeFacets(qs, dropAttr(fTwo, c.key), ctx()).list.length;
   ok(c.after === after, `chip "${c.label}": → ${c.after} khớp kết quả thật khi bỏ nó (${after})`);
+}
+
+console.log('Mục "Chưa có ID"');
+{
+  // 3 câu chưa có ID nằm ở chỗ giữ (Lớp 12 · Dạng đầu): 2 câu lớp 10, 1 câu chưa rõ lớp
+  const ni = [mk({ level: 'TH' }), mk({ level: 'VD' }), mk({ level: 'TH' })];
+  const lop = new Map([[ni[0].uid, 10], [ni[1].uid, 10], [ni[2].uid, NOID_UNKNOWN]]);
+  const all = [...qs, ni[0], ni[1], ni[2]];
+  const cx = (wide = false) => facetCtx(tax, () => true, wide, undefined, (x) => lop.get(x.uid) ?? null);
+  const before = computeFacets(qs, F(), ctx());
+  const r0 = computeFacets(all, F(), cx());
+  ok(r0.noId === 3 && r0.noIdBy.get(10) === 2 && r0.noIdBy.get(NOID_UNKNOWN) === 1, 'đếm Chưa có ID: tổng 3, Lớp 10: 2, chưa rõ lớp: 1');
+  ok(r0.gradeAll === before.gradeAll + 3 && r0.list.length === before.list.length + 3, '"Tất cả" vẫn gồm câu Chưa có ID');
+  ok(fm1 != null && r0.node.get(`f:${fm1.id}`) === before.node.get(`f:${fm1.id}`) && r0.node.get(`g:${g12.id}`) === before.node.get(`g:${g12.id}`) && r0.node.get(`c:${ch1.id}`) === before.node.get(`c:${ch1.id}`), 'không cộng vào số đếm Lớp/Chương/Dạng của chỗ giữ');
+  const r12 = computeFacets(all, F({ gradeId: g12.id, chapterId: ch1.id, lessonId: ls1.id, formId: fm1?.id ?? null }), cx());
+  ok(!r12.list.some((x) => lop.has(x.uid)), 'chọn Dạng của chỗ giữ: không hiện câu Chưa có ID');
+  const rn = computeFacets(all, pickNoId(F(), 'all'), cx());
+  ok(rn.list.length === 3 && rn.list.every((x) => lop.has(x.uid)), 'chọn "Chưa có ID": chỉ còn đúng các câu đó');
+  ok(computeFacets(all, pickNoId(F(), 10), cx()).list.length === 2 && computeFacets(all, pickNoId(F(), NOID_UNKNOWN), cx()).list.length === 1, 'chọn theo lớp trong mục: Lớp 10 / chưa rõ lớp');
+  ok(computeFacets(all, pickNoId(F({ levels: new Set<Level>(['TH']) }), 'all'), cx()).list.length === 2, 'thuộc tính (Mức độ) vẫn áp trong mục');
+  const p = pickNoId(F({ gradeId: g12.id, chapterId: ch1.id }), 'all');
+  ok(p.gradeId === null && p.chapterId === null && p.noId === 'all', 'chọn mục bỏ vị trí trong cây');
+  ok(pickGrade(p, g12.id).noId === null && pickPath(p, { gradeId: g12.id, branchId: null, chapterId: null, lessonId: null, formId: null }).noId === null, 'chọn mục trong cây bỏ "Chưa có ID"');
+  ok(sanitize(tax, { ...F({ gradeId: g12.id }), noId: 'all' }).gradeId === null, 'sanitize: Chưa có ID và vị trí loại trừ nhau');
+  const old = { ...F() } as Partial<BankFilters>; delete old.noId;
+  ok(sanitize(tax, old as BankFilters).noId === null, 'phiên lưu từ bản cũ (thiếu noId) ⇒ null');
 }
 
 console.log('Hiệu năng');

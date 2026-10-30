@@ -1065,6 +1065,7 @@ a { color: var(--accent); }
 .aid-bad { color: var(--danger-ink); }
 .aid-code { white-space: nowrap; }
 .code-tag.is-new { background: var(--pri-soft); color: var(--pri-ink); }
+.code-tag.is-noid { font-family: inherit; background: var(--warn-bg); color: var(--warn-ink); }
 .aid-sel { max-width: 340px; width: 100%; height: 30px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 13px; }
 .aid-none { color: var(--warn-ink); font-weight: 600; }
 .aid-conf { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
@@ -1515,6 +1516,11 @@ span.bt-caret { cursor: default; }
 .k-all .bt-label { font-weight: 700; }
 .bt-n { flex: none; min-width: 34px; text-align: right; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; padding-top: 1px; }
 .k-all .bt-n, .is-sel .bt-n { color: var(--ink); font-weight: 700; }
+/* mục gốc "Chưa có ID": câu chưa đặt vào Dạng nào */
+.k-noid { padding-left: 6px; border-bottom: 1px dashed var(--line); }
+.k-noid > .bt-name .bt-label { font-weight: 600; }
+.k-noid .bt-ico { color: var(--warn); }
+.k-noid .bt-n { color: var(--warn-ink); font-weight: 700; }
 .bt-row.is-empty .bt-label, .bt-row.is-empty .bt-n { color: var(--ink-3); }
 .bt-none { padding: 8px; font-size: 13px; color: var(--ink-3); }
 .bt-empty-sw { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-2); }

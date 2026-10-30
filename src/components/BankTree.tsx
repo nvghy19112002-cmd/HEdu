@@ -1,6 +1,8 @@
 // Cây mục lục kiểu thư mục cho màn Ngân hàng: "Tất cả", Lớp → (Phân môn) → Chương → Bài → Dạng, mỗi mục có số câu;
 // ô "Tìm thư mục…" (không dấu, theo tên hoặc mã); mặc định ẩn mục chưa có câu. Chọn một mục = lọc theo mục đó.
+// Mục gốc "Chưa có ID" (ngang hàng "Tất cả"): câu chưa được đặt vào Dạng nào, chia con theo lớp giáo viên chọn khi nhập.
 import { memo, useEffect, useMemo, useState } from 'react';
+import { NOID_UNKNOWN, type NoIdPick } from '../lib/bankfilter';
 import { fullTree, pathKeys, selectedKey, visibleTree, type NodePath, type TreeNode } from '../lib/banktree';
 import type { Taxonomy } from '../lib/types';
 
@@ -35,13 +37,22 @@ interface Props {
   /** đang tìm trong toàn kho: cây tạm không áp dụng (vẫn xem/chọn được) */
   off?: boolean;
   onPick(p: NodePath | null): void;
+  /** mục "Chưa có ID": tổng, số theo lớp (NOID_UNKNOWN = chưa rõ lớp), mục đang chọn */
+  noId?: { total: number; by: ReadonlyMap<number, number>; sel: NoIdPick; onPick(v: NoIdPick): void };
 }
 
-export const BankTree = memo(function BankTree({ tax, path, counts, total, off, onPick }: Props) {
+const Inbox = () => (
+  <svg className="bt-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 13h5l1.5 2.5h5L16 13h5" /><path d="M5.5 5h13L21 13v5.5A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5V13z" />
+  </svg>
+);
+
+export const BankTree = memo(function BankTree({ tax, path, counts, total, off, onPick, noId }: Props) {
   const [query, setQuery] = useState('');
   const [showEmpty, setShowEmpty] = useState(false);
   const [open, setOpen] = useState<Set<string>>(loadOpen);
-  const sel = selectedKey(path);
+  const noSel = noId?.sel ?? null;
+  const sel = noSel != null ? null : selectedKey(path);
   const onPath = useMemo(() => pathKeys(path), [path]);
   // mục đang chọn luôn được mở đường tới nó (kể cả khi chọn từ nơi khác, vd thẻ câu hay Ctrl K)
   useEffect(() => { setOpen((s) => { let changed = false; const n = new Set(s); for (const k of onPath) if (!n.has(k)) { n.add(k); changed = true; } if (changed) saveOpen(n); return changed ? n : s; }); }, [onPath]);
@@ -79,11 +90,36 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
         <input type="search" placeholder="Tìm thư mục…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
       <ul className="bt-tree" role="tree" aria-label="Cây mục lục">
-        <li role="treeitem" aria-level={1} aria-selected={sel === null}>
-          <div className={`bt-row k-all${sel === null ? ' is-sel' : ''}`}>
+        <li role="treeitem" aria-level={1} aria-selected={sel === null && noSel == null}>
+          <div className={`bt-row k-all${sel === null && noSel == null ? ' is-sel' : ''}`}>
             <button type="button" className="bt-name" onClick={() => onPick(null)}><Layers /><span className="bt-label">Tất cả</span><span className="bt-n">{nf.format(total)}</span></button>
           </div>
         </li>
+        {noId && (noId.total > 0 || noSel != null) && (() => {
+          // con theo lớp: chỉ hiện khi đã biết lớp của ít nhất một câu
+          const kids = [...noId.by.entries()].filter(([g, n]) => n > 0 && g !== NOID_UNKNOWN).sort((a, b) => a[0] - b[0]);
+          const unknown = noId.by.get(NOID_UNKNOWN) ?? 0;
+          const list: [number, string, number][] = kids.length ? [...kids.map(([g, n]): [number, string, number] => [g, `Lớp ${g}`, n]), ...(unknown ? [[NOID_UNKNOWN, 'Chưa rõ lớp', unknown] as [number, string, number]] : [])] : [];
+          return (
+            <li role="treeitem" aria-level={1} aria-selected={noSel === 'all'} aria-expanded={list.length ? true : undefined}>
+              <div className={`bt-row k-noid${noSel === 'all' ? ' is-sel' : ''}`}>
+                <button type="button" className="bt-name" title="Câu chưa được đặt vào Dạng nào: không có ID, không tính vào số câu của Chương/Bài/Dạng" onClick={() => noId.onPick('all')}><Inbox /><span className="bt-label">Chưa có ID</span><span className="bt-n">{nf.format(noId.total)}</span></button>
+              </div>
+              {list.length > 0 && (
+                <ul role="group" style={{ ["--guide" as string]: '14px' }}>
+                  {list.map(([g, label, n]) => (
+                    <li key={g} role="treeitem" aria-level={2} aria-selected={noSel === g}>
+                      <div className={`bt-row k-noid-sub${noSel === g ? ' is-sel' : ''}`} style={{ paddingLeft: 16 }}>
+                        <span className="bt-caret" aria-hidden="true" />
+                        <button type="button" className="bt-name" onClick={() => noId.onPick(g)}><span className="bt-label">{label}</span><span className="bt-n">{nf.format(n)}</span></button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })()}
         {shown.map((x) => row(x, 0))}
         {searching && shown.length === 0 && <li className="bt-none" role="none">Không có mục nào khớp “{query.trim()}”.</li>}
       </ul>
