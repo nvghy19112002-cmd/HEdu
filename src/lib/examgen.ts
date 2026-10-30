@@ -144,6 +144,8 @@ class Flow {
   }
 }
 
+const SCOPE_ORDER: readonly ScopeKind[] = ['form', 'lesson', 'chapter', 'grade'];
+
 export function allocate(bank: readonly Question[], rows: readonly Row[], o: AllocOpts): Alloc {
   const rand = rng(o.seed);
   const pool: Record<string, number> = {};
@@ -190,14 +192,18 @@ export function allocate(bank: readonly Question[], rows: readonly Row[], o: All
   const keys = [...left.keys()].filter((k) => left.get(k)!.length);
   const R = rows.length, G = keys.length, S = 0, T = R + G + 1;
   const net = new Flow(T + 1);
-  rows.forEach((r, i) => { const need = r.count - picks[r.id].length; if (need > 0) net.add(S, 1 + i, need); });
   const edges: { row: number; g: number; id: number }[] = [];
   const order = shuffle(keys.map((_, g) => g), rand);
   for (const g of order) {
     net.add(1 + R + g, T, left.get(keys[g])!.length);
     for (const i of keys[g].split(',').map(Number)) edges.push({ row: i, g, id: net.add(1 + i, 1 + R + g, Infinity) });
   }
-  net.run(S, T);
+  // Ô phạm vi hẹp được phục vụ trước (Dạng → Bài → Chương → cả lớp): câu hiếm của một Dạng không bị ô "Cả lớp" lấy mất.
+  // Mỗi lượt chỉ thêm nguồn cho các ô cùng độ hẹp rồi chạy tiếp trên đồ thị dư: số câu đã cấp cho ô hẹp không giảm, tổng cuối vẫn tối đa.
+  for (const kind of SCOPE_ORDER) {
+    rows.forEach((r, i) => { const need = r.count - picks[r.id].length; if (need > 0 && r.scope.kind === kind) net.add(S, 1 + i, need); });
+    net.run(S, T);
+  }
   for (const e of edges) {
     const f = net.cap[e.id ^ 1];
     if (f > 0) picks[rows[e.row].id].push(...left.get(keys[e.g])!.splice(0, f));

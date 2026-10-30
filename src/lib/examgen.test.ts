@@ -50,6 +50,18 @@ console.log('Phân bổ toàn cục');
   ok(a.pool.r1 === 3 && a.pool.r2 === 1, 'đếm kho từng dòng');
 }
 {
+  // Kho THIẾU: 2 câu lớp 12 (một ở Dạng f9) cho 3 ô "Cả lớp 12" + 1 ô Dạng f9. Mọi cách chia đều chỉ được 2 câu,
+  // nhưng câu duy nhất của Dạng f9 phải về ô Dạng f9, không bị ô "Cả lớp" lấy mất (lỗi thấy trên màn Tạo đề).
+  const bank = [mk({ formId: 'f9' }), mk({})];
+  const gs = ['g1', 'g2', 'g3'].map((id) => row(id, { scope: { kind: 'grade', id: '12' } })), fr = row('f', { scope: { kind: 'form', id: 'f9' } });
+  let good = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const a = allocate(bank, seed % 2 ? [fr, ...gs] : [...gs, fr], { policy: 'duyet', eff, seed });
+    if (a.picks.f[0] === bank[0].uid && Object.values(a.picks).flat().length === 2) good++;
+  }
+  ok(good === 20, 'kho thiếu: ô phạm vi hẹp (Dạng) được cấp câu trước ô cả lớp, tổng số câu vẫn tối đa');
+}
+{
   const bank = [mk({}), mk({})];
   const a = allocate(bank, [row('r1', { count: 5 })], { policy: 'duyet', eff, seed: 2 });
   ok(a.picks.r1.length === 2 && a.deficit.r1 === 3, 'thiếu thật được báo đúng số câu');

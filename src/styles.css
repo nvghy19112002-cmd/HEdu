@@ -1843,3 +1843,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .cid-st { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink-2); white-space: nowrap; }
 .cid-st.st-co-de-xuat { background: var(--pri-soft); color: var(--pri-ink); }
 .cid-st.st-da-nhap { background: var(--ok-bg); color: var(--ok-ink); }
+.seg .te-pn { margin-left: 4px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.seg [aria-pressed="true"] .te-pn { color: inherit; }
+.te-short { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: var(--warn-ink); }
+/* dòng đang mở ô chọn (cây Dạng bài / chọn câu): nút của dòng nổi ở hàng đầu, không trôi xuống giữa ô chọn */
+.sm-row:has(> .sm-pop):hover .sm-acts, .sm-row:has(> .sm-pop):focus-within .sm-acts { top: 12px; }
