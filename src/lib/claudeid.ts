@@ -23,6 +23,8 @@ export interface LotItem { k: string; fp: string; lop: number | null; loai: stri
 export interface LotForm { id: string; ma: string; duong: string; vd: string[] }
 export interface LotFile {
   format: typeof LOT_FORMAT; v: 1; lo: string; taoLuc: string; taxRev: string;
+  /** "kiem-tra-lai": lô gồm cả câu giáo viên đã xác minh, nhờ AI soát lại Dạng và mức độ (không có câu đối chứng ngầm) */
+  kieu?: 'kiem-tra-lai';
   huongDan: string[];
   dang: LotForm[];
   cau: LotItem[];
@@ -61,7 +63,12 @@ export const HUONG_DAN = [
   'Ghi tệp kết quả tên "de-xuat-<lo>.json" (thay <lo> bằng giá trị "lo") vào CÙNG thư mục với tệp lô này.',
 ];
 
-export interface BuildOpts { tax: Taxonomy; ix: TaxIndex; taxRev: string; effOf: (q: Question) => Effective; size: number; goldShare: number; lo: string; seed?: number; now?: Date }
+/** Mã lô "Kiểm tra lại" bắt đầu bằng K (lô gán ID thường bắt đầu bằng L): HEdu biết kiểu lô từ chính mã lô trong tệp đề xuất. */
+export const RECHECK_PREFIX = 'K';
+export const isRecheckLot = (lo: string): boolean => lo.startsWith(RECHECK_PREFIX);
+export const HUONG_DAN_KIEM_TRA_LAI = 'Lô KIỂM TRA LẠI: các câu đã nằm trong ngân hàng (nhiều câu giáo viên đã xác minh). Phân loại độc lập từng câu như thường lệ, KHÔNG cố đoán Dạng đang lưu; HEdu tự so với Dạng và mức độ đang lưu, câu khác sẽ được đưa cho giáo viên xem lại.';
+
+export interface BuildOpts { tax: Taxonomy; ix: TaxIndex; taxRev: string; effOf: (q: Question) => Effective; size: number; goldShare: number; lo: string; seed?: number; now?: Date; /** lấy MỌI câu đang lọc, kể cả câu đã xác minh; không trộn câu đối chứng */ recheck?: boolean }
 
 /**
  * Lô cần gán ID: các câu CHƯA được giáo viên xác minh Dạng (theo thứ tự ưu tiên của hàng đợi), trộn ngầm câu đối chứng
@@ -70,14 +77,14 @@ export interface BuildOpts { tax: Taxonomy; ix: TaxIndex; taxRev: string; effOf:
 export function buildLot(pool: readonly Question[], o: BuildOpts): { lot: LotFile; need: number; gold: number } {
   const verified = (e: Effective) => e.form === 'gv' && !e.unclassified;
   const rank = (e: Effective) => (e.form === 'xem-lai' ? 0 : e.unclassified ? 1 : e.form === 'chua' ? 2 : 3);
-  const needAll = pool.map((q) => ({ q, e: o.effOf(q) })).filter((x) => !verified(x.e)).sort((a, b) => rank(a.e) - rank(b.e));
+  const needAll = pool.map((q) => ({ q, e: o.effOf(q) })).filter((x) => o.recheck || !verified(x.e)).sort((a, b) => rank(a.e) - rank(b.e));
   const needX = needAll.slice(0, Math.max(1, o.size));
   const need = needX.map((x) => x.q);
   // Lớp của câu: câu Chưa có ID dùng lớp chọn khi nhập (không dùng lớp của vị trí giữ chỗ); chưa rõ lớp ⇒ gửi Dạng của mọi lớp
   const lopOf = new Map(needX.map((x) => [x.q.uid, gradeOfEff(x.q, x.e)] as const));
   const grades = new Set([...lopOf.values()].some((g) => g == null) ? o.tax.grades.map((g) => g.grade) : [...lopOf.values()].filter((g): g is number => g != null));
   const goldPool = pool.filter((q) => grades.has(q.grade) && verified(o.effOf(q)));
-  const goldN = Math.min(goldPool.length, Math.round(need.length * o.goldShare));
+  const goldN = o.recheck ? 0 : Math.min(goldPool.length, Math.round(need.length * o.goldShare));
   const gold = shuffle([...goldPool], (o.seed ?? 7) + 1).slice(0, goldN);
   const items = shuffle([...need, ...gold], o.seed ?? 7).map((q): LotItem => ({ k: q.uid, fp: contentKeys(q.latex).i, lop: lopOf.has(q.uid) ? lopOf.get(q.uid)! : q.grade, loai: TYPE_LABEL[q.type], latex: (idlessVariants(q.latex)[0] ?? q.latex).trim() }));
   // đề mẫu cho mỗi Dạng: tối đa 2 câu giáo viên đã xác minh (không lấy câu đối chứng đang nằm trong lô)
@@ -91,7 +98,8 @@ export function buildLot(pool: readonly Question[], o: BuildOpts): { lot: LotFil
   }
   const lot: LotFile = {
     format: LOT_FORMAT, v: 1, lo: o.lo, taoLuc: (o.now ?? new Date()).toISOString(), taxRev: o.taxRev,
-    huongDan: HUONG_DAN,
+    ...(o.recheck ? { kieu: 'kiem-tra-lai' as const } : {}),
+    huongDan: o.recheck ? [HUONG_DAN[0], HUONG_DAN_KIEM_TRA_LAI, ...HUONG_DAN.slice(1)] : HUONG_DAN,
     dang: forms.map(({ id, ma, duong, vd }) => ({ id, ma, duong, vd })),
     cau: items,
   };
@@ -124,18 +132,28 @@ export const SKIP_LABEL: Record<SkipWhy, string> = {
 };
 export interface Accuracy { n: number; chuong: number; bai: number; dang: number; muc: number; sai: { uid: string; dung: string; deXuat: string }[] }
 export interface ImportPlan {
-  /** bản ghi sẽ đặt (câu chưa giáo viên xác minh) */
+  /** bản ghi sẽ đặt (câu chưa giáo viên xác minh; lô Kiểm tra lại: cả câu đã xác minh mà Claude thấy khác) */
   recs: [string, ReviewRec][];
+  /** lô Kiểm tra lại (mã lô bắt đầu bằng K) */
+  recheck: boolean;
+  /** số câu Claude đề xuất mức độ khác mức đang lưu (giáo viên bấm K để dùng) */
+  mucKhac: number;
   dongY: number; khac: number; theoChac: Record<Conf, { dongY: number; khac: number }>;
   skip: Partial<Record<SkipWhy, number>>;
   gold: Accuracy;
 }
 
-/** Lập kế hoạch nhập đề xuất (không ghi gì). `who` là tên AI ghi vào lý do. */
+/**
+ * Lập kế hoạch nhập đề xuất (không ghi gì). `who` là tên AI ghi vào lý do.
+ * Lô thường: câu giáo viên đã xác minh trong lô là câu đối chứng — chỉ để đo. Lô Kiểm tra lại: câu đã xác minh vẫn được đo, và nếu Claude
+ * thấy khác Dạng ⇒ "Cần xem lại" (Dạng đang lưu GIỮ NGUYÊN, giáo viên chọn); khác mức độ ⇒ chỉ thêm mức đề xuất (phím K). Không câu nào bị đổi.
+ * Trạng thái mức độ đã có (giáo viên xác minh / máy) được giữ, không bị nhập đề xuất xoá.
+ */
 export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: TaxIndex; taxRev: string; effOf: (q: Question) => Effective; now?: number }): ImportPlan {
   const byUid = new Map(pool.map((q) => [q.uid, q] as const));
   const seen = new Set<string>();
-  const plan: ImportPlan = { recs: [], dongY: 0, khac: 0, theoChac: { cao: { dongY: 0, khac: 0 }, vua: { dongY: 0, khac: 0 }, thap: { dongY: 0, khac: 0 } }, skip: {}, gold: { n: 0, chuong: 0, bai: 0, dang: 0, muc: 0, sai: [] } };
+  const recheck = isRecheckLot(p.lo);
+  const plan: ImportPlan = { recs: [], recheck, mucKhac: 0, dongY: 0, khac: 0, theoChac: { cao: { dongY: 0, khac: 0 }, vua: { dongY: 0, khac: 0 }, thap: { dongY: 0, khac: 0 } }, skip: {}, gold: { n: 0, chuong: 0, bai: 0, dang: 0, muc: 0, sai: [] } };
   const skip = (w: SkipWhy) => { plan.skip[w] = (plan.skip[w] ?? 0) + 1; };
   const who = p.boi || 'AI ngoài';
   for (const it of p.cau) {
@@ -149,23 +167,35 @@ export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: 
     const e = o.effOf(q);
     const lop = gradeOfEff(q, e); // câu Chưa có ID: lớp chọn khi nhập, chưa rõ ⇒ nhận mọi lớp
     if (lop != null && loc.grade !== lop) { skip('sai-lop'); continue; }
+    const pl = it.muc && it.muc !== q.level ? { propLevel: it.muc } : {}; // mức đề xuất chỉ giữ để giáo viên bấm dùng (phím K), không ghi vào câu
+    if (pl.propLevel) plan.mucKhac++;
+    const why = `${who} (${CONF_LABEL[it.chac]}): ${it.lyDo || 'không ghi lý do'}${pl.propLevel ? ` · đề xuất mức ${it.muc}` : ''}`;
+    const at = o.now ? { at: o.now } : {};
     if (e.form === 'gv' && !e.unclassified) {
-      // câu đối chứng: chỉ để đo, không đổi gì
+      // câu giáo viên đã xác minh: đo độ đúng; lô thường thì không đổi gì
       const g = plan.gold;
       g.n++;
       if (loc.chapterId === q.chapterId) g.chuong++;
       if (loc.lessonId === q.lessonId) g.bai++;
       if (it.dang === q.formId) g.dang++; else g.sai.push({ uid: q.uid, dung: q.formId, deXuat: it.dang });
       if (it.muc && it.muc === q.level) g.muc++;
+      if (!recheck) continue;
+      const rec = e.rec;
+      if (it.dang === q.formId) {
+        plan.dongY++; plan.theoChac[it.chac].dongY++;
+        // đồng ý Dạng: giữ nguyên xác minh, chỉ thêm mức đề xuất nếu khác (mức đề xuất cũ còn treo mà nay đồng ý mức ⇒ bỏ đi)
+        if (rec && (pl.propLevel || rec.propLevel)) plan.recs.push([q.uid, makeRec(q, { form: 'gv', level: e.level, src: rec.src, taxRev: o.taxRev, ...(rec.why ? { why: rec.why } : {}), ...(rec.orig ? { orig: rec.orig } : {}), ...pl, ...at })]);
+        continue;
+      }
+      plan.khac++; plan.theoChac[it.chac].khac++;
+      plan.recs.push([q.uid, makeRec(q, { form: 'xem-lai', level: e.level, src: 'ai-ngoai', taxRev: o.taxRev, why: `Kiểm tra lại · ${why}`, prop: it.dang, ...(rec?.orig ? { orig: rec.orig } : {}), ...pl, ...at })]);
       continue;
     }
-    const why = `${who} (${CONF_LABEL[it.chac]}): ${it.lyDo || 'không ghi lý do'}${it.muc && it.muc !== q.level ? ` · đề xuất mức ${it.muc}` : ''}`;
     const same = it.dang === q.formId && !e.unclassified;
-    const pl = it.muc && it.muc !== q.level ? { propLevel: it.muc } : {}; // mức đề xuất chỉ giữ để giáo viên bấm dùng (phím K), không ghi vào câu
     if (same) { plan.dongY++; plan.theoChac[it.chac].dongY++; } else { plan.khac++; plan.theoChac[it.chac].khac++; }
     plan.recs.push([q.uid, same
-      ? makeRec(q, { form: 'may', src: 'ai-ngoai', taxRev: o.taxRev, why, ...pl, ...(o.now ? { at: o.now } : {}) })
-      : makeRec(q, { form: 'xem-lai', src: 'ai-ngoai', taxRev: o.taxRev, why, prop: it.dang, ...pl, ...keepNoId(e), ...(o.now ? { at: o.now } : {}) })]);
+      ? makeRec(q, { form: 'may', level: e.level, src: 'ai-ngoai', taxRev: o.taxRev, why, ...pl, ...at })
+      : makeRec(q, { form: 'xem-lai', level: e.level, src: 'ai-ngoai', taxRev: o.taxRev, why, prop: it.dang, ...pl, ...keepNoId(e), ...at })]);
   }
   return plan;
 }

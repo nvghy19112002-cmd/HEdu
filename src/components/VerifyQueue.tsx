@@ -7,13 +7,13 @@ import { IdSuggester, CONFIDENCE_LABEL, type Suggestion } from '../lib/idsuggest
 import { indexOf } from '../lib/taxonomy';
 import { taxRevision } from '../lib/taxpath';
 import { getState, setReview, useBank } from '../lib/store';
-import { applyQueueAction, queueUids, SCOPE_LABEL, scopeCounts, scopeOf, undoQueueAction, type QueueAction, type QueueScope, type QueueUndo } from '../lib/verifyqueue';
+import { applyQueueAction, pendingLevel, queueUids, SCOPE_LABEL, scopeCounts, scopeOf, undoQueueAction, type QueueAction, type QueueScope, type QueueUndo } from '../lib/verifyqueue';
 import { LEVEL_LABEL, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 import { useEffectiveOf } from './IdReviewControl';
 import { QuestionView } from './QuestionView';
 import { ReviewControl } from './ReviewControl';
 
-const SCOPES: QueueScope[] = ['tat-ca', 'can-xem', 'chua-phan-loai', 'may', 'chua'];
+const SCOPES: QueueScope[] = ['tat-ca', 'can-xem', 'chua-phan-loai', 'may', 'chua', 'muc-do'];
 const KEYS: [string, string][] = [
   ['Y / Enter', 'Xác nhận Dạng hiện tại'], ['M', 'Xác nhận mức độ đang lưu'], ['K', 'Dùng mức độ đề xuất'], ['N', 'Cần xem lại'], ['1 · 2 · 3', 'Đổi sang Dạng gợi ý 1, 2, 3 (rồi xác nhận)'],
   ['D', 'Chọn Dạng khác trong danh sách'], ['U', 'Hoàn tác'], ['S / →', 'Bỏ qua, sang câu sau'], ['←', 'Về câu trước'], ['L', 'Hiện/ẩn lời giải'], ['?', 'Hiện/ẩn bảng phím'], ['Esc', 'Đóng hàng đợi'],
@@ -56,8 +56,8 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
   const eff = q ? effOf(q) : null;
   // lớp đáng tin: câu Chưa có ID dùng lớp chọn khi nhập (null = chưa rõ ⇒ không gợi ý, cho chọn Dạng mọi lớp), không dùng vị trí giữ chỗ
   const qGrade = q && eff ? gradeOfEff(q, eff) : null;
-  // mức độ AI/máy đề xuất khác mức đang lưu, mức độ chưa được giáo viên xác minh
-  const propLv = q && eff?.rec?.propLevel && eff.rec.propLevel !== q.level && eff.level !== 'gv' ? eff.rec.propLevel : null;
+  // mức độ AI/máy đề xuất khác mức đang lưu, còn chờ giáo viên chọn (kể cả khi mức đang lưu đã xác minh — lô Kiểm tra lại)
+  const propLv = eff && pendingLevel(eff) ? eff.rec!.propLevel! : null;
 
   // gợi ý tham khảo: dựng MỘT lần khi mở (kho đổi theo từng thao tác nhưng gợi ý cũ vẫn đủ để tham khảo)
   const sug = useRef<{ tax: typeof tax; s: IdSuggester } | null>(null);
@@ -135,7 +135,7 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
               {SCOPES.map((s) => <option key={s} value={s}>{SCOPE_LABEL[s]} ({counts[s]})</option>)}
             </select>
           </label>
-          <span className="sys-hint" aria-live="polite">{uids.length ? `Câu ${Math.min(idx + 1, uids.length)}/${uids.length} · đã xử lý ${done} · còn ${remaining} chưa xác minh Dạng` : 'Không còn câu nào trong nhóm này.'}</span>
+          <span className="sys-hint" aria-live="polite">{uids.length ? `Câu ${Math.min(idx + 1, uids.length)}/${uids.length} · đã xử lý ${done} · còn ${remaining} câu chưa xong` : 'Không còn câu nào trong nhóm này.'}</span>
           <span className="vq-acts">
             <button type="button" className="btn btn-sm" onClick={() => setHelp((v) => !v)}>Phím tắt (?)</button>
             <button type="button" className="btn btn-sm" onClick={onClose}>Đóng (Esc)</button>
@@ -202,7 +202,7 @@ export function VerifyQueue({ pool, onClose }: { pool: readonly Question[]; onCl
               </div>
               <div className="vq-actions">
                 <button type="button" className="btn btn-accent" disabled={busy || eff.form === 'gv' || eff.unclassified} title={eff.unclassified ? 'Câu chưa có ID: chọn Dạng ở trên' : undefined} onClick={() => void run({ kind: 'xac-nhan-dang' }, true)}><kbd>Y</kbd> Xác nhận Dạng</button>
-                <button type="button" className="btn" disabled={busy || eff.level === 'gv'} onClick={() => void run({ kind: 'xac-nhan-muc-do' }, false)}><kbd>M</kbd> Xác nhận mức độ ({LEVEL_LABEL[q.level]})</button>
+                <button type="button" className="btn" disabled={busy || (eff.level === 'gv' && !propLv)} title={propLv ? 'Giữ mức đang lưu, bỏ mức đề xuất' : undefined} onClick={() => void run({ kind: 'xac-nhan-muc-do' }, false)}><kbd>M</kbd> Xác nhận mức độ ({LEVEL_LABEL[q.level]})</button>
                 <button type="button" className="btn" disabled={busy || eff.form === 'xem-lai'} onClick={() => void run({ kind: 'can-xem-lai' }, true)}><kbd>N</kbd> Cần xem lại</button>
                 <button type="button" className="btn" disabled={busy || undo.length === 0} onClick={() => void doUndo()}><kbd>U</kbd> Hoàn tác</button>
                 <button type="button" className="btn" disabled={idx >= uids.length - 1} onClick={() => { setIdx((i) => i + 1); setMsg(null); }}><kbd>S</kbd> Bỏ qua</button>

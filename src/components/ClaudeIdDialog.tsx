@@ -3,7 +3,7 @@
 // vào hàng đợi Xác minh. Không câu nào bị đổi Dạng/ID ở đây.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  buildLot, CONF_LABEL, latestPending, LOT_STATE_LABEL, lotFileName, lotRows, parseProposal, pct, planImport, SKIP_LABEL,
+  buildLot, CONF_LABEL, RECHECK_PREFIX, latestPending, LOT_STATE_LABEL, lotFileName, lotRows, parseProposal, pct, planImport, SKIP_LABEL,
   type ImportPlan, type LotRow, type ProposalFile, type SkipWhy, type XFile,
 } from '../lib/claudeid';
 import { commitRecs, type Effective } from '../lib/idreview';
@@ -39,6 +39,8 @@ export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQu
   const taxRev = useMemo(() => taxRevision(tax), [tax]);
   const [size, setSize] = useState(300);
   const [gold, setGold] = useState(true);
+  // Kiểm tra lại: xuất MỌI câu đang lọc (kể cả câu đã xác minh) để Claude soát lại Dạng và mức độ; câu vẫn nằm nguyên trong ngân hàng
+  const [recheck, setRecheck] = useState(false);
   const [dir, setDir] = useState<string>(() => load(DIR_KEY) ?? '');
   const [files, setFiles] = useState<XFile[]>([]);
   const [done, setDone] = useState<Set<string>>(() => { try { return new Set(JSON.parse(load(DONE_KEY) ?? '[]') as string[]); } catch { return new Set(); } });
@@ -69,8 +71,8 @@ export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQu
     setErr(null);
     const d = new Date();
     const p2 = (x: number) => String(x).padStart(2, '0');
-    const lo = `L${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
-    const { lot, need: n, gold: g } = buildLot(pool, { tax, ix, taxRev, effOf, size, goldShare: gold ? 0.1 : 0, lo, seed: d.getTime() % 100000 });
+    const lo = `${recheck ? RECHECK_PREFIX : 'L'}${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+    const { lot, need: n, gold: g } = buildLot(pool, { tax, ix, taxRev, effOf, size, goldShare: gold ? 0.1 : 0, lo, seed: d.getTime() % 100000, recheck });
     const text = JSON.stringify(lot, null, 1);
     try {
       if (desktop && dir) {
@@ -79,7 +81,7 @@ export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQu
       } else {
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = lotFileName(lo); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       }
-      toast(`Đã xuất lô ${lo}: ${nf.format(n)} câu cần gán${g ? ` + ${nf.format(g)} câu đối chứng` : ''}. Nhắn Claude: “làm lô mới nhất”.`);
+      toast(`Đã xuất lô ${lo}: ${nf.format(n)} câu ${recheck ? 'cần kiểm tra lại' : 'cần gán'}${g ? ` + ${nf.format(g)} câu đối chứng` : ''}. Nhắn Claude: “làm lô mới nhất”.`);
     } catch (e) { setErr(msg(e)); }
   };
 
@@ -123,15 +125,17 @@ export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQu
           )}
 
           <section className="cid-step">
-            <b>1 · Xuất lô cần gán ID</b>
+            <b>1 · Xuất lô {recheck ? 'kiểm tra lại' : 'cần gán ID'}</b>
             <span className="xl-meta">Lấy từ {nf.format(pool.length)} câu đang lọc: {nf.format(need)} câu chưa được giáo viên xác minh Dạng (ưu tiên câu “Cần xem lại”), {nf.format(verified)} câu đã xác minh.</span>
+            <label className="sw"><input type="checkbox" checked={recheck} onChange={(e) => setRecheck(e.target.checked)} /> Kiểm tra lại cả câu đã xác minh (Claude soát Dạng và mức độ của mọi câu đang lọc; câu không bị xoá hay đổi)</label>
             <div className="cid-row">
               <label className="sm-n">Số câu mỗi lô
                 <select className="sel" value={size} onChange={(e) => setSize(Number(e.target.value))}>{SIZES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
               </label>
-              <label className="sw"><input type="checkbox" checked={gold} disabled={verified === 0} onChange={(e) => setGold(e.target.checked)} /> Trộn ngầm ~10% câu đã xác minh để đo độ đúng</label>
-              <button type="button" className="btn btn-accent btn-sm" disabled={need === 0} onClick={() => void exportLot()}>Xuất lô</button>
+              <label className="sw"><input type="checkbox" checked={gold && !recheck} disabled={verified === 0 || recheck} onChange={(e) => setGold(e.target.checked)} /> Trộn ngầm ~10% câu đã xác minh để đo độ đúng</label>
+              <button type="button" className="btn btn-accent btn-sm" disabled={recheck ? pool.length === 0 : need === 0} onClick={() => void exportLot()}>Xuất lô</button>
             </div>
+            {recheck && pool.length > size && <span className="xl-meta">Đang lọc {nf.format(pool.length)} câu, lô chỉ lấy {nf.format(size)} câu đầu. Hãy chọn mục nhỏ hơn trong Cây mục lục (từng Bài hoặc Dạng) để kiểm hết.</span>}
             <span className="xl-meta">Rồi nhắn Claude trong cuộc trò chuyện: <b>“làm lô mới nhất”</b>. Claude đọc lô trong thư mục trên và ghi tệp đề xuất vào cùng chỗ; danh sách bên dưới tự cập nhật.</span>
           </section>
 
@@ -159,13 +163,14 @@ export function ClaudeIdDialog({ pool, all, tax, effOf, toast, onClose, onOpenQu
             {P && g && (
               <div className="cid-sum">
                 <div className={`note ${g.n >= 10 ? (g.dang / g.n >= 0.9 ? 'ok' : 'warn') : 'warn'}`}><div className="note-body">
-                  <b>{g.n ? `Độ đúng trên ${nf.format(g.n)} câu đối chứng: Dạng ${pct(g.dang, g.n)} · Bài ${pct(g.bai, g.n)} · Chương ${pct(g.chuong, g.n)} · Mức độ ${pct(g.muc, g.n)}` : 'Lô này không có câu đối chứng nên chưa đo được độ đúng.'}</b>
+                  <b>{g.n ? `Độ đúng trên ${nf.format(g.n)} câu ${P.recheck ? 'thầy/cô đã xác minh' : 'đối chứng'}: Dạng ${pct(g.dang, g.n)} · Bài ${pct(g.bai, g.n)} · Chương ${pct(g.chuong, g.n)} · Mức độ ${pct(g.muc, g.n)}` : 'Lô này không có câu đối chứng nên chưa đo được độ đúng.'}</b>
                   {g.n > 0 && g.n < 10 && <span>Ít câu đối chứng nên tỉ lệ chưa đáng tin; nên xác minh tay thêm câu rồi xuất lô có đối chứng.</span>}
                   {g.sai.slice(0, 5).map((s) => <span key={s.uid} className="xl-meta">Sai: đúng là {where(s.dung)} — Claude chọn {where(s.deXuat)}</span>)}
                 </div></div>
                 <ul className="xl-lines">
-                  <li><b>{nf.format(P.dongY)}</b> câu Claude đồng ý Dạng đang lưu → “Máy phân loại” (nguồn AI ngoài)</li>
-                  <li><b>{nf.format(P.khac)}</b> câu Claude đề xuất Dạng khác → “Cần xem lại”, thầy/cô bấm <kbd>P</kbd> “Dùng Dạng đề xuất” trong hàng đợi</li>
+                  <li><b>{nf.format(P.dongY)}</b> câu Claude đồng ý Dạng đang lưu → {P.recheck ? 'câu đã xác minh giữ nguyên, câu chưa xác minh thành' : ''} “Máy phân loại” (nguồn AI ngoài)</li>
+                  <li><b>{nf.format(P.khac)}</b> câu Claude đề xuất Dạng khác → “Cần xem lại” (Dạng đang lưu giữ nguyên), thầy/cô bấm <kbd>P</kbd> “Dùng Dạng đề xuất” hoặc <kbd>Y</kbd> giữ Dạng cũ trong hàng đợi</li>
+                  {P.mucKhac > 0 && <li><b>{nf.format(P.mucKhac)}</b> câu Claude đề xuất mức độ khác → thầy/cô bấm <kbd>K</kbd> “Dùng mức đề xuất” hoặc <kbd>M</kbd> giữ mức cũ</li>}
                   {(['cao', 'vua', 'thap'] as const).map((c) => P.theoChac[c].dongY + P.theoChac[c].khac > 0 && <li key={c} className="xl-meta">{CONF_LABEL[c]}: {nf.format(P.theoChac[c].dongY)} đồng ý · {nf.format(P.theoChac[c].khac)} khác</li>)}
                   {(Object.keys(P.skip) as SkipWhy[]).map((k) => <li key={k} className="xl-meta">Bỏ qua {nf.format(P.skip[k] ?? 0)}: {SKIP_LABEL[k]}</li>)}
                 </ul>

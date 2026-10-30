@@ -10,20 +10,23 @@ import type { TaxIndex } from './taxonomy';
 import { checkLocation, locationOfForm } from './taxpath';
 import { LEVEL_LABEL, LEVELS, type Level, type Location, type Question, type Taxonomy } from './types';
 
-/** Nhóm cần xử lý trong hàng đợi, theo thứ tự ưu tiên: cần xem lại → chưa phân loại → máy phân loại → chưa xác minh. */
-export type QueueScope = 'can-xem' | 'chua-phan-loai' | 'may' | 'chua' | 'tat-ca';
+/** Nhóm cần xử lý trong hàng đợi, theo thứ tự ưu tiên: cần xem lại → chưa phân loại → máy phân loại → chưa xác minh → mức độ cần xem. */
+export type QueueScope = 'can-xem' | 'chua-phan-loai' | 'may' | 'chua' | 'muc-do' | 'tat-ca';
 export const SCOPE_LABEL: Record<QueueScope, string> = {
   'can-xem': 'Cần xem lại',
   'chua-phan-loai': 'Chưa có ID',
   may: 'Máy phân loại',
   chua: 'Chưa xác minh',
+  'muc-do': 'Mức độ cần xem (Dạng đã xác minh)',
   'tat-ca': 'Tất cả chưa được giáo viên xác minh',
 };
-const RANK = (e: Effective): number => (e.form === 'xem-lai' ? 0 : e.unclassified ? 1 : e.form === 'may' ? 2 : e.form === 'chua' ? 3 : 9);
+/** Mức độ AI/máy đề xuất còn chờ giáo viên chọn (khác mức đang lưu). */
+export const pendingLevel = (e: Effective): boolean => !!e.rec?.propLevel && e.rec.propLevel !== e.rec.level0;
+const RANK = (e: Effective): number => (e.form === 'xem-lai' ? 0 : e.unclassified ? 1 : e.form === 'may' ? 2 : e.form === 'chua' ? 3 : pendingLevel(e) ? 4 : 9);
 
-/** Câu thuộc nhóm nào (một câu chỉ thuộc một nhóm). Câu đã giáo viên xác minh Dạng không vào hàng đợi. */
+/** Câu thuộc nhóm nào (một câu chỉ thuộc một nhóm). Câu đã giáo viên xác minh Dạng chỉ vào hàng đợi khi còn mức độ đề xuất chờ chọn. */
 export function scopeOf(e: Effective): Exclude<QueueScope, 'tat-ca'> | null {
-  if (e.form === 'gv' && !e.unclassified) return null;
+  if (e.form === 'gv' && !e.unclassified) return pendingLevel(e) ? 'muc-do' : null;
   if (e.form === 'xem-lai') return 'can-xem';
   if (e.unclassified) return 'chua-phan-loai';
   return e.form === 'may' ? 'may' : 'chua';
@@ -39,7 +42,7 @@ export interface QueueCtx { tax: Taxonomy; ix: TaxIndex; taxRev: string }
 
 /** Đếm theo nhóm (để hiện số trên bộ chọn nhóm). */
 export function scopeCounts(pool: readonly Question[], effOf: (q: Question) => Effective): Record<QueueScope, number> {
-  const c: Record<QueueScope, number> = { 'can-xem': 0, 'chua-phan-loai': 0, may: 0, chua: 0, 'tat-ca': 0 };
+  const c: Record<QueueScope, number> = { 'can-xem': 0, 'chua-phan-loai': 0, may: 0, chua: 0, 'muc-do': 0, 'tat-ca': 0 };
   for (const q of pool) { const s = scopeOf(effOf(q)); if (s) { c[s]++; c['tat-ca']++; } }
   return c;
 }
@@ -76,12 +79,12 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
   if (seenLatex !== undefined && q.latex !== seenLatex) return { ok: false, message: 'Câu vừa được sửa ở nơi khác nên chưa đổi gì. Hãy xem lại câu rồi thử lại.' };
   const prevRec = getRec(uid);
   const eff = effectiveOf(q, prevRec, { ix: ctx.ix, taxRev: ctx.taxRev });
-  const mk = (qq: Question, o: { form: FormState; level: Effective['level']; src: 'tay'; noId?: boolean; why?: string }) =>
+  const mk = (qq: Question, o: { form: FormState; level: Effective['level']; src: 'tay'; noId?: boolean; why?: string; levelAction?: boolean }) =>
     makeRec(qq, {
       form: o.form, level: o.level, src: o.src, taxRev: ctx.taxRev, ...(o.noId ? keepNoId(eff) : {}), ...(o.why ? { why: o.why } : {}), ...(prevRec?.orig ? { orig: prevRec.orig } : {}),
-      // đề xuất còn chờ giáo viên chọn thì giữ lại: Dạng đề xuất khi trạng thái Dạng không đổi, mức đề xuất khi mức độ chưa được xác minh
+      // đề xuất còn chờ giáo viên chọn thì giữ lại: Dạng đề xuất khi trạng thái Dạng không đổi, mức đề xuất cho tới khi giáo viên chọn mức (M/K)
       ...(prevRec?.prop && o.form === eff.form && o.form !== 'gv' ? { prop: prevRec.prop } : {}),
-      ...(prevRec?.propLevel && o.level !== 'gv' ? { propLevel: prevRec.propLevel } : {}),
+      ...(prevRec?.propLevel && !o.levelAction ? { propLevel: prevRec.propLevel } : {}),
     });
   /** Đổi câu (vị trí/mức độ/LaTeX) rồi ghi trạng thái — cả hai hoặc không gì: ghi trạng thái lỗi ⇒ trả câu về như cũ. */
   const changeThenRecord = async (patch: Partial<Question>, rec: (nq: Question) => ReviewRec, okMsg: string): Promise<QueueResult> => {
@@ -112,7 +115,7 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
     return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh Dạng' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   if (action.kind === 'xac-nhan-muc-do') {
-    const saved = await commitRecs([[uid, mk(q, { form: eff.form, level: 'gv', src: 'tay', noId: true, ...(eff.why ? { why: eff.why } : {}) })]]);
+    const saved = await commitRecs([[uid, mk(q, { form: eff.form, level: 'gv', src: 'tay', noId: true, levelAction: true, ...(eff.why ? { why: eff.why } : {}) })]]);
     return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh mức độ' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
   }
   if (action.kind === 'can-xem-lai') {
@@ -122,7 +125,7 @@ export async function applyQueueAction(uid: string, action: QueueAction, ctx: Qu
   if (action.kind === 'dung-muc') {
     if (!LEVELS.includes(action.level)) return { ok: false, message: 'Mức độ đề xuất không hợp lệ.' };
     const lv = action.level;
-    const keep = (nq: Question) => mk(nq, { form: eff.form, level: 'gv', src: 'tay', noId: true, ...(eff.why ? { why: eff.why } : {}) });
+    const keep = (nq: Question) => mk(nq, { form: eff.form, level: 'gv', src: 'tay', noId: true, levelAction: true, ...(eff.why ? { why: eff.why } : {}) });
     if (lv === q.level) {
       const saved = await commitRecs([[uid, keep(q)]]);
       return saved ? { ok: true, undo: { uid, prevRec }, message: 'Đã xác minh mức độ' } : { ok: false, message: 'Chưa ghi được xuống đĩa nên CHƯA đổi gì. Hãy kiểm tra ổ đĩa rồi thử lại.' };
