@@ -1,7 +1,7 @@
 // Cây mục lục kiểu thư mục cho màn Ngân hàng: "Tất cả", Lớp → (Phân môn) → Chương → Bài → Dạng, mỗi mục có số câu;
 // ô "Tìm thư mục…" (không dấu, theo tên hoặc mã); mặc định ẩn mục chưa có câu. Chọn một mục = lọc theo mục đó.
 // Mục gốc "Chưa có ID" (ngang hàng "Tất cả"): câu chưa được đặt vào Dạng nào, chia con theo lớp giáo viên chọn khi nhập.
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { NOID_UNKNOWN, type NoIdPick } from '../lib/bankfilter';
 import { fullTree, pathKeys, selectedKey, visibleTree, type NodePath, type TreeNode } from '../lib/banktree';
 import type { Taxonomy } from '../lib/types';
@@ -14,6 +14,35 @@ function loadOpen(): Set<string> {
 }
 function saveOpen(s: Set<string>) {
   try { localStorage.setItem(OPEN_KEY, JSON.stringify([...s].slice(0, 2000))); } catch { /* chỉ là tiện lợi */ }
+}
+
+/** Phím mũi tên trong cây (chuẩn cây thư mục): ↑↓ đi giữa các mục đang hiện, → mở/vào mục con, ← thu gọn/về mục cha, Home/End. Enter/Space = chọn. */
+function treeKeys(e: KeyboardEvent<HTMLUListElement>) {
+  const cur = e.target as HTMLElement;
+  if (!cur.classList.contains('bt-name')) return;
+  const names = [...e.currentTarget.querySelectorAll<HTMLElement>('.bt-name')];
+  const i = names.indexOf(cur);
+  const li = cur.closest('li[role="treeitem"]');
+  const caret = li?.querySelector<HTMLButtonElement>(':scope > .bt-row > button.bt-caret');
+  const expanded = li?.getAttribute('aria-expanded');
+  let to: HTMLElement | null | undefined = null;
+  switch (e.key) {
+    case 'ArrowDown': to = names[i + 1]; break;
+    case 'ArrowUp': to = names[i - 1]; break;
+    case 'Home': to = names[0]; break;
+    case 'End': to = names[names.length - 1]; break;
+    case 'ArrowRight':
+      if (expanded === 'false') caret?.click();
+      else if (expanded === 'true') to = li?.querySelector<HTMLElement>(':scope > ul .bt-name');
+      break;
+    case 'ArrowLeft':
+      if (expanded === 'true' && caret) caret.click();
+      else to = li?.parentElement?.closest('li[role="treeitem"]')?.querySelector<HTMLElement>(':scope > .bt-row > .bt-name');
+      break;
+    default: return;
+  }
+  e.preventDefault();
+  to?.focus();
 }
 
 const Folder = ({ open }: { open: boolean }) => (
@@ -59,6 +88,16 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
   const tree = useMemo(() => fullTree(tax, counts), [tax, counts]);
   const shown = useMemo(() => visibleTree(tree, { query, showEmpty, selected: sel, selectedPath: onPath }), [tree, query, showEmpty, sel, onPath]);
   const searching = !!query.trim();
+  // mục đang chọn (kể cả chọn từ nơi khác) luôn nằm trong vùng nhìn thấy của cây; chỉ cuộn cây, không cuộn cả trang
+  const treeRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    const box = treeRef.current;
+    const el = box?.querySelector<HTMLElement>('.bt-row.is-sel');
+    if (!box || !el) return;
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
+    else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8;
+  }, [sel, noSel]);
   const toggle = (k: string) => setOpen((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); saveOpen(n); return n; });
 
   const row = (x: TreeNode, depth: number) => {
@@ -67,7 +106,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
     const isSel = sel === x.key;
     return (
       <li key={x.key} role="treeitem" aria-level={depth + 1} aria-selected={isSel} aria-expanded={has ? isOpen : undefined}>
-        <div className={`bt-row k-${x.kind}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 4 + depth * 12 }}>
+        <div className={`bt-row k-${x.kind}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 4 + depth * 14 }}>
           {has
             ? <button type="button" className="bt-caret" aria-label={isOpen ? `Thu gọn ${x.label}` : `Mở ${x.label}`} tabIndex={-1} onClick={() => toggle(x.key)}><svg className={isOpen ? 'is-open' : undefined} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
             : <span className="bt-caret" aria-hidden="true" />}
@@ -77,7 +116,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
             <span className="bt-n">{nf.format(x.count)}</span>
           </button>
         </div>
-        {isOpen && <ul role="group" style={{ ["--guide" as string]: `${14 + depth * 12}px` }}>{x.children.map((c) => row(c, depth + 1))}</ul>}
+        {isOpen && <ul role="group" style={{ ["--guide" as string]: `${15 + depth * 14}px` }}>{x.children.map((c) => row(c, depth + 1))}</ul>}
       </li>
     );
   };
@@ -89,7 +128,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
         <span className="sr-only">Tìm thư mục</span>
         <input type="search" placeholder="Tìm thư mục…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
-      <ul className="bt-tree" role="tree" aria-label="Cây mục lục">
+      <ul ref={treeRef} className="bt-tree" role="tree" aria-label="Cây mục lục" onKeyDown={treeKeys}>
         <li role="treeitem" aria-level={1} aria-selected={sel === null && noSel == null}>
           <div className={`bt-row k-all${sel === null && noSel == null ? ' is-sel' : ''}`}>
             <button type="button" className="bt-name" onClick={() => onPick(null)}><Layers /><span className="bt-label">Tất cả</span><span className="bt-n">{nf.format(total)}</span></button>
@@ -106,7 +145,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
                 <button type="button" className="bt-name" title="Câu chưa được đặt vào Dạng nào: không có ID, không tính vào số câu của Chương/Bài/Dạng" onClick={() => noId.onPick('all')}><Inbox /><span className="bt-label">Chưa có ID</span><span className="bt-n">{nf.format(noId.total)}</span></button>
               </div>
               {list.length > 0 && (
-                <ul role="group" style={{ ["--guide" as string]: '14px' }}>
+                <ul role="group" style={{ ["--guide" as string]: '15px' }}>
                   {list.map(([g, label, n]) => (
                     <li key={g} role="treeitem" aria-level={2} aria-selected={noSel === g}>
                       <div className={`bt-row k-noid-sub${noSel === g ? ' is-sel' : ''}`} style={{ paddingLeft: 16 }}>

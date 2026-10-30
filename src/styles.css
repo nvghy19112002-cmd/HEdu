@@ -916,6 +916,9 @@ a { color: var(--accent); }
 .fs-top h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 .fs-scroll { overflow: auto; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; min-height: 0; flex: 1 1 auto; }
 .fs-block { display: flex; flex-direction: column; gap: 6px; }
+/* khung chỉ có cây mục lục: cây tự cuộn bên trong, khung không cuộn */
+.fs-scroll.is-tree { overflow: hidden; }
+.fs-scroll.is-tree > .fs-block { flex: 1 1 auto; min-height: 0; }
 .fs-block.is-off > :not(.fs-sec):not(.fs-note) { opacity: .45; pointer-events: none; }
 .fs-sec { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .fs-sec span { white-space: nowrap; }
@@ -1491,21 +1494,23 @@ a { color: var(--accent); }
 }
 
 /* Ngân hàng: cây mục lục kiểu thư mục */
-.bt { display: flex; flex-direction: column; gap: 8px; }
+.bt { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; }
 .bt.is-off .bt-tree { opacity: .55; }
 .bt-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink-3); }
 .bt-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13.5px; color: var(--ink); }
 .bt-search:focus-within { border-color: var(--ink-2); }
 .bt-tree, .bt-tree ul { list-style: none; margin: 0; padding: 0; }
-.bt-tree { max-height: min(62vh, 720px); overflow: auto; margin: 0 -6px; padding: 0 6px 4px; }
-.bt-row { display: flex; align-items: flex-start; gap: 2px; border-radius: 8px; }
+/* cây là vùng cuộn duy nhất, cao theo khung bên (hết khoảng trống dưới); ô tìm ở trên và ô "Hiện cả mục chưa có câu" ở dưới luôn đứng yên */
+.bt-tree { flex: 1 1 auto; min-height: 120px; overflow: auto; overscroll-behavior: contain; scroll-padding: 8px 0; margin: 0 -6px; padding: 2px 6px 6px; }
+.bt-row { display: flex; align-items: flex-start; gap: 2px; border-radius: 8px; transition: background-color .12s; }
 .bt-row:hover { background: var(--paper-2); }
+.bt-row:has(> .bt-name:focus-visible) { background: var(--paper-2); }
 .bt-row.is-sel { background: color-mix(in srgb, var(--accent) 16%, var(--paper)); }
 .bt-row.is-sel .bt-label { font-weight: 700; }
-.bt-caret { flex: none; width: 20px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--ink-3); font-size: 15px; cursor: pointer; border-radius: 6px; }
+.bt-caret { flex: none; width: 22px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--ink-3); font-size: 15px; cursor: pointer; border-radius: 6px; }
 span.bt-caret { cursor: default; }
 .bt-caret:hover { color: var(--ink); }
-.bt-name { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 8px; padding: 6px 6px 6px 2px; border: 0; background: none; text-align: left; font: inherit; font-size: 13.5px; line-height: 1.4; color: var(--ink); cursor: pointer; border-radius: 6px; }
+.bt-name { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 8px; padding: 8px 8px 8px 2px; border: 0; background: none; text-align: left; font: inherit; font-size: 13.5px; line-height: 1.4; color: var(--ink); cursor: pointer; border-radius: 6px; }
 .bt-name:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
 .bt-ico { flex: none; margin-top: 1px; color: #E0A93B; }
 .k-all .bt-ico { color: var(--accent); }
@@ -1523,7 +1528,7 @@ span.bt-caret { cursor: default; }
 .k-noid .bt-n { color: var(--warn-ink); font-weight: 700; }
 .bt-row.is-empty .bt-label, .bt-row.is-empty .bt-n { color: var(--ink-3); }
 .bt-none { padding: 8px; font-size: 13px; color: var(--ink-3); }
-.bt-empty-sw { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.bt-empty-sw { flex: none; display: inline-flex; gap: 6px; align-items: center; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
 
 /* Ngân hàng: thanh thống kê hai hàng (tên / số câu) — gọn một dòng, bấm để lọc */
 .qstats { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); overflow-x: auto; }
