@@ -98,5 +98,40 @@ console.log('Câu Chưa có ID (vị trí giữ chỗ Lớp 12, thật ra là c�
   const pl2 = planImport({ ...P, cau: [{ ...P.cau[0], dang: f11.id }] }, p2, { ix, taxRev, effOf: effN, now: 1 });
   ok(pl2.skip['sai-lop'] === 1, 'đã biết lớp 10 ⇒ Dạng lớp 11 vẫn bị loại "sai-lop"');
 }
+console.log('Kiểm tra lại (lô K…): soát cả câu đã xác minh, không đổi câu');
+{
+  const rq = [q(A), q(A), q(B), q(C)]; // v1: đã xác minh Dạng + mức; v2: đã xác minh Dạng; v3: máy phân loại, mức đã xác minh; v4: chưa xác minh
+  const [v1, v2, v3, v4] = rq;
+  const recs = new Map([
+    [v1.uid, makeRec(v1, { form: 'gv', level: 'gv', src: 'tay', taxRev, why: 'Giáo viên xác nhận Dạng' })],
+    [v2.uid, makeRec(v2, { form: 'gv', src: 'tay', taxRev })],
+    [v3.uid, makeRec(v3, { form: 'may', level: 'gv', src: 'ai-ngoai', taxRev })],
+  ]);
+  const effR = (x: Question): Effective => { const r = recs.get(x.uid); return r ? { form: r.form, level: r.level, unclassified: false, src: r.src, ...(r.why ? { why: r.why } : {}), rec: r } : { form: 'chua', level: 'chua', unclassified: false }; };
+  const { lot: kl, need: kn, gold: kg } = buildLot(rq, { tax, ix, taxRev, effOf: effR, size: 300, goldShare: 0.1, lo: 'K001', seed: 1, recheck: true });
+  ok(kn === 4 && kg === 0 && kl.cau.length === 4 && kl.kieu === 'kiem-tra-lai', 'lô kiểm tra lại gồm MỌI câu đang lọc (kể cả đã xác minh), không trộn đối chứng');
+  ok(kl.huongDan.some((x) => x.includes('KIỂM TRA LẠI')) && kl.cau.every((x) => !/%\[/.test(x.latex)), 'hướng dẫn nói rõ kiểu lô; đề vẫn bỏ ID cũ');
+  const fpR = (x: Question) => contentKeys(x.latex).i;
+  const kp: ProposalFile = { format: PROPOSAL_FORMAT, v: 1, lo: 'K001', boi: 'Claude', cau: [
+    { k: v1.uid, fp: fpR(v1), dang: A.f.id, muc: 'VD', chac: 'cao', lyDo: 'đúng Dạng, mức cao hơn' }, // đồng ý Dạng, khác mức
+    { k: v2.uid, fp: fpR(v2), dang: B.f.id, muc: 'TH', chac: 'vua', lyDo: 'Dạng khác' },              // khác Dạng
+    { k: v3.uid, fp: fpR(v3), dang: B.f.id, muc: 'TH', chac: 'cao', lyDo: '' },                       // đồng ý hết
+    { k: v4.uid, fp: fpR(v4), dang: C.f.id, muc: 'NB', chac: 'cao', lyDo: '' },                       // chưa xác minh, đồng ý Dạng
+  ] };
+  const kpl = planImport(kp, rq, { ix, taxRev, effOf: effR, now: 2 });
+  const get = (x: Question) => kpl.recs.find(([u]) => u === x.uid)?.[1];
+  ok(kpl.recheck && kpl.gold.n === 2 && kpl.gold.dang === 1 && kpl.gold.muc === 1, 'vẫn đo độ đúng trên câu đã xác minh');
+  const r1 = get(v1)!, r2 = get(v2)!;
+  ok(r1.form === 'gv' && r1.level === 'gv' && r1.src === 'tay' && r1.propLevel === 'VD' && r1.level0 === 'TH', 'đồng ý Dạng, khác mức ⇒ GIỮ xác minh, chỉ thêm mức đề xuất');
+  ok(r2.form === 'xem-lai' && r2.prop === B.f.id && r2.formId === A.f.id && /Kiểm tra lại/.test(r2.why ?? ''), 'khác Dạng ⇒ Cần xem lại kèm Dạng đề xuất, Dạng đang lưu giữ nguyên');
+  ok(get(v3)?.form === 'may' && get(v3)?.level === 'gv' && get(v3)?.propLevel === undefined, 'máy phân loại, đồng ý cả Dạng lẫn mức ⇒ vẫn máy phân loại, giữ mức đã xác minh');
+  ok(get(v4)?.form === 'may' && get(v4)?.propLevel === 'NB', 'câu chưa xác minh xử lý như lô thường');
+  ok(kpl.mucKhac === 2 && kpl.dongY === 3 && kpl.khac === 1, 'đếm: 2 câu khác mức, 3 đồng ý Dạng, 1 khác Dạng');
+  // lô thường: câu máy phân loại đã xác minh mức độ giữ trạng thái mức khi nhập đề xuất
+  const np = planImport({ ...kp, lo: 'L002', cau: [{ ...kp.cau[2], dang: C.f.id }] }, rq, { ix, taxRev, effOf: effR, now: 3 });
+  ok(!np.recheck && np.recs[0][1].level === 'gv' && np.recs[0][1].form === 'xem-lai', 'nhập đề xuất không xoá mức độ giáo viên đã xác minh');
+  const np2 = planImport({ ...kp, lo: 'L003' }, rq, { ix, taxRev, effOf: effR, now: 3 });
+  ok(np2.recs.every(([u]) => u !== v1.uid && u !== v2.uid), 'lô thường: câu đã xác minh Dạng chỉ là đối chứng, không bị đặt bản ghi');
+}
 if (fail) { console.log(`\n${fail} kiểm thử claudeid lỗi`); process.exit(1); }
 console.log('claudeid: đạt hết.');

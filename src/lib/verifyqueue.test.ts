@@ -274,5 +274,20 @@ console.log('Dùng mức độ đề xuất (phím K)');
   ok(!(await applyQueueAction(w.uid, { kind: 'dung-muc', level: 'XX' as Level }, ctx)).ok, 'mức độ lạ bị từ chối');
 }
 
+console.log('Mức độ đề xuất cho câu đã xác minh (lô Kiểm tra lại)');
+{
+  const w = fresh1('kiem-tra-lai');
+  putRecs([[w.uid, makeRec(w, { form: 'gv', level: 'gv', src: 'tay', taxRev: rev, propLevel: 'VDC' })]]);
+  ok(scopeOf(eff(cur(w.uid))) === 'muc-do' && queueUids([cur(w.uid)], eff, 'tat-ca').length === 1, 'Dạng đã xác minh nhưng còn mức đề xuất ⇒ vào nhóm "Mức độ cần xem"');
+  const m = await applyQueueAction(w.uid, { kind: 'xac-nhan-muc-do' }, ctx);
+  ok(m.ok && cur(w.uid).level === 'TH' && getRec(w.uid)!.propLevel === undefined && scopeOf(eff(cur(w.uid))) === null, 'M = giữ mức cũ, bỏ mức đề xuất, rời hàng đợi');
+  await undoQueueAction(mustUndo(m));
+  const y = await applyQueueAction(w.uid, { kind: 'can-xem-lai' }, ctx);
+  ok(y.ok && getRec(w.uid)!.propLevel === 'VDC', 'thao tác về Dạng không làm mất mức đề xuất đang chờ');
+  await undoQueueAction(mustUndo(y));
+  const k = await applyQueueAction(w.uid, { kind: 'dung-muc', level: 'VDC' }, ctx);
+  ok(k.ok && cur(w.uid).level === 'VDC' && eff(cur(w.uid)).form === 'gv' && scopeOf(eff(cur(w.uid))) === null, 'K = đổi mức, Dạng vẫn giáo viên xác minh, rời hàng đợi');
+}
+
 if (fail) process.exit(1);
 console.log('verifyqueue: đạt hết.');

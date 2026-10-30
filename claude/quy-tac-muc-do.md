@@ -34,4 +34,8 @@ Chủ dự án duyệt ngày 30/10/2026. Áp dụng cho mọi đường đề xu
 - Tệp lô Gán ID có các dòng hướng dẫn mức độ trong `huongDan` (`src/lib/claudeid.ts`, `HUONG_DAN`).
 - Khi nhập đề xuất, mức đề xuất khác mức đang lưu được giữ ở `ReviewRec.propLevel` (tệp phụ `id-review`, không đổi schema).
 - Hàng đợi Xác minh: phím **K** "Dùng mức đề xuất" đổi mức độ của câu (câu đã có ID thì ghi lại chữ mức độ trong `%[ID]`, cả hai hoặc không gì cả), rồi đặt Mức độ = "giáo viên xác minh". Có Hoàn tác (U).
-- Dò lại mức độ cả ngân hàng: dùng lại đường xuất lô / nhập đề xuất. Không bao giờ tự ghi mức độ hàng loạt.
+- Dò lại Dạng và mức độ của câu đã có trong ngân hàng: chọn mục ở Cây mục lục → Gán ID nhờ Claude → tick **"Kiểm tra lại cả câu đã xác minh"** → Xuất lô (mã lô bắt đầu bằng `K`). Không xoá câu.
+  - Claude đồng ý: câu đã xác minh giữ nguyên.
+  - Khác Dạng: câu vào "Cần xem lại", Dạng đang lưu giữ nguyên. Giáo viên bấm P (dùng Dạng đề xuất) hoặc Y (giữ Dạng cũ).
+  - Khác mức độ: thêm mức đề xuất. Câu đã xác minh Dạng vào nhóm "Mức độ cần xem". Giáo viên bấm K (dùng mức đề xuất) hoặc M (giữ mức cũ).
+- Không bao giờ tự ghi Dạng hay mức độ hàng loạt.
