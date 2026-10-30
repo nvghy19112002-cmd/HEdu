@@ -1,3 +1,14 @@
+## Có gì mới trong beta.42 (kênh beta): chuẩn hoá khi nạp file .tex
+Gồm bước chuẩn hoá ở màn Nhập liệu (so với beta.41). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đây là bản BETA, chưa thử với tệp .tex thật của bạn.
+
+**Điều chính cần biết**
+- **Chỉ bốc các khối `\begin{ex}…\end{ex}` hoàn chỉnh**, nguyên văn (kể cả ID `%[…]` ở cuối dòng `\begin{ex}` hay dòng ngay sau). Phần mở đầu tệp, `\chapter`… được bỏ qua.
+- **Tránh nạp nhầm**: khối bị comment `%` không còn được nhập; khối thiếu `\end{ex}` bị bỏ chứ không gộp nhầm hai câu; `\end{ex}` thừa và khối rỗng bị bỏ.
+- **Khung “Chuẩn hoá” báo rõ** tệp nào, dòng nào, vì sao bỏ (kể cả ID đặt trước `\begin{ex}` mà app không đọc). Bỏ BOM, đổi xuống dòng CRLF về LF, cắt khoảng trắng cuối dòng.
+
+**Lời khuyên**
+- Nhập thử một tệp, xem khung “Chuẩn hoá”: nếu số câu ít hơn kỳ vọng, sửa tệp nguồn theo dòng được báo rồi mở lại.
+
 ## Có gì mới trong beta.41 (kênh beta): sửa câu có ID ở cuối dòng đầu bị xếp nhầm chỗ
 Gồm PR #162 (so với beta.40). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đây là bản BETA.
 

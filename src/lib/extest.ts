@@ -313,19 +313,75 @@ export function splitExBlocks(src: string): string[] {
   return out;
 }
 
-/** Như splitExBlocks nhưng kèm số dòng (từ 1) nơi mỗi câu bắt đầu trong chuỗi lớn. */
-export function splitExBlocksAt(src: string): { text: string; line: number }[] {
-  const out: { text: string; line: number }[] = [];
-  const re = /\\begin\{ex\}[\s\S]*?\\end\{ex\}/g;
-  let m: RegExpExecArray | null;
-  let line = 1;
-  let last = 0;
-  while ((m = re.exec(src))) {
-    for (let i = last; i < m.index; i++) if (src.charCodeAt(i) === 10) line++;
-    last = m.index;
-    out.push({ text: m[0], line });
+export type ExIssueKind = 'chua-dong' | 'thua-end' | 'ngoai-khoi' | 'khoi-rong' | 'chu-thich';
+export interface ExIssue { kind: ExIssueKind; line: number; message: string }
+export interface ExNormalized { blocks: { text: string; line: number }[]; issues: ExIssue[] }
+
+/** `%` chưa thoát trước vị trí `pos` trên cùng dòng ⇒ đoạn đó là chú thích LaTeX. */
+function inComment(src: string, pos: number): boolean {
+  const ls = src.lastIndexOf('\n', pos - 1) + 1;
+  for (let i = ls; i < pos; i++) {
+    if (src[i] === '\\') { i++; continue; }
+    if (src[i] === '%') return true;
   }
-  return out;
+  return false;
+}
+
+/**
+ * Bước chuẩn hoá khi nạp .tex: chỉ bốc các khối \begin{ex}…\end{ex} hoàn chỉnh.
+ * - bỏ BOM, đổi xuống dòng về \n, cắt khoảng trắng cuối dòng (nội dung câu không đổi);
+ * - bỏ qua \begin/\end nằm trong chú thích `%` (khối bị comment không được nhập);
+ * - \begin{ex} mới mở khi khối trước chưa đóng ⇒ bỏ khối dở, giữ khối sau (không gộp hai câu);
+ * - \end{ex} thừa, khối rỗng, nội dung ngoài khối (\chapter, văn bản…) ⇒ bỏ và báo.
+ */
+export function normalizeEx(raw: string): ExNormalized {
+  const src = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  const blocks: ExNormalized['blocks'] = [];
+  const issues: ExIssue[] = [];
+  const starts = [0];
+  for (let i = src.indexOf('\n'); i >= 0; i = src.indexOf('\n', i + 1)) starts.push(i + 1);
+  const lineAt = (pos: number) => { let lo = 0, hi = starts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= pos) lo = mid; else hi = mid - 1; } return lo + 1; };
+  const re = /\\(begin|end)\{ex\}/g;
+  let open = -1;
+  let outsideFrom = 0;
+  const outside: string[] = [];
+  let idOutside = 0;
+  const takeOutside = (to: number) => {
+    for (const l of src.slice(outsideFrom, to).split('\n')) {
+      const t = l.replace(/(^|[^\\])%.*$/, '$1').trim();
+      if (/^%\s*\[[0-9][A-Za-z][0-9A-Za-z-]*\]/.test(l.trim())) idOutside++;
+      else if (t && !t.startsWith('\\')) outside.push(t); // dòng lệnh (\chapter, \usepackage…) là cấu trúc tệp; chỉ chữ lạc ngoài khối đáng báo
+    }
+  };
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    if (inComment(src, m.index)) { issues.push({ kind: 'chu-thich', line: lineAt(m.index), message: `${m[0]} nằm trong chú thích %: bỏ qua` }); continue; }
+    if (m[1] === 'begin') {
+      if (open >= 0) issues.push({ kind: 'chua-dong', line: lineAt(open), message: 'Khối \\begin{ex} thiếu \\end{ex} (gặp \\begin{ex} khác trước khi đóng): đã bỏ khối dở' });
+      else takeOutside(m.index);
+      open = m.index;
+    } else if (open < 0) {
+      issues.push({ kind: 'thua-end', line: lineAt(m.index), message: '\\end{ex} thừa, không có \\begin{ex} tương ứng: bỏ qua' });
+      outsideFrom = m.index + m[0].length;
+    } else {
+      const text = src.slice(open, m.index + m[0].length).split('\n').map((l) => l.replace(/[ \t]+$/, '')).join('\n');
+      const body = text.slice('\\begin{ex}'.length, -'\\end{ex}'.length).replace(/%.*$/gm, '').trim();
+      if (!body) issues.push({ kind: 'khoi-rong', line: lineAt(open), message: 'Khối \\begin{ex}…\\end{ex} rỗng: bỏ qua' });
+      else blocks.push({ text, line: lineAt(open) });
+      open = -1;
+      outsideFrom = m.index + m[0].length;
+    }
+  }
+  if (open >= 0) issues.push({ kind: 'chua-dong', line: lineAt(open), message: 'Khối \\begin{ex} đến hết tệp vẫn thiếu \\end{ex}: đã bỏ khối dở' });
+  else takeOutside(src.length);
+  if (idOutside) issues.push({ kind: 'ngoai-khoi', line: 0, message: `${idOutside} chú thích ID %[…] nằm NGOÀI khối ex (trước \\begin{ex}) nên không được đọc: đặt ID ngay sau hoặc cuối dòng \\begin{ex}` });
+  if (outside.length && blocks.length) issues.push({ kind: 'ngoai-khoi', line: 0, message: `Bỏ ${outside.length} dòng chữ nằm ngoài khối ex (vd: ${outside[0].slice(0, 60)})` });
+  return { blocks, issues };
+}
+
+/** Như splitExBlocks nhưng kèm số dòng (từ 1) nơi mỗi câu bắt đầu; đã chuẩn hoá (xem normalizeEx). */
+export function splitExBlocksAt(src: string): { text: string; line: number }[] {
+  return normalizeEx(src).blocks;
 }
 
 export const TEMPLATES: Record<QType, string> = {
