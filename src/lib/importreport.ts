@@ -54,7 +54,7 @@ export interface ImportReport {
 
 export const DECISION_TEXT: Record<RowDecision, string> = { import: 'Đã nhập', 'skip-dup': 'Bỏ qua (nghi trùng)', 'skip-user': 'Bỏ qua (bạn chọn)' };
 export const ID_STATE_TEXT: Record<IdState, string> = { ok: 'Có ID đủ', 'thieu-dang': 'ID thiếu Dạng', 'khong-hop-le': 'ID không hợp lệ', 'khong-co': 'Không có ID' };
-export const ID_PLACE_TEXT: Record<IdPlace, string> = { 'dung-ma': 'Theo mã ID', 'ma-khop': 'Theo mã ID (khớp ngân hàng)', 'ma-chua-kiem-chung': 'Theo mã ID (chưa kiểm chứng)', 'ma-giu-tay': 'Giữ mã ID (bạn chọn, bất đồng ngân hàng)', 'ma-cho': 'Chờ xác minh (ID bất đồng ngân hàng, giữ ID gốc)', 'dang-dau': 'Dạng đầu của Bài', ai: 'Gợi ý đã chọn', 'vi-tri-chung': 'Vị trí chung' };
+export const ID_PLACE_TEXT: Record<IdPlace, string> = { 'dung-ma': 'Theo mã ID', 'ma-khop': 'Theo mã ID (khớp ngân hàng)', 'ma-chua-kiem-chung': 'Theo mã ID (chưa kiểm chứng)', 'ma-giu-tay': 'Giữ mã ID (bạn chọn, bất đồng ngân hàng)', 'ma-cho': 'Chờ xác minh (ID bất đồng ngân hàng, giữ ID gốc)', 'dang-dau': 'Dạng đầu của Bài', ai: 'Gợi ý đã chọn', 'vi-tri-chung': 'Chưa có ID' };
 
 export function buildReport(input: { at: number; name: string; batchTag?: string; paste: boolean; restorePoint: boolean; rows: ReportRow[]; warnings?: string[] }): ImportReport {
   const rows = input.rows;

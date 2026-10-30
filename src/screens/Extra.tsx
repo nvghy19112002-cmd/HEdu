@@ -611,7 +611,7 @@ export function ImportScreen() {
                                 {stale ? <span className="aid-none">Câu đã sửa sau khi gợi ý — bấm “Gợi ý lại”</span> : (
                                   <select className="aid-sel" value={p.formId ?? ''} onChange={(e) => setPick(i, e.target.value || null)} aria-label={`Vị trí cho câu ${i + 1}`}>
                                     {optionsOf(p).map((o, k) => { const pl = pickIx?.get(o.formId); return <option key={o.formId} value={o.formId}>{k === 0 && p.suggestion.best ? '★ ' : ''}{pl && pl.chapter && pl.lesson && pl.form ? `${shortName(pl.chapter.name)} › ${shortName(pl.lesson.name)} › ${shortName(pl.form.name)}` : o.formId}</option>; })}
-                                    <option value="">— Vị trí chung ở trên —</option>
+                                    <option value="">— Để vào Chưa có ID —</option>
                                   </select>
                                 )}
                                 {p.suggestion.notes.map((t) => <small key={t} className="aid-note">{t}</small>)}
