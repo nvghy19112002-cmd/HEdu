@@ -1,3 +1,18 @@
+## Có gì mới trong beta.45 (kênh beta): mức độ, "Kiểm tra lại" nhờ Claude, tìm theo số câu, Tạo đề
+Gồm PR #168–#172 (so với beta.44). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đã thử bằng bộ kiểm thử có sẵn và trên trình duyệt với dữ liệu mẫu; chưa thử với ngân hàng thật. Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Mức độ đề xuất dùng được ngay (phím K)**: trong hàng đợi Xác minh, khi Claude đề xuất mức khác mức đang lưu, có nút “Dùng mức đề xuất”. Câu đã có ID thì chữ mức độ trong ID đổi theo; câu Chưa có ID không bị thêm ID. M vẫn là giữ mức đang lưu. Có Hoàn tác.
+- **Quy tắc mức độ 4 mức** (NB/TH/VD/VDC theo yêu cầu tư duy; câu nhiều ý do thầy/cô chốt) đã ghi vào hướng dẫn của mỗi lô gửi Claude.
+- **“Kiểm tra lại cả câu đã xác minh”** (hộp Gán ID nhờ Claude): chọn một mục trong Cây mục lục, tick ô này rồi Xuất lô (mã lô bắt đầu bằng K). Claude soát lại Dạng và mức độ; câu không bị xoá hay đổi. Câu Claude thấy khác Dạng vào “Cần xem lại” (Dạng cũ giữ nguyên, bấm P dùng đề xuất hoặc Y giữ cũ); câu chỉ khác mức độ vào nhóm mới “Mức độ cần xem” (K hoặc M).
+- **Nhập đề xuất không còn xoá xác nhận mức độ** thầy/cô đã bấm trước đó.
+- **Ô Tìm ở Ngân hàng nhận số câu** dạng `#2086`, tìm trong toàn kho.
+- **Cây mục lục** dùng hết chiều cao khung, đi bằng phím mũi tên, tự cuộn tới mục đang chọn.
+- **Tạo đề**: hết báo kho 0 câu; các ô Lớp/Chương/Bài/Dạng ghi số câu cạnh từng lựa chọn; lớp mặc định là lớp có nhiều câu nhất; câu Chưa có ID không bị bốc vào đề.
+
+**Lời khuyên**
+- Lô đã nhập trước bản này không có nút K. Muốn dò lại mức độ một mục, dùng “Kiểm tra lại” cho mục đó.
+
 ## Có gì mới trong beta.44 (kênh beta): xem trước hiểu nhãn danh sách `label=`
 Gồm một PR nhỏ (so với beta.43). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đã thử bằng bộ kiểm thử có sẵn và biên dịch thật bằng TeX Live; chưa thử với ngân hàng thật. Đây là bản BETA.
 
