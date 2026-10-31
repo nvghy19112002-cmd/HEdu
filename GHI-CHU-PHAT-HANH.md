@@ -1,3 +1,16 @@
+## Có gì mới trong beta.46 (kênh beta): Gán ID nhờ Claude áp dụng luôn, một lần bấm
+Gồm PR #174, #177 (so với beta.45). Không đổi schema ngân hàng hay UID; LaTeX chỉ đổi ở vùng ID `%[…]`. Đã thử bằng bộ kiểm thử và trên trình duyệt với dữ liệu mẫu; chưa thử với ngân hàng thật. Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Nhập đề xuất là áp dụng luôn**: nút “Nhập và áp dụng đề xuất mới nhất” (hộp Gán ID nhờ Claude) ghi ngay Dạng, mức độ và ID Claude chọn vào câu chưa được thầy/cô xác minh, kể cả câu “Chưa có ID” (câu rời mục đó, có ID). Không cần duyệt từng câu trong hàng đợi nữa.
+- Các câu này mang trạng thái **“Máy phân loại”** (mức “Máy đề xuất”) nên rà lại sau được; không câu nào bị đánh dấu “giáo viên xác minh” thay thầy/cô.
+- **Câu thầy/cô đã xác minh giữ nguyên.** Câu không ghi được ID mới vẫn vào hàng đợi Xác minh như cũ.
+- **Hoàn tác**: nút “Hoàn tác lần áp dụng này” trong hộp (còn trong lần mở app đó). Lô từ 20 câu có điểm khôi phục tự động trước khi ghi.
+- **Lô lấy đúng câu đang tick**: có câu đang tick ở Ngân hàng thì lô chỉ gồm các câu đó (không tick thì lấy danh sách đang lọc); nút Gán ID nhờ Claude có thêm ở thanh câu đã chọn.
+
+**Lời khuyên**
+- Quy trình gọn: Xuất lô → nhắn Claude “làm lô mới nhất” → bấm “Nhập và áp dụng đề xuất mới nhất”.
+
 ## Có gì mới trong beta.45 (kênh beta): mức độ, "Kiểm tra lại" nhờ Claude, tìm theo số câu, Tạo đề
 Gồm PR #168–#172 (so với beta.44). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu. Đã thử bằng bộ kiểm thử có sẵn và trên trình duyệt với dữ liệu mẫu; chưa thử với ngân hàng thật. Đây là bản BETA.
 
