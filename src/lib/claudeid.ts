@@ -1,11 +1,13 @@
 // Gán ID nhờ AI ngoài (Claude qua gói Pro / Claude Code): HEdu xuất "lô cần gán ID" → AI đề xuất Dạng từng câu → HEdu nhập
-// tệp đề xuất vào hàng đợi Xác minh. AI KHÔNG BAO GIỜ ghi thẳng vào câu: đề xuất trùng Dạng đang lưu ⇒ "Máy phân loại" (nguồn
-// "AI ngoài"); khác ⇒ "Cần xem lại" kèm Dạng đề xuất (`prop`) để giáo viên chọn. Câu giáo viên đã xác minh không bị đụng.
+// tệp đề xuất. Mặc định (chủ dự án chọn 31/10/2026) HEdu ÁP DỤNG LUÔN Dạng + mức Claude chọn cho câu chưa được giáo viên xác minh:
+// đổi vị trí + ID6 trong LaTeX, trạng thái "Máy phân loại" (nguồn "AI ngoài", không bao giờ thành "giáo viên xác minh"), có Hoàn tác
+// (claudeapply.ts). Câu không ghi được ID mới vẫn vào hàng đợi Xác minh như cũ. Câu giáo viên đã xác minh không bị đổi.
 //
 // Đo độ đúng: lô trộn NGẦM một phần câu giáo viên đã xác minh (cùng định dạng, đã bỏ ID cũ) — AI không biết câu nào là câu đối chứng;
 // khi nhập, HEdu so đề xuất với Dạng giáo viên đã xác minh để báo tỉ lệ đúng theo Chương / Bài / Dạng.
 // Quy tắc nền: claude/quy-tac-gan-id-chuan.md (nguồn "ai-ngoai", "máy" không tự thành "gv").
-import { contentKeys, gradeOfEff, keepNoId, makeRec, type Effective, type ReviewRec } from './idreview';
+import { contentKeys, gradeOfEff, keepNoId, makeRec, type Effective, type LevelState, type ReviewRec } from './idreview';
+import { placeWithId } from './idsync';
 import { idlessVariants } from './idtex';
 import { stemSnippet } from './snippet';
 import { locationOfForm } from './taxpath';
@@ -131,6 +133,13 @@ export const SKIP_LABEL: Record<SkipWhy, string> = {
   'sai-lop': 'Dạng đề xuất khác lớp của câu', trung: 'câu xuất hiện hai lần trong tệp',
 };
 export interface Accuracy { n: number; chuong: number; bai: number; dang: number; muc: number; sai: { uid: string; dung: string; deXuat: string }[] }
+/** Vị trí + mức độ + LaTeX của một câu (phần "áp dụng luôn" được đổi). */
+export interface Placement { grade: number; chapterId: string; lessonId: string; formId: string; level: Level; latex: string }
+export const placementOf = (q: Question): Placement => ({ grade: q.grade, chapterId: q.chapterId, lessonId: q.lessonId, formId: q.formId, level: q.level, latex: q.latex });
+export const samePlacement = (q: Placement, s: Placement): boolean =>
+  q.grade === s.grade && q.chapterId === s.chapterId && q.lessonId === s.lessonId && q.formId === s.formId && q.level === s.level && q.latex === s.latex;
+/** Áp dụng luôn đề xuất cho một câu: vị trí theo Dạng Claude chọn, mức độ Claude chọn, ID6 mới trong LaTeX; trạng thái "máy phân loại". */
+export interface DirectEdit { uid: string; before: Placement; after: Placement; level: LevelState; why: string }
 export interface ImportPlan {
   /** bản ghi sẽ đặt (câu chưa giáo viên xác minh; lô Kiểm tra lại: cả câu đã xác minh mà Claude thấy khác) */
   recs: [string, ReviewRec][];
@@ -139,6 +148,10 @@ export interface ImportPlan {
   /** số câu Claude đề xuất mức độ khác mức đang lưu (giáo viên bấm K để dùng) */
   mucKhac: number;
   dongY: number; khac: number; theoChac: Record<Conf, { dongY: number; khac: number }>;
+  /** chế độ áp dụng luôn: câu được ghi thẳng Dạng + mức + ID theo Claude (câu giáo viên đã xác minh không nằm ở đây) */
+  edits: DirectEdit[];
+  /** áp dụng luôn nhưng không ghi được ID vào LaTeX (câu nhiều ID, cây mã trùng…) ⇒ để vào hàng đợi như cũ */
+  idLoi: number;
   skip: Partial<Record<SkipWhy, number>>;
   gold: Accuracy;
 }
@@ -149,11 +162,11 @@ export interface ImportPlan {
  * thấy khác Dạng ⇒ "Cần xem lại" (Dạng đang lưu GIỮ NGUYÊN, giáo viên chọn); khác mức độ ⇒ chỉ thêm mức đề xuất (phím K). Không câu nào bị đổi.
  * Trạng thái mức độ đã có (giáo viên xác minh / máy) được giữ, không bị nhập đề xuất xoá.
  */
-export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: TaxIndex; taxRev: string; effOf: (q: Question) => Effective; now?: number }): ImportPlan {
+export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: TaxIndex; taxRev: string; effOf: (q: Question) => Effective; now?: number; direct?: { tax: Taxonomy } }): ImportPlan {
   const byUid = new Map(pool.map((q) => [q.uid, q] as const));
   const seen = new Set<string>();
   const recheck = isRecheckLot(p.lo);
-  const plan: ImportPlan = { recs: [], recheck, mucKhac: 0, dongY: 0, khac: 0, theoChac: { cao: { dongY: 0, khac: 0 }, vua: { dongY: 0, khac: 0 }, thap: { dongY: 0, khac: 0 } }, skip: {}, gold: { n: 0, chuong: 0, bai: 0, dang: 0, muc: 0, sai: [] } };
+  const plan: ImportPlan = { recs: [], edits: [], idLoi: 0, recheck, mucKhac: 0, dongY: 0, khac: 0, theoChac: { cao: { dongY: 0, khac: 0 }, vua: { dongY: 0, khac: 0 }, thap: { dongY: 0, khac: 0 } }, skip: {}, gold: { n: 0, chuong: 0, bai: 0, dang: 0, muc: 0, sai: [] } };
   const skip = (w: SkipWhy) => { plan.skip[w] = (plan.skip[w] ?? 0) + 1; };
   const who = p.boi || 'AI ngoài';
   for (const it of p.cau) {
@@ -193,6 +206,18 @@ export function planImport(p: ProposalFile, pool: readonly Question[], o: { ix: 
     }
     const same = it.dang === q.formId && !e.unclassified;
     if (same) { plan.dongY++; plan.theoChac[it.chac].dongY++; } else { plan.khac++; plan.theoChac[it.chac].khac++; }
+    if (o.direct) {
+      // chủ dự án chọn (31/10/2026): áp dụng luôn Dạng + mức Claude chọn, trạng thái "máy phân loại" (KHÔNG thành giáo viên xác minh)
+      const lv = it.muc ?? q.level;
+      const w = placeWithId(q.latex, loc, lv, o.direct.tax, true);
+      if (!('problem' in w)) {
+        const level: LevelState = it.muc && !(it.muc === q.level && e.level === 'gv') ? 'may' : e.level;
+        if (pl.propLevel) plan.mucKhac--; // mức đã được áp dụng luôn, không còn chờ phím K
+        plan.edits.push({ uid: q.uid, before: placementOf(q), after: { grade: loc.grade, chapterId: loc.chapterId, lessonId: loc.lessonId, formId: loc.formId, level: lv, latex: w.latex }, level, why });
+        continue;
+      }
+      plan.idLoi++;
+    }
     plan.recs.push([q.uid, same
       ? makeRec(q, { form: 'may', level: e.level, src: 'ai-ngoai', taxRev: o.taxRev, why, ...pl, ...at })
       : makeRec(q, { form: 'xem-lai', level: e.level, src: 'ai-ngoai', taxRev: o.taxRev, why, prop: it.dang, ...pl, ...keepNoId(e), ...at })]);

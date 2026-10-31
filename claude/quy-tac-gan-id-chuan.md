@@ -37,6 +37,7 @@ Trạng thái: **Phần A–D** đã có trong mã (tài liệu hoá lại). **P
 12. **Mức độ không tự đổi**; chỉ đổi khi giáo viên tick riêng. Mức độ AI trả về chỉ là gợi ý. Cách xác định mức: `claude/quy-tac-muc-do.md` (4 mức, đã duyệt 30/10/2026).
 13. Tối đa **200 câu mỗi lượt** (`AUTO_ID_MAX`); có Hoàn tác trong phiên (`undoAutoId`).
 14. Nhập .tex: ID có sẵn trong tệp chỉ được dùng khi qua `resolveCode`; mã sai/thiếu/trùng không được tự sửa lặng lẽ.
+14a. **Gán ID nhờ Claude — áp dụng luôn** (chủ dự án chọn 31/10/2026, ngoại lệ có chủ đích của mục 9 và 12): nhập tệp đề xuất là ghi luôn Dạng + mức độ + ID6 Claude chọn cho câu CHƯA được giáo viên xác minh Dạng (kể cả câu "Chưa có ID"), một lần bấm, trạng thái "Máy phân loại" / mức "Máy đề xuất" (nguồn AI ngoài) — không bao giờ thành "giáo viên xác minh" (15b). Câu giáo viên đã xác minh giữ nguyên (lô thường: chỉ để đo; lô Kiểm tra lại: khác Dạng ⇒ "Cần xem lại"). Không ghi được ID ⇒ vào hàng đợi như cũ. Điểm khôi phục trước lô ≥ 20 câu, câu và trạng thái ghi cả hai hoặc không gì, Hoàn tác trong phiên (`claudeapply.ts`). Chủ dự án sẽ rà lại sau.
 
 ## D. Thứ tự bằng chứng và AI
 

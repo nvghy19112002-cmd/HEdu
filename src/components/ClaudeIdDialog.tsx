@@ -1,12 +1,13 @@
 // Hộp "Gán ID nhờ Claude" (màn Ngân hàng): xuất lô câu cần gán ID vào THƯ MỤC TRAO ĐỔI cố định; Claude (Claude Code, trong cuộc
-// trò chuyện) đọc lô và ghi tệp đề xuất vào cùng thư mục; HEdu nhập đề xuất mới nhất: báo độ đúng trên câu đối chứng, đưa đề xuất
-// vào hàng đợi Xác minh. Không câu nào bị đổi Dạng/ID ở đây.
+// trò chuyện) đọc lô và ghi tệp đề xuất vào cùng thư mục; HEdu nhập đề xuất mới nhất: báo độ đúng trên câu đối chứng và ÁP DỤNG LUÔN
+// Dạng + mức + ID Claude chọn cho câu chưa được giáo viên xác minh (trạng thái "Máy phân loại", có Hoàn tác — claudeapply.ts).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildLot, CONF_LABEL, RECHECK_PREFIX, latestPending, LOT_STATE_LABEL, lotFileName, lotRows, parseProposal, pct, planImport, SKIP_LABEL,
   type ImportPlan, type LotRow, type ProposalFile, type SkipWhy, type XFile,
 } from '../lib/claudeid';
-import { commitRecs, type Effective } from '../lib/idreview';
+import { applyDirect, undoDirect, type DirectUndo } from '../lib/claudeapply';
+import type { Effective } from '../lib/idreview';
 import { invoke, isDesktop } from '../lib/platform';
 import { taxRevision } from '../lib/taxpath';
 import { indexOf } from '../lib/taxonomy';
@@ -30,7 +31,7 @@ interface Props {
   all: readonly Question[];
   tax: Taxonomy;
   effOf(q: Question): Effective;
-  toast(m: string): void;
+  toast(m: string, action?: { label: string; run(): void }): void;
   onClose(): void;
   onOpenQueue(): void;
 }
@@ -49,6 +50,8 @@ export function ClaudeIdDialog({ pool, fromSelection = false, all, tax, effOf, t
   const [plan, setPlan] = useState<{ p: ProposalFile; plan: ImportPlan; dropped: number; name: string; lo: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [undo, setUndo] = useState<DirectUndo | null>(null);
   const fileIn = useRef<HTMLInputElement>(null);
   const need = useMemo(() => pool.filter((q) => { const e = effOf(q); return !(e.form === 'gv' && !e.unclassified); }).length, [pool, effOf]);
   const verified = pool.length - need;
@@ -87,27 +90,41 @@ export function ClaudeIdDialog({ pool, fromSelection = false, all, tax, effOf, t
     } catch (e) { setErr(msg(e)); }
   };
 
-  const readText = (text: string, name: string, lo: string) => {
-    setErr(null); setPlan(null);
+  type Loaded = { p: ProposalFile; plan: ImportPlan; dropped: number; name: string; lo: string };
+  const readText = (text: string, name: string, lo: string): Loaded | null => {
+    setErr(null); setPlan(null); setResult(null); setUndo(null);
     const r = parseProposal(text);
-    if (!r.ok) { setErr(`${name}: ${r.why}`); return; }
-    setPlan({ p: r.p, plan: planImport(r.p, all, { ix, taxRev, effOf }), dropped: r.dropped, name, lo: lo || r.p.lo });
+    if (!r.ok) { setErr(`${name}: ${r.why}`); return null; }
+    const x = { p: r.p, plan: planImport(r.p, all, { ix, taxRev, effOf, direct: { tax } }), dropped: r.dropped, name, lo: lo || r.p.lo };
+    setPlan(x);
+    return x;
   };
-  const readRow = async (r: LotRow) => {
-    if (!r.propFile) return;
-    try { readText(await invoke<string>('id_exchange_read', { dir, name: r.propFile }), r.propFile, r.lo); } catch (e) { setErr(msg(e)); }
+  const readRow = async (r: LotRow): Promise<Loaded | null> => {
+    if (!r.propFile) return null;
+    try { return readText(await invoke<string>('id_exchange_read', { dir, name: r.propFile }), r.propFile, r.lo); } catch (e) { setErr(msg(e)); return null; }
   };
 
-  const apply = async () => {
-    if (!plan || busy) return;
+  const apply = async (x: Loaded | null = plan) => {
+    if (!x || busy) return;
     setBusy(true);
-    const ok = await commitRecs(plan.plan.recs);
+    const r = await applyDirect(x.plan, x.lo, taxRev);
     setBusy(false);
-    if (!ok) { setErr('Chưa lưu được trạng thái xác minh (ổ đĩa đầy hoặc tệp bị chặn ghi). Không câu nào bị đổi.'); return; }
-    if (plan.lo) { const n = new Set(done); n.add(plan.lo); setDone(n); save(DONE_KEY, JSON.stringify([...n].slice(-500))); }
-    toast(`Đã đưa ${nf.format(plan.plan.recs.length)} đề xuất vào hàng đợi Xác minh (${nf.format(plan.plan.khac)} câu cần xem lại). Không câu nào bị đổi Dạng hay ID.`);
-    setPlan(null);
+    if (!r.ok) { setErr(r.message); return; }
+    if (x.lo) { const n = new Set(done); n.add(x.lo); setDone(n); save(DONE_KEY, JSON.stringify([...n].slice(-500))); }
+    setResult(`Lô ${x.lo || x.name}: đã áp dụng ${nf.format(r.applied)} câu theo Claude (Dạng, mức độ, ID)${r.queued ? ` · ${nf.format(r.queued)} câu vào hàng đợi Xác minh` : ''}${r.stale ? ` · ${nf.format(r.stale)} câu vừa bị sửa nên bỏ qua` : ''}.`);
+    setUndo(r.undo);
+    toast(`Đã áp dụng ${nf.format(r.applied)} câu theo Claude.`, r.undo ? { label: 'Hoàn tác', run: () => { if (r.undo) void runUndo(r.undo); } } : undefined);
   };
+  const runUndo = async (u: DirectUndo) => {
+    setBusy(true);
+    const b = await undoDirect(u);
+    setBusy(false);
+    setUndo(null);
+    const m = b.ok ? `Đã hoàn tác ${nf.format(b.restored)} câu${b.kept ? ` (${nf.format(b.kept)} câu đã sửa tiếp nên giữ)` : ''}.` : 'Chưa hoàn tác được: hãy kiểm tra ổ đĩa rồi thử lại.';
+    setResult(m); toast(m);
+  };
+  /** Một lần bấm: đọc đề xuất mới nhất rồi áp dụng luôn. */
+  const importLatest = async () => { if (!pending) return; const x = await readRow(pending); if (x) await apply(x); };
 
   const P = plan?.plan;
   const g = P?.gold;
@@ -117,7 +134,7 @@ export function ClaudeIdDialog({ pool, fromSelection = false, all, tax, effOf, t
       <div className="cfm xl-panel cid" role="dialog" aria-modal="true" aria-label="Gán ID nhờ Claude">
         <h3>Gán ID nhờ Claude</h3>
         <div className="xl-panel-body">
-          <p className="xl-meta">Claude chỉ <b>đề xuất</b>; HEdu đưa đề xuất vào hàng đợi Xác minh để thầy/cô duyệt. Không câu nào bị đổi Dạng hay ID cho tới khi thầy/cô xác nhận.</p>
+          <p className="xl-meta">Nhập đề xuất là HEdu <b>áp dụng luôn</b> Dạng, mức độ và ID Claude chọn (trạng thái “Máy phân loại”, rà lại sau được). Câu thầy/cô đã xác minh giữ nguyên. Có Hoàn tác ngay sau khi nhập.</p>
 
           {desktop && (
             <div className="cid-row cid-dir">
@@ -156,11 +173,12 @@ export function ClaudeIdDialog({ pool, fromSelection = false, all, tax, effOf, t
               </ul>
             )}
             <div className="cid-row">
-              <button type="button" className="btn btn-accent btn-sm" disabled={!pending} onClick={() => { if (pending) void readRow(pending); }}>{pending ? `Nhập đề xuất mới nhất (${pending.lo})` : 'Chưa có đề xuất mới'}</button>
+              <button type="button" className="btn btn-accent btn-sm" disabled={!pending || busy} onClick={() => void importLatest()}>{busy ? 'Đang áp dụng…' : pending ? `Nhập và áp dụng đề xuất mới nhất (${pending.lo})` : 'Chưa có đề xuất mới'}</button>
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => fileIn.current?.click()}>Chọn tệp khác…</button>
               <input ref={fileIn} type="file" accept="application/json,.json" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) readText(await f.text(), f.name, ''); }} />
               {plan && <span className="xl-meta">{plan.name} · {nf.format(plan.p.cau.length)} dòng{plan.dropped ? ` · ${plan.dropped} dòng hỏng bị bỏ` : ''}</span>}
             </div>
+            {result && <div className="note ok" role="status"><div className="note-body"><span>{result}</span>{undo && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void runUndo(undo)}>Hoàn tác lần áp dụng này</button>}</div></div>}
             {err && <div className="note bad" role="alert"><div className="note-body"><span>{err}</span></div></div>}
             {P && g && (
               <div className="cid-sum">
@@ -170,14 +188,15 @@ export function ClaudeIdDialog({ pool, fromSelection = false, all, tax, effOf, t
                   {g.sai.slice(0, 5).map((s) => <span key={s.uid} className="xl-meta">Sai: đúng là {where(s.dung)} — Claude chọn {where(s.deXuat)}</span>)}
                 </div></div>
                 <ul className="xl-lines">
-                  <li><b>{nf.format(P.dongY)}</b> câu Claude đồng ý Dạng đang lưu → {P.recheck ? 'câu đã xác minh giữ nguyên, câu chưa xác minh thành' : ''} “Máy phân loại” (nguồn AI ngoài)</li>
-                  <li><b>{nf.format(P.khac)}</b> câu Claude đề xuất Dạng khác → “Cần xem lại” (Dạng đang lưu giữ nguyên), thầy/cô bấm <kbd>P</kbd> “Dùng Dạng đề xuất” hoặc <kbd>Y</kbd> giữ Dạng cũ trong hàng đợi</li>
+                  <li><b>{nf.format(P.edits.length)}</b> câu áp dụng luôn theo Claude (Dạng, mức độ, ID) → “Máy phân loại”</li>
+                  {P.idLoi > 0 && <li><b>{nf.format(P.idLoi)}</b> câu không ghi được ID mới vào LaTeX → vào hàng đợi Xác minh để thầy/cô chọn</li>}
+                  {g.n > 0 && <li className="xl-meta">{nf.format(g.n)} câu thầy/cô đã xác minh: giữ nguyên{P.recheck ? ', câu Claude thấy khác Dạng → “Cần xem lại”' : ' (chỉ dùng để đo độ đúng)'}</li>}
                   {P.mucKhac > 0 && <li><b>{nf.format(P.mucKhac)}</b> câu Claude đề xuất mức độ khác → thầy/cô bấm <kbd>K</kbd> “Dùng mức đề xuất” hoặc <kbd>M</kbd> giữ mức cũ</li>}
                   {(['cao', 'vua', 'thap'] as const).map((c) => P.theoChac[c].dongY + P.theoChac[c].khac > 0 && <li key={c} className="xl-meta">{CONF_LABEL[c]}: {nf.format(P.theoChac[c].dongY)} đồng ý · {nf.format(P.theoChac[c].khac)} khác</li>)}
                   {(Object.keys(P.skip) as SkipWhy[]).map((k) => <li key={k} className="xl-meta">Bỏ qua {nf.format(P.skip[k] ?? 0)}: {SKIP_LABEL[k]}</li>)}
                 </ul>
                 <div className="cid-row">
-                  <button type="button" className="btn btn-accent btn-sm" disabled={busy || !P.recs.length} onClick={() => void apply()}>{busy ? 'Đang lưu…' : `Đưa ${nf.format(P.recs.length)} đề xuất vào hàng đợi Xác minh`}</button>
+                  <button type="button" className="btn btn-accent btn-sm" disabled={busy || !(P.edits.length + P.recs.length)} onClick={() => void apply()}>{busy ? 'Đang áp dụng…' : `Áp dụng ${nf.format(P.edits.length)} câu theo Claude`}</button>
                 </div>
               </div>
             )}
