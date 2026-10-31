@@ -61,7 +61,7 @@ Trạng thái: **Phần A–D** đã có trong mã (tài liệu hoá lại). **P
 - **E1. Phân loại theo yêu cầu chính của đề**, không theo từ khoá: chữ "công thức", "định lý", "mệnh đề", "đúng/sai" không đủ để chọn Dạng lý thuyết.
 - **E2. Công cụ phụ ≠ kỹ năng được hỏi**: đề bảo tìm số hạng cụ thể thì chọn Dạng "tìm số hạng", dù lời giải dùng công thức tổng quát.
 - **E3. Câu lý thuyết thuần** (chỉ nhớ/nhận ra định nghĩa, công thức, định lý, không tính): chọn Dạng lý thuyết **của đúng Bài đó nếu có**; Bài không có Dạng lý thuyết thì **để trống** (form_id = null), không nhét vào Dạng tính. Cài đặt: mọi Dạng có chữ "lý/lí thuyết" trong tên tự nhận dòng quy tắc `THEORY_RULE`.
-- **E4. Câu đúng/sai nhiều ý, câu nhiều chủ đề**: đọc đủ các ý; các ý thuộc nhiều Dạng ngang nhau thì từ chối.
+- **E4. Câu đúng/sai nhiều ý, câu nhiều chủ đề** (chủ dự án đổi 31/10/2026, theo cách của MathHub): đọc đủ các ý, xác định Dạng của **từng ý**, rồi gán cả câu vào Dạng của ý nằm ở nội dung **học sau cùng** (xa nhất) trong chương trình, KHÔNG theo số đông. "Sau" so lần lượt: lớp → chương → bài → dạng, theo thứ tự trong cây (chương so theo số in trong **tên** chương, không theo chữ số của mã). Lý do: câu chỉ dùng được khi học sinh đã học tới nội dung xa nhất nó chạm tới. Ý không tra được vào cây thì bỏ khi so; mọi ý đều không tra được thì để trống. Mọi ý cùng một Dạng thì gán như câu một ý. Mức độ câu nhiều ý vẫn theo `claude/quy-tac-muc-do.md` (giáo viên chốt). Đang áp dụng ở: "Gán ID nhờ Claude" (`claudeid.ts`), prompt GPT. **Prompt Gemini (`ganid.ts` v4) còn dùng quy tắc cũ** ("nhiều Dạng ngang nhau thì từ chối") cho tới khi đo lại theo mục F.
 - **E5. Câu có hình**: hình bị lược làm thiếu căn cứ thì không tự tin.
 
 Prompt dùng cho trợ lí GPT ngoài app: `claude/prompt-gpt-gan-id.md`.
