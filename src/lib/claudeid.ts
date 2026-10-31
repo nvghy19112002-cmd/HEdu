@@ -58,6 +58,7 @@ export const HUONG_DAN = [
   'Không đoán bừa: phân vân giữa nhiều Dạng thì chọn Dạng hợp nhất và để "chac":"thap"; ghi "lyDo" một câu ngắn (vì sao chọn Dạng này).',
   'Mức độ theo YÊU CẦU TƯ DUY của câu (không theo loại câu hay tên Dạng): NB = nhớ/nhận ra định nghĩa, kí hiệu, công thức, đọc kết quả trực tiếp (1 bước); TH = áp dụng trực tiếp một kiến thức trong tình huống quen thuộc, 2–3 bước, chuyển cách biểu diễn; VD = phối hợp nhiều kiến thức, có tham số phải lập điều kiện, đặt ẩn/mô hình hoá bài thực tế quen thuộc; VDC = tình huống mới, biện luận nhiều trường hợp, phối hợp nhiều bài/chương.',
   'Xét bước khó nhất BẮT BUỘC để ra đáp án; hai mức kề nhau đều hợp lý thì chọn mức thấp hơn. Câu nhiều ý (Đúng/Sai, tự luận a/b/c…): đề xuất mức của ý khó nhất và ghi "nhiều ý" trong "lyDo" — giáo viên sẽ chốt mức.',
+  'Dạng của câu nhiều ý (Đúng/Sai, tự luận a/b/c…) mà các ý thuộc Dạng khác nhau: xác định Dạng của từng ý rồi chọn Dạng của ý thuộc nội dung học SAU CÙNG trong cây (so lớp → chương → bài → dạng theo thứ tự trong "dang"), KHÔNG theo số đông; ý không có Dạng phù hợp thì bỏ khi so. Ghi "ý xa nhất" trong "lyDo".',
   'Trả về MỘT tệp JSON: {"format":"hedu-gan-id-de-xuat","v":1,"lo":<giống "lo">,"boi":"Claude","cau":[{"k":<k>,"fp":<fp>,"dang":<id Dạng>,"muc":"NB|TH|VD|VDC","chac":"cao|vua|thap","lyDo":"…"}]}.',
   'Chép NGUYÊN "k" và "fp" của từng câu. Đủ một dòng cho mỗi câu; không thêm câu, không đổi đề.',
   'Ghi tệp kết quả tên "de-xuat-<lo>.json" (thay <lo> bằng giá trị "lo") vào CÙNG thư mục với tệp lô này.',

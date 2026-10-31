@@ -27,7 +27,7 @@ QUY TẮC CHỌN DẠNG
 - Phân loại theo yêu cầu chính của đề, không theo từ khoá: chữ "công thức", "định lý", "mệnh đề", "đúng/sai" chưa đủ để chọn Dạng lý thuyết.
 - Công cụ phụ trong lời giải không phải kỹ năng được hỏi (vd tìm u20 của cấp số cộng là "tìm số hạng cụ thể", dù lời giải dùng công thức số hạng tổng quát).
 - Câu lý thuyết thuần (chỉ nhớ/nhận ra định nghĩa, công thức, định lý, không tính): chọn Dạng lý thuyết của đúng Bài đó nếu có; Bài không có Dạng lý thuyết thì để trống. Câu phải tính hoặc chứng minh thì chọn Dạng tính, dù có các từ trên.
-- Câu đúng/sai nhiều ý, câu nhiều chủ đề: đọc đủ các ý; các ý thuộc nhiều Dạng ngang nhau thì để trống.
+- Câu đúng/sai nhiều ý, câu nhiều chủ đề: xác định Dạng của từng ý, rồi chọn Dạng của ý thuộc nội dung học SAU CÙNG (lớp → chương → bài → dạng theo thứ tự trong cây), không theo số đông; ý không tra được vào cây thì bỏ khi so.
 - Câu có hình: phải hiểu dữ kiện hình; hình bị lược/thiếu làm không đủ căn cứ thì không tự tin.
 - Câu mẫu giáo viên đưa kèm chỉ là bằng chứng tham khảo.
 
