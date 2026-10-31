@@ -110,6 +110,8 @@ const SETUP_CMDS: [string, number][] = [
   ['tdplotsetmaincoords', 2], ['tdplotsetrotatedcoords', 3], ['tdplotsetrotatedcoordsorigin', 1],
   ['tikzset', 1], ['pgfmathsetmacro', 2], ['pgfmathtruncatemacro', 2], ['colorlet', 2], ['definecolor', 3],
   ['pgfplotsset', 1], ['DeclareMathOperator', 2],
+  // nạp thư viện TikZ ngay trong câu (vd trong center, trước tikzpicture): đi cùng hình, không hiện thành chữ "Chưa hiểu"
+  ['usetikzlibrary', 1], ['usepgfplotslibrary', 1],
 ];
 
 /** Vị trí các khối \loigiai{…} (để không lôi hình trong lời giải ra làm hình của đề). */

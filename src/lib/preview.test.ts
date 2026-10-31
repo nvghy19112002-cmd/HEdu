@@ -1,5 +1,5 @@
 // Kiểm thử xem trước LaTeX (Issue #9). Toàn bộ ví dụ là câu tự viết, KHÔNG dùng câu hỏi thật.
-import { buildExTest, parseExTest } from './extest';
+import { buildExTest, extractDefs, parseExTest } from './extest';
 import { checkQuestion } from './check';
 import { previewProblems, renderPartsEx, renderLatexText, type Part } from './render';
 import { barePathProblems, sourceProblems } from './srcdiag';
@@ -93,6 +93,10 @@ console.log('Chữ, danh sách, bảng');
   ok(cells >= 3, `dòng kẻ cuối phủ đủ ${cells}/3 cột (không chỉ cột đầu)`);
   const m = renderPartsEx('\\begin{align*} a &= b \\\\ c &= d \\end{align*} và \\begin{eqnarray*} x &=& 1 \\end{eqnarray*}');
   ok(m.unsupported.length === 0 && (m.parts.map((x) => (x as { html?: string }).html ?? '').join('').match(/katex/g) ?? []).length > 0, 'align*, eqnarray* ngoài $…$ dựng bằng công thức');
+  // câu #3460 (chủ dự án báo 31/10/2026): \usetikzlibrary và \tikzset nằm trong center, trước tikzpicture
+  const lib = renderPartsEx('Cho cây.\n\\begin{center}\n\\usetikzlibrary{decorations.pathmorphing,shapes}\n\\tikzset{a/.style={decorate}}\n\\begin{tikzpicture}\\draw[a] (0,0)--(1,0);\\end{tikzpicture}\n\\end{center}\nBiết $AH=4$.');
+  ok(lib.unsupported.length === 0 && lib.figures === 1 && !/usetikzlibrary|decorations\.pathmorphing/.test(JSON.stringify(lib.parts.filter((x) => x.kind === 'html'))), '\\usetikzlibrary ngoài tikzpicture: không báo "Chưa hiểu", không lộ thành chữ, hình vẫn dựng');
+  ok(/\\usetikzlibrary\{decorations\.pathmorphing,shapes\}/.test(extractDefs('\\usetikzlibrary{decorations.pathmorphing,shapes}\n\\begin{tikzpicture}\\end{tikzpicture}').defs), '\\usetikzlibrary đi cùng khai báo của hình (TeX vẫn nạp thư viện khi dịch hình)');
   const ab = renderPartsEx('Ta có\n\\allowdisplaybreaks\n\\begin{eqnarray*} x &=& 1 \\end{eqnarray*}');
   ok(ab.unsupported.length === 0 && !/allowdisplaybreaks/.test(JSON.stringify(ab.parts)), '\\allowdisplaybreaks chỉ là lệnh ngắt trang: bỏ qua, không báo "Chưa hiểu"');
   const mc = renderPartsEx('Trong các bất phương trình sau\n\\begin{multicols}{4}\n\\begin{enumerate}[i.]\n\\item $x>0$\n\\item $y<1$\n\\end{enumerate}\n\\end{multicols}');
