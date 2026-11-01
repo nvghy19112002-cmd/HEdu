@@ -19,7 +19,7 @@ import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usage
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
-import { heduFiles } from '../lib/hedusty';
+import { loadThemeId, themeFiles, themeStamp } from '../lib/examtheme';
 import { invoke, isDesktop } from '../lib/platform';
 import { stemSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
@@ -237,12 +237,13 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
       const fresh = buildIndex((await scanUsage()).projects, d.usage);
       if (usageSig(fresh, d.reuse) !== usageSig(idx, d.reuse)) { usage.refresh(); throw new Error('Thư viện đề đã thay đổi kể từ lần quét trước nên danh sách câu đã dùng được làm mới. Hãy xem lại đề rồi lưu lại'); }
     }
+    const theme = loadThemeId(); // mẫu in chọn ở Cài đặt › Đề thi
     const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
     const fileHashes = await sourceHashes(tex);
     return [
       ...tex,
-      ...heduFiles(picks, ''),
-      { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes, tranhCauDaDung: traceOf(d.usage, idx, d.reuse, new Date().toISOString(), lockedSet) }) },
+      ...themeFiles(theme, picks, ''),
+      { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes, tranhCauDaDung: traceOf(d.usage, idx, d.reuse, new Date().toISOString(), lockedSet), mauIn: themeStamp(theme) }) },
       { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
     ];
   };
