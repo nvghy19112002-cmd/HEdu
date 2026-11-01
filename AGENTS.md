@@ -12,7 +12,7 @@ Kho: `nvghy19112002-cmd/HEdu` (công khai), nhánh `main`.
 | Ai | Làm gì | Không làm |
 |---|---|---|
 | Chủ dự án (giáo viên Toán) | Định hướng, ưu tiên; quyết định nghiệp vụ Toán, cách ra đề/kiểm duyệt; chọn phương án giao diện; nghiệm thu trên app thật; duyệt kiến trúc/dữ liệu, gộp PR, phát hành | Không cần viết code hay thao tác kỹ thuật |
-| ChatGPT (GPT) / Codex | Phân tích nhu cầu, nghiên cứu, đề xuất UI/UX + kiến trúc, viết đặc tả/phiếu việc, rà PR; **Codex viết mã** trong vùng chủ dự án giao (mục 2a) | Không sửa vùng của Claude; không gộp PR, không phát hành |
+| ChatGPT (GPT) | Phân tích nhu cầu, nghiên cứu, đề xuất UI/UX + kiến trúc, viết đặc tả/phiếu việc, rà PR | **Không viết mã vào repo**, không gộp PR, không phát hành |
 | Claude Code | Kiểm tra code + Git mới nhất; phản biện đề xuất; viết code + test; chạy app thử trên Windows; kiểm Rust/TS/Tauri/LaTeX/TikZ; tạo nhánh/commit/PR; báo kết quả + bằng chứng + giới hạn | Không gộp PR khi chưa được duyệt cho đúng PR đó; không phát hành khi chưa được yêu cầu rõ (mục 5) |
 
 Nguyên tắc:
@@ -34,38 +34,24 @@ Bàn giao (hai AI không đọc chung lịch sử; mọi bàn giao nằm trong t
 - GPT → Claude: vấn đề · hành vi cần có · phương án đề xuất · rủi ro · tiêu chí nghiệm thu · điều chủ dự án đã duyệt.
 - Claude → GPT/chủ dự án: báo cáo theo mẫu mục 6 + link PR + điểm cần GPT rà hoặc chủ dự án quyết.
 
-## 2a. Lập trình cùng Codex (GPT) — quy tắc phối hợp (chủ dự án chốt 01/11/2026)
+## 2a. Chỉ Claude lập trình (chủ dự án chốt 01/11/2026)
 
-Từ 01/11/2026 chủ dự án dùng **Codex** (công cụ lập trình của GPT) để viết mã song song với Claude Code. Codex được sửa repo **trong phạm vi chủ dự án giao**; mọi quy tắc ở mục 3–6 áp dụng cho Codex y như Claude.
-
-**Chia vùng (một việc một người, không sửa cùng tệp cùng lúc)**
-| Vùng | Ai làm | Tệp chính |
-|---|---|---|
-| Màn **Xử lí TeX** (bàn nháp, biên dịch PDF, Đợt 2–3) | **Claude** | `src/screens/TexScratch.tsx`, `src/lib/texscratch*.ts`, `scratchbuild*.ts`, `scratchdraft.ts`, `src-tauri/src/texscratch.rs`, `claude/de-xuat-man-xu-li-tex.md` |
-| Màn **Đề thi** (Thư viện đề, không gian làm việc đề, Tạo đề) — chỉnh giao diện/sửa lỗi | **Codex** khi chủ dự án giao | `src/screens/ExamLibrary.tsx`, `ExamWorkspace.tsx`, `Exam.tsx`, `src/components/Exam*.tsx`, `SlotMatrix.tsx`, `src/lib/exam*.ts` |
-| Tính năng mới khác | Ai được chủ dự án giao trong tin nhắn | Ghi rõ vùng tệp trong phiếu việc |
-
-- **Tệp dùng chung** (`src/styles.css`, `src/App.tsx`, `src/app-context.tsx`, `src/components/Icons.tsx`, `src/components/PdfViewer.tsx`, `CodeEditor.tsx`, `scripts/test.mjs`, `src-tauri/src/lib.rs`, `examcompile.rs`, `package.json`, `Cargo.toml`, lock): sửa **ít nhất có thể**, chỉ thêm (không viết lại khối của người khác); thêm CSS ở **cuối tệp** trong một khối có chú thích tên tính năng; nếu phải đổi hàm dùng chung thì ghi rõ trong PR "đụng tệp chung: …".
-- Trước khi sửa: `git fetch` + xem PR đang mở (`/pulls?state=open`) để biết tệp nào đang có người sửa. Đụng tệp đang nằm trong PR mở của bên kia ⇒ **dừng, báo chủ dự án**, không tự gộp hay ghi đè.
-- Không sửa vùng của bên kia, kể cả "tiện tay". Thấy lỗi ở vùng bên kia ⇒ ghi vào PR/Issue để bên đó sửa.
+Từ 01/11/2026 chủ dự án **không dùng Codex để lập trình nữa: 100% mã do Claude Code viết** (theo quyết định hiện tại; nếu sau này đổi sẽ ghi lại ở đây). GPT chỉ phân tích, đề xuất, rà PR. Vì một người viết mã nên không còn chia vùng tệp giữa hai AI; vẫn giữ các quy tắc sau.
 
 **Nhánh, commit, PR**
-- Claude: nhánh `claude/<tên>`. Codex: nhánh `codex/<tên>`. Luôn tạo từ `main` mới nhất; không commit thẳng `main`; không push lên nhánh của bên kia.
+- Nhánh `claude/<tên>`, luôn tạo từ `main` mới nhất; không commit thẳng `main`.
 - Mỗi PR một việc nhỏ; mô tả theo mục 5 (thay đổi · lý do · đã kiểm gì · chưa kiểm gì · tệp chung đã đụng).
 - Trước khi mở PR: `npm test`, `npm run typecheck`, `npm run build`; đụng Rust thì `cargo test --lib --locked`; đụng giao diện thì xem bằng `npm run dev` (dữ liệu mẫu) hoặc app thử `vn.hedu.app.thu`. **Không bao giờ** chạy app với dữ liệu thật `%APPDATA%\vn.hedu.app`.
-- Chỉ chủ dự án cho gộp (đúng PR đó) và cho phát hành. Codex và Claude **không tự gộp, không tự phát hành**. Gộp theo thứ tự PR mở trước; PR sau phải cập nhật theo `main` mới và chạy lại test trước khi gộp.
-- Khi hai PR vướng nhau (cùng thêm dòng vào `scripts/test.mjs`, `styles.css`…): bên gộp sau tự nối tay, giữ phần của cả hai, chạy lại test.
+- Chỉ chủ dự án cho gộp (đúng PR đó) và cho phát hành; Claude **không tự gộp, không tự phát hành**. Nhiều PR xếp chồng thì gộp theo thứ tự, PR sau cập nhật theo `main` mới và chạy lại test trước khi gộp. Hai PR cùng thêm dòng vào `scripts/test.mjs`, `styles.css`…: bên gộp sau tự nối tay, giữ phần của cả hai, chạy lại test.
+- Tệp dùng chung (`src/styles.css`, `src/App.tsx`, `src/app-context.tsx`, `scripts/test.mjs`, `src-tauri/src/lib.rs`, `package.json`, `Cargo.toml`, lock): chỉ thêm, CSS thêm ở **cuối tệp** trong khối có chú thích tên tính năng.
+- Nhờ GPT rà PR khi chủ dự án muốn: GPT ghi ý kiến vào PR, không sửa nhánh.
 
-**Môi trường máy chủ dự án** (cả hai bên)
+**Môi trường máy chủ dự án**
 - Ổ C gần đầy: không ghi ra ổ C. `TMP=D:/hedu-tmp`, `TEMP=D:/hedu-tmp`; build Rust `CARGO_TARGET_DIR=D:/hedu-build-target`; tệp tạm ở `D:\HEdu-rac\scratch`.
 - Không tắt `C:\Users\admin\AppData\Local\HEdu\hedu.exe` (app thật). Chỉ tắt tiến trình app thử (`D:\hedu-build-target\debug\hedu.exe`) do mình mở.
 - Không commit dữ liệu thật, khoá API, `data/test/`.
 
-**Bàn giao giữa Claude và Codex** (hai bên không đọc chung lịch sử)
-- Mỗi lần dừng việc dở: cập nhật `claude/ban-giao-desktop.md` (Claude) hoặc `codex/ban-giao.md` (Codex) — ghi đè, ngắn: việc đang làm · nhánh/PR · tệp đã đổi · đã kiểm gì · bước tiếp · tệp chung đang đụng.
-- Phiếu việc chủ dự án giao cho Codex nên có: vấn đề · màn/tệp được sửa · kết quả mong muốn · tiêu chí nghiệm thu (mẫu ở mục 3).
-- Rà chéo khi chủ dự án nhờ: bên rà ghi ý kiến vào PR (không sửa thẳng nhánh của bên kia).
-- Trạng thái chung (mục 7) và `GHI-CHU-PHAT-HANH.md`: chỉ bên được giao phát hành cập nhật, để tránh hai bên sửa cùng lúc.
+**Bàn giao**: mỗi lần dừng việc dở, cập nhật `claude/ban-giao-desktop.md` (ghi đè, ngắn: việc đang làm · nhánh/PR · tệp đã đổi · đã kiểm gì · bước tiếp). Trạng thái chung (mục 7) và `GHI-CHU-PHAT-HANH.md` do bên được giao phát hành cập nhật.
 
 ## 3. Quy mô việc (giữ ngắn để tiết kiệm token)
 - **S** (sửa nhỏ, giao diện, chữ): chủ dự án nói thẳng với Claude, không cần Issue. Claude làm trên nhánh, chạy test, mở PR, báo 2–3 dòng (vẫn theo quy trình PR ở mục 5).
