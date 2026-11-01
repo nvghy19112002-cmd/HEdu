@@ -1962,3 +1962,20 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 .xt-x:hover { background: var(--hover); color: var(--ink); }
 .xt-count { margin-left: auto; align-self: center; padding-left: 12px; font-size: 12px; white-space: nowrap; }
 .xc-open { color: var(--pri); }
+
+/* ---- Thư viện đề: ngăn Thông tin bên phải, menu chuột phải, kéo-thả ---- */
+.xm-side-scrim { background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.qm.xm-side { top: 0; right: 0; left: auto; transform: none; width: min(520px, 100vw); height: 100vh; max-height: none; border-radius: 0; border-width: 0 0 0 1px; animation: xm-side-in .16s ease-out; }
+.qm.xm-side .xm-facts { grid-template-columns: 1fr 1fr; }
+@keyframes xm-side-in { from { transform: translateX(24px); opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .qm.xm-side { animation: none; } }
+.more-menu.xl-cmenu { position: fixed; right: auto; z-index: 70; min-width: 240px; }
+.xl-cmenu button { flex-direction: column; align-items: flex-start; gap: 1px; }
+.xl-cmenu button b { font-weight: 600; }
+.xl-cmenu button small { font-size: 12px; color: var(--ink-3); }
+.xl-cmenu button[disabled] { opacity: .5; cursor: default; }
+.xl-cmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.xl-cmenu .xl-cmenu-danger { color: var(--danger); }
+.xc.ctx-on { outline: 2px solid var(--pri); outline-offset: 2px; }
+.xl-drop { position: fixed; inset: 12px 12px 12px 76px; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 2px dashed var(--pri); border-radius: 16px; background: color-mix(in srgb, var(--pri-soft) 85%, transparent); color: var(--pri-ink); pointer-events: none; font-size: 14px; }
+.xl-drop b { font-size: 20px; }
