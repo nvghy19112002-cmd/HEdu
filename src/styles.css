@@ -1892,3 +1892,47 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 /* Sửa thẻ Ngân hàng mất dấu căn √ (câu #3743): quy tắc `.card-body svg { height: auto }` bóp hình SVG
    rất dài của KaTeX (dấu căn, mũi tên, ngoặc giãn) xuống cao gần 0. Trả lại cách KaTeX tự đặt. */
 .card-body .katex svg { max-width: none; height: inherit; }
+
+/* ---- Xử lí TeX: thanh công cụ gọn (một hàng: chế độ xem bên trái; Công cụ ▾, Đưa vào Ngân hàng, Biên dịch PDF bên phải) ---- */
+.tsx-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.tsx-toolbar .qe-vmode { align-self: auto; }
+.tsx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tsx-more { position: relative; }
+.tsx-more .more-menu { left: auto; right: 0; }
+.tsx-more .more-menu button[disabled] { opacity: .45; cursor: default; }
+.tsx-head .head-actions { align-items: center; }
+.tsx-panes { height: calc(100vh - 190px); }
+
+/* ---- Xử lí TeX: lọc + chọn câu, hộp Tìm và thay thế ---- */
+.tsx-listwrap { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line-3); }
+.tsx-listwrap .tsx-list { flex: 1 1 auto; border-right: 0; }
+.tsx-filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 6px 2px; }
+.tsx-chip { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 2px 8px; font: inherit; font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.tsx-chip b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tsx-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--paper)); border-color: var(--accent); color: var(--ink); }
+.tsx-pickbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 2px 10px 4px; font-size: 12px; }
+.tsx-row { display: flex; align-items: flex-start; gap: 2px; }
+.tsx-row .tsx-pick { flex: none; margin: 10px 2px 0 4px; width: 16px; height: 16px; accent-color: var(--ink); }
+.tsx-row .tsx-item { flex: 1 1 auto; min-width: 0; }
+.tsx-rf { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; }
+.tsx-rf input { height: 32px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 8px; font: inherit; background: var(--paper); color: var(--ink); }
+@media (max-width: 1000px) { .tsx-listwrap { border-right: 0; border-bottom: 1px solid var(--line-3); } }
+.tsx-opts { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; font-size: 13px; }
+.tsx-opts .sw { display: flex; align-items: baseline; gap: 8px; }
+
+.tsx-dupbusy { margin: 0; padding: 2px 10px; }
+
+.tsx-slot { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); }
+.tsx-slot select { height: 28px; max-width: 220px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); color: var(--ink); font: inherit; font-size: 13px; padding: 0 6px; }
+.tsx-hr { border: 0; border-top: 1px solid var(--line-3); margin: 4px 0; }
+
+.tsx-lots { margin: 0 0 8px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.tsx-lots li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tsx-skips { margin: 0 0 6px; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+
+/* ---- Xử lí TeX: hướng dẫn khi bàn nháp trống; trạng thái PDF ở chân màn bấm được ---- */
+.tsx-editor { position: relative; }
+.tsx-empty { position: absolute; left: 60px; right: 16px; top: 36px; padding: 12px 14px; background: color-mix(in srgb, var(--paper) 92%, transparent); border: 1px dashed var(--line-2); border-radius: 12px; font-size: 13px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; max-width: 460px; }
+.tsx-empty ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.qe-status button.qs { border: 0; background: none; font: inherit; cursor: pointer; }
+.qe-status button.qs:hover { text-decoration: underline; }

@@ -436,6 +436,7 @@ pub fn run() {
             idexchange::id_exchange_write,
             texscratch::tex_scratch_load,
             texscratch::tex_scratch_save,
+            texscratch::tex_scratch_delete,
             texscratch::tex_scratch_compile,
             texscratch::tex_scratch_compile_cancel,
             texscratch::tex_scratch_pdf,
