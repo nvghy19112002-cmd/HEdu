@@ -1889,6 +1889,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-diff del { background: var(--danger-soft); }
 .tsx-diff ins { background: var(--ok-bg); }
 
+/* Sửa thẻ Ngân hàng mất dấu căn √ (câu #3743): quy tắc `.card-body svg { height: auto }` bóp hình SVG
+   rất dài của KaTeX (dấu căn, mũi tên, ngoặc giãn) xuống cao gần 0. Trả lại cách KaTeX tự đặt. */
+.card-body .katex svg { max-width: none; height: inherit; }
+
 /* ---- Xử lí TeX: thanh công cụ gọn (một hàng: chế độ xem bên trái; Công cụ ▾, Đưa vào Ngân hàng, Biên dịch PDF bên phải) ---- */
 .tsx-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .tsx-toolbar .qe-vmode { align-self: auto; }
