@@ -1871,3 +1871,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-bad { display: inline-flex; align-items: center; gap: 3px; color: var(--danger-ink); font-weight: 600; font-size: 12px; }
 .tsx-sheet { min-width: 0; }
 @media (max-width: 1000px) { .tsx-panes { height: auto; } .tsx-split { grid-template-columns: 1fr; } .tsx-list { max-height: 200px; border-right: 0; border-bottom: 1px solid var(--line-3); } }
+.tsx-pdf { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px 12px 12px; overflow: auto; }
+.tsx-pdf .note { padding: 10px 12px; }
+.tsx-diags { margin: 2px 0; padding-left: 18px; }
+.tsx-pdfbox { flex: 1 1 auto; min-height: 360px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tsx-pdfbox > * { flex: 1 1 auto; min-height: 0; }
