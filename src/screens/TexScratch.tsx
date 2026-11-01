@@ -25,6 +25,8 @@ import { ScratchReplace } from '../components/ScratchReplace';
 import { ScratchClaudeId } from '../components/ScratchClaudeId';
 import { appendText, exportName, openTexFiles } from '../lib/scratchfile';
 import { checkScratchDup, type DupRun } from '../lib/scratchdup';
+import { checkScratchBlocks, needsLook, worstOf, type CheckRun } from '../lib/scratchcheck';
+import { LEVEL_TEXT } from '../lib/check';
 import { DUP_KIND_LABEL } from '../lib/dup2';
 import { seqLabel } from '../lib/id';
 import { getState } from '../lib/store';
@@ -73,6 +75,10 @@ export function TexScratchScreen() {
   const [dupRun, setDupRun] = useState<DupRun | null>(null);
   const [dupBusy, setDupBusy] = useState<{ pct: number; phase: string } | null>(null);
   const dupStop = useRef({ aborted: false });
+  /** kết quả "Soát nội dung": chỉ áp cho câu còn đúng văn bản lúc soát */
+  const [chkRun, setChkRun] = useState<CheckRun | null>(null);
+  const [chkBusy, setChkBusy] = useState<{ done: number; total: number } | null>(null);
+  const chkStop = useRef({ aborted: false });
   /** PDF đang hiện là của các câu này (null = cả bàn nháp) */
   const [pdfScope, setPdfScope] = useState<number[] | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -212,7 +218,9 @@ export function TexScratchScreen() {
   const buildErr = useMemo(() => { const m = new Map<number, number>(); for (const d of errs) { const w = whereOf(d, scan); if (w.kind === 'noi-dung' && w.block != null) m.set(w.block, (m.get(w.block) ?? 0) + 1); } return m; }, [errs, scan]);
   /** câu nghi trùng còn hiệu lực (văn bản chưa đổi từ lúc kiểm) */
   const dupOf = useMemo(() => { const m = new Map<number, NonNullable<DupRun['marks'] extends Map<number, infer V> ? V : never>>(); if (!dupRun) return m; for (const b of scan.blocks) { const mk = dupRun.marks.get(b.n); if (mk && dupRun.snap.get(b.n) === b.text) m.set(b.n, mk); } return m; }, [dupRun, scan]);
-  const fctx = useMemo(() => ({ buildErr: new Set(buildErr.keys()), picked: scope ?? new Set<number>(), dup: new Set(dupOf.keys()) }), [buildErr, scope, dupOf]);
+  const chkOf = useMemo(() => { const m = new Map<number, NonNullable<CheckRun['issues'] extends Map<number, infer V> ? V : never>>(); if (!chkRun) return m; for (const b of scan.blocks) { const l = chkRun.issues.get(b.n); if (l && chkRun.snap.get(b.n) === b.text) m.set(b.n, l); } return m; }, [chkRun, scan]);
+  const chkLook = useMemo(() => new Set([...chkOf].filter(([, l]) => needsLook(l)).map(([n]) => n)), [chkOf]);
+  const fctx = useMemo(() => ({ buildErr: new Set(buildErr.keys()), picked: scope ?? new Set<number>(), dup: new Set(dupOf.keys()), check: chkLook }), [buildErr, scope, dupOf, chkLook]);
   const counts = useMemo(() => filterCounts(infos, fctx), [infos, fctx]);
   const shown = useMemo(() => filterInfos(infos, lfilter, fctx), [infos, lfilter, fctx]);
   const togglePick = (n: number) => setPicked((p) => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
@@ -346,6 +354,30 @@ export function TexScratchScreen() {
     try { const t = await navigator.clipboard.readText(); if (!t.trim()) { toast('Bộ nhớ tạm đang trống.'); return; } addOpened([{ name: 'bộ nhớ tạm', text: t, guessed: false }]); }
     catch { toast('Không đọc được bộ nhớ tạm (bị chặn). Bấm vào khung rồi dán bằng Ctrl+V.'); ed.current?.focus(); }
   };
+  /** Soát nội dung các câu hoàn chỉnh (hoặc chỉ câu đã chọn) bằng bộ kiểm của màn Nhập liệu. Chỉ báo, không sửa. */
+  const runCheck = async () => {
+    if (chkBusy) return;
+    const sc = scanScratch(latest.current);
+    const blocks = sc.blocks.filter((b) => b.closed && (!scope || scope.has(b.n))).map((b) => ({ n: b.n, text: b.text, line0: b.line0 }));
+    if (!blocks.length) { toast('Chưa có câu hoàn chỉnh để soát.'); return; }
+    chkStop.current = { aborted: false };
+    const sig = chkStop.current;
+    setChkBusy({ done: 0, total: blocks.length });
+    try {
+      const r = await checkScratchBlocks(blocks, { signal: sig, onProgress: (done, total) => { if (!sig.aborted) setChkBusy({ done, total }); } });
+      if (!r.complete) { toast('Đã dừng soát; chưa có kết quả đầy đủ nên không coi là "không có lỗi".'); return; }
+      setChkRun((old) => {
+        if (!old || !scope) return r;
+        const issues = new Map(old.issues), snap = new Map(old.snap);
+        for (const [n] of r.snap) { issues.delete(n); snap.set(n, r.snap.get(n)!); }
+        for (const [n, v] of r.issues) issues.set(n, v);
+        return { complete: true, issues, snap };
+      });
+      const bad = [...r.issues.values()].filter((l) => needsLook(l)).length;
+      toast(bad ? `${bad}/${blocks.length} câu cần xem lại. Xem mục “Cần xem lại” ở danh sách câu.` : `Đã soát ${blocks.length} câu: không thấy lỗi hay cảnh báo.`);
+      if (bad) setLfilter('check');
+    } catch (e) { toast(`Không soát được: ${msg(e)}`); } finally { setChkBusy(null); }
+  };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
   return (
@@ -385,6 +417,7 @@ export function TexScratchScreen() {
                 <hr className="tsx-hr" />
                 <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
                 <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!nDone || !!chkBusy} onClick={() => { setToolsOpen(false); void runCheck(); }} title="Kiểm công thức, ngoặc, đáp án đúng, lời giải… như khi nhập vào Ngân hàng; chỉ báo, không sửa">Soát nội dung…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!dupBusy} onClick={() => { setToolsOpen(false); void runDup(); }} title="So với ngân hàng và giữa các câu trong bàn nháp; chỉ đọc, không sửa gì">Kiểm tra trùng với ngân hàng…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!blocked} onClick={() => { setToolsOpen(false); setClaudeOpen(true); }}>Gán ID nhờ Claude…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setReplaceOpen(true); }}>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
@@ -488,6 +521,7 @@ export function TexScratchScreen() {
                   <button key={f} type="button" className="tsx-chip" aria-pressed={lfilter === f} onClick={() => setLfilter(f)}>{FILTER_LABEL[f]} <b>{nf.format(counts[f])}</b></button>
                 ))}
               </div>
+              {chkBusy && <p className="sys-hint tsx-dupbusy" role="status">Đang soát nội dung… {chkBusy.done}/{chkBusy.total} <button type="button" className="linkbtn" onClick={() => { chkStop.current.aborted = true; }}>Dừng</button></p>}
               {dupBusy && <p className="sys-hint tsx-dupbusy" role="status">{dupBusy.phase}… {dupBusy.pct}% <button type="button" className="linkbtn" onClick={() => { dupStop.current.aborted = true; }}>Dừng</button></p>}
               <div className="tsx-pickbar">
                 <label className="sw" title="Tick hoặc bỏ tick mọi câu đang hiện"><input type="checkbox" checked={allShownPicked} disabled={!shown.length} onChange={pickShown} />Chọn các câu đang hiện</label>
@@ -506,6 +540,7 @@ export function TexScratchScreen() {
                       <span className={`tsx-id id-${b.id.state}`}>{b.id.code ? `${b.id.code} · ` : ''}{ID_STATE_LABEL[b.id.state]}</span>
                       {b.problems > 0 && <span className="tsx-bad"><IcAlert size={13} />{b.problems}</span>}
                       {dupOf.get(b.block.n)?.[0] && (() => { const m = dupOf.get(b.block.n)![0]; const q = m.with === 'bank' ? getState().questions.find((x) => x.uid === m.other) : null; return <span className="tsx-bad" title={DUP_KIND_LABEL[m.kind]}>{m.with === 'bank' ? `trùng ${q ? seqLabel(q.seq) : 'câu trong ngân hàng'}` : `trùng câu ${m.other}`}</span>; })()}
+                      {chkOf.has(b.block.n) && worstOf(chkOf.get(b.block.n)) && worstOf(chkOf.get(b.block.n)) !== 'tin' && <span className="tsx-bad" title={chkOf.get(b.block.n)!.map((i) => i.message).join('\n')}>{worstOf(chkOf.get(b.block.n)) === 'loi' ? 'lỗi nội dung' : 'xem lại'}</span>}
                       {buildErr.has(b.block.n) && <span className="tsx-bad" title="TeX báo lỗi ở câu này">lỗi biên dịch</span>}
                     </button>
                   </li>
@@ -517,6 +552,7 @@ export function TexScratchScreen() {
                 : !parsed ? <p className="q-warn">Câu {cur.block.n} chưa có <code>\end{'{ex}'}</code> nên chưa xem nhanh được.</p>
                 : <>
                     {cur.firstProblem && <p className="q-warn">{cur.firstProblem}</p>}
+                    {chkOf.get(cur.block.n)?.filter((i) => i.level !== 'tin').map((i, k) => <p key={k} className={i.level === 'loi' ? 'q-warn' : 'sys-hint'}><b>{LEVEL_TEXT[i.level]}:</b> {i.message}{i.detail ? <> — <code>{i.detail}</code></> : null}</p>)}
                     <QuestionView p={parsed} number={cur.block.n} raw={cur.block.text} showSolution={showSol} />
                   </>}
             </div>
