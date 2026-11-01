@@ -5,13 +5,13 @@ import type { BlockInfo, ScratchScan } from './texscratch';
 /** Khối có hình TikZ (tikzpicture hoặc bảng biến thiên tkz-tab vẽ qua tikz). */
 export const hasTikz = (blockText: string): boolean => /\\begin\s*\{tikzpicture\}/.test(blockText);
 
-export type ListFilter = 'all' | 'no-id' | 'problem' | 'tikz' | 'build-err' | 'picked';
+export type ListFilter = 'all' | 'no-id' | 'problem' | 'tikz' | 'dup' | 'build-err' | 'picked';
 export const FILTER_LABEL: Record<ListFilter, string> = {
-  all: 'Tất cả', 'no-id': 'Chưa có ID', problem: 'Có lỗi', tikz: 'Có hình', 'build-err': 'Lỗi biên dịch', picked: 'Đã chọn',
+  all: 'Tất cả', 'no-id': 'Chưa có ID', problem: 'Có lỗi', tikz: 'Có hình', dup: 'Có thể trùng', 'build-err': 'Lỗi biên dịch', picked: 'Đã chọn',
 };
-export const FILTER_ORDER: ListFilter[] = ['all', 'no-id', 'problem', 'tikz', 'build-err', 'picked'];
+export const FILTER_ORDER: ListFilter[] = ['all', 'no-id', 'problem', 'tikz', 'dup', 'build-err', 'picked'];
 
-export interface FilterCtx { buildErr: ReadonlySet<number>; picked: ReadonlySet<number> }
+export interface FilterCtx { buildErr: ReadonlySet<number>; picked: ReadonlySet<number>; /** câu nghi trùng (kết quả "Kiểm tra trùng" còn hiệu lực) */ dup: ReadonlySet<number> }
 
 export function matchFilter(b: BlockInfo, f: ListFilter, ctx: FilterCtx): boolean {
   switch (f) {
@@ -19,6 +19,7 @@ export function matchFilter(b: BlockInfo, f: ListFilter, ctx: FilterCtx): boolea
     case 'no-id': return b.id.state === 'khong-co';
     case 'problem': return b.problems > 0;
     case 'tikz': return hasTikz(b.block.text);
+    case 'dup': return ctx.dup.has(b.block.n);
     case 'build-err': return ctx.buildErr.has(b.block.n);
     case 'picked': return ctx.picked.has(b.block.n);
   }
@@ -27,7 +28,7 @@ export function matchFilter(b: BlockInfo, f: ListFilter, ctx: FilterCtx): boolea
 export const filterInfos = (infos: readonly BlockInfo[], f: ListFilter, ctx: FilterCtx): BlockInfo[] => infos.filter((b) => matchFilter(b, f, ctx));
 
 export function filterCounts(infos: readonly BlockInfo[], ctx: FilterCtx): Record<ListFilter, number> {
-  const c = { all: 0, 'no-id': 0, problem: 0, tikz: 0, 'build-err': 0, picked: 0 } as Record<ListFilter, number>;
+  const c = { all: 0, 'no-id': 0, problem: 0, tikz: 0, dup: 0, 'build-err': 0, picked: 0 } as Record<ListFilter, number>;
   for (const b of infos) for (const f of FILTER_ORDER) if (matchFilter(b, f, ctx)) c[f]++;
   return c;
 }

@@ -22,6 +22,10 @@ import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbu
 import { FIX_RULES, planFix, planSort } from '../lib/texfix';
 import { ScratchReplace } from '../components/ScratchReplace';
 import { appendText, exportName, openTexFiles } from '../lib/scratchfile';
+import { checkScratchDup, type DupRun } from '../lib/scratchdup';
+import { DUP_KIND_LABEL } from '../lib/dup2';
+import { seqLabel } from '../lib/id';
+import { getState } from '../lib/store';
 import { saveTextFile } from '../lib/savefile';
 import { downloadText } from '../app-context';
 import { filterCounts, FILTER_LABEL, FILTER_ORDER, filterInfos, hasTikz, mapBlocks, pickBlocks, type ListFilter } from '../lib/scratchsel';
@@ -62,6 +66,10 @@ export function TexScratchScreen() {
   const pickedRef = useRef<ReadonlySet<number>>(picked);
   pickedRef.current = picked;
   const [lfilter, setLfilter] = useState<ListFilter>('all');
+  /** kết quả "Kiểm tra trùng": chỉ áp cho câu còn đúng văn bản lúc kiểm */
+  const [dupRun, setDupRun] = useState<DupRun | null>(null);
+  const [dupBusy, setDupBusy] = useState<{ pct: number; phase: string } | null>(null);
+  const dupStop = useRef({ aborted: false });
   /** PDF đang hiện là của các câu này (null = cả bàn nháp) */
   const [pdfScope, setPdfScope] = useState<number[] | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -190,7 +198,9 @@ export function TexScratchScreen() {
   const stale = pdfGen > 0 && (pdfText === null || pdfText !== pdfNow);
   /** số lỗi biên dịch theo câu (để gắn nhãn ở danh sách và lọc) */
   const buildErr = useMemo(() => { const m = new Map<number, number>(); for (const d of errs) { const w = whereOf(d, scan); if (w.kind === 'noi-dung' && w.block != null) m.set(w.block, (m.get(w.block) ?? 0) + 1); } return m; }, [errs, scan]);
-  const fctx = useMemo(() => ({ buildErr: new Set(buildErr.keys()), picked: scope ?? new Set<number>() }), [buildErr, scope]);
+  /** câu nghi trùng còn hiệu lực (văn bản chưa đổi từ lúc kiểm) */
+  const dupOf = useMemo(() => { const m = new Map<number, NonNullable<DupRun['marks'] extends Map<number, infer V> ? V : never>>(); if (!dupRun) return m; for (const b of scan.blocks) { const mk = dupRun.marks.get(b.n); if (mk && dupRun.snap.get(b.n) === b.text) m.set(b.n, mk); } return m; }, [dupRun, scan]);
+  const fctx = useMemo(() => ({ buildErr: new Set(buildErr.keys()), picked: scope ?? new Set<number>(), dup: new Set(dupOf.keys()) }), [buildErr, scope, dupOf]);
   const counts = useMemo(() => filterCounts(infos, fctx), [infos, fctx]);
   const shown = useMemo(() => filterInfos(infos, lfilter, fctx), [infos, lfilter, fctx]);
   const togglePick = (n: number) => setPicked((p) => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
@@ -254,6 +264,30 @@ export function TexScratchScreen() {
     else if (r.kind === 'downloaded') toast(`Đã tải ${name} về máy.`);
     else if (r.kind === 'error') toast(`Không lưu được: ${r.message}`);
   };
+  /** So các câu hoàn chỉnh (hoặc chỉ câu đã chọn) với ngân hàng và với nhau. Chỉ đọc; chạy khi bạn bấm. */
+  const runDup = async () => {
+    if (dupBusy) return;
+    const sc = scanScratch(latest.current);
+    const blocks = sc.blocks.filter((b) => b.closed && (!scope || scope.has(b.n))).map((b) => ({ n: b.n, text: b.text }));
+    if (!blocks.length) { toast('Chưa có câu hoàn chỉnh để kiểm tra.'); return; }
+    dupStop.current = { aborted: false };
+    const sig = dupStop.current;
+    setDupBusy({ pct: 0, phase: 'Đang chuẩn bị' });
+    try {
+      const r = await checkScratchDup(blocks, getState().questions, { signal: sig, onProgress: (f, phase) => { if (!sig.aborted) setDupBusy({ pct: Math.round(f * 100), phase }); } });
+      if (!r.complete) { toast('Đã dừng kiểm tra trùng; chưa có kết quả đầy đủ nên không coi là "không trùng".'); return; }
+      // giữ kết quả cũ của câu không nằm trong lượt này
+      setDupRun((old) => {
+        if (!old || !scope) return r;
+        const marks = new Map(old.marks), snap = new Map(old.snap);
+        for (const [n] of r.snap) { marks.delete(n); snap.set(n, r.snap.get(n)!); }
+        for (const [n, v] of r.marks) marks.set(n, v);
+        return { complete: true, marks, snap };
+      });
+      toast(r.marks.size ? `${r.marks.size}/${blocks.length} câu có thể trùng. Xem mục “Có thể trùng” ở danh sách câu.` : `Không thấy câu nào trùng (${blocks.length} câu đã kiểm).`);
+      if (r.marks.size) setLfilter('dup');
+    } catch (e) { toast(`Không kiểm tra được: ${msg(e)}`); } finally { setDupBusy(null); }
+  };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
   return (
@@ -283,6 +317,7 @@ export function TexScratchScreen() {
               <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setToolsOpen(false); } }}>
                 <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} autoFocus disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
                 <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!nDone || !!dupBusy} onClick={() => { setToolsOpen(false); void runDup(); }} title="So với ngân hàng và giữa các câu trong bàn nháp; chỉ đọc, không sửa gì">Kiểm tra trùng với ngân hàng…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setReplaceOpen(true); }}>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setFixFor('fix'); }}>Chuẩn hoá…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!scan.blocks.length} onClick={() => { setToolsOpen(false); setFixFor('sort'); }}>Sắp xếp theo ID…</button>
@@ -370,6 +405,7 @@ export function TexScratchScreen() {
                   <button key={f} type="button" className="tsx-chip" aria-pressed={lfilter === f} onClick={() => setLfilter(f)}>{FILTER_LABEL[f]} <b>{nf.format(counts[f])}</b></button>
                 ))}
               </div>
+              {dupBusy && <p className="sys-hint tsx-dupbusy" role="status">{dupBusy.phase}… {dupBusy.pct}% <button type="button" className="linkbtn" onClick={() => { dupStop.current.aborted = true; }}>Dừng</button></p>}
               <div className="tsx-pickbar">
                 <label className="sw" title="Tick hoặc bỏ tick mọi câu đang hiện"><input type="checkbox" checked={allShownPicked} disabled={!shown.length} onChange={pickShown} />Chọn các câu đang hiện</label>
                 {nScope > 0 && <button type="button" className="linkbtn" onClick={() => setPicked(new Set())}>Bỏ chọn ({nf.format(nScope)})</button>}
@@ -386,6 +422,7 @@ export function TexScratchScreen() {
                       {hasTikz(b.block.text) && <span className="tsx-tag" title="Có hình TikZ">hình</span>}
                       <span className={`tsx-id id-${b.id.state}`}>{b.id.code ? `${b.id.code} · ` : ''}{ID_STATE_LABEL[b.id.state]}</span>
                       {b.problems > 0 && <span className="tsx-bad"><IcAlert size={13} />{b.problems}</span>}
+                      {dupOf.get(b.block.n)?.[0] && (() => { const m = dupOf.get(b.block.n)![0]; const q = m.with === 'bank' ? getState().questions.find((x) => x.uid === m.other) : null; return <span className="tsx-bad" title={DUP_KIND_LABEL[m.kind]}>{m.with === 'bank' ? `trùng ${q ? seqLabel(q.seq) : 'câu trong ngân hàng'}` : `trùng câu ${m.other}`}</span>; })()}
                       {buildErr.has(b.block.n) && <span className="tsx-bad" title="TeX báo lỗi ở câu này">lỗi biên dịch</span>}
                     </button>
                   </li>
