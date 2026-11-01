@@ -49,6 +49,14 @@ export function TexScratchScreen() {
   const [sel, setSel] = useState<number | null>(null);
   const [showSol, setShowSol] = useState(true);
   const [askClear, setAskClear] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const off = (e: MouseEvent) => { if (!toolsRef.current?.contains(e.target as Node)) setToolsOpen(false); };
+    document.addEventListener('mousedown', off);
+    return () => document.removeEventListener('mousedown', off);
+  }, [toolsOpen]);
   const [fixFor, setFixFor] = useState<'fix' | 'sort' | null>(null);
   // biên dịch PDF
   const [tab, setTab] = useState<'cau' | 'pdf'>('cau');
@@ -183,30 +191,42 @@ export function TexScratchScreen() {
       <header className="page-head tsx-head">
         <div>
           <h1>Xử lí TeX</h1>
-          <span className="sys-hint">Dán hoặc gõ các khối <code>\begin{'{ex}'}…\end{'{ex}'}</code>. Khai báo gói có sẵn, không cần <code>\documentclass</code>. Bàn nháp không ghi vào ngân hàng.</span>
+          <span className="sys-hint">Dán hoặc gõ các khối <code>\begin{'{ex}'}…\end{'{ex}'}</code>; khai báo gói có sẵn. Bàn nháp không ghi vào ngân hàng cho tới khi bạn bấm “Đưa vào Ngân hàng”.</span>
         </div>
         <div className="head-actions">
           <span className={`qs ${save === 'loi' ? 'bad' : save === 'da-luu' ? 'ok' : 'idle'}`} role="status" title={saveErr ?? undefined}>{blocked ? 'Không lưu được' : SAVE_LABEL[save]}</span>
           <button type="button" className="btn btn-sm" disabled={!!blocked || save === 'da-luu'} onClick={() => void flush()} title="Ctrl+S">Lưu nháp</button>
-          <button type="button" className="btn btn-sm" disabled={!text || !!blocked} onClick={() => setFixFor('fix')} title="Xem trước các thay đổi rồi mới áp dụng">Chuẩn hoá…</button>
-          <button type="button" className="btn btn-sm" disabled={!scan.blocks.length || !!blocked} onClick={() => setFixFor('sort')}>Sắp xếp theo ID…</button>
-          <button type="button" className="btn btn-sm btn-ghost" disabled={!text} onClick={() => setAskClear(true)}>Xoá nội dung…</button>
+        </div>
+      </header>
+
+      <div className="tsx-toolbar" role="toolbar" aria-label="Công cụ bàn nháp">
+        <div className="seg sm qe-vmode" role="group" aria-label="Chế độ xem">
+          {([['code', 'Mã'], ['both', 'Mã + Xem trước'], ['view', 'Xem trước']] as const).map(([k, l]) => (
+            <button key={k} type="button" aria-pressed={vmode === k} onClick={() => setVmode(k)}>{l}</button>
+          ))}
+        </div>
+        <div className="tsx-tools">
+          <div className="tsx-more" ref={toolsRef}>
+            <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolsOpen} disabled={!text || !!blocked} onClick={() => setToolsOpen((o) => !o)}>Công cụ ▾</button>
+            {toolsOpen && (
+              <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setToolsOpen(false); } }}>
+                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setFixFor('fix'); }} autoFocus>Chuẩn hoá…</button>
+                <button type="button" role="menuitem" disabled={!scan.blocks.length} onClick={() => { setToolsOpen(false); setFixFor('sort'); }}>Sắp xếp theo ID…</button>
+                <button type="button" role="menuitem" className="danger" onClick={() => { setToolsOpen(false); setAskClear(true); }}>Xoá nội dung…</button>
+              </div>
+            )}
+          </div>
           <button type="button" className="btn btn-sm" disabled={!nDone || !!blocked} onClick={() => void toBank()} title="Mở màn Nhập liệu với các câu của bàn nháp: rà trùng, kiểm ID rồi mới ghi vào ngân hàng">Đưa vào Ngân hàng{nDone ? ` (${nf.format(nDone)} câu)` : ''}…</button>
           {busy
             ? <button type="button" className="btn btn-sm" onClick={stop}>Dừng biên dịch</button>
             : <button type="button" className="btn btn-sm btn-accent" disabled={!text.trim()} onClick={() => void compile()} title="Ctrl+Enter">Biên dịch PDF</button>}
         </div>
-      </header>
+      </div>
 
       {blocked && <div className="note bad" role="alert"><div className="note-body"><IcAlert size={16} /><span>{blocked}</span></div></div>}
       {fromBackup && <div className="note warn" role="status"><div className="note-body"><span>Bản nháp chính bị hỏng nên HEdu đã mở bản dự phòng gần nhất. Kiểm tra lại nội dung.</span></div></div>}
       {saveErr && !blocked && <div className="note bad" role="alert"><div className="note-body"><span>{saveErr}</span><button type="button" className="btn btn-sm" onClick={() => void flush()}>Thử lưu lại</button></div></div>}
 
-      <div className="seg sm qe-vmode" role="group" aria-label="Chế độ xem">
-        {([['code', 'Mã'], ['both', 'Mã + Xem trước'], ['view', 'Xem trước']] as const).map(([k, l]) => (
-          <button key={k} type="button" aria-pressed={vmode === k} onClick={() => setVmode(k)}>{l}</button>
-        ))}
-      </div>
       <div className="qe-tabs" role="tablist" aria-label="Khung đang xem">
         <button type="button" role="tab" aria-selected={pane === 'code'} onClick={() => setPane('code')}>Mã LaTeX</button>
         <button type="button" role="tab" aria-selected={pane === 'view'} onClick={() => setPane('view')}>Câu hỏi</button>
