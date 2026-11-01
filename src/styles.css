@@ -1898,3 +1898,20 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-more .more-menu button[disabled] { opacity: .45; cursor: default; }
 .tsx-head .head-actions { align-items: center; }
 .tsx-panes { height: calc(100vh - 190px); }
+
+/* ---- Xử lí TeX: lọc + chọn câu, hộp Tìm và thay thế ---- */
+.tsx-listwrap { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line-3); }
+.tsx-listwrap .tsx-list { flex: 1 1 auto; border-right: 0; }
+.tsx-filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 6px 2px; }
+.tsx-chip { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 2px 8px; font: inherit; font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.tsx-chip b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tsx-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--paper)); border-color: var(--accent); color: var(--ink); }
+.tsx-pickbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 2px 10px 4px; font-size: 12px; }
+.tsx-row { display: flex; align-items: flex-start; gap: 2px; }
+.tsx-row .tsx-pick { flex: none; margin: 10px 2px 0 4px; width: 16px; height: 16px; accent-color: var(--ink); }
+.tsx-row .tsx-item { flex: 1 1 auto; min-width: 0; }
+.tsx-rf { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; }
+.tsx-rf input { height: 32px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 8px; font: inherit; background: var(--paper); color: var(--ink); }
+@media (max-width: 1000px) { .tsx-listwrap { border-right: 0; border-bottom: 1px solid var(--line-3); } }
+.tsx-opts { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; font-size: 13px; }
+.tsx-opts .sw { display: flex; align-items: baseline; gap: 8px; }
