@@ -5,6 +5,7 @@
 // PDF mang nhãn "bản trước" khi mã đã đổi; PDF nguyên văn (có thể chứa lời giải).
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { setImportHandoff } from '../lib/importhandoff';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IcAlert, IcCheckCircle, IcCopy } from '../components/Icons';
@@ -32,7 +33,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const lines = (xs: readonly number[]) => (xs.length > 4 ? `${xs.slice(0, 4).join(', ')}…` : xs.join(', '));
 
 export function TexScratchScreen() {
-  const { toast } = useApp();
+  const { toast, go } = useApp();
   const { tax } = useTaxonomy();
   const ed = useRef<CodeEditorHandle>(null);
   const [text, setText] = useState('');
@@ -124,6 +125,7 @@ export function TexScratchScreen() {
   const cur: BlockInfo | null = infos.find((b) => b.block.n === sel) ?? infos[0] ?? null;
   const parsed = useMemo(() => (cur?.block.closed ? parseExTest(cur.block.text) : null), [cur]);
   const nId = infos.filter((b) => b.id.state === 'co-trong-cay').length;
+  const nDone = infos.filter((b) => b.block.closed).length;
   const nBad = infos.filter((b) => b.problems > 0).length;
 
   const compile = useCallback(async () => {
@@ -167,6 +169,13 @@ export function TexScratchScreen() {
     ed.current?.replaceDoc(KEY, next);
     toast(`Đã ${what.toLowerCase()}.`, { label: 'Hoàn tác', run: () => { if (latest.current === next) ed.current?.replaceDoc(KEY, prev); } });
   };
+  /** Đưa các khối ex của bàn nháp sang màn Nhập liệu (qua đúng luồng nhập: rà trùng, kiểm ID, xem lại, rồi mới ghi). Bàn nháp giữ nguyên. */
+  const toBank = async () => {
+    if (nDone === 0) { toast('Chưa có khối ex hoàn chỉnh (đủ \\begin{ex} và \\end{ex}) để đưa vào.'); return; }
+    await flush();
+    setImportHandoff(latest.current);
+    go({ screen: 'import' });
+  };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
   return (
@@ -182,6 +191,7 @@ export function TexScratchScreen() {
           <button type="button" className="btn btn-sm" disabled={!text || !!blocked} onClick={() => setFixFor('fix')} title="Xem trước các thay đổi rồi mới áp dụng">Chuẩn hoá…</button>
           <button type="button" className="btn btn-sm" disabled={!scan.blocks.length || !!blocked} onClick={() => setFixFor('sort')}>Sắp xếp theo ID…</button>
           <button type="button" className="btn btn-sm btn-ghost" disabled={!text} onClick={() => setAskClear(true)}>Xoá nội dung…</button>
+          <button type="button" className="btn btn-sm" disabled={!nDone || !!blocked} onClick={() => void toBank()} title="Mở màn Nhập liệu với các câu của bàn nháp: rà trùng, kiểm ID rồi mới ghi vào ngân hàng">Đưa vào Ngân hàng{nDone ? ` (${nf.format(nDone)} câu)` : ''}…</button>
           {busy
             ? <button type="button" className="btn btn-sm" onClick={stop}>Dừng biên dịch</button>
             : <button type="button" className="btn btn-sm btn-accent" disabled={!text.trim()} onClick={() => void compile()} title="Ctrl+Enter">Biên dịch PDF</button>}
