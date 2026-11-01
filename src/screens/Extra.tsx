@@ -35,6 +35,7 @@ import { DEFAULT_SORT } from '../lib/qsort';
 import { ImportReportView } from '../components/ImportReportView';
 import { appendLog, buildReport, type IdPlace, type ImportReport, type ReportRow } from '../lib/importreport';
 import { addMany, flushSave, getState, isLastSaveOk, useBank, type Draft } from '../lib/store';
+import { clearImportHandoff, peekImportHandoff } from '../lib/importhandoff';
 import { TRUST_BLOCK_LABEL, trustBlock, trustTag, type TrustBlock } from '../lib/importtrust';
 import { LEVEL_LABEL, LEVELS, TYPE_LABEL, type Level, type Location } from '../lib/types';
 
@@ -52,7 +53,10 @@ export function ImportScreen() {
   const taxIx = useMemo(() => indexOf(taxNow), [taxNow]);
   /** Trạng thái xác minh CÓ HIỆU LỰC của câu trong ngân hàng (căn cứ kiểm chứng không lấy câu chưa phân loại / cần xem lại). */
   const effOf = (q: (typeof questions)[number]) => effectiveOf(q, getRec(q.uid), { ix: taxIx, taxRev: taxRevNow });
-  const [src, setSrc] = useState('');
+  // Nội dung chuyển từ bàn nháp Xử lí TeX (nếu có): vào ô dán như dán tay, rồi đi đủ các bước nhập như mọi lần.
+  const [fromTex] = useState(() => peekImportHandoff());
+  const [src, setSrc] = useState(fromTex ?? '');
+  useEffect(() => { clearImportHandoff(); }, []);
   // Câu không có ID vào mục "Chưa có ID" (không vào Dạng nào). Giáo viên chỉ chọn Lớp nếu biết; vị trí lưu kèm câu chỉ là chỗ giữ, không hiện, không thành ID.
   const [noIdGrade, setNoIdGrade] = useState<number | null>(null);
   const loc = useMemo<Location>(() => firstLocation(noIdGrade ?? undefined), [noIdGrade, taxNow]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,7 +64,7 @@ export function ImportScreen() {
   const file = useRef<HTMLInputElement>(null);
 
   // Đọc lại sau khi ngừng gõ 250ms: dán một file vài trăm câu mà đọc ngay từng phím thì treo.
-  const [text250, setText250] = useState('');
+  const [text250, setText250] = useState(fromTex ?? '');
   useEffect(() => {
     const t = setTimeout(() => setText250(src), 250);
     return () => clearTimeout(t);
@@ -468,6 +472,12 @@ export function ImportScreen() {
           })}
         </ol>
       </header>
+      {fromTex && !multi && !result && src === fromTex && (
+        <div className="simple"><div className="note" role="status"><div className="note-body">
+          <span>Các câu dưới đây lấy từ bàn nháp <b>Xử lí TeX</b> (bàn nháp vẫn còn nguyên, nhập xong không bị xoá). Nhập đủ các bước như mọi lần: rà trùng, kiểm ID, xem lại rồi mới ghi vào ngân hàng.</span>
+          <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'tex' })}>← Về Xử lí TeX</button>
+        </div></div></div>
+      )}
       {result && lots && lots.idx < lots.list.length - 1 && (
         <div className="simple"><div className="note" role="status"><div className="note-body">
           <b>Xong lô {lots.idx + 1} / {lots.list.length}.</b>

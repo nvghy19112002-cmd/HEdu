@@ -15,21 +15,49 @@ pub const MAX_BYTES: usize = 20 * 1024 * 1024;
 
 pub struct Paths {
     dir: PathBuf,
+    /// phần tên tệp bản nháp: "nhap" (bản chính, như trước) hoặc "nhap-<ngăn>"
+    stem: String,
 }
 
 impl Paths {
     pub fn new(app_data: &Path) -> Self {
-        Paths { dir: app_data.join("xu-li-tex") }
+        Paths { dir: app_data.join("xu-li-tex"), stem: "nhap".into() }
+    }
+    /// Ngăn bản nháp có tên (nhiều bàn nháp). Tên ngăn do giao diện sinh, chỉ nhận a-z, 0-9, dấu gạch ngang (không cho "..", "/", "\\"); rỗng = bản chính.
+    pub fn slot(app_data: &Path, slot: Option<&str>) -> io::Result<Self> {
+        let mut p = Paths::new(app_data);
+        if let Some(s) = slot.filter(|s| !s.is_empty()) {
+            if s.len() > 40 || !s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "Tên ngăn bản nháp không hợp lệ."));
+            }
+            p.stem = format!("nhap-{s}");
+        }
+        Ok(p)
     }
     fn main(&self) -> PathBuf {
-        self.dir.join("nhap.tex")
+        self.dir.join(format!("{}.tex", self.stem))
     }
     fn bak(&self) -> PathBuf {
-        self.dir.join("nhap.tex.bak")
+        self.dir.join(format!("{}.tex.bak", self.stem))
     }
     fn tmp(&self) -> PathBuf {
-        self.dir.join("nhap.tex.part")
+        self.dir.join(format!("{}.tex.part", self.stem))
     }
+}
+
+/// Xoá một ngăn bản nháp có tên (không xoá được bản chính).
+pub fn delete_slot(p: &Paths) -> io::Result<()> {
+    if p.stem == "nhap" {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Không xoá được bàn nháp chính."));
+    }
+    for f in [p.main(), p.bak(), p.tmp()] {
+        match fs::remove_file(&f) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
 }
 
 /// Ghi bản nháp. Quá giới hạn ⇒ lỗi, không ghi gì.
@@ -95,16 +123,26 @@ fn paths(app: &AppHandle) -> Result<Paths, String> {
     Ok(Paths::new(&app.path().app_data_dir().map_err(|e| e.to_string())?))
 }
 
+fn slot_paths(app: &AppHandle, slot: Option<String>) -> Result<Paths, String> {
+    Paths::slot(&app.path().app_data_dir().map_err(|e| e.to_string())?, slot.as_deref()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
-pub async fn tex_scratch_load(app: AppHandle) -> Result<LoadOut, String> {
-    let p = paths(&app)?;
+pub async fn tex_scratch_load(app: AppHandle, slot: Option<String>) -> Result<LoadOut, String> {
+    let p = slot_paths(&app, slot)?;
     tauri::async_runtime::spawn_blocking(move || load(&p)).await.map_err(|e| e.to_string())?.map_err(|e| format!("Không đọc được bản nháp: {e}"))
 }
 
 #[tauri::command]
-pub async fn tex_scratch_save(app: AppHandle, text: String) -> Result<(), String> {
-    let p = paths(&app)?;
+pub async fn tex_scratch_save(app: AppHandle, text: String, slot: Option<String>) -> Result<(), String> {
+    let p = slot_paths(&app, slot)?;
     tauri::async_runtime::spawn_blocking(move || save(&p, &text)).await.map_err(|e| e.to_string())?.map_err(|e| format!("Không lưu được bản nháp: {e}"))
+}
+
+#[tauri::command]
+pub async fn tex_scratch_delete(app: AppHandle, slot: String) -> Result<(), String> {
+    let p = slot_paths(&app, Some(slot))?;
+    tauri::async_runtime::spawn_blocking(move || delete_slot(&p)).await.map_err(|e| e.to_string())?.map_err(|e| format!("Không xoá được bản nháp: {e}"))
 }
 
 // ---------- Đợt 1b: biên dịch bàn nháp ra PDF ----------
@@ -410,6 +448,47 @@ mod tests {
         assert_eq!(load(&p).unwrap(), LoadOut { text: Some("bản tốt".into()), from_backup: true });
         fs::write(p.bak(), [0xff]).unwrap();
         assert!(load(&p).is_err(), "cả hai hỏng ⇒ báo lỗi, không coi như trống");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn nhieu_ngan_ban_nhap_tach_roi_va_ban_chinh_khong_doi() {
+        let d = tmp_dir("ngan");
+        let main = Paths::slot(&d, None).unwrap();
+        let a = Paths::slot(&d, Some("de-gk1")).unwrap();
+        save(&main, "chính").unwrap();
+        save(&a, "đề giữa kì").unwrap();
+        assert_eq!(load(&main).unwrap().text.as_deref(), Some("chính"));
+        assert_eq!(load(&a).unwrap().text.as_deref(), Some("đề giữa kì"));
+        assert!(d.join("xu-li-tex").join("nhap.tex").exists(), "bản chính vẫn là nhap.tex như các bản trước");
+        assert!(d.join("xu-li-tex").join("nhap-de-gk1.tex").exists());
+        assert_eq!(Paths::slot(&d, Some("")).unwrap().main(), main.main(), "ngăn rỗng = bản chính");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn ten_ngan_khong_hop_le_bi_tu_choi() {
+        let d = tmp_dir("ten");
+        for bad in ["..", "a/b", "a\\b", "A", "a b", "a.tex", &"x".repeat(41)] {
+            assert!(Paths::slot(&d, Some(bad)).is_err(), "{bad}");
+        }
+        assert!(Paths::slot(&d, Some("a-1")).is_ok());
+    }
+
+    #[test]
+    fn xoa_ngan_chi_xoa_ngan_do_va_khong_xoa_ban_chinh() {
+        let d = tmp_dir("xoa");
+        let main = Paths::slot(&d, None).unwrap();
+        let a = Paths::slot(&d, Some("a")).unwrap();
+        save(&main, "chính").unwrap();
+        save(&a, "một").unwrap();
+        save(&a, "hai").unwrap();
+        delete_slot(&a).unwrap();
+        assert_eq!(load(&a).unwrap().text, None, "xoá cả tệp .bak");
+        assert_eq!(load(&main).unwrap().text.as_deref(), Some("chính"));
+        assert!(delete_slot(&main).is_err());
+        assert_eq!(load(&main).unwrap().text.as_deref(), Some("chính"));
+        delete_slot(&a).unwrap(); // xoá lần nữa không lỗi
         let _ = fs::remove_dir_all(&d);
     }
 
