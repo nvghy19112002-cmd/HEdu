@@ -21,7 +21,8 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Pane = 'files' | 'edit' | 'pdf' | 'log';
 const NARROW = 1000;
 
-interface Props { id: string; name: string; mainFile: string | null; onClose(): void }
+/** `toInfo` = người dùng bấm "Thông tin…": đóng không gian soạn rồi mở hộp Thông tin & thao tác của đề (đổi tên, lớp, chốt đề, xuất gói, Thùng rác…). */
+interface Props { id: string; name: string; mainFile: string | null; onClose(toInfo?: boolean): void }
 
 export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   const { toast } = useApp();
@@ -324,7 +325,8 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   const heduSty = list.files.some((x) => x.rel === 'hedu.sty');
   const stale = !!result && result.status !== 'ok';
 
-  const requestClose = () => { if (anyDirty(tabsRef.current)) setLeave(true); else onClose(); };
+  const goInfo = useRef(false);
+  const requestClose = (toInfo = false) => { goInfo.current = toInfo; if (anyDirty(tabsRef.current)) setLeave(true); else onClose(toInfo); };
   const onKey = (e: React.KeyboardEvent) => {
     if (e.defaultPrevented) return; // trình soạn đã xử lý (vd. Ctrl+S) rồi
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (e.shiftKey) void saveAll(); else if (active) void saveOne(active); }
@@ -364,9 +366,10 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   return (
     <div className="ew" role="dialog" aria-modal="true" aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
       <header className="ew-head">
-        <nav aria-label="Vị trí" className="ew-crumb"><button type="button" className="btn btn-sm" onClick={requestClose}>← Thư viện</button> <b>{name}</b>{active && <span className="xl-meta"> › {active}</span>}</nav>
+        <nav aria-label="Vị trí" className="ew-crumb"><button type="button" className="btn btn-sm" onClick={() => requestClose()}>← Thư viện</button> <b>{name}</b>{active && <span className="xl-meta"> › {active}</span>}</nav>
         <span className={`ew-badge ${badge.tone}`} role="status" aria-live="polite">{badge.text}</span>
         <span className="pv-grp">
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => requestClose(true)} title="Đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
           <button type="button" className="btn btn-sm" disabled={!tab || !tab.dirty || !!tab.readOnly || saving} onClick={() => active && void saveOne(active)}>Lưu</button>
           <button type="button" className="btn btn-sm" disabled={!anyDirty(tabs) || saving} onClick={() => void saveAll()}>Lưu tất cả</button>
           <button type="button" className="btn btn-sm" disabled={!tab || tab.kind !== 'text' || !!tab.readOnly} onClick={() => setPicker(true)}>+ Câu từ Ngân hàng</button>
@@ -498,8 +501,8 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
             <p>{tabs.filter((t) => t.dirty).map((t) => t.rel).join(', ')}</p>
             <p className="xl-meta">Nếu đóng không lưu, bản nháp tự lưu vẫn được giữ và hỏi khôi phục lần sau.</p>
             <div className="xl-actions">
-              <button type="button" className="btn btn-sm btn-primary" onClick={async () => { if (await saveAll()) onClose(); else setLeave(false); }}>Lưu tất cả rồi đóng</button>
-              <button type="button" className="btn btn-sm" onClick={onClose}>Đóng không lưu</button>
+              <button type="button" className="btn btn-sm btn-primary" onClick={async () => { if (await saveAll()) onClose(goInfo.current); else setLeave(false); }}>Lưu tất cả rồi đóng</button>
+              <button type="button" className="btn btn-sm" onClick={() => onClose(goInfo.current)}>Đóng không lưu</button>
               <button type="button" className="btn btn-sm" onClick={() => setLeave(false)}>Quay lại</button>
             </div>
           </div>
