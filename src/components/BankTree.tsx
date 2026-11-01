@@ -67,6 +67,8 @@ interface Props {
   off?: boolean;
   onPick(p: NodePath | null): void;
   /** mục "Chưa có ID": tổng, số theo lớp (NOID_UNKNOWN = chưa rõ lớp), mục đang chọn */
+  /** mục "Tất cả" đang được chọn (false = chưa chọn mục nào nên không tô sáng "Tất cả") */
+  allOn?: boolean;
   noId?: { total: number; by: ReadonlyMap<number, number>; sel: NoIdPick; onPick(v: NoIdPick): void };
 }
 
@@ -76,7 +78,7 @@ const Inbox = () => (
   </svg>
 );
 
-export const BankTree = memo(function BankTree({ tax, path, counts, total, off, onPick, noId }: Props) {
+export const BankTree = memo(function BankTree({ tax, path, counts, total, off, onPick, noId, allOn = true }: Props) {
   const [query, setQuery] = useState('');
   const [showEmpty, setShowEmpty] = useState(false);
   const [open, setOpen] = useState<Set<string>>(loadOpen);
@@ -129,8 +131,8 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
         <input type="search" placeholder="Tìm thư mục…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
       <ul ref={treeRef} className="bt-tree" role="tree" aria-label="Cây mục lục" onKeyDown={treeKeys}>
-        <li role="treeitem" aria-level={1} aria-selected={sel === null && noSel == null}>
-          <div className={`bt-row k-all${sel === null && noSel == null ? ' is-sel' : ''}`}>
+        <li role="treeitem" aria-level={1} aria-selected={allOn && sel === null && noSel == null}>
+          <div className={`bt-row k-all${allOn && sel === null && noSel == null ? ' is-sel' : ''}`}>
             <button type="button" className="bt-name" onClick={() => onPick(null)}><Layers /><span className="bt-label">Tất cả</span><span className="bt-n">{nf.format(total)}</span></button>
           </div>
         </li>

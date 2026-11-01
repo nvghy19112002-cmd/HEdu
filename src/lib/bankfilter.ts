@@ -19,7 +19,12 @@ export interface BankFilters {
   tag: string | null;
   /** mục "Chưa có ID": null = không chọn · 'all' = mọi câu chưa có ID · số = theo lớp giáo viên chọn khi nhập (0 = chưa rõ lớp). Loại trừ với vị trí. */
   noId: NoIdPick;
+  /** đã bấm mục "Tất cả" ở cây (xem cả kho). Vắng/false và chưa chọn Lớp/"Chưa có ID" = CHƯA chọn mục nào ⇒ chưa hiện câu (xem `scopeChosen`). */
+  all?: boolean;
 }
+
+/** Đã chọn phạm vi để xem câu chưa: "Tất cả", một Lớp (và các cấp con) hoặc "Chưa có ID". Chưa chọn ⇒ Ngân hàng chưa hiện câu (chủ dự án chốt 01/11/2026). */
+export const scopeChosen = (f: BankFilters): boolean => !!f.all || f.gradeId != null || f.noId != null;
 
 export type NoIdPick = null | 'all' | number;
 /** lớp của câu Chưa có ID khi chưa biết */
@@ -27,7 +32,7 @@ export const NOID_UNKNOWN = 0;
 
 export const emptyFilters = (): BankFilters => ({
   gradeId: null, branchId: null, chapterId: null, lessonId: null, formId: null,
-  levels: new Set(), types: new Set(), figure: 'all', review: 'all', tag: null, noId: null,
+  levels: new Set(), types: new Set(), figure: 'all', review: 'all', tag: null, noId: null, all: false,
 });
 
 /** Chọn nhiều: chọn ĐỦ mọi giá trị ≡ "Tất cả" (không phải đang lọc). Rỗng cũng là không lọc. */
@@ -46,9 +51,10 @@ const clearFrom = {
   lesson: { lessonId: null, formId: null },
 } as const;
 
-export const pickGrade = (f: BankFilters, g: string | null): BankFilters => ({ ...f, gradeId: g, ...clearFrom.branch, noId: null });
+/** `g` = null là mục "Tất cả" (xem cả kho). */
+export const pickGrade = (f: BankFilters, g: string | null): BankFilters => ({ ...f, gradeId: g, ...clearFrom.branch, noId: null, all: g == null });
 /** Chọn mục "Chưa có ID" (hoặc một lớp trong đó): bỏ vị trí trong cây. */
-export const pickNoId = (f: BankFilters, v: NoIdPick): BankFilters => ({ ...f, gradeId: null, ...clearFrom.branch, noId: v });
+export const pickNoId = (f: BankFilters, v: NoIdPick): BankFilters => ({ ...f, gradeId: null, ...clearFrom.branch, noId: v, all: false });
 export const pickBranch = (f: BankFilters, id: string | null): BankFilters => ({ ...f, ...clearFrom.branch, branchId: id });
 export const pickChapter = (tax: Taxonomy, f: BankFilters, id: string | null): BankFilters => ({
   ...f, ...clearFrom.chapter, chapterId: id,
@@ -94,7 +100,7 @@ export function sanitize(tax: Taxonomy, f: BankFilters): BankFilters {
   if (f.noId != null) return f.gradeId || f.branchId || f.chapterId || f.lessonId || f.formId ? { ...f, gradeId: null, ...clearFrom.branch } : f;
   if (f.gradeId == null) return f.branchId || f.chapterId || f.lessonId || f.formId ? { ...f, ...clearFrom.branch } : f;
   const g = tax.grades.find((x) => x.id === f.gradeId);
-  if (!g) return pickGrade(f, null);
+  if (!g) return { ...pickGrade(f, null), all: false }; // lớp không còn trong cây: về trạng thái chưa chọn
   let out = f;
   const br = f.branchId ? g.branches.find((b) => b.id === f.branchId) : undefined;
   if (f.branchId && !br) out = pickBranch(out, null);
@@ -120,10 +126,12 @@ export interface FilterCtx {
   sort?: SortMode;
   /** câu thuộc mục "Chưa có ID" ⇒ lớp giáo viên chọn khi nhập (NOID_UNKNOWN = chưa rõ); câu đã có vị trí thật ⇒ null */
   noIdOf?: (q: Question) => number | null;
+  /** đã chọn phạm vi (`scopeChosen`); false và không "Toàn kho" ⇒ chưa hiện câu nào (mặc định true) */
+  chosen?: boolean;
 }
 
 /** Dựng ngữ cảnh lọc từ cây. */
-export const facetCtx = (tax: Taxonomy, textOk: (uid: string) => boolean, wide: boolean, sort?: SortMode, noIdOf?: (q: Question) => number | null): FilterCtx => ({ ...taxMaps(tax), textOk, wide, sort, noIdOf });
+export const facetCtx = (tax: Taxonomy, textOk: (uid: string) => boolean, wide: boolean, sort?: SortMode, noIdOf?: (q: Question) => number | null, chosen = true): FilterCtx => ({ ...taxMaps(tax), textOk, wide, sort, noIdOf, chosen });
 
 export interface Facets {
   /** Các câu hiện ra (đã sắp theo mới sửa trước) */
@@ -187,7 +195,7 @@ export function computeFacets(questions: readonly Question[], f: BankFilters, ct
     if (!ctx.textOk(q.uid)) continue;
     let prefix = 0;
     while (prefix < 5 && pos[prefix]) prefix++;
-    const posOk = ctx.wide || prefix === 5;
+    const posOk = ctx.wide || (ctx.chosen !== false && prefix === 5);
     const fig = figureOf(q);
     let fails = 0;
     if (lv && !f.levels.has(q.level)) fails |= B_LEVEL;
@@ -248,10 +256,11 @@ export function dropAttr(f: BankFilters, key: AttrKey): BankFilters {
 }
 
 /** Vì sao danh sách rỗng: 'bank' kho trống · 'scope' mục chưa có câu · 'filters' có câu nhưng bộ lọc loại hết · 'text' do chữ tìm. null = không rỗng. */
-export type EmptyKind = 'bank' | 'scope' | 'filters' | 'text' | null;
+export type EmptyKind = 'bank' | 'choose' | 'scope' | 'filters' | 'text' | null;
 export function emptyKind(facets: Facets, f: BankFilters, o: { totalQuestions: number; hasText: boolean; wide: boolean }): EmptyKind {
   if (facets.list.length) return null;
   if (o.totalQuestions === 0) return 'bank';
+  if (!o.wide && !scopeChosen(f)) return 'choose';
   if (!o.wide && facets.inScope === 0) return 'scope';
   if (attrCount(f) > 0) return 'filters';
   return o.hasText ? 'text' : 'scope';

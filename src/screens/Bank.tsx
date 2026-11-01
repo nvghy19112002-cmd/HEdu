@@ -30,7 +30,7 @@ import { verbatimTex } from '../lib/texproject';
 import { ExportChoiceDialog } from '../components/ExportChoiceDialog';
 import { addMany, exportVerdict, pageState, prune, removeMany, selCounts, SELECT_ALL_CONFIRM_OVER, toggleOne, EXPORT_MAX } from '../lib/selection';
 import { SORT_LABEL, SORT_MODES, sortedCopy, type SortMode } from '../lib/qsort';
-import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, NOID_UNKNOWN, sanitize, taxMaps, type BankFilters } from '../lib/bankfilter';
+import { attrCount, chapterBranchMap, levelsActive, clearAttrs, computeFacets, emptyFilters, facetCtx, NOID_UNKNOWN, sanitize, scopeChosen, taxMaps, type BankFilters } from '../lib/bankfilter';
 import { getRec } from '../lib/idreview';
 import { fold, parseBankQuery, queryOk } from '../lib/banksearch';
 import { DupCheck } from '../components/DupCheck';
@@ -135,7 +135,7 @@ export function BankScreen() {
       const e = effOf(q);
       return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF;
     };
-    return computeFacets(questions, f, facetCtx(tax, (uid) => queryOk(query, index.get(uid)!, qByUid.get(uid)?.seq ?? -1) && idOk(uid), wideOn, sort, noIdOf));
+    return computeFacets(questions, f, facetCtx(tax, (uid) => queryOk(query, index.get(uid)!, qByUid.get(uid)?.seq ?? -1) && idOk(uid), wideOn, sort, noIdOf, scopeChosen(f)));
   }, [questions, f, query, wideOn, tax, index, sort, idF, qByUid, effOf, noIdOf]);
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
@@ -189,7 +189,7 @@ export function BankScreen() {
       return;
     }
     const tm = taxMaps(tax);
-    setF0({ ...emptyFilters(), gradeId: tm.chapterGrade.get(q.chapterId) ?? tm.gradeByNum.get(q.grade) ?? null, branchId: chapterBranchMap(tax).get(q.chapterId) ?? null, chapterId: q.chapterId || null, lessonId: q.lessonId || null });
+    setF0({ ...emptyFilters(), gradeId: tm.chapterGrade.get(q.chapterId) ?? tm.gradeByNum.get(q.grade) ?? null, branchId: chapterBranchMap(tax).get(q.chapterId) ?? null, chapterId: q.chapterId || null, lessonId: q.lessonId || null, all: !(tm.chapterGrade.get(q.chapterId) ?? tm.gradeByNum.get(q.grade)) });
     const sc = questions.filter((x) => x.grade === q.grade && (!q.chapterId || x.chapterId === q.chapterId) && (!q.lessonId || x.lessonId === q.lessonId)).sort((a, b) => b.updatedAt - a.updatedAt);
     setPage(Math.floor(Math.max(0, sc.findIndex((x) => x.uid === uid)) / PER_PAGE));
     setFlashUid(uid);
