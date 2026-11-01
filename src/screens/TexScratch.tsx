@@ -341,6 +341,11 @@ export function TexScratchScreen() {
       if (r.marks.size) setLfilter('dup');
     } catch (e) { toast(`Không kiểm tra được: ${msg(e)}`); } finally { setDupBusy(null); }
   };
+  /** Dán nội dung đang copy (nếu trình duyệt cho đọc) vào bàn nháp, nối vào cuối. */
+  const pasteClip = async () => {
+    try { const t = await navigator.clipboard.readText(); if (!t.trim()) { toast('Bộ nhớ tạm đang trống.'); return; } addOpened([{ name: 'bộ nhớ tạm', text: t, guessed: false }]); }
+    catch { toast('Không đọc được bộ nhớ tạm (bị chặn). Bấm vào khung rồi dán bằng Ctrl+V.'); ed.current?.focus(); }
+  };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
   return (
@@ -410,6 +415,20 @@ export function TexScratchScreen() {
           <div className="qe-bar"><h2>Mã LaTeX</h2><span className="qe-pos">{ready ? `${nf.format(scan.blocks.length)} khối ex` : 'Đang mở bản nháp…'}</span></div>
           <div className="tsx-editor">
             <CodeEditor ref={ed} label="Soạn nội dung LaTeX" onDirty={() => undefined} onSave={() => void flush()} onChangeText={onChangeText} />
+            {ready && !text && !blocked && (
+              <div className="tsx-empty" role="note">
+                <b>Bàn nháp đang trống</b>
+                <ol>
+                  <li>Dán các khối <code>\begin{'{ex}'}…\end{'{ex}'}</code> vào khung này (Ctrl+V), hoặc mở tệp .tex.</li>
+                  <li>Xem từng câu ở bên phải; bấm <b>Biên dịch PDF</b> (Ctrl+Enter) để TeX Live dịch thử.</li>
+                  <li>Gán ID, kiểm tra trùng rồi bấm <b>Đưa vào Ngân hàng</b>.</li>
+                </ol>
+                <div className="head-actions">
+                  <button type="button" className="btn btn-sm" onClick={() => void openFiles()}>Mở tệp .tex…</button>
+                  <button type="button" className="btn btn-sm" onClick={() => void pasteClip()}>Dán từ bộ nhớ tạm</button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -509,7 +528,7 @@ export function TexScratchScreen() {
         <span className="qs">{nf.format(infos.length)} câu</span>
         <span className="qs" title="ID đúng cú pháp và có trong cây chương trình (chưa phải giáo viên xác minh Dạng)">{nf.format(nId)} có ID trong cây</span>
         <span className={`qs ${nBad ? 'bad' : 'ok'}`}>{nBad ? <IcAlert size={15} /> : <IcCheckCircle size={15} />}{nBad ? `${nf.format(nBad)} câu cần xem lại` : 'Không thấy lỗi cú pháp'}</span>
-        <span className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`}>{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</span>
+        <button type="button" className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`} onClick={() => setTab('pdf')} title="Xem khung PDF">{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</button>
       </footer>
 
       {nameDlg && <NameDialog title={nameDlg.kind === 'new' ? 'Bàn nháp mới' : 'Đổi tên bàn nháp'} initial={nameDlg.initial} confirmLabel={nameDlg.kind === 'new' ? 'Tạo' : 'Đổi tên'} onOk={(n) => void (nameDlg.kind === 'new' ? createDraft(n) : renameCurrent(n))} onCancel={() => setNameDlg(null)} />}

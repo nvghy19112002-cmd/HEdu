@@ -1925,3 +1925,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-lots { margin: 0 0 8px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .tsx-lots li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tsx-skips { margin: 0 0 6px; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+
+/* ---- Xử lí TeX: hướng dẫn khi bàn nháp trống; trạng thái PDF ở chân màn bấm được ---- */
+.tsx-editor { position: relative; }
+.tsx-empty { position: absolute; left: 60px; right: 16px; top: 36px; padding: 12px 14px; background: color-mix(in srgb, var(--paper) 92%, transparent); border: 1px dashed var(--line-2); border-radius: 12px; font-size: 13px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; max-width: 460px; }
+.tsx-empty ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.qe-status button.qs { border: 0; background: none; font: inherit; cursor: pointer; }
+.qe-status button.qs:hover { text-decoration: underline; }
