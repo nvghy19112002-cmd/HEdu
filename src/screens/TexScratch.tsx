@@ -1,17 +1,27 @@
 // Màn "Xử lí TeX" — Đợt 1a (claude/de-xuat-man-xu-li-tex.md mục 10): bàn nháp soạn các khối \begin{ex}…\end{ex}.
 // Khung soạn (CodeEditor) + danh sách câu (phân tích CHỈ ĐỌC, texscratch.ts) + xem nhanh từng câu (gần đúng, có thể khác PDF).
 // Một bản nháp duy nhất, lưu bền (scratchdraft.ts → texscratch.rs). Không ghi gì vào ngân hàng hay Thư viện đề; không sửa văn bản.
-// Biên dịch PDF bằng TeX Live là Đợt 1b (PR sau).
+// Đợt 1b: "Biên dịch PDF" (nút hoặc Ctrl+Enter) — main.tex + content.tex nguyên văn (scratchbuild.ts) → Rust texscratch.rs; lỗi theo câu/dòng,
+// PDF mang nhãn "bản trước" khi mã đã đổi; PDF nguyên văn (có thể chứa lời giải).
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { IcAlert, IcCheckCircle } from '../components/Icons';
+import { IcAlert, IcCheckCircle, IcCopy } from '../components/Icons';
+import { PdfViewer } from '../components/PdfViewer';
 import { QuestionView } from '../components/QuestionView';
 import { useTaxonomy } from '../lib/curriculum';
 import { parseExTest } from '../lib/extest';
 import { AUTOSAVE_MS, loadDraft, SAVE_LABEL, saveDraft, type SaveState } from '../lib/scratchdraft';
 import { blockInfos, ID_STATE_LABEL, scanScratch, type BlockInfo } from '../lib/texscratch';
+import type { Diag } from '../lib/examcompile';
+import { missingPackages } from '../lib/missingpkg';
+import { invoke, isDesktop } from '../lib/platform';
+import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
+
+interface ScratchOut { status: 'ok' | 'failed' | 'timeout' | 'cancelled' | 'no-tex'; message: string; pages: number | null; runs: number; ms: number; texVersion: string; diagnostics: Diag[]; errorCount: number; warningCount: number; rawLog: string; invalidPdf: boolean; hasPdf: boolean }
+const PKG_KEY = 'hedu.texscratch.goi';
+const loadPkgs = (): string[] => { try { const v = JSON.parse(localStorage.getItem(PKG_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 50) : []; } catch { return []; } };
 
 const KEY = 'nhap';
 const MODE_KEY = 'hedu.texmode';
@@ -37,6 +47,15 @@ export function TexScratchScreen() {
   const [sel, setSel] = useState<number | null>(null);
   const [showSol, setShowSol] = useState(true);
   const [askClear, setAskClear] = useState(false);
+  // biên dịch PDF
+  const [tab, setTab] = useState<'cau' | 'pdf'>('cau');
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<ScratchOut | null>(null);
+  /** nội dung lúc biên dịch THÀNH CÔNG gần nhất (PDF đang có là của nội dung này) */
+  const [pdfText, setPdfText] = useState<string | null>(null);
+  const [pdfGen, setPdfGen] = useState(0);
+  const [extra, setExtra] = useState<string[]>(loadPkgs);
+  const shared = useRef<string | null>(null);
 
   const latest = useRef('');
   const saved = useRef('');
@@ -105,6 +124,38 @@ export function TexScratchScreen() {
   const nId = infos.filter((b) => b.id.state === 'co-trong-cay').length;
   const nBad = infos.filter((b) => b.problems > 0).length;
 
+  const compile = useCallback(async () => {
+    if (busy) return;
+    if (!isDesktop()) { toast('Biên dịch PDF chỉ có ở bản cài trên Windows (cần TeX Live).'); return; }
+    const t = latest.current;
+    if (!t.trim()) { toast('Bàn nháp đang trống.'); return; }
+    setBusy(true); setTab('pdf');
+    try {
+      await flush();
+      if (shared.current === null) { try { shared.current = await invoke<string>('tikz_default_preamble'); } catch { shared.current = ''; } }
+      const o = await invoke<ScratchOut>('tex_scratch_compile', { files: scratchFiles(t, shared.current, extra) });
+      setOut(o);
+      if (o.status === 'ok') { setPdfText(t); setPdfGen((g) => g + 1); }
+      else if (o.hasPdf) setPdfGen((g) => g || 1); // vẫn hiện PDF tốt gần nhất (nhãn "bản trước")
+    } catch (e) {
+      setOut({ status: 'failed', message: msg(e), pages: null, runs: 0, ms: 0, texVersion: '', diagnostics: [], errorCount: 0, warningCount: 0, rawLog: '', invalidPdf: false, hasPdf: false });
+    } finally { setBusy(false); }
+  }, [busy, extra, flush, toast]);
+  const stop = () => { void invoke<boolean>('tex_scratch_compile_cancel'); };
+  // Ctrl+Enter: biên dịch (Ctrl+S chỉ lưu nháp)
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void compile(); } };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [compile]);
+  const errs = (out?.diagnostics ?? []).filter((d) => d.severity === 'error');
+  const hints = out && out.status !== 'ok' ? missingPackages(out.diagnostics, out.rawLog) : [];
+  /** PDF đang hiện không phải của nội dung hiện tại (mã đã đổi, hoặc là PDF của lần trước khi mở lại màn) */
+  const stale = pdfGen > 0 && (pdfText === null || pdfText !== text);
+  const addPkg = (p: string) => { const n = [...new Set([...extra, p])]; setExtra(n); try { localStorage.setItem(PKG_KEY, JSON.stringify(n)); } catch { /* chỉ là tiện lợi */ } toast(`Đã thêm gói ${p} vào khai báo của bàn nháp. Bấm Biên dịch PDF lại.`); };
+  const copyReport = async () => { try { await navigator.clipboard.writeText(errorReport(out?.diagnostics ?? [], scan, latest.current)); toast('Đã sao chép báo lỗi. Dán vào tin nhắn gửi Claude.'); } catch { toast('Không sao chép được (bị chặn).'); } };
+  const jumpTo = (d: Diag) => { const w = whereOf(d, scan); if (w.kind === 'noi-dung') { ed.current?.jump(KEY, w.line); if (w.block != null) setSel(w.block); if (vmode === 'view') setVmode('both'); } };
+
   const pick = (b: BlockInfo) => { setSel(b.block.n); ed.current?.jump(KEY, b.block.line0); if (vmode === 'view') setVmode('both'); };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
@@ -119,6 +170,9 @@ export function TexScratchScreen() {
           <span className={`qs ${save === 'loi' ? 'bad' : save === 'da-luu' ? 'ok' : 'idle'}`} role="status" title={saveErr ?? undefined}>{blocked ? 'Không lưu được' : SAVE_LABEL[save]}</span>
           <button type="button" className="btn btn-sm" disabled={!!blocked || save === 'da-luu'} onClick={() => void flush()} title="Ctrl+S">Lưu nháp</button>
           <button type="button" className="btn btn-sm btn-ghost" disabled={!text} onClick={() => setAskClear(true)}>Xoá nội dung…</button>
+          {busy
+            ? <button type="button" className="btn btn-sm" onClick={stop}>Dừng biên dịch</button>
+            : <button type="button" className="btn btn-sm btn-accent" disabled={!text.trim()} onClick={() => void compile()} title="Ctrl+Enter">Biên dịch PDF</button>}
         </div>
       </header>
 
@@ -146,17 +200,52 @@ export function TexScratchScreen() {
 
         <section className="qe-view tsx-view" aria-label="Câu hỏi">
           <div className="qe-bar">
-            <h2>Câu hỏi</h2>
-            <span className="tsx-tag" title="Dựng nhanh trong app, không qua TeX Live">Xem nhanh (có thể khác PDF)</span>
-            <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Lời giải</label>
+            <div className="seg sm" role="group" aria-label="Khung bên phải">
+              <button type="button" aria-pressed={tab === 'cau'} onClick={() => setTab('cau')}>Câu hỏi</button>
+              <button type="button" aria-pressed={tab === 'pdf'} onClick={() => setTab('pdf')}>PDF TeX Live{busy ? ' …' : ''}</button>
+            </div>
+            {tab === 'cau' && <span className="tsx-tag" title="Dựng nhanh trong app, không qua TeX Live">Xem nhanh (có thể khác PDF)</span>}
+            {tab === 'cau' && <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Lời giải</label>}
           </div>
-          <div className="tsx-notes">
+          {tab === 'pdf' && (
+            <div className="tsx-pdf">
+              {busy && <p className="sys-hint" role="status">Đang biên dịch bằng TeX Live… (Dừng ở nút trên cùng)</p>}
+              {!busy && !out && <p className="sys-hint">Bấm <b>Biên dịch PDF</b> (Ctrl+Enter) để TeX Live dịch cả bàn nháp. Khai báo gói có sẵn; chỉ dịch khi bạn bấm.</p>}
+              {out && !busy && (
+                <div className={`note ${out.status === 'ok' ? (out.warningCount ? 'warn' : 'ok') : 'bad'}`} role="status">
+                  <div className="note-body">
+                    <b>{out.message}</b>
+                    {errs.length > 0 && (
+                      <ul className="tsx-diags">
+                        {errs.slice(0, 8).map((d, k) => { const w = whereOf(d, scan); return (
+                          <li key={k}>{w.kind === 'noi-dung' ? <button type="button" className="linkbtn" onClick={() => jumpTo(d)}>{whereLabel(w)}</button> : <span>{whereLabel(w)}</span>}: {d.message}</li>
+                        ); })}
+                        {errs.length > 8 && <li>… và {errs.length - 8} lỗi nữa</li>}
+                      </ul>
+                    )}
+                    {errs.length > 0 && <span className="sys-hint">TeX có thể dừng ở lỗi đầu tiên nên danh sách chưa chắc đủ mọi lỗi.</span>}
+                    {hints.map((h) => <span key={h.pkg}>{h.why} <button type="button" className="btn btn-sm" onClick={() => addPkg(h.pkg)}>Thêm gói {h.pkg}</button></span>)}
+                    {errs.length > 0 && <span><button type="button" className="btn btn-sm btn-ghost" onClick={() => void copyReport()}><IcCopy size={14} /> Sao chép báo lỗi</button></span>}
+                  </div>
+                </div>
+              )}
+              {pdfGen > 0 && (
+                <>
+                  {stale && <p className="q-warn" role="status">PDF dưới đây là của <b>bản trước</b> (mã đã đổi, hoặc lần biên dịch vừa rồi chưa thành công). Bấm Biên dịch PDF để cập nhật.</p>}
+                  <div className="tsx-pdfbox">
+                    <PdfViewer key={pdfGen} embedded id="xu-li-tex" title="Bàn nháp Xử lí TeX" stale={stale || (!!out && out.status !== 'ok')} note="PDF nguyên văn: có thể chứa lời giải. Đừng phát cho học sinh khi chưa xem lại." load={() => invoke<ArrayBuffer>('tex_scratch_pdf')} />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {tab === 'cau' && <div className="tsx-notes">
             {scan.fullDoc.length > 0 && <p className="q-warn">Có vẻ đây là cả một tài liệu (<code>\documentclass</code>/<code>\begin{'{document}'}</code> ở dòng {lines(scan.fullDoc)}). Màn này đã có sẵn khai báo; nên chỉ giữ các khối câu hỏi. HEdu không tự xoá phần nào.</p>}
             {scan.io.length > 0 && <p className="q-warn">Có lệnh đọc/ghi tệp ({[...new Set(scan.io.map((x) => x.text))].join(', ')} ở dòng {lines(scan.io.map((x) => x.line))}). Khi biên dịch, chỉ đọc được tệp trong thư mục của bàn nháp.</p>}
             {scan.strayEnds.length > 0 && <p className="q-warn"><code>\end{'{ex}'}</code> thừa ở dòng {lines(scan.strayEnds)}.</p>}
             {scan.outside.length > 0 && <p className="sys-hint">{scan.outside.length} đoạn nằm ngoài các khối câu (dòng {lines(scan.outside.map((o) => o.line0))}): giữ nguyên, không tính là câu.</p>}
-          </div>
-          <div className="tsx-split">
+          </div>}
+          {tab === 'cau' && <div className="tsx-split">
             <ol className="tsx-list" aria-label="Danh sách câu">
               {infos.length === 0 && <li className="sys-hint">Chưa có khối <code>\begin{'{ex}'}</code> nào.</li>}
               {infos.map((b) => (
@@ -178,7 +267,7 @@ export function TexScratchScreen() {
                     <QuestionView p={parsed} number={cur.block.n} raw={cur.block.text} showSolution={showSol} />
                   </>}
             </div>
-          </div>
+          </div>}
         </section>
       </div>
 
@@ -186,7 +275,7 @@ export function TexScratchScreen() {
         <span className="qs">{nf.format(infos.length)} câu</span>
         <span className="qs" title="ID đúng cú pháp và có trong cây chương trình (chưa phải giáo viên xác minh Dạng)">{nf.format(nId)} có ID trong cây</span>
         <span className={`qs ${nBad ? 'bad' : 'ok'}`}>{nBad ? <IcAlert size={15} /> : <IcCheckCircle size={15} />}{nBad ? `${nf.format(nBad)} câu cần xem lại` : 'Không thấy lỗi cú pháp'}</span>
-        <span className="qs idle">PDF TeX Live: có ở bản cập nhật sau</span>
+        <span className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`}>{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</span>
       </footer>
 
       {askClear && (

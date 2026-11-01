@@ -46,6 +46,11 @@ export interface Need { kind: DeclKind; name: string; file: string; bundled: boo
 
 /** Gom mọi gói/thư viện bộ đề cần: từ khai báo chung, từ chính các câu hỏi, và gói suy ra từ lệnh. */
 export function collectNeeds(qs: readonly Question[], sharedContent: string): Need[] {
+  return collectNeedsRaw(qs.map((q) => q.latex), sharedContent);
+}
+
+/** Như collectNeeds nhưng nhận mã LaTeX thô (vd nội dung bàn nháp "Xử lí TeX"), không cần đối tượng câu hỏi. */
+export function collectNeedsRaw(texts: readonly string[], sharedContent: string): Need[] {
   const out = new Map<string, Need>();
   const bundled = new Set<string>(BUNDLED_FILES);
   const add = (kind: DeclKind, name: string, from: Need['from'], why?: string) => {
@@ -56,8 +61,8 @@ export function collectNeeds(qs: readonly Question[], sharedContent: string): Ne
   };
   for (const d of extractDecls(KHAIBAOCHUNG_TEX)) if (d.kind !== 'input') add(d.kind, d.name, 'khai-bao');
   for (const d of extractDecls(sharedContent)) if (d.kind !== 'input') add(d.kind, d.name, 'khai-bao');
-  for (const q of qs) for (const d of extractDecls(q.latex)) if (d.kind !== 'input') add(d.kind, d.name, 'cau-hoi');
-  for (const q of qs) for (const e of evidenceOf(q.latex)) add('package', e.pkg, 'suy-ra', e.why);
+  for (const t of texts) for (const d of extractDecls(t)) if (d.kind !== 'input') add(d.kind, d.name, 'cau-hoi');
+  for (const t of texts) for (const e of evidenceOf(t)) add('package', e.pkg, 'suy-ra', e.why);
   return [...out.values()];
 }
 

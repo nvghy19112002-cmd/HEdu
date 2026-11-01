@@ -31,9 +31,9 @@ function loadLib(): Promise<PdfLib> {
 type Fit = 'width' | 'page' | number;
 const GAP = 12;
 
-interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; /** chế độ PDF cần xem (mặc định nguyên văn) */ mode?: ExamMode; onClose?(): void; /** nhúng trong khung (không phủ toàn màn hình, không có nút Đóng) */ embedded?: boolean }
+interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; /** chế độ PDF cần xem (mặc định nguyên văn) */ mode?: ExamMode; onClose?(): void; /** nhúng trong khung (không phủ toàn màn hình, không có nút Đóng) */ embedded?: boolean; /** nguồn PDF khác (vd bàn nháp Xử lí TeX); mặc định đọc PDF tốt gần nhất của dự án `id` */ load?(): Promise<ArrayBuffer> }
 
-export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'nguyen-van' }: Props) {
+export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'nguyen-van', load }: Props) {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
     let d: PdfDoc | null = null;
     (async () => {
       try {
-        const [lib, buf] = await Promise.all([loadLib(), invoke<ArrayBuffer>('exam_pdf_read', { id, mode })]);
+        const [lib, buf] = await Promise.all([loadLib(), load ? load() : invoke<ArrayBuffer>('exam_pdf_read', { id, mode })]);
         const task = lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useWorkerFetch: false, disableFontFace: true, verbosity: 0 });
         d = await task.promise;
         const dims: { w: number; h: number }[] = [];
@@ -216,8 +216,8 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
           </>}
         </form>
         <span className="pv-grp pv-right">
-          <button type="button" className="btn btn-sm" onClick={save}>Lưu bản sao…</button>
-          <button type="button" className="btn btn-sm" onClick={external}>Mở bằng ứng dụng khác</button>
+          {!load && <button type="button" className="btn btn-sm" onClick={save}>Lưu bản sao…</button>}
+          {!load && <button type="button" className="btn btn-sm" onClick={external}>Mở bằng ứng dụng khác</button>}
           {onClose && <button type="button" className="btn btn-sm btn-primary" onClick={onClose}>Đóng</button>}
         </span>
       </div>

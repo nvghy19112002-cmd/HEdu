@@ -28,7 +28,7 @@ pub const JOBNAME: &str = "hedu-out";
 /// Chế độ E2a: biên dịch nguyên văn, CHƯA xác định đề hay lời giải (E5 mới có hai chế độ).
 pub const MODE_RAW: &str = "nguyen-van";
 const MAX_LOG: usize = 2 * 1024 * 1024;
-const RAW_LOG_KEEP: usize = 64 * 1024;
+pub(crate) const RAW_LOG_KEEP: usize = 64 * 1024;
 const MAX_DIAGS: usize = 200;
 
 #[derive(Deserialize, Clone, Default)]
@@ -171,7 +171,7 @@ fn texinputs_for_project(support_dir: &Option<PathBuf>) -> Option<String> {
     })
 }
 
-fn engine_command(tex_bin: &Option<String>, engine: &str, support_dir: &Option<PathBuf>, cwd: &Path) -> Command {
+pub(crate) fn engine_command(tex_bin: &Option<String>, engine: &str, support_dir: &Option<PathBuf>, cwd: &Path) -> Command {
     let mut c = Command::new(tikz::prog(tex_bin, engine));
     c.current_dir(cwd);
     if let Some(t) = texinputs_for_project(support_dir) {
@@ -536,13 +536,13 @@ pub fn cancel(id: &str) -> bool {
     }
 }
 
-fn read_capped(p: &Path) -> String {
+pub(crate) fn read_capped(p: &Path) -> String {
     let mut b = Vec::new();
     let _ = fs::File::open(p).and_then(|f| f.take(MAX_LOG as u64).read_to_end(&mut b));
     String::from_utf8_lossy(&b).into_owned()
 }
 
-fn tail(s: &str, keep: usize) -> String {
+pub(crate) fn tail(s: &str, keep: usize) -> String {
     if s.len() <= keep {
         return s.to_string();
     }
@@ -553,7 +553,7 @@ fn tail(s: &str, keep: usize) -> String {
     s[i..].to_string()
 }
 
-fn first_line(s: &str) -> String {
+pub(crate) fn first_line(s: &str) -> String {
     s.lines().next().unwrap_or("").trim().chars().take(160).collect()
 }
 
