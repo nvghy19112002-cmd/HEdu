@@ -1888,3 +1888,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-diff del, .tsx-diff ins { grid-column: 2; white-space: pre-wrap; word-break: break-all; text-decoration: none; }
 .tsx-diff del { background: var(--danger-soft); }
 .tsx-diff ins { background: var(--ok-bg); }
+
+/* ---- Xử lí TeX: thanh công cụ gọn (một hàng: chế độ xem bên trái; Công cụ ▾, Đưa vào Ngân hàng, Biên dịch PDF bên phải) ---- */
+.tsx-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.tsx-toolbar .qe-vmode { align-self: auto; }
+.tsx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tsx-more { position: relative; }
+.tsx-more .more-menu { left: auto; right: 0; }
+.tsx-more .more-menu button[disabled] { opacity: .45; cursor: default; }
+.tsx-head .head-actions { align-items: center; }
+.tsx-panes { height: calc(100vh - 190px); }
