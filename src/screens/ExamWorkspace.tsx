@@ -1,7 +1,7 @@
 // Không gian Biên tập đề (E3): cây tệp · soạn nhiều tab · xem PDF · nhật ký lỗi. Mở từ Thư viện đề thi.
 // An toàn dữ liệu: lưu bằng so dấu vân (không ghi đè tệp đã đổi ngoài app), giữ nguyên BOM/CRLF, bản nháp tự lưu NGOÀI dự án,
 // biên dịch chỉ chạy sau khi lưu xong mọi tệp (không lưu được thì không biên dịch). Không báo "đã lưu" khi chưa ghi xong.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
 import { BankPicker } from '../components/BankPicker';
@@ -16,15 +16,18 @@ import {
 } from '../lib/examfiles';
 import { getSettings } from '../lib/tikz';
 import { addToGoiThem, missingPackages } from '../lib/missingpkg';
+import { compileSlots, type TabStatus } from '../lib/examtabs';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Pane = 'files' | 'edit' | 'pdf' | 'log';
 const NARROW = 1000;
 
-/** `toInfo` = người dùng bấm "Thông tin…": đóng không gian soạn rồi mở hộp Thông tin & thao tác của đề (đổi tên, lớp, chốt đề, xuất gói, Thùng rác…). */
-interface Props { id: string; name: string; mainFile: string | null; onClose(toInfo?: boolean): void }
+/** Mỗi đề đang mở là một tab ở Thư viện đề: tab ẩn vẫn giữ nguyên trạng thái (tệp đang sửa, PDF, nhật ký).
+ * `onLibrary` = về tab Thư viện (đề vẫn mở) · `onInfo` = mở hộp Thông tin & thao tác của đề · `onClose` = đóng tab (đã hỏi lưu nếu cần). */
+interface Props { id: string; name: string; mainFile: string | null; hidden?: boolean; onLibrary(): void; onInfo(): void; onClose(): void; onStatus?(id: string, s: TabStatus): void }
+export interface ExamWorkspaceHandle { requestClose(): void }
 
-export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
+export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
   const { toast } = useApp();
   const ed = useRef<CodeEditorHandle>(null);
   const loaded = useRef(new Map<string, string>()); // văn bản lúc mở, dùng khi gắn vào trình soạn lần đầu
@@ -40,6 +43,10 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   const [engine, setEngine] = useState<Engine>('pdflatex');
   const [runs, setRuns] = useState(2);
   const [compiling, setCompiling] = useState(false);
+  /** đang chờ lượt biên dịch (đã có 2 đề khác đang biên dịch) */
+  const [queued, setQueued] = useState(false);
+  const gen = useRef(0); // mỗi lần bấm Biên dịch một số mới; "Huỷ chờ" tăng số để lượt đang chờ tự bỏ
+  const alive = useRef(true);
   const [result, setResult] = useState<CompileOut | null>(null);
   const [goods, setGoods] = useState<GoodInfo[]>([]);
   const [mode, setMode] = useState<ExamMode>('nguyen-van');
@@ -124,7 +131,9 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
 
   // ---- bản nháp tự lưu (ngoài dự án) ----
   const timers = useRef(new Map<string, number>());
+  const latest = useRef(new Map<string, string>()); // văn bản mới nhất từng tệp, để ghi nháp ngay khi rời màn
   const scheduleDraft = (rel: string, text: string) => {
+    latest.current.set(rel, text);
     const t = tabsRef.current.find((x) => x.rel === rel);
     if (!t || t.readOnly) return;
     window.clearTimeout(timers.current.get(rel));
@@ -133,7 +142,12 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
       if (cur?.dirty) void draftWrite(id, rel, cur.sha, text).catch(() => undefined);
     }, 1500));
   };
-  useEffect(() => () => { for (const t of timers.current.values()) window.clearTimeout(t); }, []);
+  useEffect(() => () => {
+    alive.current = false;
+    for (const t of timers.current.values()) window.clearTimeout(t);
+    // rời màn Thư viện đề khi còn tệp chưa lưu: ghi bản nháp ngay (không đợi 1,5 giây), lần sau mở lại sẽ hỏi khôi phục
+    for (const t of tabsRef.current) { const text = latest.current.get(t.rel); if (t.dirty && !t.readOnly && text !== undefined) void draftWrite(id, t.rel, t.sha, text).catch(() => undefined); }
+  }, [id]);
 
   // ---- lưu ----
   const inflight = useRef(new Map<string, Promise<boolean>>());
@@ -251,6 +265,11 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
     setNote(null);
     if (!(await saveAll())) return; // không lưu được thì không biên dịch
     setCompiling(true); setResult(null);
+    const my = ++gen.current;
+    setQueued(compileSlots.busy >= 2);
+    const release = await compileSlots.acquire(); // tối đa 2 đề biên dịch cùng lúc, đề sau chờ lượt
+    if (!alive.current || my !== gen.current) { release(); return; } // đã huỷ chờ hoặc đã đóng đề
+    setQueued(false);
     try {
       const st = getSettings();
       const r = await examCompile(id, { engine, runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120) });
@@ -258,7 +277,7 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
       examCompileAll(id).then(setGoods).catch(() => undefined);
       if (r.status === 'ok') setViewMode(mode);
       if (r.status === 'ok' && narrow) setPane('pdf'); else if (r.status !== 'ok') setPane('log');
-    } catch (e) { setNote(msg(e)); } finally { setCompiling(false); }
+    } catch (e) { setNote(msg(e)); } finally { release(); if (alive.current) setCompiling(false); }
   };
 
   /** Biên dịch lỗi vì thiếu gói: thêm gói vào hedu-goithem.tex (hedu.sty tự nạp) rồi biên dịch lại. */
@@ -325,12 +344,15 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   const heduSty = list.files.some((x) => x.rel === 'hedu.sty');
   const stale = !!result && result.status !== 'ok';
 
-  const goInfo = useRef(false);
-  const requestClose = (toInfo = false) => { goInfo.current = toInfo; if (anyDirty(tabsRef.current)) setLeave(true); else onClose(toInfo); };
+  const requestClose = () => { if (anyDirty(tabsRef.current)) setLeave(true); else onClose(); };
+  useImperativeHandle(ref, () => ({ requestClose }));
+  const dirtyAny = anyDirty(tabs);
+  const compileState: TabStatus['compile'] = queued ? 'waiting' : compiling ? 'running' : !result ? 'idle' : result.status === 'ok' ? 'ok' : 'failed';
+  useEffect(() => { onStatus?.(id, { dirty: dirtyAny, compile: compileState }); }, [id, dirtyAny, compileState, onStatus]);
   const onKey = (e: React.KeyboardEvent) => {
     if (e.defaultPrevented) return; // trình soạn đã xử lý (vd. Ctrl+S) rồi
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (e.shiftKey) void saveAll(); else if (active) void saveOne(active); }
-    else if (e.key === 'Escape' && !leave && !newName) { e.stopPropagation(); requestClose(); }
+    else if (e.key === 'Escape' && !leave && !newName) { e.stopPropagation(); onLibrary(); }
   };
 
   const renderNode = (n: TreeNode, depth: number): React.ReactNode => {
@@ -364,12 +386,12 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
   const showLog = !narrow || pane === 'log';
 
   return (
-    <div className="ew" role="dialog" aria-modal="true" aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
+    <div className={`ew tabbed${hidden ? ' off' : ''}`} role="dialog" aria-modal={!hidden} aria-hidden={hidden || undefined} aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
       <header className="ew-head">
-        <nav aria-label="Vị trí" className="ew-crumb"><button type="button" className="btn btn-sm" onClick={() => requestClose()}>← Thư viện</button> <b>{name}</b>{active && <span className="xl-meta"> › {active}</span>}</nav>
+        <nav aria-label="Vị trí" className="ew-crumb"><button type="button" className="btn btn-sm" onClick={onLibrary} title="Về Thư viện đề (đề vẫn mở ở tab trên cùng)">← Thư viện</button> <b>{name}</b>{active && <span className="xl-meta"> › {active}</span>}</nav>
         <span className={`ew-badge ${badge.tone}`} role="status" aria-live="polite">{badge.text}</span>
         <span className="pv-grp">
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => requestClose(true)} title="Đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
           <button type="button" className="btn btn-sm" disabled={!tab || !tab.dirty || !!tab.readOnly || saving} onClick={() => active && void saveOne(active)}>Lưu</button>
           <button type="button" className="btn btn-sm" disabled={!anyDirty(tabs) || saving} onClick={() => void saveAll()}>Lưu tất cả</button>
           <button type="button" className="btn btn-sm" disabled={!tab || tab.kind !== 'text' || !!tab.readOnly} onClick={() => setPicker(true)}>+ Câu từ Ngân hàng</button>
@@ -377,7 +399,7 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
           <label className="xl-meta">Bản <select className="xl-in" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch">{MODES.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !profile?.available} title={m.id !== 'nguyen-van' && !profile?.available ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select></label>
           <label className="xl-meta">Trình dịch <select className="xl-in" value={engine} disabled={compiling} onChange={(e) => setEngine(e.target.value as Engine)}>{ENGINES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
           <label className="xl-meta">Lượt <select className="xl-in" value={runs} disabled={compiling} onChange={(e) => setRuns(+e.target.value)}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-          {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch PDF</button> : <button type="button" className="btn btn-sm" onClick={() => void examCompileCancel(id)}>Dừng</button>}
+          {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch PDF</button> : <button type="button" className="btn btn-sm" title={queued ? 'Đang chờ lượt: 2 đề khác đang biên dịch' : undefined} onClick={() => { if (queued) { gen.current++; setQueued(false); setCompiling(false); } else void examCompileCancel(id); }}>{queued ? 'Huỷ chờ' : 'Dừng'}</button>}
         </span>
       </header>
       {narrow && (
@@ -460,7 +482,7 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
       </div>
       {showLog && (
         <section className="ew-log" aria-label="Nhật ký biên dịch">
-          {compiling && <p className="aid-wait" role="status">Đang lưu và biên dịch…</p>}
+          {compiling && <p className="aid-wait" role="status">{queued ? 'Đang chờ lượt biên dịch (đã có 2 đề khác đang biên dịch)…' : 'Đang lưu và biên dịch…'}</p>}
           {!result && !compiling && <p className="xl-meta">Kết quả biên dịch sẽ hiện ở đây.</p>}
           {result && (() => { const sm = summarize(result); return <div className={`note ${sm.tone === 'bad' ? 'bad' : sm.tone}`} role="status"><div className="note-body"><b>{sm.text}</b>{result.warnings.map((w, i) => <span key={i}>{w}</span>)}{result.texVersion && <span className="xl-meta">{result.texVersion} · {result.runs} lượt · {Math.round(result.ms / 100) / 10} giây</span>}</div></div>; })()}
           {pkgHints.length > 0 && (
@@ -501,8 +523,8 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
             <p>{tabs.filter((t) => t.dirty).map((t) => t.rel).join(', ')}</p>
             <p className="xl-meta">Nếu đóng không lưu, bản nháp tự lưu vẫn được giữ và hỏi khôi phục lần sau.</p>
             <div className="xl-actions">
-              <button type="button" className="btn btn-sm btn-primary" onClick={async () => { if (await saveAll()) onClose(goInfo.current); else setLeave(false); }}>Lưu tất cả rồi đóng</button>
-              <button type="button" className="btn btn-sm" onClick={() => onClose(goInfo.current)}>Đóng không lưu</button>
+              <button type="button" className="btn btn-sm btn-primary" onClick={async () => { if (await saveAll()) onClose(); else setLeave(false); }}>Lưu tất cả rồi đóng</button>
+              <button type="button" className="btn btn-sm" onClick={() => onClose()}>Đóng không lưu</button>
               <button type="button" className="btn btn-sm" onClick={() => setLeave(false)}>Quay lại</button>
             </div>
           </div>
@@ -510,4 +532,4 @@ export function ExamWorkspace({ id, name, mainFile, onClose }: Props) {
       )}
     </div>
   );
-}
+});
