@@ -14,6 +14,7 @@ import { QuestionView } from '../components/QuestionView';
 import { useTaxonomy } from '../lib/curriculum';
 import { parseExTest } from '../lib/extest';
 import { AUTOSAVE_MS, loadDraft, SAVE_LABEL, saveDraft, type SaveState } from '../lib/scratchdraft';
+import { addDraft, deleteDraft, EMPTY_INDEX, loadIndex, MAIN_NAME, nameOf, removeDraft, renameDraft, saveIndex, setActive, type DraftIndex } from '../lib/scratchslots';
 import { blockInfos, ID_STATE_LABEL, scanScratch, type BlockInfo } from '../lib/texscratch';
 import type { Diag } from '../lib/examcompile';
 import { missingPackages } from '../lib/missingpkg';
@@ -95,6 +96,11 @@ export function TexScratchScreen() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
   const blockedRef = useRef<string | null>(null);
+  /** bàn nháp đang mở ('' = bàn nháp chính) và danh sách các bàn nháp riêng */
+  const slotRef = useRef('');
+  const [ix, setIx] = useState<DraftIndex>(EMPTY_INDEX);
+  const [nameDlg, setNameDlg] = useState<{ kind: 'new' | 'rename'; initial: string } | null>(null);
+  const [askDelete, setAskDelete] = useState(false);
 
   /** Lưu NGAY (Ctrl+S, rời màn, hết thời gian chờ). Các lần lưu chạy nối tiếp nhau, không chồng. */
   const flush = useCallback((): Promise<void> => {
@@ -105,7 +111,7 @@ export function TexScratchScreen() {
       if (t === saved.current) { setSave('da-luu'); return; }
       setSave('dang-luu');
       try {
-        await saveDraft(t);
+        await saveDraft(t, slotRef.current);
         saved.current = t;
         ed.current?.markSaved(KEY, t);
         setSaveErr(null);
@@ -120,7 +126,11 @@ export function TexScratchScreen() {
 
   useEffect(() => {
     let alive = true;
-    loadDraft().then((d) => {
+    loadIndex().then((index) => {
+      slotRef.current = index.active;
+      if (alive) setIx(index);
+      return loadDraft(index.active);
+    }).then((d) => {
       if (!alive) return;
       const t = d.text ?? '';
       latest.current = t; saved.current = t;
@@ -135,7 +145,7 @@ export function TexScratchScreen() {
     return () => {
       alive = false;
       // rời màn: lưu nốt phần chưa lưu
-      if (latest.current !== saved.current && !blockedRef.current) void saveDraft(latest.current).catch(() => undefined);
+      if (latest.current !== saved.current && !blockedRef.current) void saveDraft(latest.current, slotRef.current).catch(() => undefined);
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
@@ -213,6 +223,47 @@ export function TexScratchScreen() {
   const jumpTo = (d: Diag) => { const w = whereOf(d, scan); if (w.kind === 'noi-dung') { ed.current?.jump(KEY, w.line); if (w.block != null) setSel(w.block); setPane('code'); if (vmode === 'view') setVmode('both'); } };
 
   const pick = (b: BlockInfo) => { setSel(b.block.n); ed.current?.jump(KEY, b.block.line0); if (vmode === 'view') setVmode('both'); };
+  /** Mở bàn nháp khác: lưu nốt bàn nháp đang mở, ghi nhớ bàn nháp đang mở, rồi nạp bàn nháp mới (kết quả lọc/chọn/trùng của bàn nháp cũ không mang sang). */
+  const openSlot = async (id: string, index: DraftIndex, fresh = false) => {
+    await flush();
+    if (blockedRef.current && !fresh) { toast('Bàn nháp hiện tại không lưu được, nên chưa chuyển. Xem thông báo đỏ phía trên.'); return; }
+    let t = '', fromB = false;
+    if (!fresh) {
+      try { const d = await loadDraft(id); t = d.text ?? ''; fromB = d.fromBackup; } catch (e) { toast(`Không mở được bàn nháp: ${msg(e)}`); return; }
+    }
+    const next = setActive(index, id);
+    try { await saveIndex(next); } catch (e) { toast(`Không ghi nhớ được bàn nháp đang mở: ${msg(e)}`); }
+    slotRef.current = id; setIx(next);
+    blockedRef.current = null; setBlocked(null); setFromBackup(fromB); setSaveErr(null); setSave('da-luu');
+    latest.current = t; saved.current = t; setText(t);
+    ed.current?.reset(KEY, t);
+    setPicked(new Set()); setLfilter('all'); setDupRun(null); setSel(null);
+  };
+  const createDraft = async (name: string) => {
+    setNameDlg(null);
+    const r = addDraft(ix, name);
+    if ('error' in r) { toast(r.error); return; }
+    await openSlot(r.id, r.ix, true);
+    toast(`Đã tạo “${nameOf(r.ix, r.id)}”. Bàn nháp trước vẫn được giữ.`);
+    ed.current?.focus();
+  };
+  const renameCurrent = async (name: string) => {
+    setNameDlg(null);
+    const n = renameDraft(ix, slotRef.current, name);
+    if (n === ix) return;
+    setIx(n);
+    try { await saveIndex(n); } catch (e) { toast(`Không lưu được tên mới: ${msg(e)}`); }
+  };
+  const deleteCurrent = async () => {
+    setAskDelete(false);
+    const id = slotRef.current;
+    if (!id) return;
+    await flush();
+    const next = removeDraft(ix, id);
+    try { await deleteDraft(id); } catch (e) { toast(`Không xoá được: ${msg(e)}`); return; }
+    await openSlot('', next);
+    toast('Đã xoá bàn nháp. Đang mở bàn nháp chính.');
+  };
   /** Áp dụng một thay đổi đã xem trước: thay cả văn bản (Ctrl+Z trong khung soạn lấy lại được), kèm nút Hoàn tác. */
   const applyText = (next: string, what: string) => {
     const prev = latest.current;
@@ -298,6 +349,12 @@ export function TexScratchScreen() {
           <span className="sys-hint">Dán hoặc gõ các khối <code>\begin{'{ex}'}…\end{'{ex}'}</code>; khai báo gói có sẵn. Bàn nháp không ghi vào ngân hàng cho tới khi bạn bấm “Đưa vào Ngân hàng”.</span>
         </div>
         <div className="head-actions">
+          <label className="tsx-slot" title="Chọn bàn nháp. Mỗi bàn nháp lưu riêng (vd. một đề, một chương)."><span>Bàn nháp</span>
+            <select value={ix.active} onChange={(e) => void openSlot(e.target.value, ix)} aria-label="Bàn nháp đang mở">
+              <option value="">{MAIN_NAME}</option>
+              {ix.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+            </select>
+          </label>
           <span className={`qs ${save === 'loi' ? 'bad' : save === 'da-luu' ? 'ok' : 'idle'}`} role="status" title={saveErr ?? undefined}>{blocked ? 'Không lưu được' : SAVE_LABEL[save]}</span>
           <button type="button" className="btn btn-sm" disabled={!!blocked || save === 'da-luu'} onClick={() => void flush()} title="Ctrl+S">Lưu nháp</button>
         </div>
@@ -315,7 +372,11 @@ export function TexScratchScreen() {
             <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>Công cụ ▾</button>
             {toolsOpen && (
               <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setToolsOpen(false); } }}>
-                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} autoFocus disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
+                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'new', initial: '' }); }} autoFocus>Bàn nháp mới…</button>
+                <button type="button" role="menuitem" disabled={!ix.active} onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'rename', initial: nameOf(ix, ix.active) }); }}>Đổi tên bàn nháp này…</button>
+                <button type="button" role="menuitem" className="danger" disabled={!ix.active} onClick={() => { setToolsOpen(false); setAskDelete(true); }}>Xoá bàn nháp này…</button>
+                <hr className="tsx-hr" />
+                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
                 <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!dupBusy} onClick={() => { setToolsOpen(false); void runDup(); }} title="So với ngân hàng và giữa các câu trong bàn nháp; chỉ đọc, không sửa gì">Kiểm tra trùng với ngân hàng…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setReplaceOpen(true); }}>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
@@ -448,6 +509,12 @@ export function TexScratchScreen() {
         <span className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`}>{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</span>
       </footer>
 
+      {nameDlg && <NameDialog title={nameDlg.kind === 'new' ? 'Bàn nháp mới' : 'Đổi tên bàn nháp'} initial={nameDlg.initial} confirmLabel={nameDlg.kind === 'new' ? 'Tạo' : 'Đổi tên'} onOk={(n) => void (nameDlg.kind === 'new' ? createDraft(n) : renameCurrent(n))} onCancel={() => setNameDlg(null)} />}
+      {askDelete && (
+        <ConfirmDialog title={`Xoá “${nameOf(ix, ix.active)}”?`} confirmLabel="Xoá bàn nháp" danger onConfirm={() => void deleteCurrent()} onCancel={() => setAskDelete(false)}>
+          <p>Toàn bộ nội dung bàn nháp này bị xoá khỏi máy và không lấy lại được. Các bàn nháp khác và ngân hàng không bị ảnh hưởng. Nếu cần giữ, hãy chọn Công cụ → Lưu ra tệp .tex trước.</p>
+        </ConfirmDialog>
+      )}
       {fixFor && <FixDialog mode={fixFor} text={latest.current} scope={scope} onApply={applyText} onClose={() => setFixFor(null)} />}
       {replaceOpen && <ScratchReplace text={latest.current} scan={scanScratch(latest.current)} scope={scope} onApply={applyText} onClose={() => setReplaceOpen(false)} />}
       {askClear && (
@@ -514,5 +581,18 @@ function FixDialog({ mode, text, scope, onApply, onClose }: { mode: 'fix' | 'sor
         </div>
       </div>
     </>
+  );
+}
+
+/** Hộp đặt tên bàn nháp. */
+function NameDialog({ title, initial, confirmLabel, onOk, onCancel }: { title: string; initial: string; confirmLabel: string; onOk(name: string): void; onCancel(): void }) {
+  const [v, setV] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  return (
+    <ConfirmDialog title={title} confirmLabel={confirmLabel} onConfirm={() => onOk(v)} onCancel={onCancel}>
+      <label className="tsx-rf"><span>Tên</span><input ref={ref} value={v} maxLength={60} placeholder="vd. Đề giữa kì 1 — Lớp 12" onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onOk(v); } }} /></label>
+      <p className="sys-hint">Mỗi bàn nháp lưu riêng trên máy; đổi qua lại ở ô “Bàn nháp” phía trên.</p>
+    </ConfirmDialog>
   );
 }

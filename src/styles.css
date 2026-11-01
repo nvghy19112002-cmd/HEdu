@@ -1917,3 +1917,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-opts .sw { display: flex; align-items: baseline; gap: 8px; }
 
 .tsx-dupbusy { margin: 0; padding: 2px 10px; }
+
+.tsx-slot { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); }
+.tsx-slot select { height: 28px; max-width: 220px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); color: var(--ink); font: inherit; font-size: 13px; padding: 0 6px; }
+.tsx-hr { border: 0; border-top: 1px solid var(--line-3); margin: 4px 0; }
