@@ -1936,3 +1936,29 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-empty ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 .qe-status button.qs { border: 0; background: none; font: inherit; cursor: pointer; }
 .qe-status button.qs:hover { text-decoration: underline; }
+
+/* ---- Thanh tab nhiều đề (Thư viện đề thi) ---- */
+.xt-bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: flex-end; gap: 2px; height: 38px; box-sizing: border-box; padding: 6px 16px 0; background: var(--paper-2); border-bottom: 1px solid var(--line-2); overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.xt-bar.over { position: fixed; top: 0; left: 0; right: 0; z-index: 56; padding-left: 80px; }
+.xt-bar.over::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 64px; background: var(--rail); }
+.ew.tabbed { top: 38px; }
+.ew.off { display: none; }
+.xt-tab { flex: 0 1 auto; min-width: 0; max-width: 240px; display: inline-flex; align-items: center; height: 31px; box-sizing: border-box; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; color: var(--ink-2); font-size: 13px; }
+.xt-tab:hover:not(.on) { background: var(--hover); }
+.xt-tab.on { height: 32px; margin-bottom: -1px; background: var(--paper); border-color: var(--line-2); color: var(--ink); font-weight: 600; }
+button.xt-tab, .xt-name { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
+.xt-tab.xt-lib.on { background: var(--paper); border: 1px solid var(--line-2); border-bottom: 0; }
+.xt-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 100%; padding: 0 4px 0 12px; }
+.xt-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xt-dot { color: var(--warn); font-size: 11px; }
+.xt-st { flex: 0 0 auto; font-size: 12px; font-weight: 700; }
+.xt-st.run { color: var(--pri); display: inline-block; animation: xt-spin 1.2s linear infinite; }
+.xt-st.wait { color: var(--ink-3); }
+.xt-st.bad { color: var(--danger); }
+@keyframes xt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .xt-st.run { animation: none; } }
+.xt-x { flex: 0 0 auto; width: 20px; height: 20px; margin-right: 6px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--ink-3); font-size: 15px; line-height: 1; cursor: pointer; }
+.xt-x:hover { background: var(--hover); color: var(--ink); }
+.xt-count { margin-left: auto; align-self: center; padding-left: 12px; font-size: 12px; white-space: nowrap; }
+.xc-open { color: var(--pri); }

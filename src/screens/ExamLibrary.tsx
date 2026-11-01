@@ -2,6 +2,7 @@
 // Thi thử, Thư mục riêng) · thanh tìm + bộ lọc + sắp xếp · thống kê trạng thái · lưới thẻ đề bằng nhau · bấm thẻ mở cửa sổ chi tiết.
 // Nhập .tex/thư mục/gói (sao chép, tệp gốc không bị đụng), tạo đề trống ngay tại mục đang chọn (điền sẵn lớp/loại/chương/bài),
 // sao chép (phiên bản mới), đổi thông tin, chốt đề, Thùng rác đề, sao lưu/khôi phục thư viện đề, Biên tập và xem PDF.
+// Bấm thẻ đề = mở đề thành một tab (thanh tab trên cùng: tab Thư viện cố định + tối đa 8 đề; nhớ tab khi tắt app; logic ở examtabs.ts).
 // Biên dịch/soạn tệp nằm ở không gian Biên tập (ExamWorkspace). Thiết kế: claude/thiet-ke-de-thi.md.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
@@ -21,7 +22,8 @@ import {
   examReveal, examScan, examTrash, examVerify, filterExams, formatBytes, needsMainChoice, SORT_LABEL, sortExams, STATUS_LABEL,
   type ExamManifest, type ExamScan, type ExamSort, type ExamStatus, type ExamSummary, type ExamVerify,
 } from '../lib/examlib';
-import { ExamWorkspace } from './ExamWorkspace';
+import { ExamWorkspace, type ExamWorkspaceHandle } from './ExamWorkspace';
+import { closeTab, cycleTab, keepExisting, loadTabs, MAX_TABS, openTab, saveTabs, type TabsState, type TabStatus } from '../lib/examtabs';
 import { ExamExportDialog } from '../components/ExamExportDialog';
 
 const nf = new Intl.NumberFormat('vi-VN');
@@ -39,7 +41,7 @@ interface Pending { path: string; scan: ExamScan; name: string; main: string }
 /** Khung cửa sổ dùng chung của màn này (Esc đóng, trừ khi đang có hộp xác nhận). */
 function Modal({ title, onClose, wide, children, foot }: { title: React.ReactNode; onClose(): void; wide?: boolean; children: React.ReactNode; foot?: React.ReactNode }) {
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.cfm') && !document.querySelector(".ew, .pv:not(.pv-embedded)")) { e.stopPropagation(); onClose(); } };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.cfm') && !document.querySelector(".ew:not(.off), .pv:not(.pv-embedded)")) { e.stopPropagation(); onClose(); } };
     document.addEventListener('keydown', k);
     return () => document.removeEventListener('keydown', k);
   }, [onClose]);
@@ -75,9 +77,12 @@ export function ExamLibraryScreen() {
   const [check, setCheck] = useState<ExamVerify | null>(null);
   const [goods, setGoods] = useState<GoodInfo[]>([]);
   const [viewing, setViewing] = useState<ExamMode | null>(null);
-  const [editing, setEditing] = useState(false);
-  /** đề vừa được bấm ở thẻ: mở thẳng không gian biên tập khi đọc xong thông tin (không qua hộp Thông tin) */
-  const autoOpen = useRef<string | null>(null);
+  /** các đề đang mở thành tab + tab đang xem (null = Thư viện) */
+  const [tabs, setTabs] = useState<TabsState>(loadTabs);
+  const [tabStat, setTabStat] = useState<ReadonlyMap<string, TabStatus>>(new Map());
+  const wsRefs = useRef(new Map<string, ExamWorkspaceHandle>());
+  /** hộp Thông tin mở từ một tab đề: đóng hộp thì quay lại tab đó */
+  const infoFrom = useRef<string | null>(null);
   const [exportingCodes, setExportingCodes] = useState(false);
   const [panel, setPanel] = useState<null | 'trash' | 'backup'>(null);
   const [ask, setAsk] = useState<null | 'trash'>(null);
@@ -100,15 +105,40 @@ export function ExamLibraryScreen() {
     examCompileAll(id).then(setGoods).catch(() => undefined);
   }, [toast]);
   useEffect(() => {
-    setDetail(null); setCheck(null); setGoods([]); setViewing(null); setEditing(false);
+    setDetail(null); setCheck(null); setGoods([]); setViewing(null);
     if (activeId) loadDetail(activeId);
   }, [activeId, loadDetail]);
+  // nhớ tab khi tắt app / rời màn; đề không còn trong thư viện thì bỏ tab
+  useEffect(() => { saveTabs(tabs); }, [tabs]);
+  useEffect(() => { if (load === 'ok' && desktop) setTabs((t) => keepExisting(t, (id) => items.some((x) => x.id === id && !!x.mainFile))); }, [items, load, desktop]);
+  const onTabStatus = useCallback((id: string, st: TabStatus) => setTabStat((m) => { const o = m.get(id); if (o && o.dirty === st.dirty && o.compile === st.compile) return m; const n = new Map(m); n.set(id, st); return n; }), []);
+  /** bấm thẻ đề: mở thành tab (đã mở thì chuyển sang) */
+  const openDoc = (e: ExamSummary) => {
+    if (!desktop || !e.mainFile) {
+      setActiveId(e.id);
+      toast(desktop ? 'Đề này chưa chọn tệp chính nên chưa biên tập được. Đây là hộp Thông tin của đề.' : 'Biên tập đề chỉ có ở bản cài trên Windows. Đây là hộp Thông tin của đề.');
+      return;
+    }
+    const n = openTab(tabs, e.id);
+    if (n === 'full') { toast(`Đang mở ${MAX_TABS} đề (tối đa). Đóng bớt một tab ở thanh trên cùng rồi mở đề này.`); return; }
+    setTabs(n);
+  };
+  /** đóng tab đề: chuyển sang tab đó trước để hộp "Có tệp chưa lưu" (nếu có) hiện đúng chỗ */
+  const askCloseDoc = (id: string) => { setTabs((t) => ({ ...t, front: id })); window.setTimeout(() => wsRefs.current.get(id)?.requestClose(), 0); };
+  const closeDoc = (id: string) => { setTabs((t) => closeTab(t, id)); setTabStat((m) => { const n = new Map(m); n.delete(id); return n; }); void reload(); };
+  // phím tắt thanh tab: Ctrl+Tab / Ctrl+Shift+Tab (hoặc Ctrl+PageDown/PageUp) đổi tab, Ctrl+W đóng tab đề đang xem
   useEffect(() => {
-    if (!detail || !activeId || autoOpen.current !== activeId) return;
-    autoOpen.current = null;
-    if (desktop && detail.mainFile) setEditing(true);
-    else toast(desktop ? 'Đề này chưa chọn tệp chính nên chưa biên tập được. Mở hộp Thông tin để xem.' : 'Biên tập đề chỉ có ở bản cài trên Windows. Đây là hộp Thông tin của đề.');
-  }, [detail, activeId, desktop, toast]);
+    if (!tabs.ids.length) return;
+    const k = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (document.querySelector('.cfm, .qm, .pv:not(.pv-embedded)')) return; // đang có hộp thoại
+      const key = e.key.toLowerCase();
+      if (key === 'tab' || key === 'pagedown' || key === 'pageup') { e.preventDefault(); e.stopPropagation(); setTabs((t) => cycleTab(t, key === 'pageup' || (key === 'tab' && e.shiftKey) ? -1 : 1)); }
+      else if (key === 'w' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); if (tabs.front) askCloseDoc(tabs.front); }
+    };
+    document.addEventListener('keydown', k, true);
+    return () => document.removeEventListener('keydown', k, true);
+  }, [tabs]); // eslint-disable-line react-hooks/exhaustive-deps
   // menu thả xuống: bấm ra ngoài / Esc thì đóng
   useEffect(() => {
     if (!menu) return;
@@ -201,11 +231,14 @@ export function ExamLibraryScreen() {
   });
   const trash = () => run(async () => {
     if (!activeId) return;
+    if (tabs.ids.includes(activeId)) { setAsk(null); toast('Đề này đang mở ở một tab. Đóng tab của đề (dấu × ở thanh trên cùng) rồi mới chuyển vào Thùng rác.'); return; }
     await examTrash(activeId);
     setAsk(null); setActiveId(null);
     await reload();
     toast('Đã chuyển đề vào Thùng rác đề. Có thể khôi phục ở Công cụ › Thùng rác đề.');
   });
+  /** đóng hộp Thông tin; mở từ tab đề thì quay lại đúng tab đó */
+  const closeInfo = () => { const back = infoFrom.current; infoFrom.current = null; setActiveId(null); if (back) setTabs((t) => (t.ids.includes(back) ? { ...t, front: back } : t)); };
   const clearAll = () => { setText(''); setStatus(null); setYear(null); setNode(null); };
 
   const card = (e: ExamSummary) => {
@@ -213,12 +246,12 @@ export function ExamLibraryScreen() {
     const at = examTrail(e, tax);
     const flags = [!e.mainFile && 'Chưa chọn tệp chính', e.skippedCount > 0 && `${e.skippedCount} mục không chép`, e.warningCount > 0 && `${e.warningCount} cảnh báo`].filter(Boolean) as string[];
     return (
-      <button key={e.id} type="button" className={`xc tone-${catTone(c)}`} onClick={() => { autoOpen.current = e.id; setActiveId(e.id); }} title="Bấm để mở đề (biên tập, biên dịch). Thông tin và thao tác khác: nút “Thông tin…” trong màn biên tập">
+      <button key={e.id} type="button" className={`xc tone-${catTone(c)}`} onClick={() => openDoc(e)} title={`Bấm để mở đề thành một tab (biên tập, biên dịch). Thông tin và thao tác khác: nút “Thông tin…” trong màn biên tập${tabs.ids.includes(e.id) ? '. Đề này đang mở.' : ''}`}>
         <span className="xc-top">
           <span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span>
           <span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span>
         </span>
-        <span className="xc-name">{e.name}</span>
+        <span className="xc-name">{tabs.ids.includes(e.id) && <span className="xc-open" title="Đang mở ở một tab">● </span>}{e.name}</span>
         <span className="xc-where">{at.length ? at.filter((x) => !HIDE_IN_WHERE.has(x)).join(' › ') : 'Chưa xếp lớp'}{e.folder ? ` · 📁 ${e.folder}` : ''}</span>
         <span className="xc-foot">
           <span title="Năm học">{e.metadata.schoolYear ?? '—'}</span>
@@ -230,8 +263,33 @@ export function ExamLibraryScreen() {
     );
   };
 
+  const docTabs = tabs.ids.map((id) => items.find((x) => x.id === id)).filter((x): x is ExamSummary => !!x && !!x.mainFile && desktop);
+  const tabBar = docTabs.length > 0 && (
+    <div className={`xt-bar${tabs.front ? ' over' : ''}`} role="tablist" aria-label="Đề đang mở (Ctrl+Tab đổi tab, Ctrl+W đóng)">
+      <button type="button" role="tab" aria-selected={!tabs.front} className={`xt-tab xt-lib${!tabs.front ? ' on' : ''}`} onClick={() => setTabs((t) => ({ ...t, front: null }))}>Thư viện</button>
+      {docTabs.map((e) => {
+        const st = tabStat.get(e.id);
+        const c = st?.compile;
+        return (
+          <span key={e.id} className={`xt-tab${tabs.front === e.id ? ' on' : ''}`} title={e.name} onAuxClick={(ev) => { if (ev.button === 1) { ev.preventDefault(); askCloseDoc(e.id); } }}>
+            <button type="button" role="tab" aria-selected={tabs.front === e.id} className="xt-name" onClick={() => setTabs((t) => ({ ...t, front: e.id }))}>
+              {c === 'running' && <span className="xt-st run" aria-label="đang biên dịch" title="Đang biên dịch">⟳</span>}
+              {c === 'waiting' && <span className="xt-st wait" aria-label="chờ lượt biên dịch" title="Chờ lượt biên dịch">⏳</span>}
+              {c === 'failed' && <span className="xt-st bad" aria-label="biên dịch lỗi" title="Biên dịch lỗi">!</span>}
+              <span className="xt-text">{e.name}</span>
+              {st?.dirty && <span className="xt-dot" aria-label="chưa lưu" title="Có tệp chưa lưu">●</span>}
+            </button>
+            <button type="button" className="xt-x" aria-label={`Đóng ${e.name}`} title="Đóng (Ctrl+W)" onClick={() => askCloseDoc(e.id)}>×</button>
+          </span>
+        );
+      })}
+      <span className="xt-count xl-meta" title={`Mở tối đa ${MAX_TABS} đề cùng lúc`}>{docTabs.length}/{MAX_TABS}</span>
+    </div>
+  );
+
   return (
     <>
+      {tabBar}
       <header className="page-head bank-head">
         <h1>Thư viện đề thi</h1>
         <div className="head-actions">
@@ -387,8 +445,8 @@ export function ExamLibraryScreen() {
         </Modal>
       )}
 
-      {activeId && !editing && !viewing && (
-        <Modal wide onClose={() => setActiveId(null)} title={detail ? <>
+      {activeId && !viewing && (
+        <Modal wide onClose={closeInfo} title={detail ? <>
           <span className={`xc-type tone-${catTone(catOfType(detail.metadata.examType))}`}>{typeText(detail.metadata.examType)}</span>
           <b className="xm-name">{detail.name}</b>
           <span className={`xc-st st-${detail.status}`}>{STATUS_LABEL[detail.status]}</span>
@@ -403,7 +461,7 @@ export function ExamLibraryScreen() {
           {!detail ? <p className="aid-wait">Đang đọc…</p> : (
             <>
               <div className="xm-acts">
-                <button type="button" className="btn btn-accent" disabled={!desktop || !detail.mainFile} onClick={() => setEditing(true)}>Biên tập & biên dịch</button>
+                <button type="button" className="btn btn-accent" disabled={!desktop || !detail.mainFile} onClick={() => { const e = items.find((x) => x.id === activeId); infoFrom.current = null; setActiveId(null); if (e) openDoc(e); }}>Biên tập & biên dịch</button>
                 {goods.map((g) => <button key={g.mode} type="button" className="btn btn-outline" onClick={() => setViewing(g.mode as ExamMode)}>Xem PDF: {modeLabel(g.mode)}</button>)}
                 <button type="button" className="btn btn-outline" disabled={!desktop || busy} title="PDF từng mã đề, gói giáo viên hoặc học sinh, Excel đáp án (đề tạo bằng Tạo đề)" onClick={() => setExportingCodes(true)}>Xuất từng mã đề…</button>
               </div>
@@ -439,7 +497,13 @@ export function ExamLibraryScreen() {
 
       {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} mode={viewing} note={MODE_NOTE[viewing]} onClose={() => setViewing(null)} />}
       {exportingCodes && activeId && detail && <ExamExportDialog id={activeId} name={detail.name} onToast={toast} onClose={() => setExportingCodes(false)} />}
-      {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={(toInfo) => { setEditing(false); void reload(); if (toInfo) loadDetail(activeId); else setActiveId(null); }} />}
+      {docTabs.map((e) => (
+        <ExamWorkspace key={e.id} ref={(h) => { if (h) wsRefs.current.set(e.id, h); else wsRefs.current.delete(e.id); }} id={e.id} name={e.name} mainFile={e.mainFile}
+          hidden={tabs.front !== e.id} onStatus={onTabStatus}
+          onLibrary={() => setTabs((t) => ({ ...t, front: null }))}
+          onInfo={() => { infoFrom.current = e.id; setTabs((t) => ({ ...t, front: null })); setActiveId(e.id); }}
+          onClose={() => closeDoc(e.id)} />
+      ))}
       {panel === 'trash' && <ExamTrashPanel toast={toast} onClose={() => setPanel(null)} onChanged={(rid) => { void reload().then(() => { if (rid) setActiveId(rid); }); }} />}
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}
       {ask === 'trash' && detail && (
