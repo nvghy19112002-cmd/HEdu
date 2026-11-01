@@ -22,6 +22,7 @@ import { invoke, isDesktop } from '../lib/platform';
 import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
 import { FIX_RULES, planFix, planSort } from '../lib/texfix';
 import { ScratchReplace } from '../components/ScratchReplace';
+import { ScratchClaudeId } from '../components/ScratchClaudeId';
 import { appendText, exportName, openTexFiles } from '../lib/scratchfile';
 import { checkScratchDup, type DupRun } from '../lib/scratchdup';
 import { DUP_KIND_LABEL } from '../lib/dup2';
@@ -62,6 +63,7 @@ export function TexScratchScreen() {
   const [askClear, setAskClear] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
+  const [claudeOpen, setClaudeOpen] = useState(false);
   /** các câu đang tick (theo số thứ tự khối); thao tác "đã chọn" chỉ chạy trên các câu này */
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
   const pickedRef = useRef<ReadonlySet<number>>(picked);
@@ -267,7 +269,7 @@ export function TexScratchScreen() {
   /** Áp dụng một thay đổi đã xem trước: thay cả văn bản (Ctrl+Z trong khung soạn lấy lại được), kèm nút Hoàn tác. */
   const applyText = (next: string, what: string) => {
     const prev = latest.current;
-    setFixFor(null); setReplaceOpen(false);
+    setFixFor(null); setReplaceOpen(false); setClaudeOpen(false);
     if (next === prev) { toast(`${what}: không có gì thay đổi.`); return; }
     ed.current?.replaceDoc(KEY, next);
     toast(`Đã ${what.toLowerCase()}.`, { label: 'Hoàn tác', run: () => { if (latest.current === next) ed.current?.replaceDoc(KEY, prev); } });
@@ -379,6 +381,7 @@ export function TexScratchScreen() {
                 <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
                 <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!dupBusy} onClick={() => { setToolsOpen(false); void runDup(); }} title="So với ngân hàng và giữa các câu trong bàn nháp; chỉ đọc, không sửa gì">Kiểm tra trùng với ngân hàng…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!nDone || !!blocked} onClick={() => { setToolsOpen(false); setClaudeOpen(true); }}>Gán ID nhờ Claude…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setReplaceOpen(true); }}>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setFixFor('fix'); }}>Chuẩn hoá…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!scan.blocks.length} onClick={() => { setToolsOpen(false); setFixFor('sort'); }}>Sắp xếp theo ID…</button>
@@ -516,6 +519,7 @@ export function TexScratchScreen() {
         </ConfirmDialog>
       )}
       {fixFor && <FixDialog mode={fixFor} text={latest.current} scope={scope} onApply={applyText} onClose={() => setFixFor(null)} />}
+      {claudeOpen && <ScratchClaudeId text={latest.current} scan={scanScratch(latest.current)} scope={scope} tax={tax} toast={toast} onApply={applyText} onClose={() => setClaudeOpen(false)} />}
       {replaceOpen && <ScratchReplace text={latest.current} scan={scanScratch(latest.current)} scope={scope} onApply={applyText} onClose={() => setReplaceOpen(false)} />}
       {askClear && (
         <ConfirmDialog title="Xoá toàn bộ nội dung bàn nháp?" confirmLabel="Xoá nội dung" danger onConfirm={clearAll} onCancel={() => setAskClear(false)}>
