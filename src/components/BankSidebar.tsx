@@ -48,6 +48,7 @@ export function BankSidebar({ tax, f, facets, wide, onF, onHide, variant }: Bank
         <div className={`fs-block${wide ? ' is-off' : ''}`}>
           {wide && <p className="fs-note" role="note">Đang tìm trong toàn kho nên mục lục tạm không áp dụng. Xoá chữ tìm để lọc theo mục lục.</p>}
           <BankTree tax={tax} path={{ gradeId: f.gradeId, branchId: f.branchId, chapterId: f.chapterId, lessonId: f.lessonId, formId: f.formId }} counts={facets.node} total={facets.gradeAll} off={wide}
+            allOn={!!f.all}
             onPick={(p) => onF(p ? pickPath(f, p) : pickGrade(f, null))}
             noId={{ total: facets.noId, by: facets.noIdBy, sel: f.noId, onPick: (v) => onF(pickNoId(f, v)) }} />
         </div>

@@ -1,4 +1,4 @@
-import { attrChips, attrCount, attrGroups, clearAttrs, computeFacets, dropAttr, emptyFilters, emptyKind, facetCtx, NOID_UNKNOWN, pickBranch, pickChapter, pickForm, pickGrade, pickLesson, pickNoId, sanitize, type BankFilters } from './bankfilter';
+import { scopeChosen, attrChips, attrCount, attrGroups, clearAttrs, computeFacets, dropAttr, emptyFilters, emptyKind, facetCtx, NOID_UNKNOWN, pickBranch, pickChapter, pickForm, pickGrade, pickLesson, pickNoId, sanitize, type BankFilters } from './bankfilter';
 import { pickPath } from './banktree';
 import { buildDefault } from './taxonomy';
 import { LEVELS, TYPES, type Grade, type Level, type QType, type Question } from './types';
@@ -155,8 +155,8 @@ console.log('Bộ lọc Nhãn');
   ok(attrCount(f) === 1 && attrGroups(f) === 1 && clearAttrs(f).tag === null, 'tính vào số bộ lọc và Xoá bộ lọc bỏ được nhãn');
   const chip = attrChips(f, r);
   ok(chip.length === 1 && chip[0].key === 'tag' && chip[0].after === computeFacets(T, dropAttr(f, 'tag'), ctx()).list.length, 'chip Nhãn: số câu khi bỏ nó khớp kết quả thật');
-  ok(computeFacets(T, F({ tag: 'không có nhãn này' }), ctx()).list.length === 0, 'nhãn không tồn tại ⇒ rỗng, không lỗi');
-  ok(emptyKind(computeFacets(T, F({ tag: 'không có nhãn này' }), ctx()), F({ tag: 'không có nhãn này' }), { totalQuestions: 4, hasText: false, wide: false }) === 'filters', 'rỗng vì bộ lọc nhãn ⇒ trạng thái "bộ lọc"');
+  ok(computeFacets(T, F({ tag: 'không có nhãn này', all: true }), ctx()).list.length === 0, 'nhãn không tồn tại ⇒ rỗng, không lỗi');
+  ok(emptyKind(computeFacets(T, F({ tag: 'không có nhãn này', all: true }), ctx()), F({ tag: 'không có nhãn này', all: true }), { totalQuestions: 4, hasText: false, wide: false }) === 'filters', 'rỗng vì bộ lọc nhãn ⇒ trạng thái "bộ lọc"');
 }
 
 console.log('Chip điều kiện và số câu sẽ có');
@@ -200,4 +200,22 @@ let t = performance.now(); computeFacets(big, F({ gradeId: g12.id, figure: 'yes'
 t = performance.now(); computeFacets(big, F({ gradeId: g12.id, figure: 'yes', levels: new Set<Level>(['TH', 'VD']) }), ctx()); const warm = performance.now() - t;
 console.log(`    60.000 câu: lần đầu ${cold.toFixed(0)} ms, lần sau ${warm.toFixed(0)} ms (máy làm việc của Claude, chỉ để tham khảo)`);
 ok(warm < 600, 'lần sau dưới 600 ms trên máy làm việc');
+// ---- Chưa chọn mục nào ở cây ⇒ chưa hiện câu (chủ dự án chốt 01/11/2026) ----
+{
+  const none = F({});
+  const chosenCtx = (f: BankFilters, wide = false) => facetCtx(tax, () => true, wide, undefined, undefined, scopeChosen(f));
+  ok(!scopeChosen(none) && scopeChosen(F({ all: true })) && scopeChosen(F({ gradeId: g12.id })) && scopeChosen(F({ noId: 'all' })), 'scopeChosen: chỉ khi bấm Tất cả / một Lớp / Chưa có ID');
+  const r0 = computeFacets(qs, none, chosenCtx(none));
+  ok(r0.list.length === 0 && r0.gradeAll > 0, 'chưa chọn mục: danh sách trống nhưng cây vẫn có số đếm');
+  ok(emptyKind(r0, none, { totalQuestions: qs.length, hasText: false, wide: false }) === 'choose', 'trạng thái trống là "choose" (chọn một mục)');
+  ok(emptyKind(r0, none, { totalQuestions: 0, hasText: false, wide: false }) === 'bank', 'kho trống vẫn là "bank"');
+  const ra = computeFacets(qs, pickGrade(none, null), chosenCtx(pickGrade(none, null)));
+  ok(pickGrade(none, null).all === true && ra.list.length === qs.length, 'bấm Tất cả: hiện cả kho');
+  ok(pickGrade(pickGrade(none, null), g12.id).all === false, 'chọn một Lớp thì bỏ cờ Tất cả');
+  const rw = computeFacets(qs, none, chosenCtx(none, true));
+  ok(rw.list.length > 0, 'Toàn kho (#số hoặc nút Tìm trong toàn kho) vẫn tìm được khi chưa chọn mục');
+  const rt = computeFacets(qs, none, facetCtx(tax, (u) => u === qs[0].uid, false, undefined, undefined, false));
+  ok(rt.list.length === 0, 'có chữ tìm nhưng chưa chọn mục ⇒ vẫn chưa hiện (phải chọn mục trước)');
+  ok(sanitize(tax, { ...none, gradeId: 'khong-co-trong-cay' }).all === false, 'lớp không còn trong cây ⇒ về chưa chọn, không tự thành Tất cả');
+}
 if (fail) { console.log(`${fail} lỗi`); process.exit(1); }

@@ -54,6 +54,19 @@ export function BankEmpty(p: BankEmptyProps) {
     );
   }
 
+  if (kind === 'choose') {
+    return (
+      <div className="bk-empty" role="status">
+        <h3>Chọn một mục ở cây mục lục để xem câu</h3>
+        <p>Bấm một Lớp (rồi Chương, Bài, Dạng) hoặc “Chưa có ID” ở cây bên trái. Muốn xem cả kho thì bấm “Tất cả”. Gõ <b>#số</b> để tìm đúng một câu trong toàn kho.</p>
+        <div className="be-acts">
+          <button type="button" className="btn btn-accent" onClick={() => p.onF(pickGrade(f, null))}>Tất cả ({nf.format(facets.gradeAll)} câu)</button>
+          {tax.grades.map((g) => <button key={g.id} type="button" className="btn btn-outline" onClick={() => p.onF(pickGrade(f, g.id))}>{gradeLabel(g)} ({nf.format(facets.grade.get(g.id) ?? 0)})</button>)}
+        </div>
+      </div>
+    );
+  }
+
   if (kind === 'scope') {
     const up = stepUp(tax, f, facets);
     return (

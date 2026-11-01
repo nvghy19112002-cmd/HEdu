@@ -485,7 +485,7 @@ export function ImportScreen() {
           <div className="head-actions"><button type="button" className="btn btn-accent" onClick={() => { showLot(lots.list, lots.idx + 1); setResult(null); }}>Tiếp lô {lots.idx + 2} / {lots.list.length} →</button></div>
         </div></div></div>
       )}
-      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag! }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => { setResult(null); if (lots) clearAll(); }} /></div>}
+      {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag!, all: true }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => { setResult(null); if (lots) clearAll(); }} /></div>}
       {!result && <div className="simple">
         <div className={`panel${rows.length ? ' is-compact' : ''}`}>
           <h2>Dán mã LaTeX hoặc mở file .tex</h2>
