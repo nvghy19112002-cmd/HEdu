@@ -18,6 +18,7 @@ import type { Diag } from '../lib/examcompile';
 import { missingPackages } from '../lib/missingpkg';
 import { invoke, isDesktop } from '../lib/platform';
 import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
+import { FIX_RULES, planFix, planSort } from '../lib/texfix';
 
 interface ScratchOut { status: 'ok' | 'failed' | 'timeout' | 'cancelled' | 'no-tex'; message: string; pages: number | null; runs: number; ms: number; texVersion: string; diagnostics: Diag[]; errorCount: number; warningCount: number; rawLog: string; invalidPdf: boolean; hasPdf: boolean }
 const PKG_KEY = 'hedu.texscratch.goi';
@@ -47,6 +48,7 @@ export function TexScratchScreen() {
   const [sel, setSel] = useState<number | null>(null);
   const [showSol, setShowSol] = useState(true);
   const [askClear, setAskClear] = useState(false);
+  const [fixFor, setFixFor] = useState<'fix' | 'sort' | null>(null);
   // biên dịch PDF
   const [tab, setTab] = useState<'cau' | 'pdf'>('cau');
   const [busy, setBusy] = useState(false);
@@ -157,6 +159,14 @@ export function TexScratchScreen() {
   const jumpTo = (d: Diag) => { const w = whereOf(d, scan); if (w.kind === 'noi-dung') { ed.current?.jump(KEY, w.line); if (w.block != null) setSel(w.block); if (vmode === 'view') setVmode('both'); } };
 
   const pick = (b: BlockInfo) => { setSel(b.block.n); ed.current?.jump(KEY, b.block.line0); if (vmode === 'view') setVmode('both'); };
+  /** Áp dụng một thay đổi đã xem trước: thay cả văn bản (Ctrl+Z trong khung soạn lấy lại được), kèm nút Hoàn tác. */
+  const applyText = (next: string, what: string) => {
+    const prev = latest.current;
+    setFixFor(null);
+    if (next === prev) { toast(`${what}: không có gì thay đổi.`); return; }
+    ed.current?.replaceDoc(KEY, next);
+    toast(`Đã ${what.toLowerCase()}.`, { label: 'Hoàn tác', run: () => { if (latest.current === next) ed.current?.replaceDoc(KEY, prev); } });
+  };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
   return (
@@ -169,6 +179,8 @@ export function TexScratchScreen() {
         <div className="head-actions">
           <span className={`qs ${save === 'loi' ? 'bad' : save === 'da-luu' ? 'ok' : 'idle'}`} role="status" title={saveErr ?? undefined}>{blocked ? 'Không lưu được' : SAVE_LABEL[save]}</span>
           <button type="button" className="btn btn-sm" disabled={!!blocked || save === 'da-luu'} onClick={() => void flush()} title="Ctrl+S">Lưu nháp</button>
+          <button type="button" className="btn btn-sm" disabled={!text || !!blocked} onClick={() => setFixFor('fix')} title="Xem trước các thay đổi rồi mới áp dụng">Chuẩn hoá…</button>
+          <button type="button" className="btn btn-sm" disabled={!scan.blocks.length || !!blocked} onClick={() => setFixFor('sort')}>Sắp xếp theo ID…</button>
           <button type="button" className="btn btn-sm btn-ghost" disabled={!text} onClick={() => setAskClear(true)}>Xoá nội dung…</button>
           {busy
             ? <button type="button" className="btn btn-sm" onClick={stop}>Dừng biên dịch</button>
@@ -278,11 +290,67 @@ export function TexScratchScreen() {
         <span className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`}>{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</span>
       </footer>
 
+      {fixFor && <FixDialog mode={fixFor} text={latest.current} onApply={applyText} onClose={() => setFixFor(null)} />}
       {askClear && (
         <ConfirmDialog title="Xoá toàn bộ nội dung bàn nháp?" confirmLabel="Xoá nội dung" danger onConfirm={clearAll} onCancel={() => setAskClear(false)}>
           <p>Bản nháp được lưu lại sau khi xoá. Muốn lấy lại, bấm Ctrl+Z trong khung soạn trước khi đóng app.</p>
         </ConfirmDialog>
       )}
     </div>
+  );
+}
+
+/** Hộp "Chuẩn hoá" / "Sắp xếp theo ID": chạy trên bản sao, hiện thay đổi, chỉ ghi khi bấm Áp dụng. */
+function FixDialog({ mode, text, onApply, onClose }: { mode: 'fix' | 'sort'; text: string; onApply(next: string, what: string): void; onClose(): void }) {
+  const { tax } = useTaxonomy();
+  const [on, setOn] = useState<Set<string>>(() => new Set(FIX_RULES.filter((r) => r.on).map((r) => r.id)));
+  const fix = useMemo(() => (mode === 'fix' ? planFix(text, on) : null), [mode, text, on]);
+  const sort = useMemo(() => (mode === 'sort' ? planSort(text, tax) : null), [mode, text, tax]);
+  const toggle = (id: string) => setOn((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
+  const groups = [['ky-thuat', 'Kỹ thuật — không đổi bản in'], ['cong-thuc', 'Công thức — ĐỔI cách in, chỉ chạy bên trong công thức']] as const;
+  return (
+    <>
+      <div className="cfm-scrim" onClick={onClose} />
+      <div className="cfm xl-panel tsx-fix" role="dialog" aria-modal="true" aria-label={mode === 'fix' ? 'Chuẩn hoá' : 'Sắp xếp theo ID'}>
+        <h3>{mode === 'fix' ? 'Chuẩn hoá nội dung' : 'Sắp xếp theo ID'}</h3>
+        <div className="xl-panel-body">
+          {fix && (
+            <>
+              <p className="xl-meta">HEdu chạy thử trên bản sao và liệt kê các dòng sẽ đổi. Chỉ khi bấm <b>Áp dụng</b> nội dung mới thay đổi (Ctrl+Z hoặc nút Hoàn tác để lấy lại). Không có luật nào xoá chú thích hay đụng vào hình TikZ.</p>
+              {groups.map(([g, title]) => (
+                <fieldset key={g} className="tsx-rules">
+                  <legend>{title}</legend>
+                  {FIX_RULES.filter((r) => r.group === g).map((r) => (
+                    <label key={r.id} className="sw" title={r.hint}>
+                      <input type="checkbox" checked={on.has(r.id)} onChange={() => toggle(r.id)} />
+                      {r.label}{on.has(r.id) && fix.perRule[r.id] ? <b className="tsx-n"> · {fix.perRule[r.id]}</b> : null}
+                      <small className="sys-hint">{r.hint}</small>
+                    </label>
+                  ))}
+                </fieldset>
+              ))}
+              <b>{fix.linesChanged ? `${nf.format(fix.linesChanged)} dòng sẽ đổi` : 'Không có dòng nào đổi'}</b>
+              {fix.changes.length > 0 && (
+                <ol className="tsx-diff">
+                  {fix.changes.map((c) => (
+                    <li key={c.line}><span className="tsx-ln">dòng {c.line}</span><del>{c.before || ' '}</del><ins>{c.after || ' '}</ins></li>
+                  ))}
+                  {fix.linesChanged > fix.changes.length && <li className="sys-hint">… và {nf.format(fix.linesChanged - fix.changes.length)} dòng nữa</li>}
+                </ol>
+              )}
+            </>
+          )}
+          {sort && (sort.ok
+            ? <p>Xếp {nf.format(sort.sorted)} câu theo lớp → chương → bài → dạng → mức độ{sort.noId ? `; ${nf.format(sort.noId)} câu chưa có ID hợp lệ để ở cuối` : ''}. Thêm dòng chú thích tiêu đề từng chương. Nội dung từng câu giữ nguyên.{!sort.moved && ' Các câu đã đúng thứ tự.'}</p>
+            : <p className="q-warn">{sort.why}</p>)}
+        </div>
+        <div className="cfm-acts">
+          <button type="button" className="btn btn-outline" onClick={onClose}>Huỷ</button>
+          {fix && <button type="button" className="btn btn-accent" disabled={!fix.linesChanged} onClick={() => onApply(fix.out, 'Chuẩn hoá')}>Áp dụng</button>}
+          {sort?.ok && <button type="button" className="btn btn-accent" onClick={() => onApply(sort.out, 'Sắp xếp theo ID')}>Sắp xếp</button>}
+        </div>
+      </div>
+    </>
   );
 }

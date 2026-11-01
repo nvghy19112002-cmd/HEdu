@@ -1876,3 +1876,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .tsx-diags { margin: 2px 0; padding-left: 18px; }
 .tsx-pdfbox { flex: 1 1 auto; min-height: 360px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .tsx-pdfbox > * { flex: 1 1 auto; min-height: 0; }
+/* Xử lí TeX — hộp Chuẩn hoá / Sắp xếp theo ID */
+.tsx-fix { width: min(760px, calc(100vw - 32px)); }
+.tsx-rules { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 6px; }
+.tsx-rules legend { font-size: 13px; font-weight: 600; padding: 0 4px; }
+.tsx-rules .sw { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; align-items: baseline; }
+.tsx-rules .sw small { grid-column: 2; }
+.tsx-n { color: var(--accent-ink); }
+.tsx-diff { max-height: 280px; overflow: auto; margin: 6px 0 0; padding: 0; list-style: none; font-family: var(--f-mono, monospace); font-size: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.tsx-diff li { display: grid; grid-template-columns: 64px 1fr; gap: 0 8px; padding: 4px 8px; border-bottom: 1px solid var(--line-3); }
+.tsx-diff del, .tsx-diff ins { grid-column: 2; white-space: pre-wrap; word-break: break-all; text-decoration: none; }
+.tsx-diff del { background: var(--danger-soft); }
+.tsx-diff ins { background: var(--ok-bg); }
