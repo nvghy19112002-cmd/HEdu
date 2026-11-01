@@ -1848,3 +1848,26 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--pri); }
 .te-short { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: var(--warn-ink); }
 /* dòng đang mở ô chọn (cây Dạng bài / chọn câu): nút của dòng nổi ở hàng đầu, không trôi xuống giữa ô chọn */
 .sm-row:has(> .sm-pop):hover .sm-acts, .sm-row:has(> .sm-pop):focus-within .sm-acts { top: 12px; }
+/* Màn Xử lí TeX (bàn nháp): khung soạn + danh sách câu + xem nhanh, cao vừa cửa sổ */
+.tsx-page { display: flex; flex-direction: column; gap: 8px; }
+.tsx-head { padding: 0 0 4px; }
+.tsx-panes { height: calc(100vh - 210px); min-height: 460px; }
+.tsx-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.tsx-editor > * { flex: 1 1 auto; min-height: 0; }
+.tsx-view { display: flex; flex-direction: column; }
+.tsx-tag { font-size: 12px; color: var(--ink-3); }
+.tsx-notes:empty { display: none; }
+.tsx-notes { padding: 6px 12px 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.tsx-notes p { margin: 0; }
+.tsx-split { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(150px, 30%) minmax(0, 1fr); }
+.tsx-list { margin: 0; padding: 6px; list-style: none; overflow: auto; border-right: 1px solid var(--line-3); }
+.tsx-item { width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; text-align: left; font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; }
+.tsx-item:hover { background: var(--paper-2); }
+.tsx-item.on { background: color-mix(in srgb, var(--accent) 14%, var(--paper)); }
+.tsx-ln { color: var(--ink-3); font-size: 12px; }
+.tsx-id { flex-basis: 100%; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tsx-id.id-co-trong-cay { color: var(--ok); }
+.tsx-id.id-sai-cu-phap, .tsx-id.id-nhieu, .tsx-id.id-khong-co-trong-cay { color: var(--warn); }
+.tsx-bad { display: inline-flex; align-items: center; gap: 3px; color: var(--danger-ink); font-weight: 600; font-size: 12px; }
+.tsx-sheet { min-width: 0; }
+@media (max-width: 1000px) { .tsx-panes { height: auto; } .tsx-split { grid-template-columns: 1fr; } .tsx-list { max-height: 200px; border-right: 0; border-bottom: 1px solid var(--line-3); } }

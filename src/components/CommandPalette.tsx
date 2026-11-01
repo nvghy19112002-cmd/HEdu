@@ -13,6 +13,7 @@ const SCREENS: { s: Screen; name: string }[] = [
   { s: 'examlib', name: 'Mở Thư viện đề thi' },
   { s: 'exam', name: 'Tạo đề theo ma trận' },
   { s: 'import', name: 'Nhập câu từ LaTeX' },
+  { s: 'tex', name: 'Xử lí TeX: soạn và kiểm các khối câu hỏi' },
   { s: 'curriculum', name: 'Xem khung chương trình' },
   { s: 'trash', name: 'Mở Thùng rác' },
   { s: 'system', name: 'Cài đặt: cập nhật, sao lưu và khôi phục' },
