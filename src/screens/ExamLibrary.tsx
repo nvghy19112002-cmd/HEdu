@@ -76,6 +76,8 @@ export function ExamLibraryScreen() {
   const [goods, setGoods] = useState<GoodInfo[]>([]);
   const [viewing, setViewing] = useState<ExamMode | null>(null);
   const [editing, setEditing] = useState(false);
+  /** đề vừa được bấm ở thẻ: mở thẳng không gian biên tập khi đọc xong thông tin (không qua hộp Thông tin) */
+  const autoOpen = useRef<string | null>(null);
   const [exportingCodes, setExportingCodes] = useState(false);
   const [panel, setPanel] = useState<null | 'trash' | 'backup'>(null);
   const [ask, setAsk] = useState<null | 'trash'>(null);
@@ -101,6 +103,12 @@ export function ExamLibraryScreen() {
     setDetail(null); setCheck(null); setGoods([]); setViewing(null); setEditing(false);
     if (activeId) loadDetail(activeId);
   }, [activeId, loadDetail]);
+  useEffect(() => {
+    if (!detail || !activeId || autoOpen.current !== activeId) return;
+    autoOpen.current = null;
+    if (desktop && detail.mainFile) setEditing(true);
+    else toast(desktop ? 'Đề này chưa chọn tệp chính nên chưa biên tập được. Mở hộp Thông tin để xem.' : 'Biên tập đề chỉ có ở bản cài trên Windows. Đây là hộp Thông tin của đề.');
+  }, [detail, activeId, desktop, toast]);
   // menu thả xuống: bấm ra ngoài / Esc thì đóng
   useEffect(() => {
     if (!menu) return;
@@ -205,7 +213,7 @@ export function ExamLibraryScreen() {
     const at = examTrail(e, tax);
     const flags = [!e.mainFile && 'Chưa chọn tệp chính', e.skippedCount > 0 && `${e.skippedCount} mục không chép`, e.warningCount > 0 && `${e.warningCount} cảnh báo`].filter(Boolean) as string[];
     return (
-      <button key={e.id} type="button" className={`xc tone-${catTone(c)}`} onClick={() => setActiveId(e.id)} title="Bấm để xem chi tiết, biên tập, xuất">
+      <button key={e.id} type="button" className={`xc tone-${catTone(c)}`} onClick={() => { autoOpen.current = e.id; setActiveId(e.id); }} title="Bấm để mở đề (biên tập, biên dịch). Thông tin và thao tác khác: nút “Thông tin…” trong màn biên tập">
         <span className="xc-top">
           <span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span>
           <span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span>
@@ -431,7 +439,7 @@ export function ExamLibraryScreen() {
 
       {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} mode={viewing} note={MODE_NOTE[viewing]} onClose={() => setViewing(null)} />}
       {exportingCodes && activeId && detail && <ExamExportDialog id={activeId} name={detail.name} onToast={toast} onClose={() => setExportingCodes(false)} />}
-      {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={() => { setEditing(false); void reload(); loadDetail(activeId); }} />}
+      {editing && activeId && detail && <ExamWorkspace id={activeId} name={detail.name} mainFile={detail.mainFile} onClose={(toInfo) => { setEditing(false); void reload(); if (toInfo) loadDetail(activeId); else setActiveId(null); }} />}
       {panel === 'trash' && <ExamTrashPanel toast={toast} onClose={() => setPanel(null)} onChanged={(rid) => { void reload().then(() => { if (rid) setActiveId(rid); }); }} />}
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}
       {ask === 'trash' && detail && (
