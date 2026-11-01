@@ -1,3 +1,17 @@
+## Có gì mới trong beta.49 (kênh beta): Thư viện đề mở nhiều đề bằng tab, mẫu in
+Gồm PR #199–#202 (so với beta.48). Không đổi schema ngân hàng, UID, nội dung câu hỏi hay tệp của các đề đã có. Đã thử bằng bộ kiểm thử và bản thử trên trình duyệt với dữ liệu giả lập; chưa thử trên máy Windows thật với Thư viện đề và TeX Live của thầy/cô. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Bấm thẻ đề là mở thẳng màn biên tập** (không qua hộp Thông tin). Thông tin đề: nút "Thông tin…" ở màn biên tập (#199).
+- **Mở nhiều đề cùng lúc bằng tab** ở trên cùng: tab "Thư viện" luôn ở đầu, tối đa 8 đề. Trên tab: ● có tệp chưa lưu, ⟳ đang biên dịch, ⏳ chờ lượt, ! biên dịch lỗi. Ctrl+Tab đổi tab (hoặc Ctrl+PageDown/PageUp), Ctrl+W đóng tab, bấm chuột giữa vào tab cũng đóng. "← Thư viện" và Esc chỉ về tab Thư viện, đề vẫn mở. Tắt app mở lại vẫn nhớ các tab. Biên dịch cùng lúc tối đa 2 đề, đề thứ ba tự chờ lượt (#200).
+- **Thông tin đề ở ngăn bên phải**; **chuột phải vào thẻ đề** có menu Mở, Xem nhanh PDF, Thông tin, Sao chép, Hiện trong Explorer, Xuất gói, Thùng rác; **Space** trên thẻ xem nhanh PDF; **kéo tệp .tex hoặc thư mục** từ Explorer thả vào Thư viện để nhập (#201).
+- **Cài đặt › Đề thi**: chọn mẫu in (hiện có "Mặc định HEdu", in giống hệt trước) và **Thông tin mặc định** (Sở/Phòng, Trường, Tổ) tự điền vào đề mới ở Tạo đề (#202).
+
+**Lời khuyên**
+- Thử mở 2–3 đề, sửa một đề rồi đổi tab, bấm Biên dịch ở cả ba đề, tắt app mở lại xem tab còn không.
+- Đặt Thông tin mặc định ở Cài đặt › Đề thi rồi tạo một đề mới ở Tạo đề, biên dịch và so bản in với đề cũ.
+- Kéo một tệp .tex vào Thư viện đề để thử nhập.
+
 ## Có gì mới trong beta.48 (kênh beta): Xử lí TeX làm việc theo nhóm câu; Ngân hàng chọn mục trước
 Gồm PR #186–#197 (so với beta.47). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu trong ngân hàng (chỉ Gán ID trên bàn nháp chèn `%[ID]` vào chữ của bàn nháp, và chỉ khi bạn bấm Chèn). Đã thử bằng bộ kiểm thử, bản thử trên trình duyệt với dữ liệu mẫu và test Rust; chưa thử trên máy Windows thật với ngân hàng và TeX Live của thầy/cô. Đây là bản beta.
 
