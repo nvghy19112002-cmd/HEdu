@@ -1,3 +1,24 @@
+## Có gì mới trong beta.48 (kênh beta): Xử lí TeX làm việc theo nhóm câu; Ngân hàng chọn mục trước
+Gồm PR #186–#197 (so với beta.47). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu trong ngân hàng (chỉ Gán ID trên bàn nháp chèn `%[ID]` vào chữ của bàn nháp, và chỉ khi bạn bấm Chèn). Đã thử bằng bộ kiểm thử, bản thử trên trình duyệt với dữ liệu mẫu và test Rust; chưa thử trên máy Windows thật với ngân hàng và TeX Live của thầy/cô. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Ngân hàng: phải chọn mục ở cây mục lục mới hiện câu.** Chưa chọn gì thì khung trống ghi hướng dẫn kèm nút "Tất cả" và từng Lớp. "Tất cả" vẫn xem được cả kho. Ô Tìm tìm trong mục đã chọn; gõ `#số` vẫn tìm đúng câu trong toàn kho (#195).
+- **Xử lí TeX — nút "Đưa vào Ngân hàng (N câu)…"**: mở màn Nhập liệu với các câu của bàn nháp, đi đủ các bước như mọi lần nhập (rà trùng, kiểm ID, xem lại rồi mới ghi). Bàn nháp giữ nguyên (#187).
+- **Xử lí TeX — thanh công cụ gọn**: một hàng, các việc phụ nằm trong menu **Công cụ ▾**; bàn nháp trống có hướng dẫn 3 bước; dòng "PDF" ở chân màn bấm được (#187, #194).
+- **Chọn, lọc và làm theo nhóm câu**: tick câu; lọc theo Chưa có ID / Có lỗi / Có hình / Cần xem lại / Có thể trùng / Lỗi biên dịch / Đã chọn. Khi có câu đã chọn, **Biên dịch, Chuẩn hoá, Tìm–Thay, Lưu .tex, Gán ID, Đưa vào Ngân hàng** chỉ chạy trên các câu đó. **Tìm và thay thế** có xem trước từng dòng. Lỗi biên dịch gắn vào từng câu, có nút "Lỗi kế tiếp ▸" (#188).
+- **Mở tệp .tex vào bàn nháp** (nối vào cuối) và **Lưu ra tệp .tex** (#189).
+- **Kiểm tra trùng với ngân hàng** ngay trên bàn nháp: nhãn "trùng #xxxx" (#190).
+- **Soát nội dung**: công thức hỏng, ngoặc lệch, thiếu đáp án đúng, thiếu lời giải… chỉ báo, không tự sửa (#196).
+- **Nhiều bàn nháp có tên** (đổi qua lại, đổi tên, xoá); bàn nháp chính giữ nguyên tệp cũ (#191).
+- **Gán ID nhờ Claude trên bàn nháp**: xuất lô cho câu chưa có ID, xem trước đề xuất, chèn `%[ID]`, có Hoàn tác (#192).
+- **Lưu thành đề trong Thư viện đề** (câu chép nguyên văn; bàn nháp không đổi) (#197).
+- Sửa: thẻ câu ở Ngân hàng không còn mất dấu căn √ (#186). Quy tắc dự án: chỉ Claude viết mã (#193).
+
+**Lời khuyên**
+- Thử Ngân hàng trước: mở lên, chọn một Lớp/Chương, thử ô Tìm và `#số`.
+- Thử luồng: dán một đề vào Xử lí TeX → Soát nội dung → Kiểm tra trùng → Gán ID nhờ Claude → Đưa vào Ngân hàng, và thử Lưu thành đề rồi mở trong mục Đề thi.
+- Cập nhật lên bản này xong, bàn nháp cũ vẫn còn trong "Bàn nháp chính".
+
 ## Có gì mới trong beta.47 (kênh beta): màn mới "Xử lí TeX"
 Gồm PR #179, #181, #182, #184 (so với beta.46). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu trong ngân hàng. Đã thử bằng bộ kiểm thử, TeX Live thật và bản chạy thử của app với dữ liệu giả; chưa thử với ngân hàng thật. Đây là bản BETA.
 
