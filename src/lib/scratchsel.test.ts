@@ -25,11 +25,11 @@ const infos = blockInfos(scan, tax);
 
 t('quét được 3 khối', scan.blocks.length === 3);
 t('hasTikz đúng', !hasTikz(scan.blocks[0].text) && hasTikz(scan.blocks[1].text));
-const none = { buildErr: new Set<number>(), picked: new Set<number>() };
+const none = { buildErr: new Set<number>(), picked: new Set<number>(), dup: new Set<number>() };
 t('lọc Có hình = câu 2', filterInfos(infos, 'tikz', none).map((b) => b.block.n).join() === '2');
 t('lọc Có lỗi gồm khối chưa đóng', filterInfos(infos, 'problem', none).some((b) => b.block.n === 3));
-const ctx = { buildErr: new Set([1]), picked: new Set([2, 3]) };
-t('đếm theo bộ lọc', filterCounts(infos, ctx).all === 3 && filterCounts(infos, ctx)['build-err'] === 1 && filterCounts(infos, ctx).picked === 2);
+const ctx = { buildErr: new Set([1]), picked: new Set([2, 3]), dup: new Set([3]) };
+t('đếm theo bộ lọc', filterCounts(infos, ctx).all === 3 && filterCounts(infos, ctx)['build-err'] === 1 && filterCounts(infos, ctx).picked === 2 && filterCounts(infos, ctx).dup === 1);
 
 const pk = pickBlocks(text, scan, [1, 2]);
 t('ghép khối đã chọn, cách nhau một dòng trống', pk.text.startsWith('\\begin{ex}') && pk.text.includes('\\end{ex}\n\n\\begin{ex}') && pk.count === 2);
