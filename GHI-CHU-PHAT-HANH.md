@@ -1,3 +1,18 @@
+## Có gì mới trong beta.47 (kênh beta): màn mới "Xử lí TeX"
+Gồm PR #179, #181, #182, #184 (so với beta.46). Không đổi schema ngân hàng, UID hay nội dung LaTeX của câu trong ngân hàng. Đã thử bằng bộ kiểm thử, TeX Live thật và bản chạy thử của app với dữ liệu giả; chưa thử với ngân hàng thật. Đây là bản BETA.
+
+**Điều chính cần biết**
+- **Mục mới "Xử lí TeX"** trên thanh bên: bàn nháp để dán/gõ các khối `\begin{ex}…\end{ex}`. Khai báo gói có sẵn, không cần `\documentclass`. Bàn nháp **không ghi vào ngân hàng** hay Thư viện đề.
+- **Danh sách câu** bên phải: dòng đầu–cuối, tình trạng ID (chưa có / sai / không có trong cây / có trong cây), số lỗi; bấm câu là khung mã nhảy tới đúng dòng, kèm **xem nhanh** câu đó (có thể khác PDF). Báo câu thiếu `\end{ex}`, `\end{ex}` thừa, chữ ngoài khối câu, dán nhầm cả tài liệu, lệnh đọc/ghi tệp.
+- **Bản nháp tự lưu** 1,5 giây sau khi ngừng gõ (Ctrl+S lưu ngay); tắt app mở lại vẫn còn. "Xoá nội dung" có hỏi lại, Ctrl+Z lấy lại.
+- **Biên dịch PDF** (nút hoặc Ctrl+Enter) bằng TeX Live trên máy: lỗi báo theo **câu và dòng**, bấm để nhảy tới; PDF cũ mang nhãn "bản trước" khi mã đã đổi hoặc lần vừa rồi lỗi; gói thiếu có nút "Thêm gói"; nút "Sao chép báo lỗi" để gửi Claude. PDF là bản **nguyên văn, có thể chứa lời giải** — đừng phát cho học sinh khi chưa xem lại.
+- **Chuẩn hoá…** có xem trước từng dòng đổi; chỉ đổi khi bấm Áp dụng, có Hoàn tác. Luật kỹ thuật bật sẵn (ký tự ẩn, khoảng trắng cuối dòng…); luật công thức tắt sẵn (`^0`→`^\circ`, `\frac`→`\dfrac`, `$$`→`\[ \]`, `3,5`→`3{,}5`), chỉ sửa bên trong công thức, không đụng chú thích hay hình TikZ.
+- **Sắp xếp theo ID…**: xếp câu theo lớp → chương → bài → dạng → mức độ, câu chưa có ID dồn cuối, thêm dòng tiêu đề chương; nội dung câu giữ nguyên.
+- Sửa: xem trước không còn báo "Chưa hiểu" với `\usetikzlibrary` đặt ngoài hình (#179).
+
+**Lời khuyên**
+- Thử: dán vài câu có hình vào Xử lí TeX → Biên dịch PDF → sửa một chỗ sai rồi biên dịch lại.
+
 ## Có gì mới trong beta.46 (kênh beta): Gán ID nhờ Claude áp dụng luôn, một lần bấm
 Gồm PR #174, #177 (so với beta.45). Không đổi schema ngân hàng hay UID; LaTeX chỉ đổi ở vùng ID `%[…]`. Đã thử bằng bộ kiểm thử và trên trình duyệt với dữ liệu mẫu; chưa thử với ngân hàng thật. Đây là bản BETA.
 
