@@ -20,6 +20,9 @@ import { missingPackages } from '../lib/missingpkg';
 import { invoke, isDesktop } from '../lib/platform';
 import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
 import { FIX_RULES, planFix, planSort } from '../lib/texfix';
+import { ScratchReplace } from '../components/ScratchReplace';
+import { filterCounts, FILTER_LABEL, FILTER_ORDER, filterInfos, hasTikz, mapBlocks, pickBlocks, type ListFilter } from '../lib/scratchsel';
+import type { ScratchScan } from '../lib/texscratch';
 
 interface ScratchOut { status: 'ok' | 'failed' | 'timeout' | 'cancelled' | 'no-tex'; message: string; pages: number | null; runs: number; ms: number; texVersion: string; diagnostics: Diag[]; errorCount: number; warningCount: number; rawLog: string; invalidPdf: boolean; hasPdf: boolean }
 const PKG_KEY = 'hedu.texscratch.goi';
@@ -50,6 +53,14 @@ export function TexScratchScreen() {
   const [showSol, setShowSol] = useState(true);
   const [askClear, setAskClear] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  /** các câu đang tick (theo số thứ tự khối); thao tác "đã chọn" chỉ chạy trên các câu này */
+  const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
+  const pickedRef = useRef<ReadonlySet<number>>(picked);
+  pickedRef.current = picked;
+  const [lfilter, setLfilter] = useState<ListFilter>('all');
+  /** PDF đang hiện là của các câu này (null = cả bàn nháp) */
+  const [pdfScope, setPdfScope] = useState<number[] | null>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!toolsOpen) return;
@@ -135,19 +146,27 @@ export function TexScratchScreen() {
   const nId = infos.filter((b) => b.id.state === 'co-trong-cay').length;
   const nDone = infos.filter((b) => b.block.closed).length;
   const nBad = infos.filter((b) => b.problems > 0).length;
+  /** câu đang tick còn tồn tại (văn bản có thể đã đổi từ lúc tick) */
+  const scope = useMemo<ReadonlySet<number> | null>(() => { const s2 = new Set([...picked].filter((n) => n <= scan.blocks.length)); return s2.size ? s2 : null; }, [picked, scan]);
+  const nScope = scope?.size ?? 0;
 
   const compile = useCallback(async () => {
     if (busy) return;
     if (!isDesktop()) { toast('Biên dịch PDF chỉ có ở bản cài trên Windows (cần TeX Live).'); return; }
-    const t = latest.current;
+    // có câu đang tick ⇒ chỉ biên dịch các câu đó (lỗi vẫn báo theo dòng/câu của bàn nháp)
+    const sc = scanScratch(latest.current);
+    const ns = [...pickedRef.current].filter((n) => n <= sc.blocks.length).sort((a, b) => a - b);
+    const sub = ns.length ? pickBlocks(latest.current, sc, ns) : null;
+    const t = sub ? sub.text : latest.current;
     if (!t.trim()) { toast('Bàn nháp đang trống.'); return; }
     setBusy(true); setTab('pdf');
     try {
       await flush();
       if (shared.current === null) { try { shared.current = await invoke<string>('tikz_default_preamble'); } catch { shared.current = ''; } }
-      const o = await invoke<ScratchOut>('tex_scratch_compile', { files: scratchFiles(t, shared.current, extra) });
+      const o0 = await invoke<ScratchOut>('tex_scratch_compile', { files: scratchFiles(t, shared.current, extra) });
+      const o = sub ? { ...o0, diagnostics: o0.diagnostics.map((d) => ((d.file ?? '').replace(/^\.\//, '') === 'content.tex' && d.line != null && d.line > 0 ? { ...d, line: sub.orig[d.line - 1] ?? null } : d)) } : o0;
       setOut(o);
-      if (o.status === 'ok') { setPdfText(t); setPdfGen((g) => g + 1); }
+      if (o.status === 'ok') { setPdfText(t); setPdfScope(sub ? ns : null); setPdfGen((g) => g + 1); }
       else if (o.hasPdf) setPdfGen((g) => g || 1); // vẫn hiện PDF tốt gần nhất (nhãn "bản trước")
     } catch (e) {
       setOut({ status: 'failed', message: msg(e), pages: null, runs: 0, ms: 0, texVersion: '', diagnostics: [], errorCount: 0, warningCount: 0, rawLog: '', invalidPdf: false, hasPdf: false });
@@ -160,28 +179,42 @@ export function TexScratchScreen() {
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, [compile]);
-  const errs = (out?.diagnostics ?? []).filter((d) => d.severity === 'error');
+  const errIdx = useRef(-1);
+  const errs = useMemo(() => (out?.diagnostics ?? []).filter((d) => d.severity === 'error'), [out]);
   const hints = out && out.status !== 'ok' ? missingPackages(out.diagnostics, out.rawLog) : [];
   /** PDF đang hiện không phải của nội dung hiện tại (mã đã đổi, hoặc là PDF của lần trước khi mở lại màn) */
-  const stale = pdfGen > 0 && (pdfText === null || pdfText !== text);
+  const pdfNow = useMemo(() => (pdfScope ? pickBlocks(text, scan, pdfScope).text : text), [text, scan, pdfScope]);
+  const stale = pdfGen > 0 && (pdfText === null || pdfText !== pdfNow);
+  /** số lỗi biên dịch theo câu (để gắn nhãn ở danh sách và lọc) */
+  const buildErr = useMemo(() => { const m = new Map<number, number>(); for (const d of errs) { const w = whereOf(d, scan); if (w.kind === 'noi-dung' && w.block != null) m.set(w.block, (m.get(w.block) ?? 0) + 1); } return m; }, [errs, scan]);
+  const fctx = useMemo(() => ({ buildErr: new Set(buildErr.keys()), picked: scope ?? new Set<number>() }), [buildErr, scope]);
+  const counts = useMemo(() => filterCounts(infos, fctx), [infos, fctx]);
+  const shown = useMemo(() => filterInfos(infos, lfilter, fctx), [infos, lfilter, fctx]);
+  const togglePick = (n: number) => setPicked((p) => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
+  const allShownPicked = shown.length > 0 && shown.every((b) => picked.has(b.block.n));
+  const pickShown = () => setPicked((p) => { const q = new Set(p); if (allShownPicked) shown.forEach((b) => q.delete(b.block.n)); else shown.forEach((b) => q.add(b.block.n)); return q; });
+  /** nhảy tới lỗi biên dịch kế tiếp trong danh sách (vòng lại từ đầu) */
+  const nextErr = () => { const here = errs.filter((d) => whereOf(d, scan).kind === 'noi-dung'); if (!here.length) return; errIdx.current = (errIdx.current + 1) % here.length; jumpTo(here[errIdx.current]); };
   const addPkg = (p: string) => { const n = [...new Set([...extra, p])]; setExtra(n); try { localStorage.setItem(PKG_KEY, JSON.stringify(n)); } catch { /* chỉ là tiện lợi */ } toast(`Đã thêm gói ${p} vào khai báo của bàn nháp. Bấm Biên dịch PDF lại.`); };
   const copyReport = async () => { try { await navigator.clipboard.writeText(errorReport(out?.diagnostics ?? [], scan, latest.current)); toast('Đã sao chép báo lỗi. Dán vào tin nhắn gửi Claude.'); } catch { toast('Không sao chép được (bị chặn).'); } };
-  const jumpTo = (d: Diag) => { const w = whereOf(d, scan); if (w.kind === 'noi-dung') { ed.current?.jump(KEY, w.line); if (w.block != null) setSel(w.block); if (vmode === 'view') setVmode('both'); } };
+  const jumpTo = (d: Diag) => { const w = whereOf(d, scan); if (w.kind === 'noi-dung') { ed.current?.jump(KEY, w.line); if (w.block != null) setSel(w.block); setPane('code'); if (vmode === 'view') setVmode('both'); } };
 
   const pick = (b: BlockInfo) => { setSel(b.block.n); ed.current?.jump(KEY, b.block.line0); if (vmode === 'view') setVmode('both'); };
   /** Áp dụng một thay đổi đã xem trước: thay cả văn bản (Ctrl+Z trong khung soạn lấy lại được), kèm nút Hoàn tác. */
   const applyText = (next: string, what: string) => {
     const prev = latest.current;
-    setFixFor(null);
+    setFixFor(null); setReplaceOpen(false);
     if (next === prev) { toast(`${what}: không có gì thay đổi.`); return; }
     ed.current?.replaceDoc(KEY, next);
     toast(`Đã ${what.toLowerCase()}.`, { label: 'Hoàn tác', run: () => { if (latest.current === next) ed.current?.replaceDoc(KEY, prev); } });
   };
   /** Đưa các khối ex của bàn nháp sang màn Nhập liệu (qua đúng luồng nhập: rà trùng, kiểm ID, xem lại, rồi mới ghi). Bàn nháp giữ nguyên. */
   const toBank = async () => {
-    if (nDone === 0) { toast('Chưa có khối ex hoàn chỉnh (đủ \\begin{ex} và \\end{ex}) để đưa vào.'); return; }
+    const sc = scanScratch(latest.current);
+    const sub = scope ? pickBlocks(latest.current, sc, scope) : null;
+    if ((sub ? sc.blocks.filter((b) => scope!.has(b.n) && b.closed).length : nDone) === 0) { toast('Chưa có khối ex hoàn chỉnh (đủ \\begin{ex} và \\end{ex}) để đưa vào.'); return; }
     await flush();
-    setImportHandoff(latest.current);
+    setImportHandoff(sub ? sub.text : latest.current);
     go({ screen: 'import' });
   };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
@@ -210,16 +243,17 @@ export function TexScratchScreen() {
             <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolsOpen} disabled={!text || !!blocked} onClick={() => setToolsOpen((o) => !o)}>Công cụ ▾</button>
             {toolsOpen && (
               <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setToolsOpen(false); } }}>
-                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setFixFor('fix'); }} autoFocus>Chuẩn hoá…</button>
+                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setReplaceOpen(true); }} autoFocus>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setFixFor('fix'); }}>Chuẩn hoá…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!scan.blocks.length} onClick={() => { setToolsOpen(false); setFixFor('sort'); }}>Sắp xếp theo ID…</button>
                 <button type="button" role="menuitem" className="danger" onClick={() => { setToolsOpen(false); setAskClear(true); }}>Xoá nội dung…</button>
               </div>
             )}
           </div>
-          <button type="button" className="btn btn-sm" disabled={!nDone || !!blocked} onClick={() => void toBank()} title="Mở màn Nhập liệu với các câu của bàn nháp: rà trùng, kiểm ID rồi mới ghi vào ngân hàng">Đưa vào Ngân hàng{nDone ? ` (${nf.format(nDone)} câu)` : ''}…</button>
+          <button type="button" className="btn btn-sm" disabled={!nDone || !!blocked} onClick={() => void toBank()} title="Mở màn Nhập liệu với các câu của bàn nháp (hoặc chỉ các câu đã chọn): rà trùng, kiểm ID rồi mới ghi vào ngân hàng">Đưa vào Ngân hàng{nScope ? ` (${nf.format(nScope)} đã chọn)` : nDone ? ` (${nf.format(nDone)} câu)` : ''}…</button>
           {busy
             ? <button type="button" className="btn btn-sm" onClick={stop}>Dừng biên dịch</button>
-            : <button type="button" className="btn btn-sm btn-accent" disabled={!text.trim()} onClick={() => void compile()} title="Ctrl+Enter">Biên dịch PDF</button>}
+            : <button type="button" className="btn btn-sm btn-accent" disabled={!text.trim()} onClick={() => void compile()} title={nScope ? 'Chỉ biên dịch các câu đã chọn (Ctrl+Enter)' : 'Ctrl+Enter'}>{nScope ? `Biên dịch ${nf.format(nScope)} câu đã chọn` : 'Biên dịch PDF'}</button>}
         </div>
       </div>
 
@@ -265,6 +299,7 @@ export function TexScratchScreen() {
                         {errs.length > 8 && <li>… và {errs.length - 8} lỗi nữa</li>}
                       </ul>
                     )}
+                    {errs.length > 1 && <span><button type="button" className="btn btn-sm btn-ghost" onClick={nextErr}>Lỗi kế tiếp ▸</button></span>}
                     {errs.length > 0 && <span className="sys-hint">TeX có thể dừng ở lỗi đầu tiên nên danh sách chưa chắc đủ mọi lỗi.</span>}
                     {hints.map((h) => <span key={h.pkg}>{h.why} <button type="button" className="btn btn-sm" onClick={() => addPkg(h.pkg)}>Thêm gói {h.pkg}</button></span>)}
                     {errs.length > 0 && <span><button type="button" className="btn btn-sm btn-ghost" onClick={() => void copyReport()}><IcCopy size={14} /> Sao chép báo lỗi</button></span>}
@@ -273,6 +308,7 @@ export function TexScratchScreen() {
               )}
               {pdfGen > 0 && (
                 <>
+                  {pdfScope && <p className="sys-hint" role="status">PDF này chỉ gồm {nf.format(pdfScope.length)} câu đã chọn (câu {lines(pdfScope)}).</p>}
                   {stale && <p className="q-warn" role="status">PDF dưới đây là của <b>bản trước</b> (mã đã đổi, hoặc lần biên dịch vừa rồi chưa thành công). Bấm Biên dịch PDF để cập nhật.</p>}
                   <div className="tsx-pdfbox">
                     <PdfViewer key={pdfGen} embedded id="xu-li-tex" title="Bàn nháp Xử lí TeX" stale={stale || (!!out && out.status !== 'ok')} note="PDF nguyên văn: có thể chứa lời giải. Đừng phát cho học sinh khi chưa xem lại." load={() => invoke<ArrayBuffer>('tex_scratch_pdf')} />
@@ -288,19 +324,34 @@ export function TexScratchScreen() {
             {scan.outside.length > 0 && <p className="sys-hint">{scan.outside.length} đoạn nằm ngoài các khối câu (dòng {lines(scan.outside.map((o) => o.line0))}): giữ nguyên, không tính là câu.</p>}
           </div>}
           {tab === 'cau' && <div className="tsx-split">
-            <ol className="tsx-list" aria-label="Danh sách câu">
-              {infos.length === 0 && <li className="sys-hint">Chưa có khối <code>\begin{'{ex}'}</code> nào.</li>}
-              {infos.map((b) => (
-                <li key={b.block.n}>
-                  <button type="button" className={`tsx-item${cur?.block.n === b.block.n ? ' on' : ''}`} aria-current={cur?.block.n === b.block.n ? 'true' : undefined} onClick={() => pick(b)} title={b.firstProblem ?? undefined}>
-                    <b>Câu {b.block.n}</b>
-                    <span className="tsx-ln">dòng {b.block.line0}–{b.block.line1}</span>
-                    <span className={`tsx-id id-${b.id.state}`}>{b.id.code ? `${b.id.code} · ` : ''}{ID_STATE_LABEL[b.id.state]}</span>
-                    {b.problems > 0 && <span className="tsx-bad"><IcAlert size={13} />{b.problems}</span>}
-                  </button>
-                </li>
-              ))}
-            </ol>
+            <div className="tsx-listwrap">
+              <div className="tsx-filters" role="group" aria-label="Lọc danh sách câu">
+                {FILTER_ORDER.filter((f) => f === 'all' || counts[f] > 0 || f === lfilter).map((f) => (
+                  <button key={f} type="button" className="tsx-chip" aria-pressed={lfilter === f} onClick={() => setLfilter(f)}>{FILTER_LABEL[f]} <b>{nf.format(counts[f])}</b></button>
+                ))}
+              </div>
+              <div className="tsx-pickbar">
+                <label className="sw" title="Tick hoặc bỏ tick mọi câu đang hiện"><input type="checkbox" checked={allShownPicked} disabled={!shown.length} onChange={pickShown} />Chọn các câu đang hiện</label>
+                {nScope > 0 && <button type="button" className="linkbtn" onClick={() => setPicked(new Set())}>Bỏ chọn ({nf.format(nScope)})</button>}
+              </div>
+              <ol className="tsx-list" aria-label="Danh sách câu">
+                {infos.length === 0 && <li className="sys-hint">Chưa có khối <code>\begin{'{ex}'}</code> nào.</li>}
+                {infos.length > 0 && shown.length === 0 && <li className="sys-hint">Không có câu nào thuộc mục “{FILTER_LABEL[lfilter]}”.</li>}
+                {shown.map((b) => (
+                  <li key={b.block.n} className="tsx-row">
+                    <input type="checkbox" className="tsx-pick" checked={picked.has(b.block.n)} onChange={() => togglePick(b.block.n)} aria-label={`Chọn câu ${b.block.n}`} />
+                    <button type="button" className={`tsx-item${cur?.block.n === b.block.n ? ' on' : ''}`} aria-current={cur?.block.n === b.block.n ? 'true' : undefined} onClick={() => pick(b)} title={b.firstProblem ?? undefined}>
+                      <b>Câu {b.block.n}</b>
+                      <span className="tsx-ln">dòng {b.block.line0}–{b.block.line1}</span>
+                      {hasTikz(b.block.text) && <span className="tsx-tag" title="Có hình TikZ">hình</span>}
+                      <span className={`tsx-id id-${b.id.state}`}>{b.id.code ? `${b.id.code} · ` : ''}{ID_STATE_LABEL[b.id.state]}</span>
+                      {b.problems > 0 && <span className="tsx-bad"><IcAlert size={13} />{b.problems}</span>}
+                      {buildErr.has(b.block.n) && <span className="tsx-bad" title="TeX báo lỗi ở câu này">lỗi biên dịch</span>}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </div>
             <div className="qe-sheet tsx-sheet">
               {!cur ? <p className="sys-hint">Dán nội dung vào khung Mã LaTeX để xem từng câu.</p>
                 : !parsed ? <p className="q-warn">Câu {cur.block.n} chưa có <code>\end{'{ex}'}</code> nên chưa xem nhanh được.</p>
@@ -320,7 +371,8 @@ export function TexScratchScreen() {
         <span className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`}>{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</span>
       </footer>
 
-      {fixFor && <FixDialog mode={fixFor} text={latest.current} onApply={applyText} onClose={() => setFixFor(null)} />}
+      {fixFor && <FixDialog mode={fixFor} text={latest.current} scope={scope} onApply={applyText} onClose={() => setFixFor(null)} />}
+      {replaceOpen && <ScratchReplace text={latest.current} scan={scanScratch(latest.current)} scope={scope} onApply={applyText} onClose={() => setReplaceOpen(false)} />}
       {askClear && (
         <ConfirmDialog title="Xoá toàn bộ nội dung bàn nháp?" confirmLabel="Xoá nội dung" danger onConfirm={clearAll} onCancel={() => setAskClear(false)}>
           <p>Bản nháp được lưu lại sau khi xoá. Muốn lấy lại, bấm Ctrl+Z trong khung soạn trước khi đóng app.</p>
@@ -331,10 +383,13 @@ export function TexScratchScreen() {
 }
 
 /** Hộp "Chuẩn hoá" / "Sắp xếp theo ID": chạy trên bản sao, hiện thay đổi, chỉ ghi khi bấm Áp dụng. */
-function FixDialog({ mode, text, onApply, onClose }: { mode: 'fix' | 'sort'; text: string; onApply(next: string, what: string): void; onClose(): void }) {
+function FixDialog({ mode, text, scope, onApply, onClose }: { mode: 'fix' | 'sort'; text: string; /** các câu đã chọn (null = cả bàn nháp); chỉ áp cho Chuẩn hoá */ scope: ReadonlySet<number> | null; onApply(next: string, what: string): void; onClose(): void }) {
   const { tax } = useTaxonomy();
   const [on, setOn] = useState<Set<string>>(() => new Set(FIX_RULES.filter((r) => r.on).map((r) => r.id)));
-  const fix = useMemo(() => (mode === 'fix' ? planFix(text, on) : null), [mode, text, on]);
+  const pk = useMemo(() => (mode === 'fix' && scope ? pickBlocks(text, scanScratch(text), scope) : null), [mode, text, scope]);
+  const fix = useMemo(() => (mode === 'fix' ? planFix(pk ? pk.text : text, on) : null), [mode, text, pk, on]);
+  /** kết quả ghi lại: với câu đã chọn thì chuẩn hoá TỪNG khối, phần còn lại giữ nguyên */
+  const fixOut = (): string => (pk && scope ? mapBlocks(text, scanScratch(text), scope, (b) => planFix(b, on).out) : fix?.out ?? text);
   const sort = useMemo(() => (mode === 'sort' ? planSort(text, tax) : null), [mode, text, tax]);
   const toggle = (id: string) => setOn((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
@@ -347,7 +402,7 @@ function FixDialog({ mode, text, onApply, onClose }: { mode: 'fix' | 'sort'; tex
         <div className="xl-panel-body">
           {fix && (
             <>
-              <p className="xl-meta">HEdu chạy thử trên bản sao và liệt kê các dòng sẽ đổi. Chỉ khi bấm <b>Áp dụng</b> nội dung mới thay đổi (Ctrl+Z hoặc nút Hoàn tác để lấy lại). Không có luật nào xoá chú thích hay đụng vào hình TikZ.</p>
+              <p className="xl-meta">{scope ? <>Chỉ <b>{scope.size} câu đã chọn</b>. </> : null}HEdu chạy thử trên bản sao và liệt kê các dòng sẽ đổi. Chỉ khi bấm <b>Áp dụng</b> nội dung mới thay đổi (Ctrl+Z hoặc nút Hoàn tác để lấy lại). Không có luật nào xoá chú thích hay đụng vào hình TikZ.</p>
               {groups.map(([g, title]) => (
                 <fieldset key={g} className="tsx-rules">
                   <legend>{title}</legend>
@@ -364,7 +419,7 @@ function FixDialog({ mode, text, onApply, onClose }: { mode: 'fix' | 'sort'; tex
               {fix.changes.length > 0 && (
                 <ol className="tsx-diff">
                   {fix.changes.map((c) => (
-                    <li key={c.line}><span className="tsx-ln">dòng {c.line}</span><del>{c.before || ' '}</del><ins>{c.after || ' '}</ins></li>
+                    <li key={c.line}><span className="tsx-ln">dòng {pk ? pk.orig[c.line - 1] ?? c.line : c.line}</span><del>{c.before || ' '}</del><ins>{c.after || ' '}</ins></li>
                   ))}
                   {fix.linesChanged > fix.changes.length && <li className="sys-hint">… và {nf.format(fix.linesChanged - fix.changes.length)} dòng nữa</li>}
                 </ol>
@@ -377,7 +432,7 @@ function FixDialog({ mode, text, onApply, onClose }: { mode: 'fix' | 'sort'; tex
         </div>
         <div className="cfm-acts">
           <button type="button" className="btn btn-outline" onClick={onClose}>Huỷ</button>
-          {fix && <button type="button" className="btn btn-accent" disabled={!fix.linesChanged} onClick={() => onApply(fix.out, 'Chuẩn hoá')}>Áp dụng</button>}
+          {fix && <button type="button" className="btn btn-accent" disabled={!fix.linesChanged} onClick={() => onApply(fixOut(), 'Chuẩn hoá')}>Áp dụng</button>}
           {sort?.ok && <button type="button" className="btn btn-accent" onClick={() => onApply(sort.out, 'Sắp xếp theo ID')}>Sắp xếp</button>}
         </div>
       </div>
