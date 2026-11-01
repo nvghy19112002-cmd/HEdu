@@ -1,13 +1,14 @@
 // Điều hướng màn Cài đặt: danh sách mục (pane) và tìm cài đặt. Thuần, không đụng dữ liệu hay giá trị cài đặt.
 import { fold } from './trashview';
 
-export type PaneId = 'overview' | 'source' | 'display' | 'latex' | 'ai' | 'backup' | 'updates' | 'help';
+export type PaneId = 'overview' | 'source' | 'display' | 'latex' | 'exam' | 'ai' | 'backup' | 'updates' | 'help';
 
 export const PANES: { id: PaneId; label: string; hint: string }[] = [
   { id: 'overview', label: 'Tổng quan', hint: 'Tình trạng chung của HEdu' },
   { id: 'source', label: 'Nguồn dữ liệu', hint: 'Ngân hàng đang dùng và nơi lưu' },
   { id: 'display', label: 'Giao diện & hiển thị', hint: 'Phóng to chữ, cỡ hình' },
   { id: 'latex', label: 'LaTeX & TikZ', hint: 'TeX Live, bộ dịch, đầu file' },
+  { id: 'exam', label: 'Đề thi', hint: 'Mẫu in, thông tin mặc định' },
   { id: 'ai', label: 'AI Gemini', hint: 'Khoá, mô hình, đồng ý gửi' },
   { id: 'backup', label: 'Dữ liệu & sao lưu', hint: 'Sao lưu, khôi phục, Thùng rác' },
   { id: 'updates', label: 'Cập nhật ứng dụng', hint: 'Kênh, bản mới, quay lại bản trước' },
@@ -24,6 +25,8 @@ export const ENTRIES: SettingEntry[] = [
   { pane: 'display', label: 'Phóng to / thu nhỏ giao diện', target: 'Cỡ hiển thị', words: 'zoom cỡ chữ phóng to thu nhỏ 80 150' },
   { pane: 'display', label: 'Cỡ hình trong xem trước', target: 'Cỡ hình trong xem trước', words: 'hình tỉ lệ cân bằng giữ nguyên figscale' },
   { pane: 'latex', label: 'Vẽ hình TikZ bằng TeX Live', target: 'Vẽ hình TikZ', words: 'tex live texlive pdflatex xelatex lualatex engine bộ dịch đường dẫn kiểm tra tikz hình cache đầu file preamble gói' },
+  { pane: 'exam', label: 'Mẫu in đề thi', target: 'Mẫu in đề thi', words: 'mẫu in theme giao diện đề thi trình bày pdf khổ giấy' },
+  { pane: 'exam', label: 'Thông tin mặc định của đề', target: 'Thông tin mặc định', words: 'sở phòng giáo dục trường tổ bộ môn đầu đề mặc định' },
   { pane: 'ai', label: 'AI Gemini', target: 'AI (Gemini)', words: 'ai gemini khoá khóa api key mô hình model đồng ý gửi google' },
   { pane: 'backup', label: 'Lưu trữ SQLite: bản chụp, điểm khôi phục, xuất JSON, kiểm tra toàn vẹn', target: 'Lưu trữ SQLite', words: 'sqlite chụp điểm khôi phục toàn vẹn xuất json khôi phục .db' },
   { pane: 'backup', label: 'Sao lưu trước cập nhật', target: 'Sao lưu trước cập nhật', words: 'sao lưu backup trước cập nhật khôi phục bản trước' },

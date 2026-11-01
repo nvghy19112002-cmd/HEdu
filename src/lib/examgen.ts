@@ -546,9 +546,9 @@ export async function sourceHashes(files: readonly ExamFile[]): Promise<Record<s
 }
 
 /** Bản ghi để tái hiện đề: ma trận, hạt giống, câu được chọn và đáp án từng mã. */
-export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string; exceptions?: Readonly<Record<string, { at: number; why: string }>>; locked?: Readonly<Record<string, readonly string[]>>; fileHashes?: Readonly<Record<string, string>>; /** dấu vết tránh câu đã dùng (PR 4B), chỉ ghi khi giáo viên bật */ tranhCauDaDung?: unknown }): string {
+export function specJson(o: { info: ExamInfo; rows: readonly Row[]; policy: Policy; seed: number; scoring: Scoring; variants: readonly Variant[]; at: string; exceptions?: Readonly<Record<string, { at: number; why: string }>>; locked?: Readonly<Record<string, readonly string[]>>; fileHashes?: Readonly<Record<string, string>>; /** dấu vết tránh câu đã dùng (PR 4B), chỉ ghi khi giáo viên bật */ tranhCauDaDung?: unknown; /** mẫu in dùng khi dựng đề (examtheme.themeStamp) */ mauIn?: unknown }): string {
   return JSON.stringify({
-    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diemToiDaMoiCau: o.scoring, chamDungSaiTheoSoYDung: DS_POINTS_CENTI, matran: o.rows, caKhoa: o.locked ?? {}, ngoaiLe: o.exceptions ?? {}, ...(o.fileHashes ? { dauVanTep: o.fileHashes } : {}), ...(o.tranhCauDaDung ? { tranhCauDaDung: o.tranhCauDaDung } : {}),
+    v: 1, tao: o.at, thongTin: o.info, chinhSach: o.policy, hatGiong: o.seed, diemToiDaMoiCau: o.scoring, chamDungSaiTheoSoYDung: DS_POINTS_CENTI, matran: o.rows, caKhoa: o.locked ?? {}, ngoaiLe: o.exceptions ?? {}, ...(o.fileHashes ? { dauVanTep: o.fileHashes } : {}), ...(o.tranhCauDaDung ? { tranhCauDaDung: o.tranhCauDaDung } : {}), ...(o.mauIn ? { mauIn: o.mauIn } : {}),
     maDe: o.variants.map((v) => ({ ma: v.code, phan: Object.fromEntries(PARTS.map((p) => [p, v.parts[p].map((s) => ({ uid: s.q.uid, dapAn: s.key, tron: s.shuffled }))])) })),
   }, null, 2) + '\n';
 }

@@ -3,6 +3,7 @@
 import { SCORING_2025, type ExamInfo, type Policy, type Row, type Scoring } from './examgen';
 import type { Level, QType, Question, Taxonomy } from './types';
 import { defaultScope, type ReuseOk, type UsageScope } from './examusage';
+import { fillInfo, loadDefaultInfo } from './examtheme';
 
 export interface Draft {
   v: 1;
@@ -88,8 +89,12 @@ export function parseDraft(raw: string | null): Draft {
   return d;
 }
 
+/** Bản nháp Tạo đề; đề chưa có Sở/Trường/Tổ thì điền Thông tin mặc định (Cài đặt › Đề thi). */
 export function loadDraft(): Draft {
-  try { return parseDraft(localStorage.getItem(KEY)); } catch { return newDraft(); }
+  let d: Draft;
+  try { d = parseDraft(localStorage.getItem(KEY)); } catch { d = newDraft(); }
+  d.info = fillInfo(d.info, loadDefaultInfo());
+  return d;
 }
 export function saveDraft(d: Draft): void {
   try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* chỉ là tiện lợi; không lưu được thì thôi */ }

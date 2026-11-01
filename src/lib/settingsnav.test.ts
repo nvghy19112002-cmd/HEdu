@@ -11,7 +11,7 @@ ok(hit('api').includes('ai') && hit('gemini').includes('ai'), 'tìm "api"/"gemin
 ok(hit('zoom').includes('display') && hit('cập nhật').includes('updates'), 'zoom → Giao diện; cập nhật → Cập nhật ứng dụng');
 ok(hit('abcxyz không có').length === 0, 'không khớp ⇒ rỗng');
 ok(hit('mathhub').length === 0 && hit('sqlite').every((p) => p === 'backup'), 'không có mục giả cho MathHub; "SQLite" chỉ dẫn tới mục sao lưu thật (không hứa nhiều nguồn)');
-ok(ENTRIES.every((e) => PANES.some((p) => p.id === e.pane)) && PANES.length === 8 && paneLabel('ai') === 'AI Gemini', 'mọi mục thuộc một pane có thật; đủ 8 pane');
+ok(ENTRIES.every((e) => PANES.some((p) => p.id === e.pane)) && PANES.length === 9 && paneLabel('ai') === 'AI Gemini', 'mọi mục thuộc một pane có thật; đủ 9 pane');
 
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
 console.log('\nsettingsnav: đạt hết.');

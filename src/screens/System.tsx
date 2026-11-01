@@ -17,6 +17,7 @@ import {
 } from '../lib/updates';
 import { FigScalePanel, ZoomPanel } from '../components/ZoomControl';
 import { AiSettingsPanel } from '../components/AiSettingsPanel';
+import { ExamThemePanel } from '../components/ExamThemePanel';
 import { SqlitePanel } from '../components/SqlitePanel';
 import { ImportLogPanel } from '../components/ImportLogPanel';
 import { ensureRestorePoint, isSqlite } from '../lib/dbbackup';
@@ -444,6 +445,8 @@ export function SystemScreen() {
         )}
 
         {is('ai') && <AiSettingsPanel toast={toast} />}
+
+        {is('exam') && <ExamThemePanel toast={toast} />}
 
         {is('display') && (<>
           <ZoomPanel />
