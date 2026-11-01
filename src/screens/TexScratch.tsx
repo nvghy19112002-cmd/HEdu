@@ -21,6 +21,9 @@ import { invoke, isDesktop } from '../lib/platform';
 import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
 import { FIX_RULES, planFix, planSort } from '../lib/texfix';
 import { ScratchReplace } from '../components/ScratchReplace';
+import { appendText, exportName, openTexFiles } from '../lib/scratchfile';
+import { saveTextFile } from '../lib/savefile';
+import { downloadText } from '../app-context';
 import { filterCounts, FILTER_LABEL, FILTER_ORDER, filterInfos, hasTikz, mapBlocks, pickBlocks, type ListFilter } from '../lib/scratchsel';
 import type { ScratchScan } from '../lib/texscratch';
 
@@ -217,6 +220,40 @@ export function TexScratchScreen() {
     setImportHandoff(sub ? sub.text : latest.current);
     go({ screen: 'import' });
   };
+  /** Mở tệp .tex/.txt: nội dung được NỐI vào cuối bàn nháp (không thay thế); Hoàn tác được. */
+  const fileIn = useRef<HTMLInputElement>(null);
+  const addOpened = (files: { name: string; text: string; guessed: boolean }[]) => {
+    if (!files.length) return;
+    const prev = latest.current;
+    const next = files.reduce((acc, f) => appendText(acc, f.text), prev);
+    if (next === prev) { toast('Tệp không có nội dung để thêm.'); return; }
+    ed.current?.replaceDoc(KEY, next);
+    const guessed = files.filter((f) => f.guessed).map((f) => f.name);
+    toast(`Đã thêm ${files.length === 1 ? `tệp ${files[0].name}` : `${files.length} tệp`} vào cuối bàn nháp.${guessed.length ? ` Tệp ${guessed.join(', ')} đọc theo bảng mã đoán (Windows-1258): xem lại chữ tiếng Việt.` : ''}`, { label: 'Hoàn tác', run: () => { if (latest.current === next) ed.current?.replaceDoc(KEY, prev); } });
+  };
+  const openFiles = async () => {
+    try {
+      const r = await openTexFiles();
+      if (r === null) { fileIn.current?.click(); return; }
+      addOpened(r);
+    } catch (e) { toast(`Không mở được tệp: ${msg(e)}`); }
+  };
+  const onPickWeb = async (list: FileList | null) => {
+    if (!list?.length) return;
+    const got = await Promise.all([...list].map(async (f) => ({ name: f.name, text: await f.text(), guessed: false })));
+    addOpened(got);
+    if (fileIn.current) fileIn.current.value = '';
+  };
+  /** Lưu bàn nháp (hoặc chỉ các câu đã chọn) ra tệp .tex nguyên văn */
+  const saveFile = async () => {
+    const t = scope ? pickBlocks(latest.current, scanScratch(latest.current), scope).text : latest.current;
+    if (!t.trim()) { toast('Chưa có nội dung để lưu.'); return; }
+    const name = exportName();
+    const r = await saveTextFile(name, t, () => downloadText(name, t, 'text/plain'));
+    if (r.kind === 'saved') toast(`Đã lưu ${r.path}.`);
+    else if (r.kind === 'downloaded') toast(`Đã tải ${name} về máy.`);
+    else if (r.kind === 'error') toast(`Không lưu được: ${r.message}`);
+  };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
   return (
@@ -232,6 +269,7 @@ export function TexScratchScreen() {
         </div>
       </header>
 
+      <input ref={fileIn} type="file" accept=".tex,.txt,text/plain" multiple hidden onChange={(e) => void onPickWeb(e.target.files)} />
       <div className="tsx-toolbar" role="toolbar" aria-label="Công cụ bàn nháp">
         <div className="seg sm qe-vmode" role="group" aria-label="Chế độ xem">
           {([['code', 'Mã'], ['both', 'Mã + Xem trước'], ['view', 'Xem trước']] as const).map(([k, l]) => (
@@ -240,13 +278,15 @@ export function TexScratchScreen() {
         </div>
         <div className="tsx-tools">
           <div className="tsx-more" ref={toolsRef}>
-            <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolsOpen} disabled={!text || !!blocked} onClick={() => setToolsOpen((o) => !o)}>Công cụ ▾</button>
+            <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>Công cụ ▾</button>
             {toolsOpen && (
               <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setToolsOpen(false); } }}>
-                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setReplaceOpen(true); }} autoFocus>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
-                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setFixFor('fix'); }}>Chuẩn hoá…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} autoFocus disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
+                <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setReplaceOpen(true); }}>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setFixFor('fix'); }}>Chuẩn hoá…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!scan.blocks.length} onClick={() => { setToolsOpen(false); setFixFor('sort'); }}>Sắp xếp theo ID…</button>
-                <button type="button" role="menuitem" className="danger" onClick={() => { setToolsOpen(false); setAskClear(true); }}>Xoá nội dung…</button>
+                <button type="button" role="menuitem" className="danger" disabled={!text} onClick={() => { setToolsOpen(false); setAskClear(true); }}>Xoá nội dung…</button>
               </div>
             )}
           </div>
