@@ -21,6 +21,7 @@ mod storage;
 mod support;
 mod texfolder;
 mod texpkg;
+mod texscratch;
 mod tikz;
 
 use serde::Serialize;
@@ -433,6 +434,8 @@ pub fn run() {
             idexchange::id_exchange_default,
             idexchange::id_exchange_list,
             idexchange::id_exchange_write,
+            texscratch::tex_scratch_load,
+            texscratch::tex_scratch_save,
             idexchange::id_exchange_read,
             export_tex_folder,
             ai_key_set,
