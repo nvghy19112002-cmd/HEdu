@@ -25,6 +25,8 @@ import { ScratchReplace } from '../components/ScratchReplace';
 import { ScratchClaudeId } from '../components/ScratchClaudeId';
 import { appendText, exportName, openTexFiles } from '../lib/scratchfile';
 import { checkScratchDup, type DupRun } from '../lib/scratchdup';
+import { buildScratchExam, defaultExamName, whyNotExam } from '../lib/scratchexam';
+import { createFromFiles } from '../lib/examsources';
 import { checkScratchBlocks, needsLook, worstOf, type CheckRun } from '../lib/scratchcheck';
 import { LEVEL_TEXT } from '../lib/check';
 import { DUP_KIND_LABEL } from '../lib/dup2';
@@ -107,7 +109,7 @@ export function TexScratchScreen() {
   /** bàn nháp đang mở ('' = bàn nháp chính) và danh sách các bàn nháp riêng */
   const slotRef = useRef('');
   const [ix, setIx] = useState<DraftIndex>(EMPTY_INDEX);
-  const [nameDlg, setNameDlg] = useState<{ kind: 'new' | 'rename'; initial: string } | null>(null);
+  const [nameDlg, setNameDlg] = useState<{ kind: 'new' | 'rename' | 'exam'; initial: string } | null>(null);
   const [askDelete, setAskDelete] = useState(false);
 
   /** Lưu NGAY (Ctrl+S, rời màn, hết thời gian chờ). Các lần lưu chạy nối tiếp nhau, không chồng. */
@@ -378,6 +380,25 @@ export function TexScratchScreen() {
       if (bad) setLfilter('check');
     } catch (e) { toast(`Không soát được: ${msg(e)}`); } finally { setChkBusy(null); }
   };
+  /** Lưu bàn nháp (hoặc các câu đã chọn) thành một đề MỚI trong Thư viện đề. Bàn nháp giữ nguyên; câu chép nguyên văn vào cauhoi.tex. */
+  const saveAsExam = async (name: string) => {
+    setNameDlg(null);
+    if (!isDesktop()) { toast('Lưu vào Thư viện đề chỉ có ở bản cài trên Windows.'); return; }
+    await flush();
+    const sc = scanScratch(latest.current);
+    const sub = scope ? pickBlocks(latest.current, sc, scope) : null;
+    const content = sub ? sub.text : latest.current;
+    const why = whyNotExam(scanScratch(content), content);
+    if (why) { toast(why); return; }
+    try {
+      if (shared.current === null) { try { shared.current = await invoke<string>('tikz_default_preamble'); } catch { shared.current = ''; } }
+      const texts = scanScratch(content).blocks.map((b) => b.text);
+      const files = buildScratchExam(content, texts, shared.current, extra);
+      const nm = name.trim() || defaultExamName(nameOf(ix, ix.active));
+      const sum = await createFromFiles(nm, files, 'main.tex', 'cauhoi.tex', []);
+      toast(`Đã lưu thành đề “${sum.name}” trong Thư viện đề (${texts.length} câu, chép nguyên văn). Bàn nháp vẫn còn nguyên.`, { label: 'Mở Thư viện đề', run: () => go({ screen: 'examlib' }) });
+    } catch (e) { toast(`Không lưu được thành đề: ${msg(e)}`); }
+  };
   const clearAll = () => { setAskClear(false); ed.current?.replaceDoc(KEY, ''); ed.current?.focus(); toast('Đã xoá nội dung bàn nháp. Bấm Ctrl+Z trong khung soạn để lấy lại.'); };
 
   return (
@@ -417,9 +438,12 @@ export function TexScratchScreen() {
                 <hr className="tsx-hr" />
                 <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
                 <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <hr className="tsx-hr" />
                 <button type="button" role="menuitem" disabled={!nDone || !!chkBusy} onClick={() => { setToolsOpen(false); void runCheck(); }} title="Kiểm công thức, ngoặc, đáp án đúng, lời giải… như khi nhập vào Ngân hàng; chỉ báo, không sửa">Soát nội dung…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!dupBusy} onClick={() => { setToolsOpen(false); void runDup(); }} title="So với ngân hàng và giữa các câu trong bàn nháp; chỉ đọc, không sửa gì">Kiểm tra trùng với ngân hàng…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!nDone || !!blocked} onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'exam', initial: defaultExamName(nameOf(ix, ix.active)) }); }} title="Tạo một đề mới trong mục Đề thi từ các câu của bàn nháp (nguyên văn)">Lưu thành đề trong Thư viện…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!blocked} onClick={() => { setToolsOpen(false); setClaudeOpen(true); }}>Gán ID nhờ Claude…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <hr className="tsx-hr" />
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setReplaceOpen(true); }}>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setFixFor('fix'); }}>Chuẩn hoá…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!scan.blocks.length} onClick={() => { setToolsOpen(false); setFixFor('sort'); }}>Sắp xếp theo ID…</button>
@@ -567,7 +591,7 @@ export function TexScratchScreen() {
         <button type="button" className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`} onClick={() => setTab('pdf')} title="Xem khung PDF">{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</button>
       </footer>
 
-      {nameDlg && <NameDialog title={nameDlg.kind === 'new' ? 'Bàn nháp mới' : 'Đổi tên bàn nháp'} initial={nameDlg.initial} confirmLabel={nameDlg.kind === 'new' ? 'Tạo' : 'Đổi tên'} onOk={(n) => void (nameDlg.kind === 'new' ? createDraft(n) : renameCurrent(n))} onCancel={() => setNameDlg(null)} />}
+      {nameDlg && <NameDialog title={nameDlg.kind === 'new' ? 'Bàn nháp mới' : nameDlg.kind === 'rename' ? 'Đổi tên bàn nháp' : 'Lưu thành đề trong Thư viện'} initial={nameDlg.initial} confirmLabel={nameDlg.kind === 'new' ? 'Tạo' : nameDlg.kind === 'rename' ? 'Đổi tên' : 'Lưu thành đề'} hint={nameDlg.kind === 'exam' ? 'Tạo một đề mới trong mục Đề thi, câu chép nguyên văn. Bàn nháp không bị xoá hay đổi.' : undefined} onOk={(n) => void (nameDlg.kind === 'new' ? createDraft(n) : nameDlg.kind === 'rename' ? renameCurrent(n) : saveAsExam(n))} onCancel={() => setNameDlg(null)} />}
       {askDelete && (
         <ConfirmDialog title={`Xoá “${nameOf(ix, ix.active)}”?`} confirmLabel="Xoá bàn nháp" danger onConfirm={() => void deleteCurrent()} onCancel={() => setAskDelete(false)}>
           <p>Toàn bộ nội dung bàn nháp này bị xoá khỏi máy và không lấy lại được. Các bàn nháp khác và ngân hàng không bị ảnh hưởng. Nếu cần giữ, hãy chọn Công cụ → Lưu ra tệp .tex trước.</p>
@@ -644,14 +668,14 @@ function FixDialog({ mode, text, scope, onApply, onClose }: { mode: 'fix' | 'sor
 }
 
 /** Hộp đặt tên bàn nháp. */
-function NameDialog({ title, initial, confirmLabel, onOk, onCancel }: { title: string; initial: string; confirmLabel: string; onOk(name: string): void; onCancel(): void }) {
+function NameDialog({ title, initial, confirmLabel, hint, onOk, onCancel }: { title: string; initial: string; confirmLabel: string; hint?: string; onOk(name: string): void; onCancel(): void }) {
   const [v, setV] = useState(initial);
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
   return (
     <ConfirmDialog title={title} confirmLabel={confirmLabel} onConfirm={() => onOk(v)} onCancel={onCancel}>
       <label className="tsx-rf"><span>Tên</span><input ref={ref} value={v} maxLength={60} placeholder="vd. Đề giữa kì 1 — Lớp 12" onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onOk(v); } }} /></label>
-      <p className="sys-hint">Mỗi bàn nháp lưu riêng trên máy; đổi qua lại ở ô “Bàn nháp” phía trên.</p>
+      <p className="sys-hint">{hint ?? 'Mỗi bàn nháp lưu riêng trên máy; đổi qua lại ở ô “Bàn nháp” phía trên.'}</p>
     </ConfirmDialog>
   );
 }
