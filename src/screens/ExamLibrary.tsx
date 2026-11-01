@@ -82,6 +82,8 @@ export function ExamLibraryScreen() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  /** Bỏ kết quả đọc cũ nếu giáo viên đã chuyển sang đề khác trong lúc lệnh Tauri còn chạy. */
+  const detailRun = useRef(0);
   const [newName, setNewName] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -94,12 +96,18 @@ export function ExamLibraryScreen() {
   useEffect(() => { if (!desktop || !items.length) return; scanUsage().then((u) => setQn(new Map(u.projects.map((p) => [p.id, p.uids.length] as const)))).catch(() => undefined); }, [desktop, items]);
 
   const loadDetail = useCallback((id: string) => {
-    examGet(id).then(setDetail).catch((e) => toast(`Không đọc được đề: ${msg(e)}`));
-    examCompileAll(id).then(setGoods).catch(() => undefined);
+    const run = ++detailRun.current;
+    examGet(id)
+      .then((value) => { if (detailRun.current === run) setDetail(value); })
+      .catch((e) => { if (detailRun.current === run) toast(`Không đọc được đề: ${msg(e)}`); });
+    examCompileAll(id)
+      .then((value) => { if (detailRun.current === run) setGoods(value); })
+      .catch(() => undefined);
   }, [toast]);
   useEffect(() => {
     setDetail(null); setCheck(null); setGoods([]); setViewing(null); setEditing(false);
     if (activeId) loadDetail(activeId);
+    else detailRun.current += 1;
   }, [activeId, loadDetail]);
   // menu thả xuống: bấm ra ngoài / Esc thì đóng
   useEffect(() => {
@@ -164,7 +172,9 @@ export function ExamLibraryScreen() {
     toast(`Đã nhập gói thành đề mới “${s.name}”. Từng tệp được đối chiếu với sổ của gói.`);
   });
   const createBlank = () => run(async () => {
-    const s = await placeNew(await examCreate(newName ?? ''));
+    const name = newName?.trim() ?? '';
+    if (!name) { toast('Hãy nhập tên đề.'); return; }
+    const s = await placeNew(await examCreate(name));
     setNewName(null);
     await reload();
     setActiveId(s.id);
@@ -347,7 +357,7 @@ export function ExamLibraryScreen() {
       {newName !== null && (
         <Modal title={<b>Tạo đề trống</b>} onClose={() => setNewName(null)} foot={<span className="qm-nav">
           <button type="button" className="btn btn-outline" onClick={() => setNewName(null)}>Huỷ</button>
-          <button type="button" className="btn btn-accent" disabled={busy} onClick={createBlank}>Tạo đề</button>
+          <button type="button" className="btn btn-accent" disabled={busy || !newName.trim()} onClick={createBlank}>Tạo đề</button>
         </span>}>
           <label className="xm-field">Tên đề <input className="xl-in" value={newName} autoFocus maxLength={120} placeholder="Ví dụ: Đề giữa kỳ 1 Toán 12 — 2026" onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void createBlank(); }} /></label>
           <p className="xl-meta">{place ? <>Đề sẽ nằm ở: <b>{trail.join(' › ')}</b>. Đổi được sau trong Thông tin đề.</> : 'Đề chưa được xếp vào mục nào; chọn lớp, loại đề trong Thông tin đề sau khi tạo (hoặc chọn một mục ở cây trước khi tạo).'}</p>
