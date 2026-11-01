@@ -3,6 +3,7 @@
 // Nhập .tex/thư mục/gói (sao chép, tệp gốc không bị đụng), tạo đề trống ngay tại mục đang chọn (điền sẵn lớp/loại/chương/bài),
 // sao chép (phiên bản mới), đổi thông tin, chốt đề, Thùng rác đề, sao lưu/khôi phục thư viện đề, Biên tập và xem PDF.
 // Bấm thẻ đề = mở đề thành một tab (thanh tab trên cùng: tab Thư viện cố định + tối đa 8 đề; nhớ tab khi tắt app; logic ở examtabs.ts).
+// Thông tin đề ở ngăn bên phải; chuột phải vào thẻ mở menu thao tác; Space trên thẻ xem nhanh PDF; kéo-thả tệp .tex/thư mục vào để nhập.
 // Biên dịch/soạn tệp nằm ở không gian Biên tập (ExamWorkspace). Thiết kế: claude/thiet-ke-de-thi.md.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
@@ -15,7 +16,7 @@ import { useTaxonomy } from '../lib/curriculum';
 import { examCompileAll, MODE_NOTE, modeLabel, type ExamMode, type GoodInfo } from '../lib/examcompile';
 import { allFolders } from '../lib/examfacets';
 import { CAT_LABEL, catOfType, examCounts, examTrail, examTree, filterByNode, nodeTrail, placementOf, type ExamCat } from '../lib/examtree';
-import { isDesktop } from '../lib/platform';
+import { isDesktop, listen } from '../lib/platform';
 import { scanUsage } from '../lib/examusage';
 import {
   bundleFolderName, chooseProjectFolder, chooseTexFile, dateText, describeScan, examBundleExport, examBundleImport, examCreate, examDuplicate, examGet, examImport, examList, examMetaUpdate,
@@ -39,7 +40,7 @@ const typeText = (t: string | null | undefined) => { const c = catOfType(t); ret
 interface Pending { path: string; scan: ExamScan; name: string; main: string }
 
 /** Khung cửa sổ dùng chung của màn này (Esc đóng, trừ khi đang có hộp xác nhận). */
-function Modal({ title, onClose, wide, children, foot }: { title: React.ReactNode; onClose(): void; wide?: boolean; children: React.ReactNode; foot?: React.ReactNode }) {
+function Modal({ title, onClose, wide, side, children, foot }: { title: React.ReactNode; onClose(): void; wide?: boolean; /** ngăn trượt bên phải (thông tin đề) thay vì hộp giữa màn */ side?: boolean; children: React.ReactNode; foot?: React.ReactNode }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.cfm') && !document.querySelector(".ew:not(.off), .pv:not(.pv-embedded)")) { e.stopPropagation(); onClose(); } };
     document.addEventListener('keydown', k);
@@ -47,8 +48,8 @@ function Modal({ title, onClose, wide, children, foot }: { title: React.ReactNod
   }, [onClose]);
   return (
     <>
-      <div className="qm-scrim" onClick={onClose} />
-      <div className={`qm xm${wide ? '' : ' xm-sm'}`} role="dialog" aria-modal="true">
+      <div className={`qm-scrim${side ? ' xm-side-scrim' : ''}`} onClick={onClose} />
+      <div className={`qm xm${wide ? '' : ' xm-sm'}${side ? ' xm-side' : ''}`} role="dialog" aria-modal="true">
         <div className="qm-head"><div className="xm-title">{title}</div><button type="button" className="btn btn-sm qm-x" aria-label="Đóng (Esc)" onClick={onClose}>✕</button></div>
         <div className="qm-body">{children}</div>
         {foot && <div className="qm-foot">{foot}</div>}
@@ -85,7 +86,13 @@ export function ExamLibraryScreen() {
   const infoFrom = useRef<string | null>(null);
   const [exportingCodes, setExportingCodes] = useState(false);
   const [panel, setPanel] = useState<null | 'trash' | 'backup'>(null);
-  const [ask, setAsk] = useState<null | 'trash'>(null);
+  /** đề đang chờ xác nhận chuyển vào Thùng rác */
+  const [askTrash, setAskTrash] = useState<ExamSummary | null>(null);
+  /** menu chuột phải trên thẻ đề */
+  const [ctx, setCtx] = useState<{ e: ExamSummary; x: number; y: number } | null>(null);
+  /** xem nhanh PDF (Space trên thẻ) */
+  const [peek, setPeek] = useState<{ id: string; name: string; mode: ExamMode } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -208,18 +215,18 @@ export function ExamLibraryScreen() {
     setActiveId(s.id);
   });
   const verify = () => run(async () => { if (activeId) setCheck(await examVerify(activeId)); });
-  const duplicate = () => run(async () => {
-    if (!activeId) return;
-    const s = await examDuplicate(activeId, null);
+  const duplicate = (id: string | null) => run(async () => {
+    if (!id) return;
+    const s = await examDuplicate(id, null);
     await reload();
     setActiveId(s.id);
     toast(`Đã tạo bản sao “${s.name}” (đang soạn). Đề gốc không đổi.`);
   });
-  const exportBundle = () => run(async () => {
-    if (!activeId || !detail) return;
+  const exportBundle = (e: { id: string; name: string } | null) => run(async () => {
+    if (!e) return;
     const parent = await chooseProjectFolder();
     if (!parent) return;
-    const dest = await examBundleExport(activeId, parent, bundleFolderName(detail.name));
+    const dest = await examBundleExport(e.id, parent, bundleFolderName(e.name));
     toast(`Đã xuất gói: ${dest}`);
   });
   const saveMeta = (m: Parameters<typeof examMetaUpdate>[1]) => run(async () => {
@@ -229,16 +236,60 @@ export function ExamLibraryScreen() {
     loadDetail(activeId);
     toast(s.status === 'finalized' && m.status === 'finalized' && detail?.status !== 'finalized' ? `Đã chốt đề “${s.name}”.` : 'Đã lưu thông tin đề.');
   });
+  /** hỏi trước khi chuyển vào Thùng rác; đề đang mở ở tab thì nhắc đóng tab trước */
+  const askToTrash = (e: ExamSummary | undefined) => {
+    if (!e) return;
+    if (tabs.ids.includes(e.id)) { toast('Đề này đang mở ở một tab. Đóng tab của đề (dấu × ở thanh trên cùng) rồi mới chuyển vào Thùng rác.'); return; }
+    setAskTrash(e);
+  };
   const trash = () => run(async () => {
-    if (!activeId) return;
-    if (tabs.ids.includes(activeId)) { setAsk(null); toast('Đề này đang mở ở một tab. Đóng tab của đề (dấu × ở thanh trên cùng) rồi mới chuyển vào Thùng rác.'); return; }
-    await examTrash(activeId);
-    setAsk(null); setActiveId(null);
+    const e = askTrash;
+    if (!e) return;
+    await examTrash(e.id);
+    setAskTrash(null);
+    if (activeId === e.id) setActiveId(null);
     await reload();
     toast('Đã chuyển đề vào Thùng rác đề. Có thể khôi phục ở Công cụ › Thùng rác đề.');
   });
   /** đóng hộp Thông tin; mở từ tab đề thì quay lại đúng tab đó */
   const closeInfo = () => { const back = infoFrom.current; infoFrom.current = null; setActiveId(null); if (back) setTabs((t) => (t.ids.includes(back) ? { ...t, front: back } : t)); };
+  /** Space trên thẻ: xem nhanh PDF gần nhất (ưu tiên bản Đề) */
+  const quickLook = (e: ExamSummary) => {
+    examCompileAll(e.id).then((g) => {
+      const m = g.find((x) => x.mode === 'de') ?? g[0];
+      if (m) setPeek({ id: e.id, name: e.name, mode: m.mode as ExamMode }); else toast('Đề này chưa có PDF. Mở đề rồi bấm “Biên dịch PDF”.');
+    }).catch((err) => toast(msg(err)));
+  };
+  const reveal = (id: string) => void examReveal(id).catch((err) => toast(msg(err)));
+  // menu chuột phải: bấm ra ngoài / Esc / cuộn thì đóng
+  useEffect(() => {
+    if (!ctx) return;
+    const h = (ev: MouseEvent) => { if (!(ev.target as HTMLElement).closest?.('.xl-cmenu')) setCtx(null); };
+    const k = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); setCtx(null); } };
+    const sc = () => setCtx(null);
+    document.addEventListener('mousedown', h); document.addEventListener('keydown', k, true); window.addEventListener('scroll', sc, true); window.addEventListener('resize', sc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k, true); window.removeEventListener('scroll', sc, true); window.removeEventListener('resize', sc); };
+  }, [ctx]);
+  // kéo-thả tệp .tex / thư mục từ Explorer vào Thư viện để nhập (sự kiện kéo-thả của cửa sổ Tauri; chỉ khi đang ở tab Thư viện, không có hộp thoại)
+  const dropOk = useRef<() => boolean>(() => false);
+  dropOk.current = () => !tabs.front && !pending && !busyRef.current && !document.querySelector('.qm, .cfm, .pv:not(.pv-embedded)');
+  const dropScan = useRef<(p: string) => void>(() => undefined);
+  dropScan.current = (path: string) => void run(async () => { const scan = await examScan(path); setPending({ path, scan, name: scan.name, main: scan.mainFile ?? '' }); });
+  useEffect(() => {
+    if (!desktop) return;
+    const offs: Promise<() => void>[] = [
+      listen<unknown>('tauri://drag-enter', () => setDragOver(dropOk.current())),
+      listen<unknown>('tauri://drag-leave', () => setDragOver(false)),
+      listen<{ paths?: string[] }>('tauri://drag-drop', (p) => {
+        setDragOver(false);
+        const paths = p?.paths ?? [];
+        if (!paths.length || !dropOk.current()) return;
+        if (paths.length > 1) toast(`Kéo vào ${paths.length} mục: HEdu nhập từng đề một, đang nhập “${paths[0].split(/[\\/]/).pop()}”. Đề nhiều tệp thì kéo cả thư mục.`);
+        dropScan.current(paths[0]);
+      }),
+    ];
+    return () => { for (const o of offs) void o.then((f) => f()).catch(() => undefined); };
+  }, [desktop, toast]);
   const clearAll = () => { setText(''); setStatus(null); setYear(null); setNode(null); };
 
   const card = (e: ExamSummary) => {
@@ -246,7 +297,10 @@ export function ExamLibraryScreen() {
     const at = examTrail(e, tax);
     const flags = [!e.mainFile && 'Chưa chọn tệp chính', e.skippedCount > 0 && `${e.skippedCount} mục không chép`, e.warningCount > 0 && `${e.warningCount} cảnh báo`].filter(Boolean) as string[];
     return (
-      <button key={e.id} type="button" className={`xc tone-${catTone(c)}`} onClick={() => openDoc(e)} title={`Bấm để mở đề thành một tab (biên tập, biên dịch). Thông tin và thao tác khác: nút “Thông tin…” trong màn biên tập${tabs.ids.includes(e.id) ? '. Đề này đang mở.' : ''}`}>
+      <button key={e.id} type="button" className={`xc tone-${catTone(c)}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} onClick={() => openDoc(e)}
+        onContextMenu={(ev) => { ev.preventDefault(); setCtx({ e, x: ev.clientX, y: ev.clientY }); }}
+        onKeyDown={(ev) => { if (ev.key === ' ') { ev.preventDefault(); quickLook(e); } else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setCtx({ e, x: r.left + 24, y: r.top + 24 }); } }}
+        title={`Bấm để mở đề thành một tab. Chuột phải: thao tác khác · Space: xem nhanh PDF${tabs.ids.includes(e.id) ? ' · Đề này đang mở' : ''}`}>
         <span className="xc-top">
           <span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span>
           <span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span>
@@ -446,16 +500,16 @@ export function ExamLibraryScreen() {
       )}
 
       {activeId && !viewing && (
-        <Modal wide onClose={closeInfo} title={detail ? <>
+        <Modal wide side onClose={closeInfo} title={detail ? <>
           <span className={`xc-type tone-${catTone(catOfType(detail.metadata.examType))}`}>{typeText(detail.metadata.examType)}</span>
           <b className="xm-name">{detail.name}</b>
           <span className={`xc-st st-${detail.status}`}>{STATUS_LABEL[detail.status]}</span>
         </> : <b>Đang đọc…</b>} foot={detail && <>
-          <button type="button" className="btn btn-sm btn-danger-soft" disabled={busy} onClick={() => setAsk('trash')}>Chuyển vào Thùng rác…</button>
+          <button type="button" className="btn btn-sm btn-danger-soft" disabled={busy} onClick={() => askToTrash(activeSum)}>Chuyển vào Thùng rác…</button>
           <span className="qm-nav">
             <button type="button" className="btn btn-sm" disabled={busy} onClick={() => activeId && void examReveal(activeId).catch((e) => toast(msg(e)))}>Hiện trong Explorer</button>
-            <button type="button" className="btn btn-sm" disabled={busy} onClick={exportBundle}>Xuất gói…</button>
-            <button type="button" className="btn btn-sm" disabled={busy} onClick={duplicate}>Sao chép thành đề mới</button>
+            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => exportBundle(activeId ? { id: activeId, name: detail.name } : null)}>Xuất gói…</button>
+            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => duplicate(activeId)}>Sao chép thành đề mới</button>
           </span>
         </>}>
           {!detail ? <p className="aid-wait">Đang đọc…</p> : (
@@ -506,9 +560,24 @@ export function ExamLibraryScreen() {
       ))}
       {panel === 'trash' && <ExamTrashPanel toast={toast} onClose={() => setPanel(null)} onChanged={(rid) => { void reload().then(() => { if (rid) setActiveId(rid); }); }} />}
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}
-      {ask === 'trash' && detail && (
-        <ConfirmDialog title="Chuyển vào Thùng rác đề?" confirmLabel="Chuyển vào Thùng rác" cancelLabel="Giữ lại" busy={busy} onCancel={() => setAsk(null)} onConfirm={trash}>
-          <p>Đề “{detail.name}” sẽ rời khỏi thư viện nhưng KHÔNG bị xoá: bạn khôi phục được ở Công cụ › Thùng rác đề.</p>
+      {peek && <PdfViewer id={peek.id} title={peek.name} stale={false} mode={peek.mode} note={`Xem nhanh: ${modeLabel(peek.mode)}. ${MODE_NOTE[peek.mode]}`} onClose={() => setPeek(null)} />}
+      {ctx && (
+        <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 370) }}>
+          <button type="button" role="menuitem" autoFocus onClick={() => { setCtx(null); openDoc(ctx.e); }}><b>Mở đề</b><small>{tabs.ids.includes(ctx.e.id) ? 'Đang mở: chuyển sang tab của đề' : 'Biên tập, biên dịch trong một tab'}</small></button>
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); quickLook(ctx.e); }}><b>Xem nhanh PDF</b><small>Phím Space</small></button>
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); infoFrom.current = null; setActiveId(ctx.e.id); }}><b>Thông tin…</b><small>Tên, lớp, loại đề, chốt đề, tệp</small></button>
+          <hr />
+          <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); duplicate(ctx.e.id); }}><b>Sao chép thành đề mới</b></button>
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); reveal(ctx.e.id); }}><b>Hiện trong Explorer</b></button>
+          <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); exportBundle(ctx.e); }}><b>Xuất gói…</b></button>
+          <hr />
+          <button type="button" role="menuitem" className="xl-cmenu-danger" onClick={() => { setCtx(null); askToTrash(ctx.e); }}><b>Chuyển vào Thùng rác…</b></button>
+        </span>
+      )}
+      {dragOver && !tabs.front && <div className="xl-drop" aria-hidden="true"><b>Thả vào đây để nhập đề</b><span>Tệp .tex hoặc thư mục dự án · tệp gốc giữ nguyên{place ? ` · vào mục ${trail.join(' › ')}` : ''}</span></div>}
+      {askTrash && (
+        <ConfirmDialog title="Chuyển vào Thùng rác đề?" confirmLabel="Chuyển vào Thùng rác" cancelLabel="Giữ lại" busy={busy} onCancel={() => setAskTrash(null)} onConfirm={trash}>
+          <p>Đề “{askTrash.name}” sẽ rời khỏi thư viện nhưng KHÔNG bị xoá: bạn khôi phục được ở Công cụ › Thùng rác đề.</p>
         </ConfirmDialog>
       )}
     </>
