@@ -42,7 +42,7 @@ const shuffle = <T,>(a: T[], seed: number): T[] => {
 };
 
 /** Mã Dạng không kèm mức độ: [Lớp][Phân môn][Chương]·[Bài]-[Dạng] (· là chỗ chữ mức độ N/H/V/C). */
-function formRows(tax: Taxonomy, grades: ReadonlySet<number>): (LotForm & { grade: number })[] {
+export function formRows(tax: Taxonomy, grades: ReadonlySet<number>): (LotForm & { grade: number })[] {
   const out: (LotForm & { grade: number })[] = [];
   for (const g of tax.grades) {
     if (!grades.has(g.grade)) continue;
