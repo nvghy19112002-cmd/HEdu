@@ -2,6 +2,8 @@
 
 > Chuyển sang tài khoản Claude khác: đọc `claude/ban-giao-tai-khoan-moi.md` trước (bàn giao đầy đủ 30/10/2026).
 
+> 01/11/2026: màn mới "Xử lí TeX" — đề xuất ở `claude/de-xuat-man-xu-li-tex.md` (khảo sát MathHub, 3 đợt, phương án kỹ thuật, câu hỏi Q1–Q6). Chủ dự án đã duyệt hướng Đợt 1; đang chờ GPT góp ý, CHƯA viết mã.
+
 ## Git và phát hành (30/10/2026)
 - `main` = `ec1c051` (PR #166). Bản phát hành gần nhất: `v0.1.0-beta.44` (kênh beta, 30/10/2026). Trong ngày đã ra beta.41 (#162) → beta.42 (#164) → beta.43 (#165) → beta.44 (#166); nội dung từng bản ở `GHI-CHU-PHAT-HANH.md` và mục "Trạng thái" của `AGENTS.md`.
 - Ngân hàng đề thi E0–E6 (#112–#125) đã nằm trong các bản phát hành từ beta.34 trở đi.
