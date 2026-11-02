@@ -23,7 +23,7 @@ t('tệp đã có \\documentclass ⇒ không bọc', wrapFiles('main.tex', '\\do
 t('\\documentclass bị chú thích vẫn là tệp dữ liệu', wrapFiles('a.tex', '%\\documentclass{book}\n\\begin{ex}x\\end{ex}', 'hymath-02-navy-editorial') !== null);
 t('tên tệp có khoảng trắng / ký tự TeX ⇒ không bọc', wrapFiles('de thi.tex', DATA, 'hymath-02-navy-editorial') === null && inputName('a%b.tex') === null && inputName('x{y}.tex') === null);
 t('tên tiếng Việt, gạch nối, dấu chấm được', inputName('đề-thi_11.v2.tex') === 'đề-thi_11.v2');
-t('mẫu lạ ⇒ dùng mẫu mặc định', JSON.stringify(wrapFiles('a.tex', DATA, 'khong-co')) === JSON.stringify(wrapFiles('a.tex', DATA, 'hymath-02-navy-editorial')));
+t('mẫu lạ ⇒ dùng mẫu mặc định', JSON.stringify(wrapFiles('a.tex', DATA, 'khong-co')) === JSON.stringify(wrapFiles('a.tex', DATA, 'hymath-13-sky-panel')));
 
 if (fails) { console.log(`\n${fails} test lỗi`); process.exit(1); }
 console.log('\nOK');
