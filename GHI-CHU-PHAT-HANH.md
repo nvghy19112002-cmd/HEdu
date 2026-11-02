@@ -1,3 +1,13 @@
+## Có gì mới trong beta.52 (kênh beta): mẫu in Sky Panel, Thư viện đề gọn hơn, xem nhanh minipage
+Gồm PR #205, #206, #207, #209, #210 (so với beta.51). Không đổi dữ liệu, ngân hàng hay tệp đề của bạn. Đã thử bằng bộ kiểm thử và dịch thật bằng TeX Live (đề `toan10_gk1_taythanh_2627`, 3 chế độ, 0 lỗi); chưa thử trên máy Windows thật. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Mẫu in cho đề chỉ có dữ liệu:** tệp đề chỉ gồm các khối `\begin{ex}` (không có `\documentclass`) nay bấm Biên dịch là HEdu tự ghép phần đầu theo một mẫu in, chỉ trong thư mục tạm, tệp của bạn không bị sửa. Ra ba bản: Đề, Đề in trắng đen, Lời giải. Biên dịch bằng XeLaTeX.
+- **Mẫu mặc định mới: Sky Panel** (khung tiêu đề xanh bo góc, nhãn Trang ở đầu trang, nhãn A B C D xanh). Có 9 mẫu để chọn ở Cài đặt › Đề thi; ai đã chọn mẫu khác thì giữ nguyên lựa chọn. Cài đặt có thêm tên giáo viên và năm học để in lên đề.
+- **Thư viện đề thi gọn hơn:** cột cây bên trái không còn chui dưới thanh tab; cây chỉ hiện mục đã có đề (ô "Hiện cả chương/bài chưa có đề" vẫn hiện đủ); thẻ đề thấp hơn, bỏ dấu "—" khi chưa có năm học.
+- **Đặt tay "Cần rà soát":** chuột phải vào thẻ đề › Đánh dấu cần rà soát / Bỏ dấu. Chốt đề vẫn làm trong hộp Thông tin, có hỏi xác nhận.
+- **Sửa xem nhanh:** các `minipage` có bề rộng dạng `.24\linewidth` hay `0.5\textwidth` nay đứng cạnh nhau, đúng tỉ lệ, thay vì xếp dọc (câu 4 hình #5786). Bề rộng tính bằng mm hay `\dimexpr` giữ cách cũ.
+
 ## Có gì mới trong beta.51 (kênh beta): sửa bôi đen, phím tắt giống TeXstudio
 Gồm PR #204 (so với beta.50). Không đổi dữ liệu. Đã thử bằng bộ kiểm thử và bản thử trên trình duyệt; chưa thử trên máy Windows thật. Đây là bản beta.
 
