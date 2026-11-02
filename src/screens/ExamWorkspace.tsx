@@ -19,6 +19,8 @@ import { addToGoiThem, missingPackages } from '../lib/missingpkg';
 import { compileSlots, type TabStatus } from '../lib/examtabs';
 import { clampLog, clampPdf, lacksPreamble, loadLayout, saveLayout, treeShown, type EwLayout } from '../lib/ewlayout';
 import { TEX_KEYS_HINT } from '../lib/texextras';
+import { inputName, wrapFiles } from '../lib/examwrap';
+import { HEDU_THEME_ID, loadDefaultInfo, loadThemeId, themeOf } from '../lib/examtheme';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Pane = 'files' | 'edit' | 'pdf' | 'log';
@@ -26,10 +28,10 @@ const NARROW = 1000;
 
 /** Mỗi đề đang mở là một tab ở Thư viện đề: tab ẩn vẫn giữ nguyên trạng thái (tệp đang sửa, PDF, nhật ký).
  * `onLibrary` = về tab Thư viện (đề vẫn mở) · `onInfo` = mở hộp Thông tin & thao tác của đề · `onClose` = đóng tab (đã hỏi lưu nếu cần). */
-interface Props { id: string; name: string; mainFile: string | null; hidden?: boolean; onLibrary(): void; onInfo(): void; onClose(): void; onStatus?(id: string, s: TabStatus): void }
+interface Props { id: string; name: string; mainFile: string | null; /** năm học của đề (Thông tin đề), in trên mẫu HyMath */ schoolYear?: string | null; hidden?: boolean; onLibrary(): void; onInfo(): void; onClose(): void; onStatus?(id: string, s: TabStatus): void }
 export interface ExamWorkspaceHandle { requestClose(): void }
 
-export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
+export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, schoolYear, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
   const { toast } = useApp();
   const ed = useRef<CodeEditorHandle>(null);
   const loaded = useRef(new Map<string, string>()); // văn bản lúc mở, dùng khi gắn vào trình soạn lần đầu
@@ -90,8 +92,10 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
     examCompileAll(id).then((g) => { setGoods(g); const m = g.find((x) => x.mode === 'de') ?? g[0]; if (m) setViewMode(m.mode as ExamMode); }).catch(() => undefined);
   }, [id, reloadList]);
 
+  /** tệp chính chỉ có dữ liệu và ghép phần đầu được ⇒ bản Đề / Lời giải dùng được dù dự án không có ex_test */
+  const dataOnlyRef = useRef(false);
   const refreshProfile = useCallback(() => {
-    examProfiles(id).then((p) => { setProfile(p); setMode((m) => (m !== 'nguyen-van' && !p.available ? 'nguyen-van' : m)); }).catch(() => setProfile(null));
+    examProfiles(id).then((p) => { setProfile(p); setMode((m) => (m !== 'nguyen-van' && !p.available && !dataOnlyRef.current ? 'nguyen-van' : m)); }).catch(() => setProfile(null));
   }, [id]);
   useEffect(() => {
     examProfiles(id).then((p) => { setProfile(p); setMode(p.available ? 'de' : 'nguyen-van'); }).catch(() => setProfile(null));
@@ -279,7 +283,12 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
     setQueued(false);
     try {
       const st = getSettings();
-      const r = await examCompile(id, { engine, runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120) });
+      // tệp chính chỉ có nội dung đề ⇒ HEdu ghép phần đầu theo mẫu in (chỉ trong thư mục build)
+      const mt = mainFile ? (ed.current?.text(mainFile) ?? loaded.current.get(mainFile) ?? (await fileRead(id, mainFile).then((x) => x.text).catch(() => null))) : null;
+      const di = loadDefaultInfo();
+      const wrap = mainFile && mt !== null ? wrapFiles(mainFile, mt, loadThemeId(), mode, { schoolYear: schoolYear || di.year, teacher: di.teacher }) : null;
+      if (!wrap && mode === 'de-in') { setNote('Bản “Đề in trắng đen” chỉ có với tệp đề chỉ có dữ liệu và mẫu in HyMath.'); return; }
+      const r = await examCompile(id, { engine: wrap?.engine ?? engine, runs: wrap?.modes ? Math.max(runs, 2) : runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120), ...(wrap ? { wrap: wrap.files, wrapModes: wrap.modes } : {}) });
       setResult(r);
       examCompileAll(id).then(setGoods).catch(() => undefined);
       if (r.status === 'ok') setViewMode(mode);
@@ -416,7 +425,17 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
   const errs = result?.errorCount ?? 0;
   // tệp chính chỉ có nội dung đề (không có \documentclass) ⇒ giải thích vì sao TeX báo "Missing \begin{document}"
   const mainText = mainFile ? (ed.current?.text(mainFile) ?? loaded.current.get(mainFile) ?? null) : null;
-  const noPreamble = !!result && result.status !== 'ok' && mainText !== null && lacksPreamble(mainText);
+  const dataOnly = !!mainFile && mainText !== null && lacksPreamble(mainText) && inputName(mainFile) !== null;
+  dataOnlyRef.current = dataOnly;
+  const modesOk = !!profile?.available || dataOnly;
+  /** tệp dữ liệu + mẫu HyMath: ba bản Đề / Đề in / Lời giải, không có "nguyên văn"; trình dịch XeLaTeX */
+  const hyData = dataOnly && loadThemeId() !== HEDU_THEME_ID;
+  const modeList = MODES.filter((m) => (hyData ? m.id !== 'nguyen-van' : m.id !== 'de-in'));
+  // bản đang chọn không có trong danh sách (vd mở tệp dữ liệu khi đang chọn "nguyên văn") ⇒ về bản Đề
+  useEffect(() => { if (!modeList.some((m) => m.id === mode)) setMode(hyData || profile?.available ? 'de' : 'nguyen-van'); }, [hyData, mode, profile?.available]); // eslint-disable-line react-hooks/exhaustive-deps
+  // chỉ có dữ liệu nhưng tên tệp không ghép được (khoảng trắng, ký tự lạ) ⇒ giải thích
+  const noPreamble = !!result && result.status !== 'ok' && mainText !== null && lacksPreamble(mainText) && !dataOnly;
+  const themeName = themeOf(loadThemeId()).name;
 
   return (
     <div className={`ew tabbed${hidden ? ' off' : ''}`} role="dialog" aria-modal={!hidden} aria-hidden={hidden || undefined} aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
@@ -424,7 +443,9 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
         <button type="button" className="btn btn-sm btn-ghost ew-back" onClick={onLibrary} title="Về Thư viện đề (đề vẫn mở ở tab trên cùng) · Esc" aria-label="Về Thư viện đề">←</button>
         <div className="ew-title"><b title={name}>{name}</b>{active && <span className="ew-path" title={active}>{active}</span>}</div>
         <span className={`ew-badge ${badge.tone}`} role="status" aria-live="polite">{badge.text}</span>
-        {profile && !profile.available && <span className="ew-chip" title={`${profile.reason ?? ''} Bạn vẫn biên dịch được bản “nguyên văn” (chưa xác định đề hay lời giải, có thể chứa lời giải).`}>Chỉ bản nguyên văn</span>}
+        {dataOnly
+          ? <span className="ew-chip ok" title={`Tệp chính chỉ có nội dung đề: khi biên dịch, HEdu tự ghép phần đầu (khai báo + mẫu in “${themeName}”) trong thư mục tạm. Tệp của thầy/cô không bị sửa. Đổi mẫu ở Cài đặt › Đề thi.`}>Tự ghép mẫu: {themeName}</span>
+          : profile && !profile.available && <span className="ew-chip" title={`${profile.reason ?? ''} Bạn vẫn biên dịch được bản “nguyên văn” (chưa xác định đề hay lời giải, có thể chứa lời giải).`}>Chỉ bản nguyên văn</span>}
         <span className="ew-sp" />
         {!narrow && <span className="ew-grp"><button type="button" className={`btn btn-sm btn-ghost${tree0 ? ' on' : ''}`} aria-pressed={tree0} onClick={toggleTree} title="Hiện/ẩn cây tệp của đề">Tệp</button></span>}
         <span className="ew-grp">
@@ -436,7 +457,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           <button type="button" className="btn btn-sm btn-ghost" onClick={openSources} title="Các câu trong đề lấy từ Ngân hàng">Nguồn câu</button>
         </span>
         <span className="ew-grp ew-compile">
-          <select className="xl-in ew-sel" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch" title="Bản biên dịch">{MODES.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !profile?.available} title={m.id !== 'nguyen-van' && !profile?.available ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select>
+          <select className="xl-in ew-sel" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch" title="Bản biên dịch">{modeList.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !modesOk} title={m.id !== 'nguyen-van' && !modesOk ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select>
           <details className="ew-opts">
             <summary className="btn btn-sm btn-ghost" title={`Tuỳ chọn biên dịch: ${ENGINES.find((x) => x.id === engine)?.label ?? engine}, ${runs} lượt`} aria-label="Tuỳ chọn biên dịch">⚙</summary>
             <div className="ew-pop">
@@ -546,8 +567,8 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           {result && sm && (narrow || result.warnings.length > 0) && <div className={`note ${sm.tone === 'bad' ? 'bad' : sm.tone}`} role="status"><div className="note-body"><b>{sm.text}</b>{result.warnings.map((w, i) => <span key={i}>{w}</span>)}{result.texVersion && <span className="xl-meta">{result.texVersion} · {result.runs} lượt · {Math.round(result.ms / 100) / 10} giây</span>}</div></div>}
           {noPreamble && (
             <div className="note warn" role="status"><div className="note-body">
-              <b>Tệp chính “{mainFile}” chỉ có nội dung đề, không có <code>\documentclass</code></b>
-              <span>Vì vậy TeX không biên dịch nó một mình được (lỗi “Missing \begin&#123;document&#125;”, “Undefined control sequence” ở dòng đầu). Cần một tệp chính có <code>\documentclass</code>, các gói và lệnh riêng của thầy/cô (vd lệnh tiêu đề đề thi), rồi <code>\begin&#123;document&#125;</code> <code>\input&#123;{(mainFile ?? '').replace(/\.tex$/, '')}&#125;</code> <code>\end&#123;document&#125;</code>; tạo tệp đó bằng “+ Tệp mới” rồi chọn làm tệp chính trong “Thông tin…”. Bản sau HEdu sẽ tự ghép phần đầu cho tệp nội dung.</span>
+              <b>Tệp chính “{mainFile}” chỉ có nội dung đề nhưng tên tệp có khoảng trắng hoặc ký tự đặc biệt</b>
+              <span>HEdu chỉ tự ghép phần đầu (khai báo + mẫu in) cho tệp tên gồm chữ, số, dấu chấm, gạch nối, gạch dưới. Hãy đổi tên tệp (vd <code>de-thi.tex</code>) rồi biên dịch lại.</span>
             </div></div>
           )}
           {pkgHints.length > 0 && (
