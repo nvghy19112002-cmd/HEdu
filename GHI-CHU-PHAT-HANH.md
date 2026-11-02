@@ -1,3 +1,11 @@
+## Có gì mới trong beta.53 (kênh beta): Thư viện đề có chế độ Danh sách, đổi tên và kéo-thả
+Gồm PR #212, #213 (so với beta.52). Không đổi dữ liệu, ngân hàng hay tệp đề của bạn. Đã thử bằng bộ kiểm thử và bằng trang thử trong trình duyệt (kéo-thả bằng chuột thật); chưa thử trên máy Windows thật. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Chế độ xem Danh sách** ở Thư viện đề thi: công tắc **Thẻ | Danh sách** cạnh ô sắp xếp, nhớ theo máy. Mỗi đề một hàng gọn: tên, loại, vị trí, trạng thái, năm học, số câu hoặc tệp, ngày sửa; thanh màu theo loại đề, dấu ⚠ khi thiếu tệp chính hoặc có cảnh báo. Một trang xem được 50 đề. Cửa sổ hẹp tự ẩn bớt cột.
+- **Đổi tên nhanh:** chuột phải vào đề › **Đổi tên…**, hoặc bấm **F2** trên thẻ hoặc hàng. Chỉ đổi tên hiển thị trong thư viện, tên tệp trong đề không đổi.
+- **Kéo đề vào cây để chuyển:** kéo thẻ hoặc hàng thả vào một mục ở cây bên trái. Thả vào thư mục riêng thì đổi thư mục; thả vào mục loại, chương, bài thì đổi lớp, loại, chương, bài (thư mục giữ nguyên); thả vào mục lớp thì chỉ đổi lớp. Mục nhận được sẽ tô sáng, **Esc** để huỷ. Mục "Tất cả đề", "Thư mục riêng", "Chưa xếp lớp" hoặc mục đề đang ở sẵn thì không nhận.
+
 ## Có gì mới trong beta.52 (kênh beta): mẫu in Sky Panel, Thư viện đề gọn hơn, xem nhanh minipage
 Gồm PR #205, #206, #207, #209, #210 (so với beta.51). Không đổi dữ liệu, ngân hàng hay tệp đề của bạn. Đã thử bằng bộ kiểm thử và dịch thật bằng TeX Live (đề `toan10_gk1_taythanh_2627`, 3 chế độ, 0 lỗi); chưa thử trên máy Windows thật. Đây là bản beta.
 
