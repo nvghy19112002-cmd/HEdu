@@ -11,6 +11,9 @@ def fix(t):
     t = t.replace('Path=fonts/,', '').replace('[Path=fonts/]', '')
     t = re.sub(r'\\IfFileExists\{fonts/([^}]+\.otf)\}', r'\\IfFontExistsTF{\1}', t)
     t = t.replace('\\input{Caidat/theme.tex}', '\\input{hymath-core.tex}')
+    # unicode-math đã định nghĩa các ký hiệu AMS (\\square, \\eth, ...); ex_test.sty của HEdu nạp amssymb sau đó sẽ báo "already defined".
+    # Đánh dấu amssymb/amsfonts là đã có (cùng cách với gói vietnam) để ex_test không nạp lại.
+    t = t.replace('\\usepackage{ex_test}', '\\makeatletter\n\\@namedef{ver@amssymb.sty}{2013/01/14 v3.01 provided by unicode-math}\n\\@namedef{ver@amsfonts.sty}{2013/01/14 v3.01 provided by unicode-math}\n\\makeatother\n\\usepackage{ex_test}')
     t = t.replace('\\input{Caidat/theme-adapter.tex}', '\\input{hymath-adapter.tex}')
     t = t.replace('\\IfFileExists{Themes/\\ThemeFile}{\\input{Themes/\\ThemeFile}}', '\\IfFileExists{\\ThemeFile}{\\input{\\ThemeFile}}')
     return t
