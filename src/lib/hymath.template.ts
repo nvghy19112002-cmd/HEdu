@@ -162,6 +162,10 @@ export const HYMATH_CORE: Readonly<Record<string, string>> = {
 \@namedef{ver@vietnam.sty}{2026/10/06 Unicode handled by fontspec}
 \@namedef{opt@vietnam.sty}{utf8}
 \makeatother
+\makeatletter
+\@namedef{ver@amssymb.sty}{2013/01/14 v3.01 provided by unicode-math}
+\@namedef{ver@amsfonts.sty}{2013/01/14 v3.01 provided by unicode-math}
+\makeatother
 \usepackage{ex_test}
 \usepackage{enumitem,needspace}
 \IfFileExists{\ThemeFile}{\input{\ThemeFile}}{\PackageError{HyMath}{Missing theme file: \ThemeFile}{Check ThemeFile in dethi.tex.}}
