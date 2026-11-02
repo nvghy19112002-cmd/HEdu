@@ -1639,7 +1639,7 @@ span.bt-caret { cursor: default; }
 .xl-crumb { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 15px; min-height: 30px; }
 .xl-crumb b { font-weight: 700; }
 .xc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
-.xc { --tone: #6B7280; all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 12px; min-height: 168px; background: var(--paper); border: 1px solid var(--line); border-top: 4px solid var(--tone); border-radius: 12px; cursor: pointer; transition: box-shadow .12s, border-color .12s, transform .12s; }
+.xc { --tone: #6B7280; all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 10px; min-height: 0; background: var(--paper); border: 1px solid var(--line); border-top: 4px solid var(--tone); border-radius: 12px; cursor: pointer; transition: box-shadow .12s, border-color .12s, transform .12s; }
 .xc:hover { box-shadow: 0 8px 22px color-mix(in srgb, var(--ink) 12%, transparent); transform: translateY(-1px); }
 .xc:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
 .tone-gk { --tone: #1F4FBF; } .tone-ck { --tone: #7C3AED; } .tone-tt { --tone: #C2410C; } .tone-ot { --tone: #1F6B4A; } .tone-kt { --tone: #0E7490; } .tone-na { --tone: #6B7280; }
@@ -2051,3 +2051,7 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 .ce-keys dt { margin: 0; }
 .ce-keys dd { margin: 0; color: var(--ink-2); }
 .ce-keys kbd { font-family: var(--f-code); font-size: 11.5px; padding: 0 5px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; background: var(--paper-2); white-space: nowrap; }
+
+/* Thư viện đề: khi có thanh tab đề, cột cây không chui dưới thanh tab (cao 38px) */
+.xt-bar:not(.over) ~ .body-row .fside { top: 50px; max-height: calc(100vh - 66px); }
+.xt-bar:not(.over) ~ .page-head { padding-top: 10px; }
