@@ -2062,3 +2062,22 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 
 /* ---- Biên tập đề: nhãn "Tự ghép mẫu" cho tệp chỉ có dữ liệu ---- */
 .ew-chip.ok { color: var(--ok-ink); background: var(--ok-bg); border-color: var(--ok-line); }
+
+/* ---- Thư viện đề: công tắc Thẻ | Danh sách và hàng danh sách ---- */
+.xl-seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--paper); flex: 0 0 auto; }
+.xl-seg button { font: inherit; font-size: 13px; padding: 0 12px; height: 34px; border: 0; background: none; color: var(--ink-2); cursor: pointer; }
+.xl-seg button + button { border-left: 1px solid var(--line-2); }
+.xl-seg button.on { background: var(--pri-soft); color: var(--pri-ink); font-weight: 600; }
+.xr-list { display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.xr-head, .xr { display: grid; grid-template-columns: minmax(180px, 2.2fr) 130px minmax(120px, 1.4fr) 104px 86px 84px 84px; align-items: center; gap: 12px; padding: 0 14px; }
+.xr-head { height: 32px; font-size: 12px; font-weight: 600; color: var(--ink-3); background: var(--paper-2); border-bottom: 1px solid var(--line); }
+.xr { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(180px, 2.2fr) 130px minmax(120px, 1.4fr) 104px 86px 84px 84px; align-items: center; gap: 12px; padding: 0 14px; min-height: 40px; border-bottom: 1px solid var(--line); border-left: 3px solid var(--tone, #6B7280); cursor: pointer; font-size: 13.5px; color: var(--ink); }
+.xr:last-child { border-bottom: 0; }
+.xr:hover { background: var(--hover); }
+.xr:focus-visible { outline: 2px solid var(--pri); outline-offset: -2px; }
+.xr.ctx-on { background: var(--pri-soft); }
+.xr-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.xr-warn { color: var(--warn); }
+.xr-where { color: var(--ink-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.xr-num { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 1180px) { .xr-head, .xr { grid-template-columns: minmax(160px, 2fr) 120px 96px 76px; } .xr-head > :nth-child(3), .xr-head > :nth-child(5), .xr-head > :nth-child(6), .xr > :nth-child(3), .xr > :nth-child(5), .xr > :nth-child(6) { display: none; } }
