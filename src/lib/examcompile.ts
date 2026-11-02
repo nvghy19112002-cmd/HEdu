@@ -9,13 +9,14 @@ export const ENGINES: { id: Engine; label: string }[] = [
   { id: 'lualatex', label: 'LuaLaTeX' },
 ];
 
-export type ExamMode = 'nguyen-van' | 'de' | 'loigiai';
+export type ExamMode = 'nguyen-van' | 'de' | 'de-in' | 'loigiai';
 export const MODES: { id: ExamMode; label: string }[] = [
   { id: 'de', label: 'Đề (không lời giải)' },
+  { id: 'de-in', label: 'Đề in trắng đen' },
   { id: 'loigiai', label: 'Lời giải' },
   { id: 'nguyen-van', label: 'Nguyên văn (chưa xác định)' },
 ];
-export interface CompileOpts { engine?: Engine; timeoutSecs?: number; runs?: number; texBin?: string; force?: boolean; mode?: ExamMode }
+export interface CompileOpts { engine?: Engine; timeoutSecs?: number; runs?: number; texBin?: string; force?: boolean; mode?: ExamMode; /** tệp chính chỉ có dữ liệu: bộ tệp bọc theo mẫu in (examwrap.ts) */ wrap?: { path: string; text: string }[]; /** tệp bọc tự đặt chế độ (mẫu HyMath) */ wrapModes?: boolean }
 export interface ProfileChange { file: string; line: number; before: string; after: string }
 export interface ProfileInfo { available: boolean; reason: string | null; file: string | null; line: number | null; options: string[] }
 export interface Diag { severity: 'error' | 'warning'; file: string | null; line: number | null; inProject: boolean; message: string; context: string[] }
@@ -36,6 +37,7 @@ export const examProfiles = (id: string) => invoke<ProfileInfo>('exam_profiles',
 /** Nhãn và lời nhắc theo chế độ PDF. */
 export const MODE_NOTE: Record<ExamMode, string> = {
   de: 'PDF ĐỀ: HEdu đã biên dịch với ex_test ở chế độ không lời giải (bản dẫn xuất trong thư mục build, tệp nguồn không đổi).',
+  'de-in': 'PDF ĐỀ in trắng đen (mẫu HyMath, không lời giải).',
   loigiai: 'PDF LỜI GIẢI: có lời giải. KHÔNG phát cho học sinh.',
   'nguyen-van': 'PDF biên dịch nguyên văn: HEdu chưa xác định đây là bản ĐỀ hay bản LỜI GIẢI, nên có thể chứa lời giải. Đừng phát cho học sinh khi chưa xem lại.',
 };

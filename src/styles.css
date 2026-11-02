@@ -2055,3 +2055,6 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 /* Thư viện đề: khi có thanh tab đề, cột cây không chui dưới thanh tab (cao 38px) */
 .xt-bar:not(.over) ~ .body-row .fside { top: 50px; max-height: calc(100vh - 66px); }
 .xt-bar:not(.over) ~ .page-head { padding-top: 10px; }
+
+/* ---- Biên tập đề: nhãn "Tự ghép mẫu" cho tệp chỉ có dữ liệu ---- */
+.ew-chip.ok { color: var(--ok-ink); background: var(--ok-bg); border-color: var(--ok-line); }
