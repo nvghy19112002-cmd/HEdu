@@ -24,6 +24,11 @@ interface Props {
   showEmpty: boolean;
   onShowEmpty(v: boolean): void;
   onPick(key: string | null): void;
+  /** nhãn dòng "tất cả" (mặc định: Tất cả đề) */
+  allLabel?: string;
+  /** hiện ô "Hiện cả chương/bài chưa có đề" (mặc định có) */
+  emptySwitch?: boolean;
+  treeLabel?: string;
 }
 
 /** Lọc cây theo chữ tìm: giữ nút khớp và đường tới nó. */
@@ -38,7 +43,7 @@ function search(ns: readonly ExamNode[], q: string): ExamNode[] {
   return out;
 }
 
-export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, onShowEmpty, onPick }: Props) {
+export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, onShowEmpty, onPick, allLabel = 'Tất cả đề', emptySwitch = true, treeLabel = 'Cây đề thi' }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Set<string>>(loadOpen);
   // mở đường tới mục đang chọn
@@ -81,19 +86,19 @@ export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, on
         <span className="sr-only">Tìm mục</span>
         <input type="search" placeholder="Tìm mục…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
-      <ul className="bt-tree" role="tree" aria-label="Cây đề thi">
+      <ul className="bt-tree" role="tree" aria-label={treeLabel}>
         <li role="treeitem" aria-level={1} aria-selected={sel === null}>
           <div className={`bt-row k-all${sel === null ? ' is-sel' : ''}`}>
             <button type="button" className="bt-name" onClick={() => onPick(null)}>
               <svg className="bt-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z" /><path d="m2.5 12 9.5 5 9.5-5" /><path d="m2.5 16 9.5 5 9.5-5" /></svg>
-              <span className="bt-label">Tất cả đề</span><span className="bt-n">{nf.format(total)}</span>
+              <span className="bt-label">{allLabel}</span><span className="bt-n">{nf.format(total)}</span>
             </button>
           </div>
         </li>
         {shown.map((x) => row(x, 0))}
         {q && shown.length === 0 && <li className="bt-none" role="none">Không có mục nào khớp “{query.trim()}”.</li>}
       </ul>
-      <label className="bt-empty-sw"><input type="checkbox" checked={showEmpty} onChange={(e) => onShowEmpty(e.target.checked)} /> Hiện cả chương/bài chưa có đề</label>
+      {emptySwitch && <label className="bt-empty-sw"><input type="checkbox" checked={showEmpty} onChange={(e) => onShowEmpty(e.target.checked)} /> Hiện cả chương/bài chưa có đề</label>}
     </div>
   );
 });

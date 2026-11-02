@@ -678,6 +678,32 @@ pub fn xoa(dest: &Path, ids: &[String], xoa: bool) -> Result<usize, String> {
     Ok(n)
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct DatTrangThai {
+    pub id: String,
+    /// "ok" | "loi" | "chua"
+    pub status: String,
+    #[serde(default)]
+    pub err: String,
+}
+
+/// Ghi kết quả dịch thử (khi giao diện vẽ ảnh thu nhỏ). Chỉ hình còn trong kho (chưa vào thùng rác); trạng thái lạ bị bỏ qua.
+/// Không đổi `edited` hay `updated_at`: đây là kết quả đo, không phải giáo viên sửa.
+pub fn dat_trang_thai(dest: &Path, items: &[DatTrangThai]) -> Result<usize, String> {
+    let mut c = open(dest)?;
+    let tx = c.transaction().map_err(|e| e.to_string())?;
+    let mut n = 0;
+    for it in items {
+        if !matches!(it.status.as_str(), "ok" | "loi" | "chua") {
+            continue;
+        }
+        let err: String = it.err.chars().take(300).collect();
+        n += tx.execute("UPDATE item SET status=?2, err=?3 WHERE id=?1 AND da_xoa=0", params![it.id, it.status, err]).map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(n)
+}
+
 /// Các mục thuộc nhánh `root` (kể cả chính nó).
 fn subtree(c: &Connection, root: &str) -> Result<Vec<String>, String> {
     let mut st = c
@@ -869,6 +895,12 @@ pub async fn kho_hinh_nut_chuyen(app: AppHandle, id: String, moi_cha: Option<Str
 pub async fn kho_hinh_nut_xoa(app: AppHandle, id: String) -> Result<(), String> {
     let d = dest_of(&app)?;
     blocking(move || nut_xoa(&d, &id)).await
+}
+
+#[tauri::command]
+pub async fn kho_hinh_dat_trang_thai(app: AppHandle, items: Vec<DatTrangThai>) -> Result<usize, String> {
+    let d = dest_of(&app)?;
+    blocking(move || dat_trang_thai(&d, &items)).await
 }
 
 // ---------- kiểm thử ----------
@@ -1080,6 +1112,25 @@ mod tests {
         println!("lọc nhánh g12-c1 loại bbt: {} kết quả, {} ms", k2.tong, t1.elapsed().as_millis());
         let c = cay(Path::new(&dest)).unwrap();
         println!("cây: {} mục, gốc có {} hình", c.len(), c.iter().find(|n| n.parent_id.is_none()).map(|n| n.dem).unwrap_or(0));
+    }
+
+    #[test]
+    fn dat_trang_thai_do_duoc_khi_ve_anh() {
+        let d = tmp("tt");
+        let (src, dest) = (d.join("mathhub.db"), d.join("kho-hinh.db"));
+        make_src(&src, &[("a", "g10", "A", "\\draw (0,0);", "10"), ("b", "g10", "B", "\\draw (1,1);", "10")]);
+        nap(&dest, &src, |_, _| {}).unwrap();
+        let ds = |id: &str, s: &str, e: &str| DatTrangThai { id: id.into(), status: s.into(), err: e.into() };
+        let n = dat_trang_thai(&dest, &[ds("a", "ok", ""), ds("b", "loi", &"x".repeat(500)), ds("a", "la", ""), ds("khong-co", "ok", "")]).unwrap();
+        assert_eq!(n, 2, "trạng thái lạ và hình không có bị bỏ qua");
+        assert_eq!(lay(&dest, "a").unwrap().unwrap().status, "ok");
+        let b = lay(&dest, "b").unwrap().unwrap();
+        assert_eq!((b.status.as_str(), b.err.chars().count(), b.edited), ("loi", 300, false), "lỗi cắt 300 ký tự, không tính là giáo viên sửa");
+        assert_eq!(tim(&dest, "", None, None, None, Some("loi"), false, 0, 50).unwrap().tong, 1, "lọc được hình dịch lỗi");
+        // hình đã vào thùng rác không bị đổi
+        xoa(&dest, &["a".to_string()], true).unwrap();
+        assert_eq!(dat_trang_thai(&dest, &[ds("a", "loi", "e")]).unwrap(), 0);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

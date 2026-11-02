@@ -29,6 +29,8 @@ export const khoThem = (hinh: KhoHinhMoi) => invoke<string>('kho_hinh_them', { h
 export const khoSua = (id: string, suaDoi: KhoHinhSua) => invoke<void>('kho_hinh_sua', { id, suaDoi });
 /** Xoá vào thùng rác (xoaDi = true) hoặc khôi phục (false). */
 export const khoXoa = (ids: string[], xoaDi: boolean) => invoke<number>('kho_hinh_xoa', { ids, xoaDi });
+/** Ghi kết quả dịch thử khi vẽ ảnh thu nhỏ (ok | loi | chua). */
+export const khoDatTrangThai = (items: { id: string; status: 'ok' | 'loi' | 'chua'; err?: string }[]) => invoke<number>('kho_hinh_dat_trang_thai', { items: items.map((x) => ({ id: x.id, status: x.status, err: x.err ?? '' })) });
 export const khoNutThem = (parent: string | null, name: string) => invoke<string>('kho_hinh_nut_them', { parent, name });
 export const khoNutDoiTen = (id: string, name: string) => invoke<void>('kho_hinh_nut_doi_ten', { id, name });
 export const khoNutChuyen = (id: string, moiCha: string | null) => invoke<void>('kho_hinh_nut_chuyen', { id, moiCha });
