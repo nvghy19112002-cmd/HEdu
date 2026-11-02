@@ -9,6 +9,12 @@ const LETTERS = ['A', 'B', 'C', 'D'];
 const TF = ['a', 'b', 'c', 'd'];
 
 /** Dựng cây từ danh sách mảnh phẳng: dấu mở/đóng khối thành <span class="tx-blk …">. */
+/** Tên khối `tx-mini@24` = khối rộng 24% dòng (minipage); tách phần bề rộng ra style. */
+function blk(cls: string, key: number | string, kids: ReactNode[]): ReactNode {
+  const [name, w] = cls.split('@');
+  return <span key={key} className={`tx-blk ${name}`} style={w ? { width: `calc(${w}% - 3px)` } : undefined}>{kids}</span>;
+}
+
 function build(parts: Part[], defs: string): ReactNode[] {
   const root: ReactNode[] = [];
   const stack: { cls: string; kids: ReactNode[] }[] = [];
@@ -17,13 +23,13 @@ function build(parts: Part[], defs: string): ReactNode[] {
     if (p.kind === 'open') stack.push({ cls: p.cls, kids: [] });
     else if (p.kind === 'close') {
       const top = stack.pop();
-      if (top) cur().push(<span key={i} className={`tx-blk ${top.cls}`}>{top.kids}</span>);
+      if (top) cur().push(blk(top.cls, i, top.kids));
     } else if (p.kind === 'html') cur().push(<span key={i} dangerouslySetInnerHTML={{ __html: p.html }} />);
     else cur().push(<TikzFigure key={i} code={p.code} defs={defs} label={p.label} size={p.size} />);
   });
   while (stack.length) {
     const top = stack.pop()!;
-    cur().push(<span key={`x${stack.length}`} className={`tx-blk ${top.cls}`}>{top.kids}</span>);
+    cur().push(blk(top.cls, `x${stack.length}`, top.kids));
   }
   return root;
 }
