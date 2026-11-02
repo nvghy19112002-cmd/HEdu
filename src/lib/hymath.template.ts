@@ -1635,57 +1635,104 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
  \fi
 }
 ` },
-  { file: "theme-13-sky-panel.tex", name: "Sky Panel", tex: String.raw`% SKY PANEL — khung tiêu đề xanh đậm bo góc, dải đầu trang có nhãn Trang, nhãn A B C D tô đặc.
-% Thiết kế theo ảnh tham khảo của chủ dự án (02/11/2026). Chọn: \ThemeFile = theme-13-sky-panel.tex
+  { file: "theme-13-sky-panel.tex", name: "Sky Panel", tex: String.raw`% SKY PANEL — khung tiêu đề xanh đậm chuyển sắc bo góc, ô thông tin thí sinh có khung mã đề, tiêu đề phần dạng dải màu, nhãn A B C D tô đặc.
+% Thiết kế theo ảnh tham khảo của chủ dự án (02/11/2026), nâng cấp kiểu dáng 02/11/2026 tối. Chọn: \ThemeFile = theme-13-sky-panel.tex
 \definecolor{ThemeBase}{HTML}{1F55A4}
 \definecolor{ThemeSecondary}{HTML}{6C97CF}
 \def\ThemeName{SKY PANEL}
 
-% ---------- Tiêu đề: khung xanh đậm, hai cột (trường | kỳ thi) ----------
+% ---------- Tiêu đề: khung xanh đậm chuyển sắc, hai cột (trường | kỳ thi) cách nhau bằng vạch mảnh ----------
 \newcommand{\HyThemeTitle}{%
- \begin{tcolorbox}[enhanced,colback=PanelFill,colframe=ExamAccent,coltext=PanelInk,
-  arc=2.2mm,boxrule=.9pt,left=5mm,right=5mm,top=3mm,bottom=3mm,
-  before skip=2mm,after skip=2mm]
-  \centering
-  \begin{minipage}[c]{.43\linewidth}\centering
-   {\bfseries\fontsize{11.5}{14.5}\selectfont\MakeUppercase{\SchoolName}\par}
-   \vspace{.8mm}{\fontsize{10.5}{13}\selectfont Năm học \SchoolYear\par}
-   \vspace{1.2mm}{\scshape\fontsize{10}{12}\selectfont Đề chính thức\par}
-  \end{minipage}\hfill
-  \begin{minipage}[c]{.54\linewidth}\centering
-   {\bfseries\fontsize{13}{16}\selectfont\MakeUppercase{\ExamName}\par}
-   \vspace{.8mm}{\bfseries\fontsize{11}{14}\selectfont\SubjectName\par}
-   \vspace{.8mm}{\itshape\fontsize{10}{13}\selectfont Thời gian: \ExamTime\ (không kể thời gian phát đề)\par}
+ \begin{tcolorbox}[hytitle]
+  \begin{minipage}[c]{.40\linewidth}\centering
+   {\bfseries\fontsize{12}{15}\selectfont\MakeUppercase{\SchoolName}\par}
+   \ifx\SchoolYear\empty\else\vspace{1.6mm}{\fontsize{10.5}{13}\selectfont\color{SkyHi}Năm học \SchoolYear\par}\fi
+   \vspace{2.2mm}\tcbox[on line,hypill]{\scshape\fontsize{9.5}{12}\selectfont Đề chính thức}\par
+  \end{minipage}%
+  \hfill{\color{SkyHi!70}\vrule width .5pt height 10mm depth 10mm}\hfill%
+  \begin{minipage}[c]{.52\linewidth}\centering
+   {\bfseries\fontsize{15}{18.5}\selectfont\MakeUppercase{\ExamName}\par}
+   \vspace{1.2mm}{\bfseries\fontsize{12}{15}\selectfont\color{SkyHi}\SubjectName\par}
+   \vspace{1.2mm}{\itshape\fontsize{10}{13}\selectfont Thời gian: \ExamTime\ (không kể thời gian phát đề)\par}
   \end{minipage}
  \end{tcolorbox}}
 
+% ---------- Thông tin thí sinh: một ô nền nhạt, bên phải là khung Mã đề ----------
 \newcommand{\StudentInfo}{%
  \par\noindent
- \begin{minipage}[c]{\dimexpr\linewidth-25mm\relax}
+ \begin{tcolorbox}[hyinfo]
   \fontsize{10.5}{13}\selectfont
-  \textbf{Họ và tên thí sinh:}\,\dotfill\,\textbf{SBD:}\,\makebox[28mm]{\dotfill}%
- \end{minipage}\hfill
- \tcbox[on line,colback=white,colframe=ExamAccent,boxrule=.6pt,arc=1.2mm,
-  left=3pt,right=3pt,top=2pt,bottom=2pt]{\parbox{17mm}{\centering
-  {\scshape\small\color{ExamAccent}Mã đề thi}\\[.2mm]{\bfseries\Large\ifExamColor\color{red!65!black}\else\color{black}\fi\ExamCode}}}%
- \par\vspace{1.5mm}}
+  \textbf{Họ và tên thí sinh:}\,\dotfill\par\vspace{2.6mm}
+  \noindent\textbf{Lớp:}\,\makebox[24mm]{\dotfill}\hfill\textbf{Số báo danh:}\,\makebox[44mm]{\dotfill}\par
+  \tcblower
+  \centering
+  {\sffamily\bfseries\scshape\fontsize{8.5}{10}\selectfont\color{ExamAccent}Mã đề thi\par}\vspace{.8mm}
+  {\sffamily\bfseries\fontsize{24}{26}\selectfont\color{SkyDeep}\ExamCode\par}
+ \end{tcolorbox}}
 
-% ---------- Nhãn đáp án: ô xanh đặc, chữ trắng ----------
+% ---------- Nhãn đáp án: chữ xanh đậm ----------
 \newcommand{\AnswerBadge}[1]{%
  \leavevmode{\bfseries\color{ExamAccent}#1.}}
 
-% ---------- Tiêu đề phần: chữ xanh, sans đậm ----------
+% ---------- Tiêu đề phần: dải màu nhạt, vạch xanh bên trái, nhãn PHẦN + điểm dạng viên thuốc ----------
+\newcommand{\HyPartTag}[1]{\tcbox[on line,hytag]{\sffamily\bfseries\fontsize{9.5}{12}\selectfont #1}}
+\newcommand{\HyPartPts}[1]{\tcbox[on line,hypts]{\sffamily\bfseries\fontsize{9.5}{12}\selectfont #1}}
+% #1 nhãn (PHẦN I), #2 điểm (rỗng nếu không có), #3 tiêu đề, #4 ghi chú (rỗng nếu không có)
+\newcommand{\HyPartBanner}[4]{%
+ \par\addvspace{3mm}\needspace{6\baselineskip}%
+ \begin{tcolorbox}[hypart]
+  \noindent\HyPartTag{#1}\hspace{2.6mm}%
+  {\sffamily\bfseries\fontsize{11.5}{14.5}\selectfont\color{SkyDeep}#3}%
+  \ifx\relax#2\relax\else\hfill\HyPartPts{#2}\fi\par
+  \ifx\relax#4\relax\else\vspace{1mm}{\fontsize{9.8}{12.4}\selectfont\itshape\color{black!72}#4}\par\fi
+ \end{tcolorbox}\par\vspace{1.2mm}}
 \newcommand{\HyThemePart}[1]{%
  \par{\bfseries\fontsize{11.5}{14}\selectfont\color{ExamAccent}#1\par}\vspace{.6mm}}
 \newcommand{\HyStyledHeading}[1]{{\color{ExamAccent}\HyOriginalTextbf{#1}}}
 \ExplSyntaxOn
 \NewCommandCopy{\HyOriginalTextbf}{\textbf}
+\tl_new:N \l_hy_i_tl
+\tl_new:N \l_hy_p_tl
+\tl_new:N \l_hy_t_tl
+\tl_new:N \l_hy_n_tl
+\seq_new:N \l_hy_parts_seq
+% Tách "PHẦN I. (3,0 điểm) Tiêu đề. Ghi chú…" thành nhãn / điểm / tiêu đề / ghi chú; không tách được thì giữ kiểu chữ xanh đậm cũ.
+\cs_new_protected:Npn \hy_part:n #1
+ {
+  \tl_set:Nn \l_tmpb_tl {#1}
+  \regex_extract_once:nVNTF
+   { \A\s*(?:PHẦN|Phần|phần)\s+([IVX]+)\b\s*[.:]?\s*(?:\(([^\)]*)\))?\s*([^.\s].*?\.)\s+(.+)\Z }
+   \l_tmpb_tl \l_hy_parts_seq
+   { \hy_banner: }
+   {
+    \regex_extract_once:nVNTF
+     { \A\s*(?:PHẦN|Phần|phần)\s+([IVX]+)\b\s*[.:]?\s*(?:\(([^\)]*)\))?\s*(.+)\Z }
+     \l_tmpb_tl \l_hy_parts_seq
+     {
+      \seq_put_right:Nn \l_hy_parts_seq {}
+      \hy_banner:
+     }
+     { \HyStyledHeading{#1} }
+   }
+ }
+\cs_new_protected:Npn \hy_do:nnnn #1#2#3#4 { \HyPartBanner {#1}{#2}{#3}{#4} }
+\cs_generate_variant:Nn \hy_do:nnnn { VVVV }
+\cs_new_protected:Npn \hy_banner:
+ {
+  \seq_pop_left:NN \l_hy_parts_seq \l_tmpa_tl
+  \seq_pop_left:NN \l_hy_parts_seq \l_hy_i_tl
+  \seq_pop_left:NN \l_hy_parts_seq \l_hy_p_tl
+  \seq_pop_left:NN \l_hy_parts_seq \l_hy_t_tl
+  \seq_pop_left:NN \l_hy_parts_seq \l_hy_n_tl
+  \tl_put_left:Nn \l_hy_i_tl { PHẦN~ }
+  \hy_do:VVVV \l_hy_i_tl \l_hy_p_tl \l_hy_t_tl \l_hy_n_tl
+ }
 \cs_new_protected:Npn \HyPartAwareBold #1
  {
   \group_begin:
   \tl_set:Nx \l_tmpa_tl {\tl_to_str:n {#1}}
   \regex_match:nVTF {\A\s*(PHẦN|Phần|phần)\s+[IVX]+} \l_tmpa_tl
-   {\HyStyledHeading{#1}}
+   {\hy_part:n {#1}}
    {\HyOriginalTextbf{#1}}
   \group_end:
  }
@@ -1696,7 +1743,7 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
 \newcommand{\HySlashes}{\tikz[x=1mm,y=1mm,baseline=-.8mm]{%
  \foreach \i in {0,1,2}{\fill[ExamAccent,opacity={1-.28*\i}] (\i*4.2,-2.5)--(\i*4.2+2.6,-2.5)--(\i*4.2+4.6,2.5)--(\i*4.2+2,2.5)--cycle;}}}
 \newcommand{\HyThemePageStyle}{%
- \setlength{\headheight}{26pt}
+ \setlength{\headheight}{28pt}
  \pagestyle{fancy}\fancyhf{}
  \renewcommand{\headrulewidth}{.7pt}\renewcommand{\footrulewidth}{.7pt}
  \renewcommand{\headrule}{\hbox to\headwidth{\color{ExamAccent!55}\leaders\hrule height .7pt\hfill}}
@@ -1712,11 +1759,34 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
   \hspace{3mm}\color{ExamAccent!40}\rule{.3\linewidth}{.5pt}}}
 
 \AtBeginDocument{%
+ % Màu và kiểu khung dùng cho tiêu đề, ô thông tin, tiêu đề phần (bản in trắng đen: khung đen, nền trắng).
+ \ifExamColor
+  \definecolor{SkyDeep}{HTML}{0F2F66}\definecolor{SkyHi}{HTML}{BFDBFE}
+  \tcbset{
+   hytitle/.style={enhanced,interior style={left color=SkyDeep,right color=ExamAccent},frame hidden,boxrule=0pt,arc=3mm,
+    left=6mm,right=6mm,top=4.4mm,bottom=4.4mm,before skip=2mm,after skip=3.5mm,coltext=white,
+    overlay={\fill[SkyHi!85] ([xshift=7mm]frame.north west) rectangle ++(20mm,-1.2mm);}},
+   hypill/.style={colback=white!16!SkyDeep,colframe=SkyHi!75,boxrule=.5pt,arc=1.4mm,left=7pt,right=7pt,top=2pt,bottom=2pt,coltext=white}}
+ \else
+  \colorlet{SkyDeep}{black}\colorlet{SkyHi}{black}
+  \tcbset{
+   hytitle/.style={enhanced,colback=white,colframe=black,boxrule=.9pt,arc=3mm,
+    left=6mm,right=6mm,top=4.4mm,bottom=4.4mm,before skip=2mm,after skip=3.5mm,coltext=black},
+   hypill/.style={colback=white,colframe=black!70,boxrule=.5pt,arc=1.4mm,left=7pt,right=7pt,top=2pt,bottom=2pt,coltext=black}}
+ \fi
+ \tcbset{
+  hyinfo/.style={enhanced,sidebyside,lefthand width=\dimexpr\linewidth-36mm\relax,sidebyside align=center,sidebyside gap=4mm,
+   segmentation style={solid,ExamAccent!45,line width=.5pt},colback=ExamLight,colframe=ExamAccent!40,boxrule=.5pt,arc=2.2mm,
+   left=4.5mm,right=2mm,top=2.4mm,bottom=2.4mm,before skip=0mm,after skip=3.5mm},
+  hypart/.style={enhanced,colback=ExamLight,colframe=ExamAccent,boxrule=0pt,leftrule=1.8mm,arc=1.4mm,
+   left=3mm,right=3mm,top=2mm,bottom=2mm,before skip=0mm,after skip=0mm},
+  hytag/.style={colback=ExamAccent,colframe=ExamAccent,boxrule=0pt,arc=1.3mm,left=6pt,right=6pt,top=2.2pt,bottom=2.2pt,coltext=white},
+  hypts/.style={colback=white,colframe=ExamAccent!60,boxrule=.5pt,arc=1.3mm,left=6pt,right=6pt,top=2pt,bottom=2pt,coltext=ExamAccent}}%
  \setmainfont{texgyretermes}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]%
  \setsansfont{texgyreheros}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]%
  \setmathfont{texgyretermes-math.otf}%
  \settowidth{\widthalpha}{\AnswerBadge{D}}\addtolength{\widthalpha}{2pt}%
- % Một họ chữ (serif) cho nhãn Câu và hàng tiêu đề bảng đúng/sai; sans chỉ còn ở nhãn A B C D và đầu/chân trang.
+ % Một họ chữ (serif) cho nhãn Câu và hàng tiêu đề bảng đúng/sai; sans chỉ còn ở nhãn A B C D, tiêu đề phần và đầu/chân trang.
  \renewtheorem{ex}{\bfseries\color{ExamAccent}Câu}%
  \AtBeginEnvironment{longtable}{%
   \renewcommand{\phatbieu}{\cellcolor{PanelFill}\textcolor{PanelInk}{\bfseries Mệnh đề}}%
