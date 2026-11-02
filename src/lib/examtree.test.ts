@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { catOfType, examCounts, examTrail, examTree, filterByNode, nodeTrail, placementOf, CAT_LABEL } from './examtree';
+import { catOfType, examCounts, examTrail, examTree, filterByNode, movePatch, nodeTrail, placementOf, CAT_LABEL } from './examtree';
 import { buildDefault } from './taxonomy';
 import type { ExamSummary } from './examlib';
 
@@ -82,5 +82,18 @@ t('vị trí chữ của một đề', () => {
   assert.deepEqual(examTrail(L[0], tax), [g12.name, 'Đề kiểm tra', 'Giữa kỳ 1']);
   assert.deepEqual(examTrail(L[3], tax), [g12.name, 'Ôn tập theo bài học', ch.name, ls.name]);
   assert.deepEqual(examTrail(L[7], tax), []);
+});
+t('kéo đề vào mục của cây: chỉ ghi phần đổi, đề đã ở đó thì bỏ qua', () => {
+  const gk1 = L[0], ck2 = L[1];
+  assert.deepEqual(movePatch(gk1, 'g:12/kt/ck1'), { grade: 12, examType: 'Cuối kỳ 1', chapterId: null, lessonId: null });
+  assert.equal(movePatch(gk1, 'g:12/kt/gk1'), null, 'đã ở đó');
+  assert.deepEqual(movePatch(gk1, 'g:11/kt/gk1'), { grade: 11, examType: 'Giữa kỳ 1', chapterId: null, lessonId: null }, 'đổi lớp');
+  assert.equal(movePatch(gk1, 'g:12'), null, 'nút lớp: cùng lớp thì không đổi');
+  assert.deepEqual(movePatch(gk1, 'g:11'), { grade: 11, chapterId: null, lessonId: null }, 'nút lớp khác: chỉ đổi lớp, xoá chương/bài cũ');
+  assert.deepEqual(movePatch(gk1, 'f:Trường A'), { folder: 'Trường A' }, 'thư mục riêng chỉ đổi thư mục');
+  assert.equal(movePatch(ck2, 'f:Trường A/2026'), null, 'đã trong thư mục');
+  assert.deepEqual(movePatch(gk1, `g:12/bai/c:${ch.id}/l:${ls.id}`), { grade: 12, examType: 'Ôn tập theo bài', chapterId: ch.id, lessonId: ls.id });
+  assert.deepEqual(movePatch(gk1, `g:12/bai/c:${ch.id}`), { grade: 12, examType: 'Ôn tập theo chương', chapterId: ch.id, lessonId: null });
+  for (const k of ['f', 'none', null]) assert.equal(movePatch(gk1, k), null, `nút không nhận đề: ${k}`);
 });
 console.log('examtree: đạt hết.');

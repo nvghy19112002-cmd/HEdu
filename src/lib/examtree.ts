@@ -148,6 +148,29 @@ export function placementOf(key: string | null): Placement | null {
   return p;
 }
 
+/** Thay đổi cần ghi khi kéo một đề vào nút của cây. */
+export interface MovePatch { grade?: number; examType?: string | null; chapterId?: string | null; lessonId?: string | null; folder?: string | null }
+/**
+ * Kéo đề vào nút `key`: thư mục riêng chỉ đổi thư mục; nút lớp/loại/chương/bài đổi lớp, loại, chương, bài (thư mục giữ nguyên).
+ * Nút lớp hoặc nhóm (không có loại cụ thể) chỉ đổi lớp. null nếu nút không nhận đề ("Tất cả", "Thư mục riêng", "Chưa xếp lớp") hoặc đề đã ở đó.
+ */
+export function movePatch(e: ExamSummary, key: string | null): MovePatch | null {
+  if (!key) return null;
+  const m = e.metadata;
+  let p: MovePatch;
+  if (key.startsWith('f:')) p = { folder: key.slice(2) };
+  else {
+    const pl = placementOf(key);
+    if (!pl || pl.grade === null) return null;
+    p = { grade: pl.grade };
+    if (pl.examType) { p.examType = pl.examType; p.chapterId = pl.chapterId; p.lessonId = pl.lessonId; }
+    else if ((m.grade ?? null) !== pl.grade) { p.chapterId = null; p.lessonId = null; }
+  }
+  const cur: Required<MovePatch> = { grade: m.grade ?? (null as unknown as number), examType: m.examType ?? null, chapterId: m.chapterId ?? null, lessonId: m.lessonId ?? null, folder: e.folder ?? null };
+  const same = (Object.keys(p) as (keyof MovePatch)[]).every((k) => (p[k] ?? null) === (cur[k] ?? null));
+  return same ? null : p;
+}
+
 /** Đường dẫn chữ của một nút (dùng cho tiêu đề danh sách): "Lớp 12 › Đề kiểm tra › Giữa kỳ 1". */
 export function nodeTrail(tree: readonly ExamNode[], key: string | null): string[] {
   if (!key) return [];
