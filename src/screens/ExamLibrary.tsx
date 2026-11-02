@@ -31,6 +31,10 @@ const nf = new Intl.NumberFormat('vi-VN');
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const STATUSES: ExamStatus[] = ['draft', 'needs_review', 'finalized'];
 const PER_PAGE = 24;
+const PER_PAGE_LIST = 50;
+const VIEW_KEY = 'hedu.examview';
+type View = 'card' | 'list';
+const loadView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'card'; } catch { return 'card'; } };
 /** màu thẻ theo nhóm loại đề */
 const catTone = (c: ExamCat | null): string => (c === 'gk1' || c === 'gk2' ? 'gk' : c === 'ck1' || c === 'ck2' ? 'ck' : c === 'thi-thu' ? 'tt' : c === 'on-bai' || c === 'on-chuong' || c === 'on-tap' ? 'ot' : c === 'kt-khac' ? 'kt' : 'na');
 /** nhóm trung gian và tên loại (đã có ở nhãn màu) không lặp lại ở dòng vị trí của thẻ */
@@ -71,6 +75,10 @@ export function ExamLibraryScreen() {
   const [status, setStatus] = useState<ExamStatus | null>(null);
   const [year, setYear] = useState<string | null>(null);
   const [sort, setSort] = useState<ExamSort>('updated');
+  /** kiểu xem: thẻ hoặc danh sách (nhớ theo máy) */
+  const [view, setViewState] = useState<View>(loadView);
+  const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* không nhớ được thì thôi */ } };
+  const perPage = view === 'list' ? PER_PAGE_LIST : PER_PAGE;
   const [page, setPage] = useState(0);
   const [menu, setMenu] = useState<null | 'add' | 'tools' | 'filter'>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -164,10 +172,10 @@ export function ExamLibraryScreen() {
   const list = useMemo(() => sortExams(status ? inNode.filter((e) => e.status === status) : inNode, sort), [inNode, status, sort]);
   const years = useMemo(() => [...new Set(items.map((e) => e.metadata.schoolYear).filter((y): y is string => !!y))].sort().reverse(), [items]);
   const folders = useMemo(() => allFolders(items), [items]);
-  const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
+  const pages = Math.max(1, Math.ceil(list.length / perPage));
   const cur = Math.min(page, pages - 1);
-  const shown = list.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
-  useEffect(() => { setPage(0); }, [node, text, status, year, sort]);
+  const shown = list.slice(cur * perPage, cur * perPage + perPage);
+  useEffect(() => { setPage(0); }, [node, text, status, year, sort, view]);
   const trail = nodeTrail(examTree(tax, counts, base, true), node);
   const place = placementOf(node);
   const nFilters = (status ? 1 : 0) + (year ? 1 : 0);
@@ -299,15 +307,37 @@ export function ExamLibraryScreen() {
   }, [desktop, toast]);
   const clearAll = () => { setText(''); setStatus(null); setYear(null); setNode(null); };
 
+  /** thao tác chung của thẻ và hàng danh sách: bấm mở tab, chuột phải/phím menu, Space xem nhanh */
+  const itemProps = (e: ExamSummary) => ({
+    onClick: () => openDoc(e),
+    onContextMenu: (ev: React.MouseEvent) => { ev.preventDefault(); setCtx({ e, x: ev.clientX, y: ev.clientY }); },
+    onKeyDown: (ev: React.KeyboardEvent<HTMLElement>) => { if (ev.key === ' ') { ev.preventDefault(); quickLook(e); } else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setCtx({ e, x: r.left + 24, y: r.top + 24 }); } },
+    title: `Bấm để mở đề thành một tab. Chuột phải: thao tác khác · Space: xem nhanh PDF${tabs.ids.includes(e.id) ? ' · Đề này đang mở' : ''}`,
+  });
+  /** một hàng của chế độ Danh sách */
+  const row = (e: ExamSummary) => {
+    const c = catOfType(e.metadata.examType);
+    const at = examTrail(e, tax).filter((x) => !HIDE_IN_WHERE.has(x));
+    const warn = (e.warningCount > 0 ? e.warningCount : 0) + (!e.mainFile ? 1 : 0);
+    return (
+      <button key={e.id} type="button" className={`xr tone-${catTone(c)}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
+        <span className="xr-name">{tabs.ids.includes(e.id) && <span className="xc-open" title="Đang mở ở một tab">● </span>}{e.name}{warn > 0 && <span className="xr-warn" title={!e.mainFile ? 'Chưa chọn tệp chính' : `${e.warningCount} cảnh báo`}> ⚠</span>}</span>
+        <span className="xr-type"><span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span></span>
+        <span className="xr-where">{at.length ? at.join(' › ') : 'Chưa xếp lớp'}{e.folder ? ` · 📁 ${e.folder}` : ''}</span>
+        <span className="xr-st"><span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span></span>
+        <span className="xr-num" title="Năm học">{e.metadata.schoolYear ?? ''}</span>
+        <span className="xr-num" title={`${e.fileCount} tệp · ${formatBytes(e.totalBytes)}`}>{qn.get(e.id) ? `${qn.get(e.id)} câu` : e.fileCount > 1 ? `${e.fileCount} tệp` : 'Soạn tay'}</span>
+        <span className="xr-num" title={dateText(e.updatedAt)}>{dateText(e.updatedAt).split(' ')[0]}</span>
+      </button>
+    );
+  };
+
   const card = (e: ExamSummary) => {
     const c = catOfType(e.metadata.examType);
     const at = examTrail(e, tax);
     const flags = [!e.mainFile && 'Chưa chọn tệp chính', e.skippedCount > 0 && `${e.skippedCount} mục không chép`, e.warningCount > 0 && `${e.warningCount} cảnh báo`].filter(Boolean) as string[];
     return (
-      <button key={e.id} type="button" className={`xc tone-${catTone(c)}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} onClick={() => openDoc(e)}
-        onContextMenu={(ev) => { ev.preventDefault(); setCtx({ e, x: ev.clientX, y: ev.clientY }); }}
-        onKeyDown={(ev) => { if (ev.key === ' ') { ev.preventDefault(); quickLook(e); } else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setCtx({ e, x: r.left + 24, y: r.top + 24 }); } }}
-        title={`Bấm để mở đề thành một tab. Chuột phải: thao tác khác · Space: xem nhanh PDF${tabs.ids.includes(e.id) ? ' · Đề này đang mở' : ''}`}>
+      <button key={e.id} type="button" className={`xc tone-${catTone(c)}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
         <span className="xc-top">
           <span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span>
           <span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span>
@@ -420,6 +450,10 @@ export function ExamLibraryScreen() {
                 {(Object.keys(SORT_LABEL) as ExamSort[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
               </select>
             </label>
+            <span className="xl-seg" role="group" aria-label="Kiểu xem">
+              <button type="button" className={view === 'card' ? 'on' : ''} aria-pressed={view === 'card'} onClick={() => setView('card')}>Thẻ</button>
+              <button type="button" className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
+            </span>
           </div>
 
           <div className="xl-crumb">
@@ -460,7 +494,13 @@ export function ExamLibraryScreen() {
               {(nFilters > 0 || !!text) && <button type="button" className="btn btn-sm" onClick={clearAll}>Xoá bộ lọc</button>}
             </div>
           )}
-          {shown.length > 0 && <div className="xc-grid">{shown.map(card)}</div>}
+          {shown.length > 0 && view === 'card' && <div className="xc-grid">{shown.map(card)}</div>}
+          {shown.length > 0 && view === 'list' && (
+            <div className="xr-list" role="list" aria-label="Danh sách đề">
+              <div className="xr-head" aria-hidden="true"><span>Tên đề</span><span>Loại</span><span>Vị trí</span><span>Trạng thái</span><span>Năm học</span><span>Nội dung</span><span>Sửa</span></div>
+              {shown.map(row)}
+            </div>
+          )}
           {pages > 1 && (
             <nav className="pager" aria-label="Phân trang">
               <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => setPage(cur - 1)}>‹ Trước</button>
