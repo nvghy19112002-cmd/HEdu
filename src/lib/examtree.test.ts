@@ -46,20 +46,21 @@ t('đề về đúng nút; nút cha đếm cả nút con', () => {
   assert.equal(counts.get('g:12'), 5);
   assert.equal(ids(null).length, L.length);
 });
-t('cây: nhóm cố định luôn có, chương/bài chỉ hiện khi có đề', () => {
+t('cây: mặc định chỉ hiện mục có đề; bật hiện mục trống thì có đủ nhóm cố định', () => {
   const tree = examTree(tax, counts, L);
   const t12 = tree.find((x) => x.key === 'g:12')!;
-  assert.deepEqual(t12.children.map((x) => x.label), ['Ôn tập theo bài học', 'Đề kiểm tra', 'Đề ôn tập', 'Đề thi thử']);
-  assert.deepEqual(t12.children[1].children.map((x) => [x.label, x.count]), [['Giữa kỳ 1', 1], ['Cuối kỳ 1', 0], ['Giữa kỳ 2', 0], ['Cuối kỳ 2', 1]]);
+  assert.deepEqual(t12.children.map((x) => x.label), ['Ôn tập theo bài học', 'Đề kiểm tra', 'Đề thi thử']);
+  assert.deepEqual(t12.children[1].children.map((x) => [x.label, x.count]), [['Giữa kỳ 1', 1], ['Cuối kỳ 2', 1]]);
   assert.deepEqual(t12.children[0].children.map((x) => x.key), [`g:12/bai/c:${ch.id}`]);
   assert.equal(t12.children[0].children[0].children.length, 1);
-  const t11 = tree.find((x) => x.key === 'g:11')!;
-  assert.ok(!t11.children.some((x) => x.label === 'Đề thi thử'), 'thi thử chỉ cố định ở lớp 12');
-  assert.ok(t11.children.some((x) => x.label === 'Chưa phân loại'));
+  const t11 = tree.find((x) => x.key === 'g:11');
+  assert.ok(!t11 || t11.children.every((x) => x.count > 0), 'lớp không có đề: ẩn mục trống');
   assert.deepEqual(tree.find((x) => x.key === 'f')!.children.map((x) => [x.label, x.children.map((y) => y.label)]), [['Trường A', ['2026']]]);
   assert.equal(tree.at(-1)!.key, 'none');
   const all = examTree(tax, counts, L, true).find((x) => x.key === 'g:12')!;
   assert.equal(all.children[0].children.length, g12.branches.flatMap((b) => b.chapters).length, 'hiện cả mục trống');
+  assert.deepEqual(all.children[1].children.map((x) => x.label), ['Giữa kỳ 1', 'Cuối kỳ 1', 'Giữa kỳ 2', 'Cuối kỳ 2', 'Kiểm tra khác'].filter((l) => l !== 'Kiểm tra khác' || all.children[1].children.some((x) => x.label === l)), 'đủ GK1–CK2 khi hiện mục trống');
+  assert.ok(all.children.some((x) => x.label === 'Đề ôn tập'), 'nhóm Đề ôn tập có khi hiện mục trống');
   assert.deepEqual(nodeTrail(tree, 'g:12/kt/gk1'), [g12.name, 'Đề kiểm tra', 'Giữa kỳ 1']);
 });
 t('tạo đề trong một nút: điền sẵn lớp, loại, chương, bài, thư mục', () => {

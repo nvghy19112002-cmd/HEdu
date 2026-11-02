@@ -87,10 +87,10 @@ export function filterByNode(list: readonly ExamSummary[], key: string | null, t
   return list.filter((e) => examKeys(e, ix).includes(key));
 }
 
-/** Dựng cây đầy đủ. Nhóm cố định (Đề kiểm tra GK1…CK2, Đề ôn tập, Thi thử lớp 12) luôn có; chương/bài chỉ hiện khi có đề, trừ khi showEmpty. */
+/** Dựng cây đầy đủ. Chỉ hiện mục đã có đề (kể cả nhóm cố định như Đề kiểm tra GK1…CK2); showEmpty hiện cả mục chưa có đề để chọn tạo đề vào đó. */
 export function examTree(tax: Taxonomy, counts: ReadonlyMap<string, number>, list: readonly ExamSummary[], showEmpty = false): ExamNode[] {
   const n = (k: string) => counts.get(k) ?? 0;
-  const keep = (x: ExamNode) => x.fixed || x.count > 0 || showEmpty;
+  const keep = (x: ExamNode) => x.count > 0 || showEmpty;
   const grades = new Set<number>(tax.grades.map((g) => g.grade));
   for (const k of counts.keys()) { const m = /^g:(\d+)$/.exec(k); if (m) grades.add(+m[1]); }
   const out: ExamNode[] = [];

@@ -19,7 +19,7 @@ import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usage
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
-import { loadThemeId, themeFiles, themeStamp } from '../lib/examtheme';
+import { HEDU_THEME_ID, themeFiles, themeStamp } from '../lib/examtheme';
 import { invoke, isDesktop } from '../lib/platform';
 import { stemSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
@@ -237,7 +237,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
       const fresh = buildIndex((await scanUsage()).projects, d.usage);
       if (usageSig(fresh, d.reuse) !== usageSig(idx, d.reuse)) { usage.refresh(); throw new Error('Thư viện đề đã thay đổi kể từ lần quét trước nên danh sách câu đã dùng được làm mới. Hãy xem lại đề rồi lưu lại'); }
     }
-    const theme = loadThemeId(); // mẫu in chọn ở Cài đặt › Đề thi
+    const theme = HEDU_THEME_ID; // đề tạo từ Ngân hàng có \documentclass riêng: luôn bộ khai báo HEdu (mẫu HyMath áp cho tệp chỉ có dữ liệu)
     const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
     const fileHashes = await sourceHashes(tex);
     return [

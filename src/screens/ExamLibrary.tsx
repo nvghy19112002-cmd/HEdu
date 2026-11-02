@@ -260,6 +260,13 @@ export function ExamLibraryScreen() {
       if (m) setPeek({ id: e.id, name: e.name, mode: m.mode as ExamMode }); else toast('Đề này chưa có PDF. Mở đề rồi bấm “Biên dịch PDF”.');
     }).catch((err) => toast(msg(err)));
   };
+  /** đặt tay "Cần rà soát" / bỏ dấu (đề đã chốt thì không đổi ở đây; chốt đề làm trong hộp Thông tin có xác nhận) */
+  const markStatus = (e: ExamSummary, status: ExamStatus) => run(async () => {
+    const m = e.metadata;
+    await examMetaUpdate(e.id, { name: e.name, folder: e.folder ?? null, grade: m.grade ?? null, schoolYear: m.schoolYear ?? null, examType: m.examType ?? null, tags: m.tags ?? [], status, chapterId: m.chapterId ?? null, lessonId: m.lessonId ?? null });
+    await reload();
+    toast(status === 'needs_review' ? `Đã đánh dấu “${e.name}” cần rà soát.` : `Đã bỏ dấu cần rà soát của “${e.name}”.`);
+  });
   const reveal = (id: string) => void examReveal(id).catch((err) => toast(msg(err)));
   // menu chuột phải: bấm ra ngoài / Esc / cuộn thì đóng
   useEffect(() => {
@@ -308,9 +315,9 @@ export function ExamLibraryScreen() {
         <span className="xc-name">{tabs.ids.includes(e.id) && <span className="xc-open" title="Đang mở ở một tab">● </span>}{e.name}</span>
         <span className="xc-where">{at.length ? at.filter((x) => !HIDE_IN_WHERE.has(x)).join(' › ') : 'Chưa xếp lớp'}{e.folder ? ` · 📁 ${e.folder}` : ''}</span>
         <span className="xc-foot">
-          <span title="Năm học">{e.metadata.schoolYear ?? '—'}</span>
-          <span title={`${e.fileCount} tệp · ${formatBytes(e.totalBytes)}`}>{qn.get(e.id) ? `${qn.get(e.id)} câu` : e.fileCount > 1 ? `${e.fileCount} tệp` : 'Đề soạn tay'}</span>
-          <span>Sửa {dateText(e.updatedAt).split(' ')[0]}</span>
+          {e.metadata.schoolYear && <span title="Năm học">{e.metadata.schoolYear}</span>}
+          <span title={`${e.fileCount} tệp · ${formatBytes(e.totalBytes)}`}>{qn.get(e.id) ? `${qn.get(e.id)} câu` : e.fileCount > 1 ? `${e.fileCount} tệp` : 'Soạn tay'}</span>
+          <span title={dateText(e.updatedAt)}>Sửa {dateText(e.updatedAt).split(' ')[0]}</span>
         </span>
         {flags.length > 0 && <span className="xc-flag">⚠ {flags.join(' · ')}</span>}
       </button>
@@ -552,7 +559,7 @@ export function ExamLibraryScreen() {
       {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} mode={viewing} note={MODE_NOTE[viewing]} onClose={() => setViewing(null)} />}
       {exportingCodes && activeId && detail && <ExamExportDialog id={activeId} name={detail.name} onToast={toast} onClose={() => setExportingCodes(false)} />}
       {docTabs.map((e) => (
-        <ExamWorkspace key={e.id} ref={(h) => { if (h) wsRefs.current.set(e.id, h); else wsRefs.current.delete(e.id); }} id={e.id} name={e.name} mainFile={e.mainFile}
+        <ExamWorkspace key={e.id} ref={(h) => { if (h) wsRefs.current.set(e.id, h); else wsRefs.current.delete(e.id); }} id={e.id} name={e.name} mainFile={e.mainFile} schoolYear={e.metadata.schoolYear}
           hidden={tabs.front !== e.id} onStatus={onTabStatus}
           onLibrary={() => setTabs((t) => ({ ...t, front: null }))}
           onInfo={() => { infoFrom.current = e.id; setTabs((t) => ({ ...t, front: null })); setActiveId(e.id); }}
@@ -562,10 +569,12 @@ export function ExamLibraryScreen() {
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}
       {peek && <PdfViewer id={peek.id} title={peek.name} stale={false} mode={peek.mode} note={`Xem nhanh: ${modeLabel(peek.mode)}. ${MODE_NOTE[peek.mode]}`} onClose={() => setPeek(null)} />}
       {ctx && (
-        <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 370) }}>
+        <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 410) }}>
           <button type="button" role="menuitem" autoFocus onClick={() => { setCtx(null); openDoc(ctx.e); }}><b>Mở đề</b><small>{tabs.ids.includes(ctx.e.id) ? 'Đang mở: chuyển sang tab của đề' : 'Biên tập, biên dịch trong một tab'}</small></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); quickLook(ctx.e); }}><b>Xem nhanh PDF</b><small>Phím Space</small></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); infoFrom.current = null; setActiveId(ctx.e.id); }}><b>Thông tin…</b><small>Tên, lớp, loại đề, chốt đề, tệp</small></button>
+          {ctx.e.status === 'draft' && <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void markStatus(ctx.e, 'needs_review'); }}><b>Đánh dấu cần rà soát</b></button>}
+          {ctx.e.status === 'needs_review' && <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void markStatus(ctx.e, 'draft'); }}><b>Bỏ dấu cần rà soát</b><small>Trở về đang soạn</small></button>}
           <hr />
           <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); duplicate(ctx.e.id); }}><b>Sao chép thành đề mới</b></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); reveal(ctx.e.id); }}><b>Hiện trong Explorer</b></button>
