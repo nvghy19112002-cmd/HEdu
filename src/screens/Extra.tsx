@@ -643,6 +643,7 @@ export function ImportScreen() {
             <div className="chk-sum">
               {checking && <span className="chk-pill">Đang kiểm tra {done}/{rows.length}…</span>}
               {!checking && <span className={`chk-pill${nErr ? ' bad' : ' ok'}`}>{nErr ? `${nErr} câu lỗi xem trước` : 'Không câu nào lỗi xem trước'}</span>}
+              {!checking && nErr > 0 && (() => { const soft = issues.filter((x, k) => x && worstLevel(x) === 'loi' && tex[k]?.ok === true).length; return soft > 0 ? <span className="chk-pill ok" title="Biên dịch thử bằng TeX Live đã dịch được các câu này; chỉ bản xem trước nhanh chưa dựng được.">{soft} câu trong số đó TeX Live vẫn dịch được</span> : null; })()}
               {nWarn > 0 && <span className="chk-pill warn">{nWarn} câu cần xem lại</span>}
               {nFig > 0 && <span className="chk-pill">{nFig} câu có hình TikZ</span>}
               {(nErr > 0 || nWarn > 0) && (
@@ -725,7 +726,7 @@ export function ImportScreen() {
             )}
             <ol className="chk-list">
               {shownRows.slice(0, limit).map(({ r, i }) => (
-                <li key={i} className={`chk-row l-${worstOf(i) ?? 'sach'} dec-${decOf(i)}`}>
+                <li key={i} className={`chk-row l-${(worstOf(i) === 'loi' && tex[i]?.ok === true ? 'canh' : worstOf(i)) ?? 'sach'} dec-${decOf(i)}`}>
                   <div className="chk-line">
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
                     <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của ${multi ? `tệp ${r.file}` : 'file'}`}>{i + 1}</span>{multi && <span className="chk-tag tin" title={r.rel ? `${r.rel}/${r.file}` : r.file}>{r.file}</span>}
@@ -736,7 +737,12 @@ export function ImportScreen() {
                     {anaDone && statusOf(i).key !== 'new' && <span className={`chk-tag dup d-${statusOf(i).key}`}>{statusOf(i).label}{(ana!.rows[i]?.hits.length ?? 0) > 0 ? ` · ${ana!.rows[i]!.hits.length}` : ''}</span>}
                     {edits[i] != null && <span className="chk-tag tin">đã sửa tại chỗ</span>}
                     {tex[i] && <span className={`chk-tag ${tex[i].ok ? 'tin' : 'loi'}`}>{tex[i].ok ? 'TeX đạt' : `TeX: ${(tex[i] as { fail: Failure }).fail.label}`}</span>}
-                    {worstOf(i) && <span className={`chk-tag ${worstOf(i)}`}>{worstOf(i) === 'tin' ? 'có hình' : LEVEL_TEXT[worstOf(i)!]}</span>}
+                    {worstOf(i) && (() => {
+                      // xem trước báo lỗi nhưng TeX Live đã biên dịch được: chỉ bản xem trước nhanh của HEdu chưa dựng được ⇒ nhãn vàng, không đỏ
+                      const soft = worstOf(i) === 'loi' && tex[i]?.ok === true;
+                      const lv = soft ? 'canh' : worstOf(i)!;
+                      return <span className={`chk-tag ${lv}`} title={soft ? 'TeX Live biên dịch được câu này; chỉ bản xem trước nhanh của HEdu chưa dựng được. Nhập vẫn an toàn.' : undefined}>{lv === 'tin' ? 'có hình' : soft ? 'Xem trước chưa dựng được' : LEVEL_TEXT[lv]}</span>;
+                    })()}
                   </button>
                   {verifOf(i)?.verdict === 'bat-dong' && fromIdOf(i) && (
                     <>

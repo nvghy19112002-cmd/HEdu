@@ -1,3 +1,17 @@
+## Có gì mới trong beta.55 (kênh beta): Kho hình TikZ, mẫu Sky Panel đẹp hơn, sửa lỗi xem trước khi nhập
+Gồm PR #217, #218, #219, #220 (so với beta.54). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, dịch thật bằng TeX Live và chạy thử trên app Tauri với kho 19.853 hình; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Kho hình TikZ (mới):** mục **Kho hình** ở thanh bên. Cài đặt › Dữ liệu và sao lưu › **Kho hình TikZ** có nút nạp kho hình MathHub (tệp .db) một lần, chạy nền có thanh tiến độ; tệp gốc chỉ được đọc. Kho lưu ở tệp riêng của HEdu, tách khỏi ngân hàng câu hỏi, chỉ nằm trên máy này (không đóng vào bản cài).
+  - Cây Lớp › Chương › Bài có số hình, ô tìm không cần gõ dấu, lọc theo loại hình (bảng biến thiên, đồ thị, hình học, không gian), lớp, trạng thái dịch.
+  - Ảnh thu nhỏ chỉ vẽ khi cuộn tới (tối đa 2 hình dịch cùng lúc); hình dịch rồi được nhớ nên lần sau không dịch lại.
+  - Bấm một hình để xem mã, vẽ thử, sao chép mã, sửa tên/chủ đề/lớp/loại/mục. **Thêm hình** của riêng bạn. **Xoá vào thùng rác** của kho, khôi phục được. Thêm, đổi tên, xoá mục. Nạp lại nhiều lần không ghi đè hình đã sửa hay làm sống lại hình đã xoá.
+  - Chưa có: chèn hình vào câu hỏi và Xử lí TeX, quét nền cả kho (các bước sau).
+- **Mẫu in Sky Panel đẹp hơn:** khung tiêu đề xanh đậm chuyển sắc, ô thông tin thí sinh có khung **Mã đề thi** lớn, tiêu đề phần là dải màu có nhãn PHẦN và viên điểm. Bản in trắng đen vẫn rõ nét.
+- **Sửa: xem trước báo "Công thức không dịch được" sai** ở màn Kiểm tra trước khi nhập, với những dòng như `\\$AB: …$` (xuống dòng rồi mở công thức). Mã của bạn vốn đúng; nay xem trước hiểu đúng (3 câu báo lỗi trên bộ 114 câu của bạn về 0).
+- **Nút "Sửa câu này"** ở mọi câu đang mở trong màn Kiểm tra trước khi nhập (trước đây chỉ có ở câu nghi trùng). Bản sửa chỉ áp dụng cho lần nhập này.
+- **Nhãn rõ hơn ở màn nhập:** câu mà bản xem trước nhanh báo lỗi nhưng TeX Live đã biên dịch được (sau khi bấm "Biên dịch thử") nay hiện nhãn vàng "Xem trước chưa dựng được" thay vì nhãn đỏ "Lỗi", và dòng tóm tắt nói có bao nhiêu câu như vậy. Nhập vẫn an toàn.
+
 ## Có gì mới trong beta.54 (kênh beta): sửa lỗi "Command \square already defined" khi dịch bằng mẫu HyMath
 Gồm PR #215 (so với beta.53). Không đổi dữ liệu, ngân hàng hay tệp đề của bạn. Đã thử bằng bộ kiểm thử và dịch thật bằng TeX Live với đúng bộ gói nhúng trong app; chưa thử trên máy Windows thật. Đây là bản beta.
 
