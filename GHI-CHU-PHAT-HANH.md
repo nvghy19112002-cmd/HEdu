@@ -1,3 +1,15 @@
+## Có gì mới trong beta.50 (kênh beta): màn Biên tập đề gọn hơn, soạn LaTeX kiểu TeXstudio
+Gồm PR #203 (so với beta.49). Không đổi dữ liệu, ngân hàng hay tệp đề. Đã thử bằng bộ kiểm thử và bản thử trên trình duyệt với dữ liệu giả lập; chưa thử trên máy Windows thật. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Biên tập đề gọn hơn**: thanh công cụ một hàng (tuỳ chọn trình dịch/số lượt ở nút ⚙); cảnh báo "Chưa có bản Đề/Lời giải" thành nhãn nhỏ "Chỉ bản nguyên văn"; nút **Tệp** ẩn/hiện cây tệp (đề 1 tệp tự ẩn); **kéo vạch** giữa mã và PDF để đổi bề rộng (bấm đúp về mặc định); **nhật ký biên dịch** thành thanh mảnh ở đáy, lỗi thì tự mở, kéo mép trên để đổi chiều cao. Bố cục được nhớ.
+- **Soạn như TeXstudio** (cả ở Xử lí TeX): gõ `\` hiện gợi ý lệnh (ex_test, toán, TikZ, lệnh có trong tệp), Enter chọn, **Tab** nhảy ô; `egin{…}` tự thêm `\end{…}`; tự đóng ngoặc `{ [ (` và `$`; thu gọn từng khối `egin…\end` bằng mũi tên ở lề.
+- **Phím tắt**: Ctrl+B đậm, Ctrl+I nghiêng, Ctrl+Shift+M công thức `$…$`, Ctrl+/ chú thích, Ctrl+D nhân đôi dòng, Ctrl+Shift+K xoá dòng, Ctrl+Space mở gợi ý.
+- Tệp chính chỉ có nội dung đề (không có `\documentclass`) mà biên dịch lỗi: nhật ký giải thích lý do và cách làm.
+
+**Lời khuyên**
+- Thử gõ tiếng Việt (Unikey) trong lúc khung gợi ý đang hiện; nếu bị chen chữ, bấm Esc để đóng gợi ý và báo lại.
+
 ## Có gì mới trong beta.49 (kênh beta): Thư viện đề mở nhiều đề bằng tab, mẫu in
 Gồm PR #199–#202 (so với beta.48). Không đổi schema ngân hàng, UID, nội dung câu hỏi hay tệp của các đề đã có. Đã thử bằng bộ kiểm thử và bản thử trên trình duyệt với dữ liệu giả lập; chưa thử trên máy Windows thật với Thư viện đề và TeX Live của thầy/cô. Đây là bản beta.
 
