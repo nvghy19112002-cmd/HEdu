@@ -1991,7 +1991,7 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 .xt-bar.over::before { display: none; }
 .ew-head { flex-wrap: nowrap; gap: 6px; padding: 5px 10px; min-height: 42px; box-sizing: border-box; }
 .ew-back { flex: 0 0 auto; width: 30px; padding: 0; font-size: 16px; }
-.ew-title { display: flex; align-items: baseline; gap: 8px; min-width: 60px; flex: 0 1 auto; overflow: hidden; white-space: nowrap; }
+.ew-title { display: flex; align-items: baseline; gap: 8px; min-width: 120px; flex: 0 1 auto; overflow: hidden; white-space: nowrap; }
 .ew-title b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
 .ew-path { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
 .ew-path::before { content: '› '; }
@@ -2039,3 +2039,15 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 .ew-log .xl-lines .btn-sm { height: 22px; padding: 0 8px; font-size: 12px; }
 .ew-log details > summary { font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 2px 0; }
 .ew-log .note { padding: 6px 10px; }
+
+/* ---- Trình soạn LaTeX: nút + bảng Phím tắt ---- */
+.ce-wrap { position: relative; height: 100%; min-height: 0; }
+.ce-keys-btn { position: absolute; right: 14px; bottom: 8px; z-index: 5; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--paper) 92%, transparent); color: var(--ink-3); font: inherit; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; cursor: pointer; opacity: .75; }
+.ce-keys-btn:hover, .ce-keys-btn[aria-expanded="true"] { opacity: 1; color: var(--ink); border-color: var(--pri-line); }
+.ce-keys { position: absolute; right: 14px; bottom: 36px; z-index: 6; width: min(460px, calc(100% - 28px)); max-height: calc(100% - 52px); overflow: auto; padding: 8px 12px 10px; background: var(--paper); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 14px 36px color-mix(in srgb, var(--ink) 18%, transparent); font-size: 12.5px; }
+.ce-keys-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.ce-keys dl { margin: 0; display: grid; gap: 3px; }
+.ce-keys dl > div { display: grid; grid-template-columns: 170px 1fr; gap: 8px; align-items: baseline; }
+.ce-keys dt { margin: 0; }
+.ce-keys dd { margin: 0; color: var(--ink-2); }
+.ce-keys kbd { font-family: var(--f-code); font-size: 11.5px; padding: 0 5px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; background: var(--paper-2); white-space: nowrap; }

@@ -8,8 +8,8 @@ import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from
 import { EditorState, type Extension, Text } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { texExtras } from '../lib/texextras';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { TEX_KEYS, texExtras } from '../lib/texextras';
 
 export interface CodeEditorHandle {
   /** Hiện tệp `key`. Lần đầu dùng `text`; lần sau dùng trạng thái đã giữ (kèm hoàn tác). */
@@ -49,7 +49,8 @@ const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: 'var(--paper)', color: 'var(--ink)' },
   '.cm-scroller': { fontFamily: 'var(--f-code)', fontSize: '13px', lineHeight: '1.55', overflow: 'auto' },
   '.cm-gutters': { backgroundColor: 'var(--paper-2)', color: 'var(--ink-3)', borderRight: '1px solid var(--line-2)' },
-  '.cm-activeLine': { backgroundColor: 'var(--hover)' },
+  // nền dòng đang soạn phải trong suốt: lớp tô vùng chọn nằm BÊN DƯỚI chữ, nền đặc sẽ che mất vùng bôi đen
+  '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--hover) 55%, transparent)' },
   '.cm-activeLineGutter': { backgroundColor: 'var(--hover)' },
   '&.cm-focused': { outline: 'none' },
   '.cm-gutterElement': { padding: '0 6px 0 8px' },
@@ -63,7 +64,8 @@ const theme = EditorView.theme({
   '.cm-completionMatchedText': { textDecoration: 'none', fontWeight: 700 },
   '.cm-snippetField': { backgroundColor: 'var(--pri-soft)', borderRadius: '2px' },
   '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--ok-bg)', outline: '1px solid var(--ok-line)' },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--pri-soft)' },
+  '.cm-selectionLayer .cm-selectionBackground': { background: 'color-mix(in srgb, var(--pri) 22%, transparent)' },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'color-mix(in srgb, var(--pri) 32%, transparent)' },
   '.cm-panels': { backgroundColor: 'var(--paper-2)', color: 'var(--ink)', borderColor: 'var(--line-2)' },
   '.cm-searchMatch': { backgroundColor: 'var(--warn-bg)', outline: '1px solid var(--warn-line)' },
   '.cm-searchMatch-selected': { backgroundColor: 'var(--pri-soft)' },
@@ -177,5 +179,17 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
     find() { if (view.current) openSearchPanel(view.current); },
   }), [label]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div className="ce" ref={host} />;
+  const [keys, setKeys] = useState(false);
+  return (
+    <div className="ce-wrap">
+      <div className="ce" ref={host} />
+      <button type="button" className="ce-keys-btn" aria-expanded={keys} onClick={() => setKeys((k) => !k)} title="Phím tắt soạn LaTeX (giống TeXstudio)">⌨ Phím tắt</button>
+      {keys && (
+        <div className="ce-keys" role="dialog" aria-label="Phím tắt soạn LaTeX" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setKeys(false); view.current?.focus(); } }}>
+          <div className="ce-keys-head"><b>Phím tắt (giống TeXstudio)</b><button type="button" className="btn btn-sm btn-ghost" autoFocus aria-label="Đóng" onClick={() => { setKeys(false); view.current?.focus(); }}>✕</button></div>
+          <dl>{TEX_KEYS.map(([k, d]) => <div key={k}><dt><kbd>{k}</kbd></dt><dd>{d}</dd></div>)}</dl>
+        </div>
+      )}
+    </div>
+  );
 });
