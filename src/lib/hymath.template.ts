@@ -1631,4 +1631,99 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
  \fi
 }
 ` },
+  { file: "theme-13-sky-panel.tex", name: "Sky Panel", tex: String.raw`% SKY PANEL — khung tiêu đề xanh đậm bo góc, dải đầu trang có nhãn Trang, nhãn A B C D tô đặc.
+% Thiết kế theo ảnh tham khảo của chủ dự án (02/11/2026). Chọn: \ThemeFile = theme-13-sky-panel.tex
+\definecolor{ThemeBase}{HTML}{1F55A4}
+\definecolor{ThemeSecondary}{HTML}{6C97CF}
+\def\ThemeName{SKY PANEL}
+
+% ---------- Tiêu đề: khung xanh đậm, hai cột (trường | kỳ thi) ----------
+\newcommand{\HyThemeTitle}{%
+ \begin{tcolorbox}[enhanced,colback=PanelFill,colframe=ExamAccent,coltext=PanelInk,
+  arc=2.2mm,boxrule=.9pt,left=5mm,right=5mm,top=3mm,bottom=3mm,
+  before skip=2mm,after skip=2mm]
+  \centering
+  \begin{minipage}[c]{.43\linewidth}\centering
+   {\bfseries\fontsize{11.5}{14.5}\selectfont\MakeUppercase{\SchoolName}\par}
+   \vspace{.8mm}{\fontsize{10.5}{13}\selectfont Năm học \SchoolYear\par}
+   \vspace{1.2mm}{\scshape\fontsize{10}{12}\selectfont Đề chính thức\par}
+  \end{minipage}\hfill
+  \begin{minipage}[c]{.54\linewidth}\centering
+   {\bfseries\fontsize{13}{16}\selectfont\MakeUppercase{\ExamName}\par}
+   \vspace{.8mm}{\bfseries\fontsize{11}{14}\selectfont\SubjectName\par}
+   \vspace{.8mm}{\itshape\fontsize{10}{13}\selectfont Thời gian: \ExamTime\ (không kể thời gian phát đề)\par}
+  \end{minipage}
+ \end{tcolorbox}}
+
+\newcommand{\StudentInfo}{%
+ \par\noindent
+ \begin{minipage}[c]{\dimexpr\linewidth-25mm\relax}
+  \fontsize{10.5}{13}\selectfont
+  \textbf{Họ và tên thí sinh:}\,\dotfill\,\textbf{SBD:}\,\makebox[28mm]{\dotfill}%
+ \end{minipage}\hfill
+ \tcbox[on line,colback=white,colframe=ExamAccent,boxrule=.6pt,arc=1.2mm,
+  left=3pt,right=3pt,top=2pt,bottom=2pt]{\parbox{17mm}{\centering
+  {\scshape\small\color{ExamAccent}Mã đề thi}\\[.2mm]{\bfseries\Large\ifExamColor\color{red!65!black}\else\color{black}\fi\ExamCode}}}%
+ \par\vspace{1.5mm}}
+
+% ---------- Nhãn đáp án: ô xanh đặc, chữ trắng ----------
+\newcommand{\AnswerBadge}[1]{%
+ \leavevmode{\bfseries\color{ExamAccent}#1.}}
+
+% ---------- Tiêu đề phần: chữ xanh, sans đậm ----------
+\newcommand{\HyThemePart}[1]{%
+ \par{\bfseries\fontsize{11.5}{14}\selectfont\color{ExamAccent}#1\par}\vspace{.6mm}}
+\newcommand{\HyStyledHeading}[1]{{\color{ExamAccent}\HyOriginalTextbf{#1}}}
+\ExplSyntaxOn
+\NewCommandCopy{\HyOriginalTextbf}{\textbf}
+\cs_new_protected:Npn \HyPartAwareBold #1
+ {
+  \group_begin:
+  \tl_set:Nx \l_tmpa_tl {\tl_to_str:n {#1}}
+  \regex_match:nVTF {\A\s*(PHẦN|Phần|phần)\s+[IVX]+} \l_tmpa_tl
+   {\HyStyledHeading{#1}}
+   {\HyOriginalTextbf{#1}}
+  \group_end:
+ }
+\RenewDocumentCommand{\textbf}{m}{\HyPartAwareBold{#1}}
+\ExplSyntaxOff
+
+% ---------- Đầu / chân trang ----------
+\newcommand{\HySlashes}{\tikz[x=1mm,y=1mm,baseline=-.8mm]{%
+ \foreach \i in {0,1,2}{\fill[ExamAccent,opacity={1-.28*\i}] (\i*4.2,-2.5)--(\i*4.2+2.6,-2.5)--(\i*4.2+4.6,2.5)--(\i*4.2+2,2.5)--cycle;}}}
+\newcommand{\HyThemePageStyle}{%
+ \setlength{\headheight}{26pt}
+ \pagestyle{fancy}\fancyhf{}
+ \renewcommand{\headrulewidth}{.7pt}\renewcommand{\footrulewidth}{.7pt}
+ \renewcommand{\headrule}{\hbox to\headwidth{\color{ExamAccent!55}\leaders\hrule height .7pt\hfill}}
+ \renewcommand{\footrule}{\vskip-2pt\hbox to\headwidth{\color{ExamAccent!55}\leaders\hrule height .7pt\hfill}\vskip3pt}
+ \fancyhead[L]{\HySlashes\hspace{6pt}\sffamily\fontsize{8.5}{11}\selectfont\color{ExamAccent}\MakeUppercase{\ExamName}}
+ \fancyhead[R]{\tcbox[on line,colback=PanelFill,colframe=ExamAccent,arc=1.4mm,left=5pt,right=5pt,top=2pt,bottom=2pt]{\sffamily\bfseries\fontsize{9.5}{11}\selectfont\color{PanelInk}Trang \thepage}}
+ \fancyfoot[L]{\sffamily\bfseries\fontsize{9}{11}\selectfont\color{ExamAccent}\TeacherName}
+ \fancyfoot[R]{\sffamily\bfseries\fontsize{9}{11}\selectfont\color{ExamAccent}Mã đề \ExamCode\ \ \textbullet\ \ \thepage/\ref{TotPages}}}
+
+\newcommand{\ExamEnd}{%
+ \par\addvspace{4mm}\noindent\makebox[\linewidth]{\color{ExamAccent!40}\rule{.3\linewidth}{.5pt}\hspace{3mm}%
+  \tikz[baseline=(e.base)]\node[fill=PanelFill,text=PanelInk,rounded corners=1.5pt,inner xsep=10pt,inner ysep=3pt,font=\sffamily\bfseries\small](e){HẾT};%
+  \hspace{3mm}\color{ExamAccent!40}\rule{.3\linewidth}{.5pt}}}
+
+\AtBeginDocument{%
+ \setmainfont{texgyretermes}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]%
+ \setsansfont{texgyreheros}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]%
+ \setmathfont{texgyretermes-math.otf}%
+ \settowidth{\widthalpha}{\AnswerBadge{D}}\addtolength{\widthalpha}{2pt}%
+ % Một họ chữ (serif) cho nhãn Câu và hàng tiêu đề bảng đúng/sai; sans chỉ còn ở nhãn A B C D và đầu/chân trang.
+ \renewtheorem{ex}{\bfseries\color{ExamAccent}Câu}%
+ \AtBeginEnvironment{longtable}{%
+  \renewcommand{\phatbieu}{\cellcolor{PanelFill}\textcolor{PanelInk}{\bfseries Mệnh đề}}%
+  \renewcommand{\Dung}{\cellcolor{PanelFill}\textcolor{PanelInk}{\bfseries Đúng}}%
+  \renewcommand{\Sai}{\cellcolor{PanelFill}\textcolor{PanelInk}{\bfseries Sai}}}%
+ \def\widthSA{4.4}%
+ \pretocmd{\shortans}{\par\nobreak\noindent}{}{}%
+ \NewCommandCopy{\HyOriginalOKQ}{\oKQ}%
+ \renewcommand{\oKQ}[2][]{\begingroup\color{ExamAccent}%
+  \tikzset{every path/.append style={draw=ExamAccent,line width=.5pt}}%
+  \HyOriginalOKQ[#1]{#2}\endgroup}%
+}
+` },
 ];

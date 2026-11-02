@@ -1,7 +1,7 @@
 // Kho mẫu in đề thi (theme) + "Thông tin mặc định" (Sở/Phòng, Trường, Tổ, dòng tên giáo viên, năm học). Chọn ở Cài đặt › Đề thi.
 // Hai loại mẫu:
 //  - "Mặc định HEdu" (kind 'hedu'): bộ khai báo hedu.sty + hedu-khaibao.tex, pdfLaTeX. Tạo đề luôn dùng mẫu này (đề có \documentclass riêng).
-//  - 8 mẫu HyMath của chủ dự án (kind 'hymath', hymath.template.ts): dùng khi biên dịch tệp đề CHỈ có dữ liệu (examwrap.ts), XeLaTeX.
+//  - 9 mẫu HyMath của chủ dự án (mặc định Sky Panel) (kind 'hymath', hymath.template.ts): dùng khi biên dịch tệp đề CHỈ có dữ liệu (examwrap.ts), XeLaTeX.
 // Mẫu chọn ở Cài đặt áp cho tệp dữ liệu; đề có \documentclass giữ nguyên cách in của nó.
 import type { ExamInfo } from './examgen';
 import { HEDU_STY_VERSION, heduFiles } from './hedusty';
@@ -17,7 +17,7 @@ export interface ExamTheme {
 
 export const HEDU_THEME_ID = 'hedu';
 /** mẫu mặc định cho tệp đề chỉ có dữ liệu */
-export const DEFAULT_THEME_ID = 'hymath-02-navy-editorial';
+export const DEFAULT_THEME_ID = 'hymath-13-sky-panel';
 export const THEMES: readonly ExamTheme[] = [
   ...HYMATH_THEMES.map((t): ExamTheme => ({
     id: `hymath-${t.file.replace(/^theme-/, '').replace(/\.tex$/, '')}`, name: t.name, version: 'HyMath', kind: 'hymath', file: t.file,

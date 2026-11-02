@@ -10,10 +10,11 @@ const t = (name: string, ok: boolean) => { if (!ok) { fails++; console.log(`  �
 const qs = [{ latex: '\\begin{ex}\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture}\\end{ex}' }, { latex: '\\begin{ex}\\begin{tikzpicture}\\tkzTabInit{x}{}\\end{tikzpicture}\\end{ex}' }] as unknown as Question[];
 t('Tạo đề: bộ tệp khai báo ĐÚNG TỪNG BYTE như cũ (bản in không đổi), mẫu nào cũng vậy', JSON.stringify(themeFiles(DEFAULT_THEME_ID, qs, '')) === JSON.stringify(heduFiles(qs, '')) && JSON.stringify(themeFiles(HEDU_THEME_ID, qs, '')) === JSON.stringify(heduFiles(qs, '')));
 t('mẫu lạ / chưa chọn ⇒ mẫu mặc định (HyMath Navy Editorial)', themeOf('khong-co').id === DEFAULT_THEME_ID && themeOf(null).id === DEFAULT_THEME_ID && themeOf(DEFAULT_THEME_ID).kind === 'hymath');
-t('id mẫu không trùng; đủ 8 mẫu HyMath + mẫu HEdu', new Set(THEMES.map((x) => x.id)).size === THEMES.length && THEMES.filter((x) => x.kind === 'hymath').length === 8 && THEMES.some((x) => x.id === HEDU_THEME_ID));
+t('id mẫu không trùng; đủ 9 mẫu HyMath + mẫu HEdu', new Set(THEMES.map((x) => x.id)).size === THEMES.length && THEMES.filter((x) => x.kind === 'hymath').length === 9 && THEMES.some((x) => x.id === HEDU_THEME_ID));
 t('dấu mẫu của Tạo đề ghi mẫu HEdu + phiên bản', JSON.stringify(themeStamp(HEDU_THEME_ID)) === JSON.stringify({ id: HEDU_THEME_ID, ten: 'Mặc định HEdu (kiểu cũ)', phienBan: HEDU_STY_VERSION }));
 const hf = hymathFiles(DEFAULT_THEME_ID);
-t('mẫu HyMath: lõi (caidat, core, adapter, hộp giải đáp) + tệp mẫu', !!hf && hf.length === Object.keys(HYMATH_CORE).length + 1 && hf.some((f) => f.path === 'theme-02-navy-editorial.tex'));
+t('mẫu HyMath: lõi (caidat, core, adapter, hộp giải đáp) + tệp mẫu', !!hf && hf.length === Object.keys(HYMATH_CORE).length + 1 && hf.some((f) => f.path === 'theme-13-sky-panel.tex'));
+t('mẫu Sky Panel có trong kho và là mẫu mặc định', THEMES.some((x) => x.id === 'hymath-13-sky-panel' && x.name === 'Sky Panel') && DEFAULT_THEME_ID === 'hymath-13-sky-panel');
 t('mẫu HEdu không có bộ tệp HyMath', hymathFiles(HEDU_THEME_ID) === null);
 t('lõi HyMath: không còn đường dẫn Caidat/, Themes/, fonts/ trong mã (chỉ chú thích)', [...Object.values(HYMATH_CORE), ...HYMATH_THEMES.map((x) => x.tex)].every((x) => !/^[^%\n]*(Caidat\/|Themes\/|fonts\/)/m.test(x)));
 t('lõi HyMath có \\TieuDeDeSo, \\TieuDeDeThi và nối vào khung tiêu đề của mẫu', /\\newcommand\{\\TieuDeDeSo\}/.test(HYMATH_CORE['hymath-caidat.tex']) && /\\renewcommand\{\\TieuDeDeSo\}/.test(HYMATH_CORE['hymath-adapter.tex']));

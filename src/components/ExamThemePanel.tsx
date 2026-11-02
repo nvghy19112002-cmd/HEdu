@@ -1,4 +1,4 @@
-// Cài đặt › Đề thi: chọn mẫu in (8 mẫu HyMath + kiểu cũ của HEdu) cho tệp đề chỉ có dữ liệu + Thông tin mặc định
+// Cài đặt › Đề thi: chọn mẫu in (9 mẫu HyMath + kiểu cũ của HEdu) cho tệp đề chỉ có dữ liệu + Thông tin mặc định
 // (Sở/Phòng, Trường, Tổ tự điền vào đề mới ở Tạo đề; dòng tên giáo viên và năm học in trên mẫu HyMath).
 import { useState } from 'react';
 import { EMPTY_INFO, loadDefaultInfo, loadThemeId, saveDefaultInfo, saveThemeId, themeOf, THEMES, type DefaultInfo } from '../lib/examtheme';
