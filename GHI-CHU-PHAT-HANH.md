@@ -1,3 +1,10 @@
+## Có gì mới trong beta.54 (kênh beta): sửa lỗi "Command \square already defined" khi dịch bằng mẫu HyMath
+Gồm PR #215 (so với beta.53). Không đổi dữ liệu, ngân hàng hay tệp đề của bạn. Đã thử bằng bộ kiểm thử và dịch thật bằng TeX Live với đúng bộ gói nhúng trong app; chưa thử trên máy Windows thật. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Sửa: dịch đề bằng mẫu in HyMath (kể cả mẫu mặc định Sky Panel) báo "5 lỗi"** dù vẫn ra PDF, với các dòng như `Command '\square' already defined`, `'\eth'`, `'\smallsetminus'`, `'\digamma'` ở `amsfonts.sty` / `amssymb.sty`. Nguyên nhân: hai gói cùng định nghĩa các ký hiệu toán này. Nay mẫu chỉ dùng một bộ, nên hết báo lỗi; các ký hiệu toán (ℝ, ℕ, ∅, ⩽, ∤, ∵, ∴, ∁, 𝔖…) vẫn hiện đúng. Đã dịch thử cả 9 mẫu, 0 lỗi.
+- Lỗi này có trong beta.52 và beta.53; từ beta.54 trở đi hết.
+
 ## Có gì mới trong beta.53 (kênh beta): Thư viện đề có chế độ Danh sách, đổi tên và kéo-thả
 Gồm PR #212, #213 (so với beta.52). Không đổi dữ liệu, ngân hàng hay tệp đề của bạn. Đã thử bằng bộ kiểm thử và bằng trang thử trong trình duyệt (kéo-thả bằng chuột thật); chưa thử trên máy Windows thật. Đây là bản beta.
 
