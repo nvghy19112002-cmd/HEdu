@@ -1,31 +1,23 @@
-# Bàn giao HEdu sang phiên Claude Code mới (30/10/2026, sau beta.44)
+# Bàn giao HEdu (02/11/2026 tối — chủ dự án đổi sang tài khoản Claude mới)
 
-> Chuyển sang tài khoản Claude khác: đọc `claude/ban-giao-tai-khoan-moi.md` trước (bàn giao đầy đủ 30/10/2026).
+Quy tắc làm việc: `AGENTS.md`. Ghi nhớ chi tiết hơn (lệnh nhanh, mẹo) nằm trong bộ nhớ Claude Code trên máy: `bat-dau-phien-moi.md`.
 
-## Git và phát hành (30/10/2026)
-- `main` = `ec1c051` (PR #166). Bản phát hành gần nhất: `v0.1.0-beta.44` (kênh beta, 30/10/2026). Trong ngày đã ra beta.41 (#162) → beta.42 (#164) → beta.43 (#165) → beta.44 (#166); nội dung từng bản ở `GHI-CHU-PHAT-HANH.md` và mục "Trạng thái" của `AGENTS.md`.
-- Ngân hàng đề thi E0–E6 (#112–#125) đã nằm trong các bản phát hành từ beta.34 trở đi.
-- PR đang mở: #123 (chỉ sửa `AGENTS.md`: quy tắc phối hợp 3 phiên Claude Code, mở từ 26/10) — chờ chủ dự án quyết gộp hay đóng.
-- Issue đang mở: #1 (còn 3 mục: lưu đầu file theo từng câu — đổi schema, cần duyệt riêng; huỷ hẳn tiến trình con TeX trên Windows; nghiệm thu máy thật).
+## Đã phát hành (kênh beta, 02/11)
+- **beta.49** (#199–#202): Thư viện đề bấm thẻ mở thẳng màn biên tập; thanh tab nhiều đề (tối đa 8, nhớ tab, biên dịch song song ≤ 2); ngăn Thông tin bên phải, menu chuột phải, Space xem nhanh PDF, kéo-thả .tex để nhập; Cài đặt › Đề thi (mẫu in, thông tin mặc định).
+- **beta.50** (#203): màn Biên tập đề gọn (thanh công cụ một hàng, cây tệp tự ẩn, kéo chia PDF, nhật ký gập); soạn kiểu TeXstudio (gợi ý lệnh, tự `\end`, tự đóng ngoặc, thu gọn khối).
+- **beta.51** (#204): sửa bôi đen không thấy màu; Ctrl+T/U chú thích đầu dòng, Ctrl+K xoá dòng, Alt+Enter đóng môi trường, Alt+Shift+M, Ctrl+Shift+I, Ctrl+R, Ctrl+G; nút ⌨ Phím tắt.
 
-## Chưa nghiệm thu trên máy Windows thật
-- Ngân hàng đề thi theo `claude/nghiem-thu-de-thi.md`; lưu trữ SQLite (mục G, H, I của `claude/nghiem-thu-beta30.md`).
-- beta.42–44 với tệp .tex và ngân hàng thật của chủ dự án (chuẩn hoá khi nạp, mục "Chưa có ID", nhãn `label=` trong xem trước và khi biên dịch).
+## Chờ chủ dự án quyết (CI đã xanh)
+- **#205** Mẫu in HyMath GĐ1: tệp đề chỉ có dữ liệu (dùng `\TieuDeDeSo`, không `\documentclass`) bấm Biên dịch là HEdu ghép phần đầu theo 1 trong 8 mẫu HyMath (chỉ trong thư mục build, XeLaTeX); bản Đề / Đề in trắng đen / Lời giải; Cài đặt có tên giáo viên + năm học. Đã dịch thật đề `toan10_gk1_taythanh_2627` với cả 8 mẫu: 0 lỗi.
+- **#206** đề xuất `claude/de-xuat-mau-in.md` (GĐ1 đã duyệt) — gộp cùng #205.
+- Sau khi gộp: ghi chú beta.52 + phát hành, chỉ khi chủ dự án nói rõ.
+- **#207** (xem nhanh minipage) do một phiên khác làm; #198 thừa (nên đóng); #180, #176, #175, #123 cũ.
 
-## Đang chờ quyết định / chưa được làm
-- Đề án cây KNTT + Gán ID V4: đã duyệt bộ chữ A/G/S/T và trả lời Q3–Q9, nhưng CHƯA được viết mã (phải qua Cổng A → B → C).
-- Màn Tạo đề cũ vẫn tắt (`FEATURES.exam=false`); không bật lại khi chưa được duyệt.
-- Trước nhập hàng loạt: trạng thái duyệt khi nhập nguồn tin cậy, chuyển bảng mã tệp không phải UTF-8, nhập lớn chạy nền (giới hạn 5.000 câu/lô, 2.000 tệp, 20 MB/tệp, gán ID tự động 200 câu/lượt).
-- Backlog: đổi tên/xoá/di chuyển tệp trong cây tệp đề thi; BibTeX/Biber; giao dịch chung Thùng rác + Ngân hàng (S6); hồ sơ người dùng / nhiều nguồn (S5–S7).
+## Đang chạy / bước tiếp
+1. **Quét kho hình TikZ MathHub** (19.853 hình, bản chép chỉ đọc ở `D:\HEdu-rac\tikz-scan`, ngoài repo): thử 300 hình dịch được 98,7%. Chạy lại nếu dừng: `python quet.py 0 6`, rồi `python bao-cao.py` → `bao-cao.md`. Kho này của MathHub: chỉ dùng trên máy, KHÔNG đưa vào repo công khai.
+2. **Vẽ hình nhờ Claude** (cần đặc tả, chờ duyệt): chạy Claude Code chính hãng ở chế độ không cửa sổ bằng gói Pro của chủ dự án; skill quy tắc vẽ; dựng toạ độ tính toán; vòng tự so ảnh; thư viện hình mẫu; chỉnh bằng bảng điểm. Không tự xoay 2 tài khoản. Chủ dự án sẽ gửi đoạn chat quy tắc vẽ TikZ cũ.
+3. **HyMath GĐ2** (ảnh mẫu, thêm mẫu, mẫu theo từng đề, mẫu thứ 9 theo 4 ảnh chủ dự án gửi) và **GĐ3** (chuẩn hoá đề ở Xử lí TeX; Tạo đề theo chuẩn HyMath).
+4. Hỏi lại lỗi "không gõ được %" sau khi chủ dự án cập nhật beta.51.
 
-## Mẹo kỹ thuật
-- Máy này không có `gh`: đọc GitHub qua REST (`curl https://api.github.com/repos/nvghy19112002-cmd/HEdu/...`); mở PR bằng REST với token từ `git credential fill`.
-- Bash heredoc làm hỏng dấu `\` của LaTeX/Rust: dùng công cụ Write hoặc Edit cho tệp có `\`.
-- Typecheck cần `@types/node` (dùng `--typeRoots`). `node_modules` do `npm ci`; `Cargo.lock`/`package-lock.json` được theo dõi (dùng `--locked`).
-- Kiểm tay với TeX Live: `HEDU_TEX_BIN=<thư mục bin> cargo test --lib --locked tex_live_that -- --ignored --nocapture`.
-
-## Quy tắc không đổi
-- Không đổi schema (3), ID6, UID, LaTeX/TikZ gốc; không tự xoá/duyệt câu; repo công khai nên không commit dữ liệu thật, khoá API, thông tin cá nhân.
-- Không bao giờ chạy app thử bằng identifier thật: `npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu)"}'`.
-- Chỉ phát hành khi chủ dự án nói rõ; chỉ gộp PR khi chủ dự án đồng ý đúng PR đó.
-- Chủ dự án là giáo viên Toán không viết code: trả lời tiếng Việt dễ hiểu; nghiệp vụ chưa rõ thì hỏi.
+## Chưa nghiệm thu trên máy thật
+Toàn bộ beta.49–51 và #205.
