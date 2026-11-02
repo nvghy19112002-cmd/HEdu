@@ -9,6 +9,7 @@ mod examcompile;
 mod examexport;
 mod examfiles;
 mod examlib;
+mod khohinh;
 mod examprofile;
 mod examsources;
 mod examusage;
@@ -470,6 +471,18 @@ pub fn run() {
             examlib::exam_lib_list,
             examlib::exam_lib_get,
             examlib::exam_lib_verify,
+            khohinh::kho_hinh_trang_thai,
+            khohinh::kho_hinh_nap,
+            khohinh::kho_hinh_cay,
+            khohinh::kho_hinh_tim,
+            khohinh::kho_hinh_lay,
+            khohinh::kho_hinh_them,
+            khohinh::kho_hinh_sua,
+            khohinh::kho_hinh_xoa,
+            khohinh::kho_hinh_nut_them,
+            khohinh::kho_hinh_nut_doi_ten,
+            khohinh::kho_hinh_nut_chuyen,
+            khohinh::kho_hinh_nut_xoa,
             examcompile::exam_compile,
             examcompile::exam_compile_cancel,
             examcompile::exam_compile_last,

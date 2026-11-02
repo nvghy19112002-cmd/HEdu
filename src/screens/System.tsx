@@ -20,6 +20,7 @@ import { AiSettingsPanel } from '../components/AiSettingsPanel';
 import { ExamThemePanel } from '../components/ExamThemePanel';
 import { SqlitePanel } from '../components/SqlitePanel';
 import { ImportLogPanel } from '../components/ImportLogPanel';
+import { KhoHinhPanel } from '../components/KhoHinhPanel';
 import { ensureRestorePoint, isSqlite } from '../lib/dbbackup';
 import { aiKeyStatus } from '../lib/ai/client';
 import { initProfiles } from '../lib/ai/profiles';
@@ -340,6 +341,7 @@ export function SystemScreen() {
         {is('backup') && (<>
         {isSqlite() && <SqlitePanel />}
         <ImportLogPanel />
+        <KhoHinhPanel />
         <section className="panel" aria-label="Sao lưu trước cập nhật">
           <h2>Sao lưu trước cập nhật</h2>
           <span className="sys-hint">Trước mỗi lần cập nhật, app tự chép dữ liệu sang một bản sao lưu. Chỉ giữ đúng một bản gần nhất; bản cũ hơn bị xoá để không chiếm chỗ.</span>
