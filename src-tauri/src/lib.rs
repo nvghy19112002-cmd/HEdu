@@ -483,6 +483,7 @@ pub fn run() {
             khohinh::kho_hinh_nut_doi_ten,
             khohinh::kho_hinh_nut_chuyen,
             khohinh::kho_hinh_nut_xoa,
+            khohinh::kho_hinh_dat_trang_thai,
             examcompile::exam_compile,
             examcompile::exam_compile_cancel,
             examcompile::exam_compile_last,

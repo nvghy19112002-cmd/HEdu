@@ -15,6 +15,7 @@ const SCREENS: { s: Screen; name: string }[] = [
   { s: 'import', name: 'Nhập câu từ LaTeX' },
   { s: 'tex', name: 'Xử lí TeX: soạn và kiểm các khối câu hỏi' },
   { s: 'curriculum', name: 'Xem khung chương trình' },
+  { s: 'khohinh', name: 'Mở Kho hình TikZ: tìm và quản lý hình vẽ' },
   { s: 'trash', name: 'Mở Thùng rác' },
   { s: 'system', name: 'Cài đặt: cập nhật, sao lưu và khôi phục' },
 ];
