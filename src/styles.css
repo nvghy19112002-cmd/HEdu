@@ -2087,3 +2087,6 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 .xdrag-ghost.ok { background: var(--pri); }
 body.xdragging, body.xdragging * { cursor: grabbing !important; user-select: none !important; }
 .bt-row.drop-on { background: var(--pri-soft); outline: 2px solid var(--pri); outline-offset: -2px; border-radius: 6px; }
+
+/* ---- Nhập liệu: nút Sửa câu này ở mọi câu đang mở ---- */
+.chk-fix { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }

@@ -769,6 +769,12 @@ export function ImportScreen() {
                     </select>
                   </label>
                   </div>
+                  {openRow === i && (
+                    <div className="chk-fix">
+                      <button type="button" className="btn btn-sm" aria-pressed={editRow === i} onClick={() => setEditRow(editRow === i ? null : i)}>{editRow === i ? 'Xong sửa' : edits[i] != null ? 'Sửa tiếp câu này' : 'Sửa câu này'}</button>
+                      {edits[i] != null && editRow !== i && <span className="xl-meta">Đã sửa (chỉ áp dụng cho lần nhập này, ô dán ở trên không đổi)</span>}
+                    </div>
+                  )}
                   {openRow === i && isTikzReady() && (
                     <div className="chk-tex">
                       {exactRow === i
