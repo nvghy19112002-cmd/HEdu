@@ -17,6 +17,8 @@ import {
 import { getSettings } from '../lib/tikz';
 import { addToGoiThem, missingPackages } from '../lib/missingpkg';
 import { compileSlots, type TabStatus } from '../lib/examtabs';
+import { clampLog, clampPdf, lacksPreamble, loadLayout, saveLayout, treeShown, type EwLayout } from '../lib/ewlayout';
+import { TEX_KEYS_HINT } from '../lib/texextras';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Pane = 'files' | 'edit' | 'pdf' | 'log';
@@ -59,6 +61,11 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
   const pend = useRef(new Map<string, { add: SourceIn[]; forget: SourceItem[] }>());
   const [leave, setLeave] = useState(false);
   const [pane, setPane] = useState<Pane>('edit');
+  /** bố cục (cây tệp, bề rộng PDF, chiều cao nhật ký) nhớ theo máy; nhật ký gập lại khi không có lỗi */
+  const [lay, setLay] = useState<EwLayout>(loadLayout);
+  const [logOpen, setLogOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < NARROW);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
@@ -276,6 +283,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
       setResult(r);
       examCompileAll(id).then(setGoods).catch(() => undefined);
       if (r.status === 'ok') setViewMode(mode);
+      setLogOpen(r.status !== 'ok');
       if (r.status === 'ok' && narrow) setPane('pdf'); else if (r.status !== 'ok') setPane('log');
     } catch (e) { setNote(msg(e)); } finally { release(); if (alive.current) setCompiling(false); }
   };
@@ -355,6 +363,25 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
     else if (e.key === 'Escape' && !leave && !newName) { e.stopPropagation(); onLibrary(); }
   };
 
+  /** kéo vạch chia: dọc = bề rộng khung PDF, ngang = chiều cao nhật ký; thả tay thì lưu */
+  const startDrag = (kind: 'pdf' | 'log') => (e: React.PointerEvent) => {
+    e.preventDefault();
+    const rect = bodyRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setDragging(true);
+    const move = (ev: PointerEvent) => setLay((l) => (kind === 'pdf' ? { ...l, pdf: clampPdf(((rect.right - ev.clientX) / rect.width) * 100) } : { ...l, log: clampLog(window.innerHeight - ev.clientY - 30, window.innerHeight) }));
+    const up = () => { window.removeEventListener('pointermove', move); setDragging(false); setLay((l) => { saveLayout(l); return l; }); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up, { once: true });
+  };
+  const nudge = (kind: 'pdf' | 'log') => (e: React.KeyboardEvent) => {
+    const d = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    setLay((l) => { const n = kind === 'pdf' ? { ...l, pdf: clampPdf(l.pdf - d * 3) } : { ...l, log: clampLog(l.log + d * 30, window.innerHeight) }; saveLayout(n); return n; });
+  };
+  const toggleTree = () => setLay((l) => { const n = { ...l, tree: !treeShown(l, list.files.length) }; saveLayout(n); return n; });
+
   const renderNode = (n: TreeNode, depth: number): React.ReactNode => {
     if (n.dir) {
       const isOpen = open.has(n.rel);
@@ -380,27 +407,46 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
     );
   };
 
-  const showFiles = !narrow || pane === 'files';
+  const tree0 = treeShown(lay, list.files.length);
+  const showFiles = narrow ? pane === 'files' : tree0;
   const showEdit = !narrow || pane === 'edit';
   const showPdf = !narrow || pane === 'pdf';
-  const showLog = !narrow || pane === 'log';
+  const showLog = narrow ? pane === 'log' : logOpen;
+  const sm = result ? summarize(result) : null;
+  const errs = result?.errorCount ?? 0;
+  // tệp chính chỉ có nội dung đề (không có \documentclass) ⇒ giải thích vì sao TeX báo "Missing \begin{document}"
+  const mainText = mainFile ? (ed.current?.text(mainFile) ?? loaded.current.get(mainFile) ?? null) : null;
+  const noPreamble = !!result && result.status !== 'ok' && mainText !== null && lacksPreamble(mainText);
 
   return (
     <div className={`ew tabbed${hidden ? ' off' : ''}`} role="dialog" aria-modal={!hidden} aria-hidden={hidden || undefined} aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
       <header className="ew-head">
-        <nav aria-label="Vị trí" className="ew-crumb"><button type="button" className="btn btn-sm" onClick={onLibrary} title="Về Thư viện đề (đề vẫn mở ở tab trên cùng)">← Thư viện</button> <b>{name}</b>{active && <span className="xl-meta"> › {active}</span>}</nav>
+        <button type="button" className="btn btn-sm btn-ghost ew-back" onClick={onLibrary} title="Về Thư viện đề (đề vẫn mở ở tab trên cùng) · Esc" aria-label="Về Thư viện đề">←</button>
+        <div className="ew-title"><b title={name}>{name}</b>{active && <span className="ew-path" title={active}>{active}</span>}</div>
         <span className={`ew-badge ${badge.tone}`} role="status" aria-live="polite">{badge.text}</span>
-        <span className="pv-grp">
-          <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
-          <button type="button" className="btn btn-sm" disabled={!tab || !tab.dirty || !!tab.readOnly || saving} onClick={() => active && void saveOne(active)}>Lưu</button>
-          <button type="button" className="btn btn-sm" disabled={!anyDirty(tabs) || saving} onClick={() => void saveAll()}>Lưu tất cả</button>
-          <button type="button" className="btn btn-sm" disabled={!tab || tab.kind !== 'text' || !!tab.readOnly} onClick={() => setPicker(true)}>+ Câu từ Ngân hàng</button>
-          <button type="button" className="btn btn-sm" onClick={openSources}>Nguồn câu hỏi</button>
-          <label className="xl-meta">Bản <select className="xl-in" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch">{MODES.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !profile?.available} title={m.id !== 'nguyen-van' && !profile?.available ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select></label>
-          <label className="xl-meta">Trình dịch <select className="xl-in" value={engine} disabled={compiling} onChange={(e) => setEngine(e.target.value as Engine)}>{ENGINES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
-          <label className="xl-meta">Lượt <select className="xl-in" value={runs} disabled={compiling} onChange={(e) => setRuns(+e.target.value)}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-          {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch PDF</button> : <button type="button" className="btn btn-sm" title={queued ? 'Đang chờ lượt: 2 đề khác đang biên dịch' : undefined} onClick={() => { if (queued) { gen.current++; setQueued(false); setCompiling(false); } else void examCompileCancel(id); }}>{queued ? 'Huỷ chờ' : 'Dừng'}</button>}
+        {profile && !profile.available && <span className="ew-chip" title={`${profile.reason ?? ''} Bạn vẫn biên dịch được bản “nguyên văn” (chưa xác định đề hay lời giải, có thể chứa lời giải).`}>Chỉ bản nguyên văn</span>}
+        <span className="ew-sp" />
+        {!narrow && <span className="ew-grp"><button type="button" className={`btn btn-sm btn-ghost${tree0 ? ' on' : ''}`} aria-pressed={tree0} onClick={toggleTree} title="Hiện/ẩn cây tệp của đề">Tệp</button></span>}
+        <span className="ew-grp">
+          <button type="button" className="btn btn-sm btn-ghost" disabled={!tab || !tab.dirty || !!tab.readOnly || saving} onClick={() => active && void saveOne(active)} title="Lưu tệp đang mở (Ctrl+S)">Lưu</button>
+          {tabs.filter((t) => t.dirty).length > 1 && <button type="button" className="btn btn-sm btn-ghost" disabled={saving} onClick={() => void saveAll()} title="Lưu mọi tệp (Ctrl+Shift+S)">Lưu tất cả</button>}
         </span>
+        <span className="ew-grp">
+          <button type="button" className="btn btn-sm btn-ghost" disabled={!tab || tab.kind !== 'text' || !!tab.readOnly} onClick={() => setPicker(true)} title="Chèn câu nguyên văn từ Ngân hàng vào chỗ con trỏ">+ Câu</button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={openSources} title="Các câu trong đề lấy từ Ngân hàng">Nguồn câu</button>
+        </span>
+        <span className="ew-grp ew-compile">
+          <select className="xl-in ew-sel" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch" title="Bản biên dịch">{MODES.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !profile?.available} title={m.id !== 'nguyen-van' && !profile?.available ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select>
+          <details className="ew-opts">
+            <summary className="btn btn-sm btn-ghost" title={`Tuỳ chọn biên dịch: ${ENGINES.find((x) => x.id === engine)?.label ?? engine}, ${runs} lượt`} aria-label="Tuỳ chọn biên dịch">⚙</summary>
+            <div className="ew-pop">
+              <label>Trình dịch <select className="xl-in" value={engine} disabled={compiling} onChange={(e) => setEngine(e.target.value as Engine)}>{ENGINES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
+              <label>Số lượt <select className="xl-in" value={runs} disabled={compiling} onChange={(e) => setRuns(+e.target.value)}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+            </div>
+          </details>
+          {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch</button> : <button type="button" className="btn btn-sm" title={queued ? 'Đang chờ lượt: 2 đề khác đang biên dịch' : undefined} onClick={() => { if (queued) { gen.current++; setQueued(false); setCompiling(false); } else void examCompileCancel(id); }}>{queued ? 'Huỷ chờ' : 'Dừng'}</button>}
+        </span>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Thông tin đề: đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
       </header>
       {narrow && (
         <div className="ew-tabs" role="tablist" aria-label="Khu vực">
@@ -409,9 +455,8 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           ))}
         </div>
       )}
-      {profile && !profile.available && <div className="note warn ew-note" role="status"><div className="note-body"><b>Chưa có bản Đề / Lời giải riêng</b><span>{profile.reason} Bạn vẫn biên dịch được bản “nguyên văn” (chưa xác định đề hay lời giải, có thể chứa lời giải).</span></div></div>}
       {note && <div className="note bad ew-note" role="alert"><div className="note-body"><span>{note}</span></div><button type="button" className="btn btn-sm" onClick={() => setNote(null)}>Ẩn</button></div>}
-      <div className={`ew-body${narrow ? ' narrow' : ''}`}>
+      <div ref={bodyRef} className={`ew-body${narrow ? ' narrow' : ''}${dragging ? ' dragging' : ''}`} style={narrow ? undefined : { gridTemplateColumns: `${showFiles ? '210px ' : ''}minmax(0, 1fr) 6px ${lay.pdf}%` }}>
         {showFiles && (
           <aside className="ew-files" aria-label="Cây tệp">
             <div className="xl-actions">
@@ -459,10 +504,11 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
               <CodeEditor ref={ed} label={tab ? `Soạn ${tab.rel}` : 'Soạn thảo'} onSave={() => { if (active) void saveOne(active); }}
                 onDirty={(k, d) => patch(k, { dirty: d })} onChangeText={scheduleDraft} />
             </div>
-            {!tab && <p className="xl-meta ew-empty">Chọn một tệp ở cây bên trái để mở.</p>}
-            {tab && !tab.readOnly && <div className="xl-meta ew-status">{tab.eol === 'crlf' ? 'CRLF' : tab.eol === 'lf' ? 'LF' : '—'} · UTF-8{tab.bom ? ' có BOM' : ''} · Ctrl+S lưu · Ctrl+F tìm · Ctrl+H thay</div>}
+            {!tab && <p className="xl-meta ew-empty">{tree0 || narrow ? 'Chọn một tệp ở cây bên trái để mở.' : 'Bấm “Tệp” trên thanh công cụ để chọn tệp cần mở.'}</p>}
+            {tab && !tab.readOnly && <div className="xl-meta ew-status" title={`${TEX_KEYS_HINT} · Ctrl+S lưu · Ctrl+F tìm · Ctrl+H thay`}><span>{tab.eol === 'crlf' ? 'CRLF' : tab.eol === 'lf' ? 'LF' : '—'} · UTF-8{tab.bom ? ' có BOM' : ''}</span><span className="ew-keys">{TEX_KEYS_HINT}</span></div>}
           </section>
         )}
+        {!narrow && <div className="ew-split" role="separator" aria-orientation="vertical" aria-label="Kéo để đổi bề rộng khung PDF" tabIndex={0} onPointerDown={startDrag('pdf')} onKeyDown={nudge('pdf')} onDoubleClick={() => setLay((l) => { const n = { ...l, pdf: 42 }; saveLayout(n); return n; })} title="Kéo để đổi bề rộng · bấm đúp: về mặc định" />}
         {showPdf && (
           <section className="ew-pdf" aria-label="PDF">
             {goods.length > 0 && (
@@ -480,11 +526,30 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           </section>
         )}
       </div>
+      {!narrow && (
+        <div className={`ew-logbar ${compiling ? 'run' : sm ? sm.tone : ''}`}>
+          {logOpen && <div className="ew-hsplit" role="separator" aria-orientation="horizontal" aria-label="Kéo để đổi chiều cao nhật ký" tabIndex={0} onPointerDown={startDrag('log')} onKeyDown={nudge('log')} />}
+          <button type="button" className="ew-logtoggle" aria-expanded={logOpen} onClick={() => setLogOpen((o) => !o)}>
+            <span className="ew-logdot" aria-hidden="true" />
+            <span className="ew-logtext">{compiling ? (queued ? 'Đang chờ lượt biên dịch…' : 'Đang lưu và biên dịch…') : sm ? sm.text : 'Chưa biên dịch lần nào trong phiên này'}</span>
+            {result && !compiling && <span className="xl-meta">{result.texVersion ? `${Math.round(result.ms / 100) / 10} giây · ${result.runs} lượt` : ''}</span>}
+            {errs > 0 && <span className="ew-count">{errs} lỗi</span>}
+            <span className="ew-caret" aria-hidden="true">{logOpen ? '▾' : '▴'}</span>
+            <span className="sr-only">{logOpen ? 'Thu nhật ký' : 'Mở nhật ký'}</span>
+          </button>
+        </div>
+      )}
       {showLog && (
-        <section className="ew-log" aria-label="Nhật ký biên dịch">
+        <section className="ew-log" aria-label="Nhật ký biên dịch" style={narrow ? undefined : { height: clampLog(lay.log, window.innerHeight) }}>
           {compiling && <p className="aid-wait" role="status">{queued ? 'Đang chờ lượt biên dịch (đã có 2 đề khác đang biên dịch)…' : 'Đang lưu và biên dịch…'}</p>}
           {!result && !compiling && <p className="xl-meta">Kết quả biên dịch sẽ hiện ở đây.</p>}
-          {result && (() => { const sm = summarize(result); return <div className={`note ${sm.tone === 'bad' ? 'bad' : sm.tone}`} role="status"><div className="note-body"><b>{sm.text}</b>{result.warnings.map((w, i) => <span key={i}>{w}</span>)}{result.texVersion && <span className="xl-meta">{result.texVersion} · {result.runs} lượt · {Math.round(result.ms / 100) / 10} giây</span>}</div></div>; })()}
+          {result && sm && (narrow || result.warnings.length > 0) && <div className={`note ${sm.tone === 'bad' ? 'bad' : sm.tone}`} role="status"><div className="note-body"><b>{sm.text}</b>{result.warnings.map((w, i) => <span key={i}>{w}</span>)}{result.texVersion && <span className="xl-meta">{result.texVersion} · {result.runs} lượt · {Math.round(result.ms / 100) / 10} giây</span>}</div></div>}
+          {noPreamble && (
+            <div className="note warn" role="status"><div className="note-body">
+              <b>Tệp chính “{mainFile}” chỉ có nội dung đề, không có <code>\documentclass</code></b>
+              <span>Vì vậy TeX không biên dịch nó một mình được (lỗi “Missing \begin&#123;document&#125;”, “Undefined control sequence” ở dòng đầu). Cần một tệp chính có <code>\documentclass</code>, các gói và lệnh riêng của thầy/cô (vd lệnh tiêu đề đề thi), rồi <code>\begin&#123;document&#125;</code> <code>\input&#123;{(mainFile ?? '').replace(/\.tex$/, '')}&#125;</code> <code>\end&#123;document&#125;</code>; tạo tệp đó bằng “+ Tệp mới” rồi chọn làm tệp chính trong “Thông tin…”. Bản sau HEdu sẽ tự ghép phần đầu cho tệp nội dung.</span>
+            </div></div>
+          )}
           {pkgHints.length > 0 && (
             <div className="note warn" role="status"><div className="note-body">
               <b>Có vẻ đề thiếu gói LaTeX</b>

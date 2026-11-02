@@ -1985,3 +1985,57 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 .xt-theme { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; }
 .xt-theme.on { border-color: var(--pri); background: var(--pri-soft); }
 .xt-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; margin: 8px 0; }
+
+/* ---- Màn Biên tập đề gọn (thanh công cụ một hàng, cây tệp ẩn được, kéo chia khung, nhật ký gập) ---- */
+.xt-bar.over { padding-left: 12px; }
+.xt-bar.over::before { display: none; }
+.ew-head { flex-wrap: nowrap; gap: 6px; padding: 5px 10px; min-height: 42px; box-sizing: border-box; }
+.ew-back { flex: 0 0 auto; width: 30px; padding: 0; font-size: 16px; }
+.ew-title { display: flex; align-items: baseline; gap: 8px; min-width: 60px; flex: 0 1 auto; overflow: hidden; white-space: nowrap; }
+.ew-title b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+.ew-path { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+.ew-path::before { content: '› '; }
+.ew-head .ew-badge { flex: 0 0 auto; font-size: 11.5px; padding: 1px 8px; }
+.ew-chip { flex: 0 0 auto; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 12px; color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-line); cursor: help; white-space: nowrap; }
+.ew-sp { flex: 1 1 auto; }
+.ew-grp { display: inline-flex; align-items: center; gap: 2px; padding-left: 6px; border-left: 1px solid var(--line-2); flex: 0 0 auto; }
+.ew-head .btn-ghost.on { background: var(--pri-soft); color: var(--pri-ink); }
+.ew-sel { height: 28px; padding: 0 6px; font-size: 12.5px; max-width: 170px; }
+.ew-opts { position: relative; }
+.ew-opts > summary { list-style: none; }
+.ew-opts > summary::-webkit-details-marker { display: none; }
+.ew-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; min-width: 200px; background: var(--paper); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: 0 10px 28px color-mix(in srgb, var(--ink) 16%, transparent); font-size: 12.5px; }
+.ew-pop label { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ew-body:not(.narrow) { gap: 0; background: var(--paper); }
+.ew-body:not(.narrow) > .ew-files { border-right: 1px solid var(--line-2); padding: 6px; background: var(--paper-2); }
+.ew-body.dragging { cursor: col-resize; user-select: none; }
+.ew-body.dragging .ew-pdf, .ew-body.dragging .ew-cm { pointer-events: none; }
+.ew-split { cursor: col-resize; background: var(--line-2); position: relative; outline: none; }
+.ew-split::after { content: ''; position: absolute; inset: 0 -3px; }
+.ew-split:hover, .ew-split:focus-visible { background: var(--pri-line); }
+.ew-tabbar { min-height: 30px; }
+.ew-tabname { padding: 5px 4px 5px 12px; font-size: 12.5px; }
+.ew-status { display: flex; gap: 12px; padding: 3px 10px; font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+.ew-keys { overflow: hidden; text-overflow: ellipsis; color: var(--ink-3); }
+.ew-logbar { position: relative; flex: 0 0 auto; border-top: 1px solid var(--line-2); background: var(--paper-2); }
+.ew-logtoggle { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; height: 30px; padding: 0 12px; font-size: 12.5px; cursor: pointer; }
+.ew-logtoggle:hover { background: var(--hover); }
+.ew-logtoggle:focus-visible { outline: 2px solid var(--pri); outline-offset: -2px; }
+.ew-logdot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: 0 0 auto; }
+.ew-logbar.ok .ew-logdot { background: var(--ok); }
+.ew-logbar.warn .ew-logdot { background: var(--warn); }
+.ew-logbar.bad .ew-logdot { background: var(--danger); }
+.ew-logbar.run .ew-logdot { background: var(--pri); animation: ew-pulse 1s ease-in-out infinite alternate; }
+@keyframes ew-pulse { to { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .ew-logbar.run .ew-logdot { animation: none; } }
+.ew-logbar.bad .ew-logtext { color: var(--danger-ink); font-weight: 600; }
+.ew-logtext { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ew-count { font-size: 11.5px; font-weight: 700; padding: 0 7px; border-radius: 10px; background: var(--danger-soft); color: var(--danger-ink); border: 1px solid var(--danger-line); }
+.ew-caret { margin-left: auto; color: var(--ink-3); }
+.ew-hsplit { position: absolute; left: 0; right: 0; top: -4px; height: 7px; cursor: row-resize; z-index: 2; outline: none; }
+.ew-hsplit:hover, .ew-hsplit:focus-visible { background: color-mix(in srgb, var(--pri-line) 70%, transparent); }
+.ew:not(:has(.ew-body.narrow)) .ew-log { max-height: none; flex: 0 0 auto; border-top: 0; padding: 6px 12px; gap: 4px; }
+.ew-log .xl-lines li { padding: 2px 0; }
+.ew-log .xl-lines .btn-sm { height: 22px; padding: 0 8px; font-size: 12px; }
+.ew-log details > summary { font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 2px 0; }
+.ew-log .note { padding: 6px 10px; }

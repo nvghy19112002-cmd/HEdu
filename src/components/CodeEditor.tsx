@@ -9,6 +9,7 @@ import { EditorState, type Extension, Text } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { texExtras } from '../lib/texextras';
 
 export interface CodeEditorHandle {
   /** Hiện tệp `key`. Lần đầu dùng `text`; lần sau dùng trạng thái đã giữ (kèm hoàn tác). */
@@ -50,7 +51,18 @@ const theme = EditorView.theme({
   '.cm-gutters': { backgroundColor: 'var(--paper-2)', color: 'var(--ink-3)', borderRight: '1px solid var(--line-2)' },
   '.cm-activeLine': { backgroundColor: 'var(--hover)' },
   '.cm-activeLineGutter': { backgroundColor: 'var(--hover)' },
-  '&.cm-focused': { outline: '2px solid var(--pri)', outlineOffset: '-2px' },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-gutterElement': { padding: '0 6px 0 8px' },
+  '.cm-foldGutter .cm-gutterElement': { padding: '0 4px', cursor: 'pointer', color: 'var(--ink-3)' },
+  '.cm-foldPlaceholder': { backgroundColor: 'var(--pri-soft)', border: '1px solid var(--pri-line)', color: 'var(--pri-ink)', borderRadius: '4px', padding: '0 6px', margin: '0 4px' },
+  '.cm-tooltip': { backgroundColor: 'var(--paper)', border: '1px solid var(--line-2)', borderRadius: '8px', boxShadow: '0 10px 28px color-mix(in srgb, var(--ink) 16%, transparent)', overflow: 'hidden' },
+  '.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--f-code)', fontSize: '12.5px', maxHeight: '16em' },
+  '.cm-tooltip-autocomplete > ul > li': { padding: '3px 10px !important', display: 'flex', gap: '12px' },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--pri)', color: 'var(--on-dark)' },
+  '.cm-completionDetail': { marginLeft: 'auto', fontFamily: 'var(--f-ui)', fontStyle: 'normal', fontSize: '12px', opacity: 0.75 },
+  '.cm-completionMatchedText': { textDecoration: 'none', fontWeight: 700 },
+  '.cm-snippetField': { backgroundColor: 'var(--pri-soft)', borderRadius: '2px' },
+  '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--ok-bg)', outline: '1px solid var(--ok-line)' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--pri-soft)' },
   '.cm-panels': { backgroundColor: 'var(--paper-2)', color: 'var(--ink)', borderColor: 'var(--line-2)' },
   '.cm-searchMatch': { backgroundColor: 'var(--warn-bg)', outline: '1px solid var(--warn-line)' },
@@ -67,6 +79,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
   cb.current = { onDirty, onSave, onChangeText };
 
   const extensions = (key: string, readOnly: boolean): Extension[] => [
+    ...(readOnly ? [] : texExtras()), // soạn kiểu TeXstudio: gợi ý lệnh, tự đóng, thu gọn khối, phím tắt (đặt trước để phím tắt riêng được ưu tiên)
     lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), history(), drawSelection(), bracketMatching(), highlightSelectionMatches(), search({ top: true }),
     StreamLanguage.define(stex), syntaxHighlighting(hl), EditorView.lineWrapping, theme,
     EditorView.contentAttributes.of({ 'aria-label': label, spellcheck: 'false' }),
