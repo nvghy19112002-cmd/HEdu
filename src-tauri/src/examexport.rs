@@ -1033,7 +1033,7 @@ pub fn export_codes(root: &Path, id: &str, o: &ExportOpts, support_dir: &Option<
             return Err(Fail::Cancelled);
         }
         let main = format!("main-{code}.tex");
-        let co = CompileOpts { engine: engine.clone(), timeout_secs: timeout, runs: Some(2), tex_bin: tex_bin.clone(), force: None, mode: Some(mode.to_string()), main: Some(main.clone()), wrap: None };
+        let co = CompileOpts { engine: engine.clone(), timeout_secs: timeout, runs: Some(2), tex_bin: tex_bin.clone(), force: None, mode: Some(mode.to_string()), main: Some(main.clone()), wrap: None, wrap_modes: None };
         let r = compile(&root2, &idc, &co, &sup).map_err(Fail::Msg)?;
         match r.status.as_str() {
             "ok" => {

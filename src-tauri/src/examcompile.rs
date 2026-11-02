@@ -27,6 +27,8 @@ use crate::tikz;
 pub const JOBNAME: &str = "hedu-out";
 /// Chế độ E2a: biên dịch nguyên văn, CHƯA xác định đề hay lời giải (E5 mới có hai chế độ).
 pub const MODE_RAW: &str = "nguyen-van";
+/// Bản đề in trắng đen — chỉ có với tệp dữ liệu ghép theo mẫu HyMath (chế độ do tệp bọc đặt, `wrap_modes`).
+pub const MODE_DE_IN: &str = "de-in";
 const MAX_LOG: usize = 2 * 1024 * 1024;
 pub(crate) const RAW_LOG_KEEP: usize = 64 * 1024;
 const MAX_DIAGS: usize = 200;
@@ -48,6 +50,8 @@ pub struct CompileOpts {
     /// Tệp chính CHỈ có nội dung đề (không có \documentclass): bộ tệp "bọc" do giao diện dựng theo mẫu in (WRAP_MAIN + khai báo).
     /// Chỉ ghi vào thư mục build, cạnh tệp chính; tệp của dự án không bao giờ bị sửa. Tệp chính đã có \documentclass thì bỏ qua.
     pub wrap: Option<Vec<WrapFile>>,
+    /// true = tệp bọc tự đặt chế độ Đề / Đề in / Lời giải (mẫu HyMath: \\CheDo) ⇒ không dò \\usepackage{ex_test} để đổi tuỳ chọn.
+    pub wrap_modes: Option<bool>,
 }
 
 #[derive(Deserialize, Clone, Default, Debug)]
@@ -168,6 +172,7 @@ pub fn mode_of(m: &Option<String>) -> Result<&'static str, String> {
         None | Some("") | Some("nguyen-van") => Ok(MODE_RAW),
         Some("de") => Ok(examprofile::MODE_DE),
         Some("loigiai") => Ok(examprofile::MODE_LOIGIAI),
+        Some("de-in") => Ok(MODE_DE_IN),
         Some(o) => Err(format!("Chế độ '{o}' không hợp lệ.")),
     }
 }
@@ -177,6 +182,7 @@ fn good_names(mode: &str, slot: &str) -> (String, String) {
     let base = match mode {
         "de" => "last-good-de",
         "loigiai" => "last-good-loigiai",
+        "de-in" => "last-good-de-in",
         _ => "last-good",
     };
     if slot.is_empty() {
@@ -516,7 +522,7 @@ pub fn last_good_slot(root: &Path, id: &str, mode: &str, slot: &str) -> Option<G
 
 /// Mọi bản tốt hiện có (mỗi chế độ một bản).
 pub fn all_good(root: &Path, id: &str) -> Vec<GoodInfo> {
-    [MODE_RAW, examprofile::MODE_DE, examprofile::MODE_LOIGIAI].iter().filter_map(|m| last_good_mode(root, id, m)).collect()
+    [MODE_RAW, examprofile::MODE_DE, MODE_DE_IN, examprofile::MODE_LOIGIAI].iter().filter_map(|m| last_good_mode(root, id, m)).collect()
 }
 
 pub(crate) fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Result<GoodInfo, String> {
@@ -682,7 +688,15 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
 
     // chế độ Đề/Lời giải: bản dẫn xuất CHỈ trong thư mục build; không chắc cách bật/tắt lời giải ⇒ KHÔNG biên dịch (không xuất PDF mang nhãn Đề)
     let mut mode_sig = mode.to_string();
-    if mode != MODE_RAW {
+    let wrap_modes = !wrap_used.is_empty() && opts.wrap_modes.unwrap_or(false);
+    if mode == MODE_DE_IN && !wrap_modes {
+        out.status = "no-profile".into();
+        out.message = "Bản “Đề in trắng đen” chỉ có khi tệp đề chỉ có dữ liệu và được ghép theo mẫu in HyMath.".into();
+        out.last_good = last_good_slot(root, id, mode, &slot);
+        out.kept_previous = out.last_good.is_some();
+        return Ok(out);
+    }
+    if mode != MODE_RAW && !wrap_modes {
         let mut rels: Vec<String> = sync.files.iter().map(|(r, _)| r.clone()).collect();
         // có tệp bọc: tìm \usepackage{ex_test} trong cả tệp bọc (đọc từ thư mục build, nơi đã có bản sao dự án + tệp bọc)
         let scan_dir = if wrap_used.is_empty() { projects_dir(&lib).join(id) } else { work.clone() };
@@ -994,6 +1008,12 @@ mod tests {
         assert!(has_documentclass("% đề\n\\documentclass[12pt]{book}\n"));
         assert!(!has_documentclass("\\TieuDeDeSo{a}\n\\begin{ex}x\\end{ex}\n"));
         assert!(!has_documentclass("%\\documentclass{book}\nabc"), "dòng chú thích không tính");
+    }
+
+    #[test]
+    fn che_do_de_in() {
+        assert_eq!(mode_of(&Some("de-in".into())), Ok(MODE_DE_IN));
+        assert_eq!(good_names(MODE_DE_IN, ""), ("last-good-de-in.json".to_string(), "last-good-de-in.pdf".to_string()));
     }
 
     #[test]
@@ -1433,7 +1453,7 @@ B
         let sup = support::prepare(&root);
         assert!(sup.is_some());
         for eng in ["pdflatex", "xelatex", "lualatex"] {
-            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None };
+            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None, wrap_modes: None };
             let r = compile(&root, &s.id, &o, &sup).unwrap();
             eprintln!("{eng}: {} · {} · {:?} trang · {} ms · {}", r.status, r.message, r.pages, r.ms, r.tex_version);
             assert_eq!(r.status, "ok", "{eng}: {:?} {}", r.diagnostics, r.raw_log);
@@ -1465,7 +1485,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "TikZ nặng", None).unwrap();
         let sup = support::prepare(&root);
-        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None };
+        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None, wrap_modes: None };
         let r = compile(&root, &s.id, &o, &sup).unwrap();
         eprintln!("TikZ nặng: {} · {:?} trang · {} ms · {} lượt", r.status, r.pages, r.ms, r.runs);
         assert_eq!(r.status, "ok", "{:?} {}", r.diagnostics, r.raw_log);
@@ -1485,7 +1505,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "Thật", None).unwrap();
         let sup = support::prepare(&root);
-        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()), main: None , wrap: None };
+        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()), main: None , wrap: None, wrap_modes: None };
         let de = compile(&root, &s.id, &o("de"), &sup).unwrap();
         let lg = compile(&root, &s.id, &o("loigiai"), &sup).unwrap();
         eprintln!("de: {} {:?} | loigiai: {} {:?}", de.status, de.pages, lg.status, lg.pages);

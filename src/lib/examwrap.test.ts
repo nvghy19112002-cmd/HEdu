@@ -1,4 +1,5 @@
-import { inputName, WRAP_MAIN, wrapFiles } from './examwrap';
+import { cheDo, inputName, texText, WRAP_MAIN, wrapFiles } from './examwrap';
+import { HEDU_THEME_ID } from './examtheme';
 import { heduFiles } from './hedusty';
 import { MAIN_HEAD } from './examgen';
 import type { Question } from './types';
@@ -6,16 +7,23 @@ import type { Question } from './types';
 let fails = 0;
 const t = (name: string, ok: boolean) => { if (!ok) { fails++; console.log(`  ✗ ${name}`); } else console.log(`  ✓ ${name}`); };
 
-const DATA = '\\setcounter{ex}{0}\n\\begin{ex}\nCho $\\triangle ABC$.\n\\choice{a}{\\True b}{c}{d}\n\\end{ex}\n';
-const w = wrapFiles('de/toan10_gk1.tex', DATA, 'hedu');
-t('tệp chỉ có dữ liệu ⇒ có bộ tệp bọc', !!w && w[0].path === WRAP_MAIN);
-t('tệp bọc: cùng phần đầu với đề do Tạo đề dựng, \\input đúng tên (bỏ thư mục, đuôi)', !!w && w[0].text === `${MAIN_HEAD}\n\\input{toan10_gk1}\n\\end{document}\n`);
-t('kèm đủ bộ khai báo của mẫu in (giống hệt heduFiles)', !!w && JSON.stringify(w.slice(1)) === JSON.stringify(heduFiles([{ latex: DATA }] as unknown as Question[], '')));
-t('tệp đã có \\documentclass ⇒ không bọc', wrapFiles('main.tex', '\\documentclass{book}\n\\begin{document}x\\end{document}', 'hedu') === null);
-t('\\documentclass bị chú thích vẫn là tệp dữ liệu', wrapFiles('a.tex', '%\\documentclass{book}\n\\begin{ex}x\\end{ex}', 'hedu') !== null);
-t('tên tệp có khoảng trắng / ký tự TeX ⇒ không bọc', wrapFiles('de thi.tex', DATA, 'hedu') === null && inputName('a%b.tex') === null && inputName('x{y}.tex') === null);
+const DATA = '\\TieuDeDeSo{TRƯỜNG A}{ĐỀ GK1}{Toán 10}{90 phút}{01}\n\\begin{ex}\nCho $\\triangle ABC$.\n\\choice{a}{\\True b}{c}{d}\n\\end{ex}\n';
+const w = wrapFiles('de/toan10_gk1.tex', DATA, 'hymath-02-navy-editorial', 'de-in', { schoolYear: '2026–2027', teacher: 'GV: Hy & cộng sự' });
+const main = w?.files[0].text ?? '';
+t('HyMath: tệp bọc + lõi + tệp mẫu; XeLaTeX; tự đặt chế độ', !!w && w.files[0].path === WRAP_MAIN && w.engine === 'xelatex' && w.modes && w.files.some((f) => f.path === 'theme-02-navy-editorial.tex') && w.files.some((f) => f.path === 'hymath-caidat.tex'));
+t('HyMath: \\input đúng tên tệp dữ liệu, đúng mẫu, đúng chế độ', main.includes('\\input{toan10_gk1}') && main.includes('\\def\\ThemeFile{theme-02-navy-editorial.tex}') && main.includes('\\def\\CheDo{in}'));
+t('HyMath: năm học, tên giáo viên vào lệnh, ký tự đặc biệt được thoát', main.includes('\\newcommand{\\SchoolYear}{2026–2027}') && main.includes('\\newcommand{\\TeacherName}{GV: Hy \\& cộng sự}'));
+t('chế độ: Đề → mau, Đề in → in, Lời giải → loigiai, nguyên văn → mau', cheDo('de') === 'mau' && cheDo('de-in') === 'in' && cheDo('loigiai') === 'loigiai' && cheDo('nguyen-van') === 'mau');
+t('thoát chữ: bỏ \\ và xuống dòng, thoát # $ % & _ { }', texText('a\\b\n#$%&_{}') === 'a b \\#\\$\\%\\&\\_\\{\\}');
+t('không quá 8 tệp (giới hạn phía Rust)', !!w && w.files.length <= 8);
+
+const old = wrapFiles('de/toan10_gk1.tex', DATA, HEDU_THEME_ID);
+t('mẫu HEdu kiểu cũ: phần đầu như Tạo đề, bộ khai báo heduFiles, pdfLaTeX', !!old && !old.modes && old.engine === null && old.files[0].text === `${MAIN_HEAD}\n\\input{toan10_gk1}\n\\end{document}\n` && JSON.stringify(old.files.slice(1)) === JSON.stringify(heduFiles([{ latex: DATA }] as unknown as Question[], '')));
+t('tệp đã có \\documentclass ⇒ không bọc', wrapFiles('main.tex', '\\documentclass{book}\n\\begin{document}x\\end{document}', 'hymath-02-navy-editorial') === null);
+t('\\documentclass bị chú thích vẫn là tệp dữ liệu', wrapFiles('a.tex', '%\\documentclass{book}\n\\begin{ex}x\\end{ex}', 'hymath-02-navy-editorial') !== null);
+t('tên tệp có khoảng trắng / ký tự TeX ⇒ không bọc', wrapFiles('de thi.tex', DATA, 'hymath-02-navy-editorial') === null && inputName('a%b.tex') === null && inputName('x{y}.tex') === null);
 t('tên tiếng Việt, gạch nối, dấu chấm được', inputName('đề-thi_11.v2.tex') === 'đề-thi_11.v2');
-t('mẫu lạ ⇒ dùng mẫu mặc định', JSON.stringify(wrapFiles('a.tex', DATA, 'khong-co')) === JSON.stringify(wrapFiles('a.tex', DATA, 'hedu')));
+t('mẫu lạ ⇒ dùng mẫu mặc định', JSON.stringify(wrapFiles('a.tex', DATA, 'khong-co')) === JSON.stringify(wrapFiles('a.tex', DATA, 'hymath-02-navy-editorial')));
 
 if (fails) { console.log(`\n${fails} test lỗi`); process.exit(1); }
 console.log('\nOK');

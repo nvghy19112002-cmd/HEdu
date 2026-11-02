@@ -20,7 +20,7 @@ import { compileSlots, type TabStatus } from '../lib/examtabs';
 import { clampLog, clampPdf, lacksPreamble, loadLayout, saveLayout, treeShown, type EwLayout } from '../lib/ewlayout';
 import { TEX_KEYS_HINT } from '../lib/texextras';
 import { inputName, wrapFiles } from '../lib/examwrap';
-import { loadThemeId, themeOf } from '../lib/examtheme';
+import { HEDU_THEME_ID, loadDefaultInfo, loadThemeId, themeOf } from '../lib/examtheme';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Pane = 'files' | 'edit' | 'pdf' | 'log';
@@ -28,10 +28,10 @@ const NARROW = 1000;
 
 /** Mỗi đề đang mở là một tab ở Thư viện đề: tab ẩn vẫn giữ nguyên trạng thái (tệp đang sửa, PDF, nhật ký).
  * `onLibrary` = về tab Thư viện (đề vẫn mở) · `onInfo` = mở hộp Thông tin & thao tác của đề · `onClose` = đóng tab (đã hỏi lưu nếu cần). */
-interface Props { id: string; name: string; mainFile: string | null; hidden?: boolean; onLibrary(): void; onInfo(): void; onClose(): void; onStatus?(id: string, s: TabStatus): void }
+interface Props { id: string; name: string; mainFile: string | null; /** năm học của đề (Thông tin đề), in trên mẫu HyMath */ schoolYear?: string | null; hidden?: boolean; onLibrary(): void; onInfo(): void; onClose(): void; onStatus?(id: string, s: TabStatus): void }
 export interface ExamWorkspaceHandle { requestClose(): void }
 
-export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
+export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, schoolYear, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
   const { toast } = useApp();
   const ed = useRef<CodeEditorHandle>(null);
   const loaded = useRef(new Map<string, string>()); // văn bản lúc mở, dùng khi gắn vào trình soạn lần đầu
@@ -285,8 +285,10 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
       const st = getSettings();
       // tệp chính chỉ có nội dung đề ⇒ HEdu ghép phần đầu theo mẫu in (chỉ trong thư mục build)
       const mt = mainFile ? (ed.current?.text(mainFile) ?? loaded.current.get(mainFile) ?? (await fileRead(id, mainFile).then((x) => x.text).catch(() => null))) : null;
-      const wrap = mainFile && mt !== null ? wrapFiles(mainFile, mt, loadThemeId()) : null;
-      const r = await examCompile(id, { engine, runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120), ...(wrap ? { wrap } : {}) });
+      const di = loadDefaultInfo();
+      const wrap = mainFile && mt !== null ? wrapFiles(mainFile, mt, loadThemeId(), mode, { schoolYear: schoolYear || di.year, teacher: di.teacher }) : null;
+      if (!wrap && mode === 'de-in') { setNote('Bản “Đề in trắng đen” chỉ có với tệp đề chỉ có dữ liệu và mẫu in HyMath.'); return; }
+      const r = await examCompile(id, { engine: wrap?.engine ?? engine, runs: wrap?.modes ? Math.max(runs, 2) : runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120), ...(wrap ? { wrap: wrap.files, wrapModes: wrap.modes } : {}) });
       setResult(r);
       examCompileAll(id).then(setGoods).catch(() => undefined);
       if (r.status === 'ok') setViewMode(mode);
@@ -426,6 +428,11 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
   const dataOnly = !!mainFile && mainText !== null && lacksPreamble(mainText) && inputName(mainFile) !== null;
   dataOnlyRef.current = dataOnly;
   const modesOk = !!profile?.available || dataOnly;
+  /** tệp dữ liệu + mẫu HyMath: ba bản Đề / Đề in / Lời giải, không có "nguyên văn"; trình dịch XeLaTeX */
+  const hyData = dataOnly && loadThemeId() !== HEDU_THEME_ID;
+  const modeList = MODES.filter((m) => (hyData ? m.id !== 'nguyen-van' : m.id !== 'de-in'));
+  // bản đang chọn không có trong danh sách (vd mở tệp dữ liệu khi đang chọn "nguyên văn") ⇒ về bản Đề
+  useEffect(() => { if (!modeList.some((m) => m.id === mode)) setMode(hyData || profile?.available ? 'de' : 'nguyen-van'); }, [hyData, mode, profile?.available]); // eslint-disable-line react-hooks/exhaustive-deps
   // chỉ có dữ liệu nhưng tên tệp không ghép được (khoảng trắng, ký tự lạ) ⇒ giải thích
   const noPreamble = !!result && result.status !== 'ok' && mainText !== null && lacksPreamble(mainText) && !dataOnly;
   const themeName = themeOf(loadThemeId()).name;
@@ -450,7 +457,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           <button type="button" className="btn btn-sm btn-ghost" onClick={openSources} title="Các câu trong đề lấy từ Ngân hàng">Nguồn câu</button>
         </span>
         <span className="ew-grp ew-compile">
-          <select className="xl-in ew-sel" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch" title="Bản biên dịch">{MODES.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !modesOk} title={m.id !== 'nguyen-van' && !modesOk ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select>
+          <select className="xl-in ew-sel" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch" title="Bản biên dịch">{modeList.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !modesOk} title={m.id !== 'nguyen-van' && !modesOk ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select>
           <details className="ew-opts">
             <summary className="btn btn-sm btn-ghost" title={`Tuỳ chọn biên dịch: ${ENGINES.find((x) => x.id === engine)?.label ?? engine}, ${runs} lượt`} aria-label="Tuỳ chọn biên dịch">⚙</summary>
             <div className="ew-pop">

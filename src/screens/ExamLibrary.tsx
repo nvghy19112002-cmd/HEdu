@@ -552,7 +552,7 @@ export function ExamLibraryScreen() {
       {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} mode={viewing} note={MODE_NOTE[viewing]} onClose={() => setViewing(null)} />}
       {exportingCodes && activeId && detail && <ExamExportDialog id={activeId} name={detail.name} onToast={toast} onClose={() => setExportingCodes(false)} />}
       {docTabs.map((e) => (
-        <ExamWorkspace key={e.id} ref={(h) => { if (h) wsRefs.current.set(e.id, h); else wsRefs.current.delete(e.id); }} id={e.id} name={e.name} mainFile={e.mainFile}
+        <ExamWorkspace key={e.id} ref={(h) => { if (h) wsRefs.current.set(e.id, h); else wsRefs.current.delete(e.id); }} id={e.id} name={e.name} mainFile={e.mainFile} schoolYear={e.metadata.schoolYear}
           hidden={tabs.front !== e.id} onStatus={onTabStatus}
           onLibrary={() => setTabs((t) => ({ ...t, front: null }))}
           onInfo={() => { infoFrom.current = e.id; setTabs((t) => ({ ...t, front: null })); setActiveId(e.id); }}
