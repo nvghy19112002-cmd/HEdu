@@ -69,7 +69,8 @@ function Shell({ recovered }: { recovered: boolean }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => !p); }
+      // trình soạn LaTeX dùng Ctrl+K để xoá dòng (như TeXstudio) và đã chặn sự kiện thì không mở bảng lệnh
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !e.defaultPrevented) { e.preventDefault(); setPalette((p) => !p); }
     };
     const onSaveErr = () => toast('Không ghi được dữ liệu xuống đĩa. Hãy tạo file sao lưu và kiểm tra ổ đĩa.');
     window.addEventListener('keydown', onKey);

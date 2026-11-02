@@ -110,3 +110,30 @@ export function envBlock(lines: readonly string[], from: number): { name: string
   }
   return null;
 }
+
+/**
+ * Ctrl+T như TeXstudio: mọi dòng (có chữ) đều đã bắt đầu bằng % (sau khoảng trắng) ⇒ bỏ một dấu %; ngược lại thêm % ở ĐẦU mỗi dòng có chữ.
+ * Dòng trống giữ nguyên.
+ */
+export function toggleCommentLines(lines: readonly string[]): string[] {
+  const filled = lines.filter((l) => l.trim());
+  if (filled.length && filled.every((l) => /^\s*%/.test(l))) return uncommentLines(lines);
+  return lines.map((l) => (l.trim() ? `%${l}` : l));
+}
+
+/** Ctrl+U: bỏ một dấu % đầu dòng (sau khoảng trắng) ở các dòng đang chú thích. */
+export const uncommentLines = (lines: readonly string[]): string[] => lines.map((l) => l.replace(/^(\s*)%/, '$1'));
+
+/** Môi trường gần nhất còn mở tính tới con trỏ (Alt+Enter đóng nó, như TeXstudio); không có ⇒ null. Bỏ qua phần chú thích. */
+export function lastOpenEnv(before: string): string | null {
+  const stack: string[] = [];
+  for (const raw of before.split('\n')) {
+    const cut = raw.search(/(?<!\\)%/);
+    const line = cut >= 0 ? raw.slice(0, cut) : raw;
+    for (const m of line.matchAll(/\\(begin|end)\{([A-Za-z*@]+)\}/g)) {
+      if (m[1] === 'begin') stack.push(m[2]);
+      else { const i = stack.lastIndexOf(m[2]); if (i >= 0) stack.splice(i, 1); }
+    }
+  }
+  return stack.at(-1) ?? null;
+}

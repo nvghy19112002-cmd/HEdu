@@ -1,3 +1,13 @@
+## Có gì mới trong beta.51 (kênh beta): sửa bôi đen, phím tắt giống TeXstudio
+Gồm PR #204 (so với beta.50). Không đổi dữ liệu. Đã thử bằng bộ kiểm thử và bản thử trên trình duyệt; chưa thử trên máy Windows thật. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Sửa: bôi đen chữ trong trình soạn không thấy màu** (vùng chọn bị nền dòng đang soạn che mất). Nay vùng chọn hiện rõ, ở cả Biên tập đề và Xử lí TeX.
+- **Ctrl+T** bật/tắt chú thích: thêm `%` ở ĐẦU mỗi dòng đang chọn, bấm lần nữa để bỏ (như TeXstudio); **Ctrl+U** bỏ chú thích; Ctrl+/ cũng được.
+- Thêm phím tắt của TeXstudio: **Ctrl+K** xoá dòng, **Alt+Enter** đóng môi trường đang mở (thêm `\end{…}`), **Alt+Shift+M** công thức `\[ … \]`, **Ctrl+Shift+I** `\item`, **Ctrl+R** thay thế, **Ctrl+G** đến dòng số, **Ctrl+Alt+↑/↓** thêm con trỏ, **Alt+Delete** xoá từ phía sau, **Tab / Shift+Tab** thụt/lùi lề khi chọn nhiều dòng.
+- Nút **⌨ Phím tắt** ở góc dưới trình soạn: xem toàn bộ phím tắt.
+- Trong trình soạn, Ctrl+K là xoá dòng (không mở bảng lệnh của app nữa).
+
 ## Có gì mới trong beta.50 (kênh beta): màn Biên tập đề gọn hơn, soạn LaTeX kiểu TeXstudio
 Gồm PR #203 (so với beta.49). Không đổi dữ liệu, ngân hàng hay tệp đề. Đã thử bằng bộ kiểm thử và bản thử trên trình duyệt với dữ liệu giả lập; chưa thử trên máy Windows thật. Đây là bản beta.
 

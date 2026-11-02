@@ -2,11 +2,12 @@
 // gõ \ hiện gợi ý lệnh (kèm ô nhảy Tab), \begin{ gợi ý môi trường và tự thêm \end, Enter sau \begin{…} tự đóng,
 // tự đóng ngoặc { [ ( và $, thu gọn khối \begin…\end, phím tắt Ctrl+B/I, Ctrl+Shift+M, Ctrl+/ hoặc Ctrl+T (chú thích), Ctrl+D (nhân đôi dòng).
 import { autocompletion, closeBrackets, closeBracketsKeymap, snippet, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
-import { copyLineDown, deleteLine, indentLess, indentMore, toggleComment } from '@codemirror/commands';
+import { addCursorAbove, addCursorBelow, copyLineDown, deleteGroupForward, deleteLine, indentLess, indentMore, insertTab } from '@codemirror/commands';
+import { gotoLine, openSearchPanel } from '@codemirror/search';
 import { codeFolding, foldGutter, foldKeymap, foldService } from '@codemirror/language';
 import { EditorSelection, EditorState, type Extension } from '@codemirror/state';
 import { keymap, type EditorView } from '@codemirror/view';
-import { beginAtEnd, docCommands, docEnvs, envBlock, needsEnd, TEX_COMMANDS, TEX_ENVS } from './texedit';
+import { beginAtEnd, docCommands, docEnvs, envBlock, lastOpenEnv, needsEnd, TEX_COMMANDS, TEX_ENVS, toggleCommentLines, uncommentLines } from './texedit';
 
 /** Áp mẫu (có ô Tab) thay đoạn from..to; nếu ngay sau là dấu } do tự đóng ngoặc thì nuốt luôn. */
 const applyTpl = (tpl: string, eatBrace: boolean) => (view: EditorView, c: Completion, from: number, to: number) => {
@@ -71,6 +72,54 @@ const wrap = (before: string, after: string) => (view: EditorView): boolean => {
   return true;
 };
 
+/** Áp `f` lên trọn các dòng có vùng chọn/con trỏ (Ctrl+T, Ctrl+U); giữ vùng chọn phủ các dòng đó. */
+const onLines = (f: (lines: readonly string[]) => string[]) => (view: EditorView): boolean => {
+  const { state } = view;
+  if (state.readOnly) return false;
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let last = -1;
+  for (const r of state.selection.ranges) {
+    const a = state.doc.lineAt(r.from), b = state.doc.lineAt(r.empty || r.to === state.doc.lineAt(r.to).from && r.to > r.from ? Math.max(r.from, r.to - 1) : r.to);
+    if (a.number <= last) continue;
+    last = b.number;
+    const lines: string[] = [];
+    for (let n = a.number; n <= b.number; n++) lines.push(state.doc.line(n).text);
+    changes.push({ from: a.from, to: b.to, insert: f(lines).join(state.lineBreak) });
+  }
+  view.dispatch({ changes, userEvent: 'input', scrollIntoView: true });
+  return true;
+};
+
+/** Chèn chữ tại con trỏ (thay phần đang chọn). */
+const insert = (text: string) => (view: EditorView): boolean => {
+  if (view.state.readOnly) return false;
+  view.dispatch(view.state.replaceSelection(text), { userEvent: 'input', scrollIntoView: true });
+  return true;
+};
+
+/** Tab: chọn nhiều dòng thì thụt lề cả khối; còn lại chèn ký tự Tab tại con trỏ (như TeXstudio). Ô mẫu / gợi ý đang mở thì phím Tab của chúng được ưu tiên. */
+function tabKey(view: EditorView): boolean {
+  const { doc } = view.state;
+  const multi = view.state.selection.ranges.some((r) => !r.empty && doc.lineAt(r.from).number !== doc.lineAt(r.to).number);
+  return multi ? indentMore(view) : insertTab(view);
+}
+
+/** Alt+Enter: thêm \end{…} cho môi trường gần nhất còn mở, cùng lề với dòng \begin. */
+function closeLastEnv(view: EditorView): boolean {
+  const { state } = view;
+  const pos = state.selection.main.head;
+  const name = lastOpenEnv(state.sliceDoc(0, pos));
+  if (!name) return false;
+  const line = state.doc.lineAt(pos);
+  let indent = '';
+  for (let n = line.number; n >= 1; n--) { const t = state.doc.line(n).text; if (t.includes(`\\begin{${name}}`)) { indent = /^\s*/.exec(t)![0]; break; } }
+  const blank = !line.text.slice(0, pos - line.from).trim();
+  const from = blank ? line.from : pos;
+  const ins = `${blank ? '' : '\n'}${indent}\\end{${name}}`;
+  view.dispatch({ changes: { from, to: pos, insert: ins }, selection: { anchor: from + ins.length }, scrollIntoView: true, userEvent: 'input' });
+  return true;
+}
+
 /** thu gọn \begin{…}…\end{…}: giữ dòng \begin, ẩn tới hết dòng trước \end */
 const envFold = foldService.of((state, lineStart) => {
   const line = state.doc.lineAt(lineStart);
@@ -91,16 +140,35 @@ export function texExtras(): Extension[] {
     codeFolding({ placeholderText: '…' }), foldGutter({ openText: '▾', closedText: '▸' }), envFold,
     keymap.of([
       { key: 'Enter', run: enterCloseEnv },
+      { key: 'Alt-Enter', run: closeLastEnv, preventDefault: true },
+      { key: 'Tab', run: tabKey }, { key: 'Shift-Tab', run: indentLess },
       ...closeBracketsKeymap, ...foldKeymap,
+      // giống TeXstudio
       { key: 'Mod-b', run: wrap('\\textbf{', '}'), preventDefault: true },
       { key: 'Mod-i', run: wrap('\\textit{', '}'), preventDefault: true },
       { key: 'Mod-Shift-m', run: wrap('$', '$'), preventDefault: true },
-      { key: 'Mod-/', run: toggleComment, preventDefault: true }, { key: 'Mod-t', run: toggleComment, preventDefault: true },
-      { key: 'Mod-d', run: copyLineDown, preventDefault: true }, { key: 'Mod-Shift-k', run: deleteLine, preventDefault: true },
+      { key: 'Alt-Shift-m', run: wrap('\\[', '\\]'), preventDefault: true },
+      { key: 'Mod-Shift-i', run: insert('\\item '), preventDefault: true },
+      { key: 'Mod-t', run: onLines(toggleCommentLines), preventDefault: true }, { key: 'Mod-u', run: onLines(uncommentLines), preventDefault: true }, { key: 'Mod-/', run: onLines(toggleCommentLines), preventDefault: true },
+      { key: 'Mod-k', run: deleteLine, preventDefault: true }, { key: 'Mod-Shift-k', run: deleteLine, preventDefault: true },
+      { key: 'Mod-d', run: copyLineDown, preventDefault: true },
+      { key: 'Alt-Delete', run: deleteGroupForward, preventDefault: true },
+      { key: 'Mod-Alt-ArrowUp', run: addCursorAbove, preventDefault: true }, { key: 'Mod-Alt-ArrowDown', run: addCursorBelow, preventDefault: true },
+      { key: 'Mod-r', run: (v) => { openSearchPanel(v); return true; }, preventDefault: true },
+      { key: 'Mod-g', run: gotoLine, preventDefault: true },
       { key: 'Mod-]', run: indentMore, preventDefault: true }, { key: 'Mod-[', run: indentLess, preventDefault: true },
     ]),
   ];
 }
 
+/** Bảng phím tắt (nút "Phím tắt" ở góc trình soạn). */
+export const TEX_KEYS: readonly [string, string][] = [
+  ['\\ rồi gõ chữ', 'Gợi ý lệnh; Enter chọn, Tab nhảy ô'], ['Ctrl+Space', 'Mở gợi ý'], ['\\begin{ + tên', 'Tự thêm \\end{…}'], ['Alt+Enter', 'Đóng môi trường đang mở'],
+  ['Ctrl+B / Ctrl+I', '\\textbf / \\textit (bọc chữ đang chọn)'], ['Ctrl+Shift+M', 'Công thức $…$'], ['Alt+Shift+M', 'Công thức \\[ … \\]'], ['Ctrl+Shift+I', '\\item'],
+  ['Ctrl+T', 'Bật/tắt chú thích % cho các dòng đang chọn'], ['Ctrl+U', 'Bỏ chú thích'], ['Ctrl+K', 'Xoá dòng'], ['Ctrl+D', 'Nhân đôi dòng'], ['Alt+↑ / Alt+↓', 'Chuyển dòng lên / xuống'],
+  ['Tab / Shift+Tab', 'Thụt / lùi lề (khi chọn nhiều dòng)'], ['Ctrl+Alt+↑ / ↓', 'Thêm con trỏ dòng trên / dưới'], ['Alt+Delete', 'Xoá từ / lệnh phía sau'],
+  ['Ctrl+F · Ctrl+R (Ctrl+H)', 'Tìm · Thay'], ['Ctrl+G', 'Đến dòng số…'], ['Ctrl+Z / Ctrl+Y', 'Hoàn tác / Làm lại'], ['Ctrl+S', 'Lưu'],
+];
+
 /** Dòng nhắc phím tắt ở thanh trạng thái. */
-export const TEX_KEYS_HINT = 'Gõ \\ để gợi ý lệnh · Tab nhảy ô · Ctrl+B đậm · Ctrl+I nghiêng · Ctrl+Shift+M công thức · Ctrl+/ chú thích · Ctrl+D nhân đôi dòng';
+export const TEX_KEYS_HINT = 'Gõ \\ để gợi ý lệnh · Ctrl+T chú thích · Ctrl+B đậm · Ctrl+Shift+M công thức · Alt+Enter đóng môi trường';
