@@ -45,6 +45,54 @@ pub struct CompileOpts {
     pub mode: Option<String>,
     /// tệp .tex chính thay cho tệp chính của dự án (vd `main-101.tex`, mỗi mã đề một tệp). Không đặt = như cũ. Phải là tệp .tex có trong dự án.
     pub main: Option<String>,
+    /// Tệp chính CHỈ có nội dung đề (không có \documentclass): bộ tệp "bọc" do giao diện dựng theo mẫu in (WRAP_MAIN + khai báo).
+    /// Chỉ ghi vào thư mục build, cạnh tệp chính; tệp của dự án không bao giờ bị sửa. Tệp chính đã có \documentclass thì bỏ qua.
+    pub wrap: Option<Vec<WrapFile>>,
+}
+
+#[derive(Deserialize, Clone, Default, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WrapFile {
+    pub path: String,
+    pub text: String,
+}
+
+/// Tên tệp bọc (có \documentclass, khai báo và \input tệp dữ liệu) — luôn phải có trong `wrap`.
+pub const WRAP_MAIN: &str = "hedu-boc.tex";
+const WRAP_MAX_FILES: usize = 8;
+const WRAP_MAX_BYTES: usize = 2 * 1024 * 1024;
+
+/// Tệp có lệnh \documentclass đang hoạt động (không tính dòng chú thích) ⇒ đã là tài liệu đầy đủ.
+pub fn has_documentclass(text: &str) -> bool {
+    text.split('\n').any(|l| examprofile::code_part(l).contains("\\documentclass"))
+}
+
+/// Kiểm bộ tệp bọc: tên đơn giản (không thư mục), đuôi .tex/.sty, giới hạn số lượng và dung lượng, có WRAP_MAIN.
+pub fn check_wrap(files: &[WrapFile]) -> Result<(), String> {
+    if files.is_empty() || files.len() > WRAP_MAX_FILES {
+        return Err("Bộ tệp bọc không hợp lệ (số tệp).".into());
+    }
+    let mut total = 0usize;
+    let mut seen = HashSet::new();
+    for f in files {
+        let n = f.path.as_str();
+        let l = n.to_lowercase();
+        let ok_name = !n.is_empty() && n.len() <= 64 && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') && n.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) && !n.contains("..");
+        if !ok_name || !(l.ends_with(".tex") || l.ends_with(".sty")) {
+            return Err(format!("Tên tệp bọc không hợp lệ: {n}"));
+        }
+        if !seen.insert(l) {
+            return Err(format!("Tệp bọc bị trùng: {n}"));
+        }
+        total += f.text.len();
+    }
+    if total > WRAP_MAX_BYTES {
+        return Err("Bộ tệp bọc quá lớn.".into());
+    }
+    if !files.iter().any(|f| f.path == WRAP_MAIN) {
+        return Err(format!("Thiếu tệp {WRAP_MAIN}."));
+    }
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -603,15 +651,43 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
         None => (String::new(), main.clone()),
     };
     let cwd = if main_dir.is_empty() { work.clone() } else { work.join(&main_dir) };
+
+    // Tệp chính chỉ có nội dung đề ⇒ ghép phần đầu bằng bộ tệp bọc (CHỈ trong thư mục build). Tệp trùng tên có trong dự án thì dùng tệp của dự án.
+    let mut wrap_used: Vec<(String, String)> = Vec::new();
+    let mut compile_name = main_name.clone();
+    if let Some(files) = opts.wrap.as_ref().filter(|f| !f.is_empty()) {
+        check_wrap(files)?;
+        let main_text = fs::read(work.join(&main)).ok().map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
+        if has_documentclass(&main_text) {
+            out.warnings.push("Tệp chính đã có \\documentclass nên HEdu biên dịch nguyên tệp, không ghép phần đầu theo mẫu in.".into());
+        } else {
+            let rel_of = |n: &str| if main_dir.is_empty() { n.to_string() } else { format!("{main_dir}/{n}") };
+            for f in files {
+                let rel = rel_of(&f.path);
+                if sync.files.iter().any(|(r, _)| r.eq_ignore_ascii_case(&rel)) {
+                    if f.path == WRAP_MAIN {
+                        return Err(format!("Dự án đã có tệp tên {WRAP_MAIN}; hãy đổi tên tệp đó để HEdu ghép phần đầu."));
+                    }
+                    out.warnings.push(format!("Dự án có sẵn «{}» nên HEdu dùng tệp đó thay cho tệp của mẫu in.", f.path));
+                    continue;
+                }
+                wrap_used.push((rel, f.text.clone()));
+            }
+            examprofile::write_derived(&work, &examprofile::Derived { files: wrap_used.clone(), changes: vec![] })?;
+            compile_name = WRAP_MAIN.to_string();
+        }
+    }
     let work_fwd = work.to_string_lossy().replace('\\', "/");
     let work_fwd = work_fwd.trim_start_matches("//?/").to_string();
 
     // chế độ Đề/Lời giải: bản dẫn xuất CHỈ trong thư mục build; không chắc cách bật/tắt lời giải ⇒ KHÔNG biên dịch (không xuất PDF mang nhãn Đề)
     let mut mode_sig = mode.to_string();
     if mode != MODE_RAW {
-        let rels: Vec<String> = sync.files.iter().map(|(r, _)| r.clone()).collect();
-        let projdir = projects_dir(&lib).join(id);
-        match examprofile::derive(&projdir, &rels, mode) {
+        let mut rels: Vec<String> = sync.files.iter().map(|(r, _)| r.clone()).collect();
+        // có tệp bọc: tìm \usepackage{ex_test} trong cả tệp bọc (đọc từ thư mục build, nơi đã có bản sao dự án + tệp bọc)
+        let scan_dir = if wrap_used.is_empty() { projects_dir(&lib).join(id) } else { work.clone() };
+        rels.extend(wrap_used.iter().map(|(r, _)| r.clone()));
+        match examprofile::derive(&scan_dir, &rels, mode) {
             Ok(d) => {
                 examprofile::write_derived(&work, &d)?;
                 let mut h = Sha256::new();
@@ -653,7 +729,12 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     if !slot.is_empty() {
         mode_sig = format!("{mode_sig}|main={main}");
     }
-    out.fingerprint = fingerprint(&sync.files, engine, runs, &mode_sig, &ver);
+    // tệp bọc (theo mẫu in) vào dấu vân: đổi mẫu in thì dịch lại
+    let mut fp_files = sync.files.clone();
+    for (r, t) in &wrap_used {
+        fp_files.push((format!("<boc>/{r}"), format!("{:x}", Sha256::digest(t.as_bytes()))));
+    }
+    out.fingerprint = fingerprint(&fp_files, engine, runs, &mode_sig, &ver);
 
     if !opts.force.unwrap_or(false) {
         if let Some(g) = last_good_slot(root, id, mode, &slot) {
@@ -685,7 +766,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             break;
         }
         let mut c = engine_command(&tex_bin, engine, support_dir, &cwd);
-        c.args(["-interaction=nonstopmode", "-file-line-error", "-no-shell-escape"]).arg(format!("-jobname={JOBNAME}")).arg(&main_name);
+        c.args(["-interaction=nonstopmode", "-file-line-error", "-no-shell-escape"]).arg(format!("-jobname={JOBNAME}")).arg(&compile_name);
         let r = match run_job(&mut c, left, &cancel_flag) {
             Ok(r) => r,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -903,6 +984,30 @@ pub fn exam_pdf_open_external(app: AppHandle, id: String, mode: Option<String>) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn wf(p: &str) -> WrapFile {
+        WrapFile { path: p.into(), text: "x".into() }
+    }
+
+    #[test]
+    fn nhan_tep_day_du_va_tep_chi_du_lieu() {
+        assert!(has_documentclass("% đề\n\\documentclass[12pt]{book}\n"));
+        assert!(!has_documentclass("\\TieuDeDeSo{a}\n\\begin{ex}x\\end{ex}\n"));
+        assert!(!has_documentclass("%\\documentclass{book}\nabc"), "dòng chú thích không tính");
+    }
+
+    #[test]
+    fn kiem_bo_tep_boc() {
+        assert!(check_wrap(&[wf(WRAP_MAIN), wf("hedu.sty"), wf("khaibaochung.tex")]).is_ok());
+        assert!(check_wrap(&[wf("hedu.sty")]).is_err(), "thiếu tệp bọc chính");
+        assert!(check_wrap(&[wf(WRAP_MAIN), wf("../x.tex")]).is_err());
+        assert!(check_wrap(&[wf(WRAP_MAIN), wf("a/b.tex")]).is_err());
+        assert!(check_wrap(&[wf(WRAP_MAIN), wf("x.exe")]).is_err());
+        assert!(check_wrap(&[wf(WRAP_MAIN), wf("HEDU-BOC.tex")]).is_err(), "trùng tên không phân biệt hoa thường");
+        assert!(check_wrap(&[]).is_err());
+        let big = WrapFile { path: "a.tex".into(), text: "x".repeat(WRAP_MAX_BYTES + 1) };
+        assert!(check_wrap(&[wf(WRAP_MAIN), big]).is_err());
+    }
 
     const SAMPLE: &str = "This is pdfTeX\n(./main.tex\nLaTeX Warning: Reference `x' on page 1 undefined on input line 7.\n\n./chapters/c1.tex:5: Undefined control sequence.\nl.5 \\foo\n         bar\n\n./main.tex:12: LaTeX Error: File `zzz.sty' not found.\n\nType X to quit\n! Emergency stop.\n<*> main.tex\n\nOutput written on hedu-out.pdf (3 pages, 12345 bytes).\n";
 
@@ -1328,7 +1433,7 @@ B
         let sup = support::prepare(&root);
         assert!(sup.is_some());
         for eng in ["pdflatex", "xelatex", "lualatex"] {
-            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None };
+            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None };
             let r = compile(&root, &s.id, &o, &sup).unwrap();
             eprintln!("{eng}: {} · {} · {:?} trang · {} ms · {}", r.status, r.message, r.pages, r.ms, r.tex_version);
             assert_eq!(r.status, "ok", "{eng}: {:?} {}", r.diagnostics, r.raw_log);
@@ -1360,7 +1465,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "TikZ nặng", None).unwrap();
         let sup = support::prepare(&root);
-        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None };
+        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None };
         let r = compile(&root, &s.id, &o, &sup).unwrap();
         eprintln!("TikZ nặng: {} · {:?} trang · {} ms · {} lượt", r.status, r.pages, r.ms, r.runs);
         assert_eq!(r.status, "ok", "{:?} {}", r.diagnostics, r.raw_log);
@@ -1380,7 +1485,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "Thật", None).unwrap();
         let sup = support::prepare(&root);
-        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()), main: None };
+        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()), main: None , wrap: None };
         let de = compile(&root, &s.id, &o("de"), &sup).unwrap();
         let lg = compile(&root, &s.id, &o("loigiai"), &sup).unwrap();
         eprintln!("de: {} {:?} | loigiai: {} {:?}", de.status, de.pages, lg.status, lg.pages);

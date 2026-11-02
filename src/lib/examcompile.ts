@@ -15,7 +15,7 @@ export const MODES: { id: ExamMode; label: string }[] = [
   { id: 'loigiai', label: 'Lời giải' },
   { id: 'nguyen-van', label: 'Nguyên văn (chưa xác định)' },
 ];
-export interface CompileOpts { engine?: Engine; timeoutSecs?: number; runs?: number; texBin?: string; force?: boolean; mode?: ExamMode }
+export interface CompileOpts { engine?: Engine; timeoutSecs?: number; runs?: number; texBin?: string; force?: boolean; mode?: ExamMode; /** tệp chính chỉ có dữ liệu: bộ tệp bọc theo mẫu in (examwrap.ts) */ wrap?: { path: string; text: string }[] }
 export interface ProfileChange { file: string; line: number; before: string; after: string }
 export interface ProfileInfo { available: boolean; reason: string | null; file: string | null; line: number | null; options: string[] }
 export interface Diag { severity: 'error' | 'warning'; file: string | null; line: number | null; inProject: boolean; message: string; context: string[] }
