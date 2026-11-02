@@ -2081,3 +2081,9 @@ button.xt-tab { padding: 0 14px; flex: 0 0 auto; }
 .xr-where { color: var(--ink-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .xr-num { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 1180px) { .xr-head, .xr { grid-template-columns: minmax(160px, 2fr) 120px 96px 76px; } .xr-head > :nth-child(3), .xr-head > :nth-child(5), .xr-head > :nth-child(6), .xr > :nth-child(3), .xr > :nth-child(5), .xr > :nth-child(6) { display: none; } }
+
+/* ---- Thư viện đề: kéo đề vào mục của cây ---- */
+.xdrag-ghost { position: fixed; z-index: 400; pointer-events: none; max-width: 280px; padding: 5px 12px; border-radius: 8px; background: var(--ink-2); color: var(--paper); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .94; }
+.xdrag-ghost.ok { background: var(--pri); }
+body.xdragging, body.xdragging * { cursor: grabbing !important; user-select: none !important; }
+.bt-row.drop-on { background: var(--pri-soft); outline: 2px solid var(--pri); outline-offset: -2px; border-radius: 6px; }
