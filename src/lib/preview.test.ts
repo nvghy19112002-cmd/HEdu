@@ -104,6 +104,11 @@ console.log('Chữ, danh sách, bảng');
   ok(mc.unsupported.length === 0 && /tx-cols-4/.test(mcHtml) && !/multicols/.test(mcHtml), 'multicols{4}: chia 4 cột, không báo "Chưa hiểu", không lộ tên lệnh');
   const cl = renderPartsEx('\\centerline{Hình 1. Đồ thị $y=x^2$}');
   ok(cl.unsupported.length === 0 && /tx-center/.test(JSON.stringify(cl.parts)) && /Hình 1/.test(JSON.stringify(cl.parts)), '\\centerline{…}: canh giữa, giữ nội dung');
+  // câu #5786 (chủ dự án báo 02/11/2026): 4 minipage .24\linewidth phải đứng cạnh nhau như bản in, không xếp dọc
+  const mini = renderPartsEx('Cho bốn hình:\\begin{center}\n\\begin{minipage}{.24\\linewidth}\\centering\n\\begin{tikzpicture}\\draw (0,0)--(1,0);\\end{tikzpicture}\n\\par Hình $1$\\end{minipage}\n\\begin{minipage}{.24\\linewidth}\\centering\nHình $2$\\end{minipage}\n\\begin{minipage}{12mm}x\\end{minipage}\\end{center}');
+  const miniOpen = mini.parts.filter((x) => x.kind === 'open').map((x) => (x as { cls: string }).cls);
+  ok(mini.unsupported.length === 0 && miniOpen.filter((c) => c === 'tx-mini@24').length === 2 && miniOpen.includes('tx-wrap'), 'minipage .24\\linewidth: khối rộng 24% đặt cạnh nhau; bề rộng đơn vị mm giữ khối thường');
+  ok(/class="tx-mini" style="width:calc\(50% - 3px\)"/.test(renderLatexText('\\begin{minipage}[t]{0.5\\textwidth}a\\end{minipage}')), 'minipage 0.5\\textwidth: HTML thuần có bề rộng 50%');
 }
 
 console.log('Không im lặng nuốt: lệnh lạ phải lộ ra');

@@ -158,7 +158,7 @@ export function renderLatexText(src: string): string {
   const { text, figures } = maskFigures(src);
   const flow = renderFlow(text, hooks);
   return flow.html
-    .replace(/\u0002O:([^\u0003]*)\u0003/g, '<div class="$1">')
+    .replace(/\u0002O:([^\u0003@]*)@?([^\u0003]*)\u0003/g, (_, c: string, w: string) => (w ? `<div class="${c}" style="width:calc(${w}% - 3px)">` : `<div class="${c}">`))
     .replace(/\u0002C\u0003/g, '</div>')
     .replace(/\u0000FIG(\d+)\u0000/g, (_, k) => {
       const label = figureLabel(figures[Number(k)]);

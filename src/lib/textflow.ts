@@ -498,6 +498,14 @@ function walk(s: string, ctx: Ctx): string {
   return out + closers.reverse().join('');
 }
 
+/** Bề rộng minipage dạng `0.24\linewidth` / `.5\textwidth` / `\linewidth` → phần trăm; dạng khác (mm, \dimexpr…) → null. */
+function miniWidthPct(w: string): number | null {
+  const m = /^\s*(\d*\.?\d+)?\s*\\(?:linewidth|textwidth|columnwidth|hsize)\s*$/.exec(w);
+  if (!m) return null;
+  const f = m[1] == null ? 1 : Number(m[1]);
+  return f > 0 && f <= 1 ? Math.round(f * 1000) / 10 : null;
+}
+
 function renderEnv(name: string, body: string, ctx: Ctx): string {
   const wrapBlock = (cls: string, inner: string) => OPEN(cls) + inner + CLOSE;
 
@@ -558,9 +566,13 @@ function renderEnv(name: string, body: string, ctx: Ctx): string {
     const o1 = readOptional(body, p);
     if (o1) p = o1[1];
     const need = name === 'wrapfigure' ? 2 : name === 'minipage' || name === 'varwidth' || name === 'adjustbox' ? 1 : name === 'spacing' ? 1 : 0;
-    const [, e] = readArgs(body, p, need);
+    const [args, e] = readArgs(body, p, need);
     const o2 = readOptional(body, e);
-    return wrapBlock('tx-wrap', walk(body.slice(o2 ? o2[1] : e), ctx));
+    const inner = walk(body.slice(o2 ? o2[1] : e), ctx);
+    // minipage có bề rộng theo tỉ lệ dòng (vd .24\linewidth): đứng cạnh nhau như bản in
+    const pct = name === 'minipage' ? miniWidthPct(args[0] ?? '') : null;
+    if (pct != null) return OPEN(`tx-mini@${pct}`) + inner + CLOSE;
+    return wrapBlock('tx-wrap', inner);
   }
 
   // multicols{n}: chia n cột như bản in (gói multicol)
