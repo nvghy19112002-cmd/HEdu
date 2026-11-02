@@ -66,7 +66,7 @@ export function mathProblems(src: string): Issue[] {
       quietly(() => katex.renderToString(seg.value, { displayMode: seg.display, throwOnError: true, strict: false, macros: { ...MACROS } }));
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e);
-      out.push({ level: 'loi', message: 'Công thức không dịch được: ' + raw.replace(/^KaTeX parse error:\s*/, ''), detail: cut('$' + seg.value + '$') });
+      out.push({ level: 'loi', message: 'Công thức không dịch được: ' + raw.replace(/^KaTeX parse error:\s*/, '').replace(/\u0332/g, ''), detail: cut('$' + seg.value + '$') });
     }
   }
   return out;

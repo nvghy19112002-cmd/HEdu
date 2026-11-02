@@ -71,6 +71,8 @@ export function segments(src: string): Seg[] {
   const flush = () => { if (buf) { out.push({ kind: 'text', value: buf, display: false }); buf = ''; } };
   while (i < src.length) {
     const ch = src[i];
+    // `\\` (xuống dòng) là một cặp: nếu không, `\\$AB…$` bị đọc thành `\` + `\$` (đô-la thoát) làm lệch mọi dấu $ phía sau
+    if (ch === '\\' && src[i + 1] === '\\') { buf += '\\\\'; i += 2; continue; }
     if (ch === '\\' && src[i + 1] === '$') { buf += '$'; i += 2; continue; }
     if (ch === '$') {
       const display = src[i + 1] === '$';

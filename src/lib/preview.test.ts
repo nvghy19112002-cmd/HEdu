@@ -1,7 +1,7 @@
 // Kiểm thử xem trước LaTeX (Issue #9). Toàn bộ ví dụ là câu tự viết, KHÔNG dùng câu hỏi thật.
 import { buildExTest, extractDefs, parseExTest } from './extest';
 import { checkQuestion } from './check';
-import { previewProblems, renderPartsEx, renderLatexText, type Part } from './render';
+import { previewProblems, renderPartsEx, renderLatexText, segments, type Part } from './render';
 import { barePathProblems, sourceProblems } from './srcdiag';
 
 let failed = 0;
@@ -173,6 +173,18 @@ console.log('Nhãn danh sách (enumitem)');
   ok(nested.join('|') === '1.|(a)|(b)|i.', 'danh sách lồng nhau: 1. (a) i.: ' + nested.join('|'));
   ok(labs('\\begin{enumerate}[\\it TH1:]\\item $x$\\begin{enumerate}[a)]\\item y\\end{enumerate}\\item z\\end{enumerate}').join('|') === 'TH1:|a)|TH2:', 'lồng nhau có nhãn riêng từng cấp');
   ok(labs('\\begin{itemize}\\item a\\end{itemize}').join('|') === '•', 'itemize giữ •');
+}
+
+console.log('Tách công thức: \\\\$ (xuống dòng rồi mở công thức) và \\$ (đô-la thoát)');
+{
+  const s = segments('Phương trình:\\\\$AB: x=1$,\\\\$CD: y=2$. Khi $M$ thỏa:\n\\[\\heva{x>0\\\\ y<1}\\]');
+  const maths = s.filter((x) => x.kind === 'math').map((x) => x.value);
+  ok(maths.length === 4 && maths[0] === 'AB: x=1' && maths[1] === 'CD: y=2' && maths[2] === 'M', `\\\\$ mở công thức đúng: ${JSON.stringify(maths)}`);
+  ok(s.some((x) => x.kind === 'math' && x.display && x.value === '\\heva{x>0\\\\ y<1}'), '\\[ … \\] sau đoạn có \\\\$ vẫn là công thức hiển thị nguyên vẹn');
+  const e = segments('giá \\$5 và $x$');
+  ok(e.length === 2 && e[0].kind === 'text' && e[0].value === 'giá $5 và ' && e[1].kind === 'math' && e[1].value === 'x', '\\$ vẫn là đô-la thoát (không mở công thức)');
+  const q = segments('\\\\\\$5 và $x$');
+  ok(q.length === 2 && q[0].value === '\\\\$5 và ' && q[1].value === 'x', '\\\\\\$ = xuống dòng + đô-la thoát');
 }
 
 if (failed) { console.log(`\n${failed} kiểm thử xem trước lỗi`); process.exit(1); }
