@@ -436,7 +436,7 @@ mod tests {
     use std::fs;
 
     fn root(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("hedu-cmd-test-{}-{}", std::process::id(), name));
+        let d = crate::testutil::dir(&format!("cmd-{name}"));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
