@@ -3,6 +3,7 @@
 // biên dịch chỉ chạy sau khi lưu xong mọi tệp (không lưu được thì không biên dịch). Không báo "đã lưu" khi chưa ghi xong.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { exportPdf } from '../lib/exampdf';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
 import { BankPicker } from '../components/BankPicker';
 import { PdfViewer } from '../components/PdfViewer';
@@ -466,6 +467,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
             </div>
           </details>
           {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch</button> : <button type="button" className="btn btn-sm" title={queued ? 'Đang chờ lượt: 2 đề khác đang biên dịch' : undefined} onClick={() => { if (queued) { gen.current++; setQueued(false); setCompiling(false); } else void examCompileCancel(id); }}>{queued ? 'Huỷ chờ' : 'Dừng'}</button>}
+          <button type="button" className="btn btn-sm" disabled={compiling || result?.status !== 'ok'} title={result?.status === 'ok' ? `Xuất PDF “${modeLabel(result.mode as ExamMode)}” vừa biên dịch thành công ra một tệp` : 'Biên dịch thành công rồi mới xuất được PDF'} onClick={() => { if (result) void exportPdf(id, name, result.mode as ExamMode).then((d) => { if (d) toast(`Đã xuất PDF: ${d}`); }).catch((e) => toast(e instanceof Error ? e.message : String(e))); }}>Xuất PDF…</button>
         </span>
         <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Thông tin đề: đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
       </header>

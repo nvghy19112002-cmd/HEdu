@@ -29,6 +29,9 @@ interface Props {
   /** hiện ô "Hiện cả chương/bài chưa có đề" (mặc định có) */
   emptySwitch?: boolean;
   treeLabel?: string;
+  /** thư mục thông minh hiện trên đầu cây (Gần đây, Gắn sao, Cần rà soát) */
+  smart?: { key: string; label: string; count: number; icon: 'clock' | 'star' | 'flag' }[];
+  onSmart?(key: string): void;
 }
 
 /** Lọc cây theo chữ tìm: giữ nút khớp và đường tới nó. */
@@ -43,7 +46,7 @@ function search(ns: readonly ExamNode[], q: string): ExamNode[] {
   return out;
 }
 
-export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, onShowEmpty, onPick, allLabel = 'Tất cả đề', emptySwitch = true, treeLabel = 'Cây đề thi' }: Props) {
+export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, onShowEmpty, onPick, allLabel = 'Tất cả đề', emptySwitch = true, treeLabel = 'Cây đề thi', smart, onSmart }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Set<string>>(loadOpen);
   // mở đường tới mục đang chọn
@@ -95,6 +98,18 @@ export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, on
             </button>
           </div>
         </li>
+        {smart?.map((s) => (
+          <li key={`smart:${s.key}`} role="treeitem" aria-level={1} aria-selected={sel === `smart:${s.key}`}>
+            <div className={`bt-row k-all${sel === `smart:${s.key}` ? ' is-sel' : ''}`}>
+              <button type="button" className="bt-name" onClick={() => onSmart?.(s.key)}>
+                <svg className="bt-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  {s.icon === 'clock' ? <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2.5 2" /></> : s.icon === 'star' ? <path d="m12 4 2.4 5 5.4.7-4 3.8 1 5.4L12 16.3 7.2 19l1-5.4-4-3.8 5.4-.7z" /> : <><path d="M6 20V5" /><path d="M6 5h10l-2 3.5 2 3.5H6" /></>}
+                </svg>
+                <span className="bt-label">{s.label}</span><span className="bt-n">{nf.format(s.count)}</span>
+              </button>
+            </div>
+          </li>
+        ))}
         {shown.map((x) => row(x, 0))}
         {q && shown.length === 0 && <li className="bt-none" role="none">Không có mục nào khớp “{query.trim()}”.</li>}
       </ul>

@@ -17,12 +17,14 @@ import { examCompileAll, MODE_NOTE, modeLabel, type ExamMode, type GoodInfo } fr
 import { allFolders } from '../lib/examfacets';
 import { CAT_LABEL, catOfType, examCounts, examTrail, examTree, filterByNode, movePatch, nodeTrail, placementOf, type ExamCat } from '../lib/examtree';
 import { startDrag } from '../lib/examdrag';
+import { clickCol, COL_LABEL, COL_ORDER, DEFAULT_COL_SORT, FILE_KIND_LABEL, fileRows, inSmart, isStar, parseColSort, SMART_LABEL, sortByCol, withStar, type ColSort, type SmartKey } from '../lib/examcols';
+import { exportAllPdf, exportPdf } from '../lib/exampdf';
 import { isDesktop, listen } from '../lib/platform';
 import { scanUsage } from '../lib/examusage';
 import {
   bundleFolderName, chooseProjectFolder, chooseTexFile, dateText, describeScan, examBundleExport, examBundleImport, examCreate, examDuplicate, examGet, examImport, examList, examMetaUpdate,
-  examReveal, examScan, examTrash, examVerify, filterExams, formatBytes, needsMainChoice, SORT_LABEL, sortExams, STATUS_LABEL,
-  type ExamManifest, type ExamMetaIn, type ExamScan, type ExamSort, type ExamStatus, type ExamSummary, type ExamVerify,
+  examReveal, examScan, examTrash, examVerify, filterExams, formatBytes, needsMainChoice, STATUS_LABEL,
+  type ExamManifest, type ExamMetaIn, type ExamScan, type ExamStatus, type ExamSummary, type ExamVerify,
 } from '../lib/examlib';
 import { ExamWorkspace, type ExamWorkspaceHandle } from './ExamWorkspace';
 import { closeTab, cycleTab, keepExisting, loadTabs, MAX_TABS, openTab, saveTabs, type TabsState, type TabStatus } from '../lib/examtabs';
@@ -31,11 +33,12 @@ import { ExamExportDialog } from '../components/ExamExportDialog';
 const nf = new Intl.NumberFormat('vi-VN');
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const STATUSES: ExamStatus[] = ['draft', 'needs_review', 'finalized'];
-const PER_PAGE = 24;
-const PER_PAGE_LIST = 50;
+const PER_PAGE = 60;
+const PER_PAGE_LIST = 200;
+const COLSORT_KEY = 'hedu.examcolsort';
 const VIEW_KEY = 'hedu.examview';
 type View = 'card' | 'list';
-const loadView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'card'; } catch { return 'card'; } };
+const loadView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'card' ? 'card' : 'list'; } catch { return 'list'; } };
 /** màu thẻ theo nhóm loại đề */
 const catTone = (c: ExamCat | null): string => (c === 'gk1' || c === 'gk2' ? 'gk' : c === 'ck1' || c === 'ck2' ? 'ck' : c === 'thi-thu' ? 'tt' : c === 'on-bai' || c === 'on-chuong' || c === 'on-tap' ? 'ot' : c === 'kt-khac' ? 'kt' : 'na');
 /** nhóm trung gian và tên loại (đã có ở nhãn màu) không lặp lại ở dòng vị trí của thẻ */
@@ -75,13 +78,21 @@ export function ExamLibraryScreen() {
   const [text, setText] = useState('');
   const [status, setStatus] = useState<ExamStatus | null>(null);
   const [year, setYear] = useState<string | null>(null);
-  const [sort, setSort] = useState<ExamSort>('updated');
+  /** cột sắp xếp (bấm tiêu đề cột), nhớ theo máy */
+  const [colSort, setColSortState] = useState<ColSort>(() => { try { return parseColSort(localStorage.getItem(COLSORT_KEY)); } catch { return DEFAULT_COL_SORT; } });
+  const setColSort = (s: ColSort) => { setColSortState(s); try { localStorage.setItem(COLSORT_KEY, JSON.stringify(s)); } catch { /* không nhớ được thì thôi */ } };
+  /** kiểu Finder: bấm = chọn (hiện thông tin bên phải), bấm đúp / Enter = mở thành tab */
+  const [sel, setSel] = useState<string | null>(null);
+  const [smart, setSmart] = useState<SmartKey | null>(null);
+  const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
+  const [rowFiles, setRowFiles] = useState<ReadonlyMap<string, ExamManifest['files']>>(new Map());
+  const [selGoods, setSelGoods] = useState<GoodInfo[]>([]);
   /** kiểu xem: thẻ hoặc danh sách (nhớ theo máy) */
   const [view, setViewState] = useState<View>(loadView);
   const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* không nhớ được thì thôi */ } };
   const perPage = view === 'list' ? PER_PAGE_LIST : PER_PAGE;
   const [page, setPage] = useState(0);
-  const [menu, setMenu] = useState<null | 'add' | 'tools' | 'filter'>(null);
+  const [menu, setMenu] = useState<null | 'add' | 'tools' | 'filter' | 'export'>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ExamManifest | null>(null);
   const [check, setCheck] = useState<ExamVerify | null>(null);
@@ -117,6 +128,15 @@ export function ExamLibraryScreen() {
   /** số câu của từng đề (đề tạo bằng Tạo đề có danh sách câu nguồn) */
   const [qn, setQn] = useState<ReadonlyMap<string, number>>(new Map());
   useEffect(() => { if (!desktop || !items.length) return; scanUsage().then((u) => setQn(new Map(u.projects.map((p) => [p.id, p.uids.length] as const)))).catch(() => undefined); }, [desktop, items]);
+
+  // PDF đã biên dịch của đề đang chọn (cho nút Xuất PDF, ngăn thông tin, menu chuột phải)
+  useEffect(() => {
+    setSelGoods([]);
+    if (!desktop || !sel) return;
+    let dead = false;
+    examCompileAll(sel).then((g) => { if (!dead) setSelGoods(g); }).catch(() => undefined);
+    return () => { dead = true; };
+  }, [desktop, sel, items]);
 
   const loadDetail = useCallback((id: string) => {
     examGet(id).then(setDetail).catch((e) => toast(`Không đọc được đề: ${msg(e)}`));
@@ -171,14 +191,17 @@ export function ExamLibraryScreen() {
   const counts = useMemo(() => examCounts(base, tax), [base, tax]);
   const tree = useMemo(() => examTree(tax, counts, base, showEmpty), [tax, counts, base, showEmpty]);
   const inNode = useMemo(() => filterByNode(base, node, tax), [base, node, tax]);
-  const byStatus = useMemo(() => { const m = new Map<ExamStatus, number>(); for (const e of inNode) m.set(e.status, (m.get(e.status) ?? 0) + 1); return m; }, [inNode]);
-  const list = useMemo(() => sortExams(status ? inNode.filter((e) => e.status === status) : inNode, sort), [inNode, status, sort]);
+  const nowMs = useMemo(() => Date.now(), [items]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inScope = useMemo(() => (smart ? base.filter((e) => inSmart(e, smart, nowMs)) : inNode), [smart, base, inNode, nowMs]);
+  const list = useMemo(() => sortByCol(status ? inScope.filter((e) => e.status === status) : inScope, colSort, qn), [inScope, status, colSort, qn]);
+  const smartCounts = useMemo(() => ({ recent: base.filter((e) => inSmart(e, 'recent', nowMs)).length, star: base.filter(isStar).length, review: base.filter((e) => e.status === 'needs_review').length }), [base, nowMs]);
+  const selE = items.find((x) => x.id === sel) ?? null;
   const years = useMemo(() => [...new Set(items.map((e) => e.metadata.schoolYear).filter((y): y is string => !!y))].sort().reverse(), [items]);
   const folders = useMemo(() => allFolders(items), [items]);
   const pages = Math.max(1, Math.ceil(list.length / perPage));
   const cur = Math.min(page, pages - 1);
   const shown = list.slice(cur * perPage, cur * perPage + perPage);
-  useEffect(() => { setPage(0); }, [node, text, status, year, sort, view]);
+  useEffect(() => { setPage(0); }, [node, smart, text, status, year, colSort, view]);
   const trail = nodeTrail(examTree(tax, counts, base, true), node);
   const place = placementOf(node);
   const nFilters = (status ? 1 : 0) + (year ? 1 : 0);
@@ -301,6 +324,40 @@ export function ExamLibraryScreen() {
     toast(`Đã chuyển “${e.name}” tới ${nodeTrail(examTree(tax, counts, base, true), key).join(' › ') || key}.`);
   });
   const reveal = (id: string) => void examReveal(id).catch((err) => toast(msg(err)));
+  const exportOne = (e: ExamSummary, mode: ExamMode) => run(async () => {
+    const dest = await exportPdf(e.id, e.name, mode);
+    if (dest) toast(`Đã xuất PDF “${modeLabel(mode)}”: ${dest}`);
+  });
+  const exportEvery = (e: ExamSummary) => run(async () => {
+    const r = await exportAllPdf(e.id, e.name, selGoods.map((g) => g.mode as ExamMode));
+    if (r) toast(`Đã xuất ${r.n} bản PDF vào ${r.dir}`);
+  });
+  const toggleStar = (e: ExamSummary) => run(async () => {
+    await examMetaUpdate(e.id, metaOf(e, { tags: withStar(e.metadata.tags ?? [], !isStar(e)) }));
+    await reload();
+  });
+  /** mở/gập cây tệp bên trong một đề (đọc danh sách tệp khi mở lần đầu) */
+  const toggleRow = (e: ExamSummary) => {
+    setOpenRows((s) => { const n = new Set(s); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; });
+    if (!rowFiles.has(e.id)) examGet(e.id).then((m) => setRowFiles((o) => new Map(o).set(e.id, m.files))).catch((err) => toast(`Không đọc được danh sách tệp: ${msg(err)}`));
+  };
+  /** phím trong danh sách: ↑↓ chọn, Enter mở, Space xem nhanh, F2 đổi tên, Delete vào Thùng rác */
+  const onListKey = (ev: React.KeyboardEvent<HTMLElement>) => {
+    if ((ev.target as HTMLElement).closest('input, textarea, select')) return;
+    const ids = shown.map((x) => x.id);
+    const i = sel ? ids.indexOf(sel) : -1;
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      const n = ev.key === 'ArrowDown' ? Math.min(ids.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
+      if (ids[n]) { setSel(ids[n]); document.querySelector(`[data-xid="${ids[n]}"]`)?.scrollIntoView({ block: 'nearest' }); }
+    } else if (selE) {
+      if (ev.key === 'Enter') { ev.preventDefault(); openDoc(selE); }
+      else if (ev.key === ' ') { ev.preventDefault(); quickLook(selE); }
+      else if (ev.key === 'F2') { ev.preventDefault(); setRenaming({ e: selE, name: selE.name }); }
+      else if (ev.key === 'Delete') { ev.preventDefault(); askToTrash(selE); }
+      else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) { ev.preventDefault(); const r = document.querySelector(`[data-xid="${selE.id}"]`)?.getBoundingClientRect(); setCtx({ e: selE, x: (r?.left ?? 200) + 24, y: (r?.top ?? 200) + 24 }); }
+    }
+  };
   // menu chuột phải: bấm ra ngoài / Esc / cuộn thì đóng
   useEffect(() => {
     if (!ctx) return;
@@ -330,32 +387,59 @@ export function ExamLibraryScreen() {
     ];
     return () => { for (const o of offs) void o.then((f) => f()).catch(() => undefined); };
   }, [desktop, toast]);
-  const clearAll = () => { setText(''); setStatus(null); setYear(null); setNode(null); };
+  const clearAll = () => { setText(''); setStatus(null); setYear(null); setNode(null); setSmart(null); };
 
-  /** thao tác chung của thẻ và hàng danh sách: bấm mở tab, chuột phải/phím menu, Space xem nhanh */
+  /** thao tác chung của thẻ và hàng: bấm = chọn, bấm đúp = mở tab, chuột phải = menu, kéo vào mục ở cây = chuyển đề */
   const itemProps = (e: ExamSummary) => ({
-    onClick: () => openDoc(e),
+    onClick: () => setSel(e.id),
+    onDoubleClick: () => openDoc(e),
     onPointerDown: (ev: React.PointerEvent<HTMLElement>) => { if (desktop && ev.button === 0) startDrag(ev.nativeEvent, e.name, (k) => !!movePatch(e, k), (k) => { void moveExam(e, k); }); },
-    onContextMenu: (ev: React.MouseEvent) => { ev.preventDefault(); setCtx({ e, x: ev.clientX, y: ev.clientY }); },
-    onKeyDown: (ev: React.KeyboardEvent<HTMLElement>) => { if (ev.key === ' ') { ev.preventDefault(); quickLook(e); } else if (ev.key === 'F2') { ev.preventDefault(); setRenaming({ e, name: e.name }); } else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setCtx({ e, x: r.left + 24, y: r.top + 24 }); } },
-    title: `Bấm để mở đề thành một tab. Chuột phải: thao tác khác · Space: xem nhanh PDF · F2: đổi tên · Kéo vào mục ở cây: chuyển đề${tabs.ids.includes(e.id) ? ' · Đề này đang mở' : ''}`,
+    onContextMenu: (ev: React.MouseEvent) => { ev.preventDefault(); setSel(e.id); setCtx({ e, x: ev.clientX, y: ev.clientY }); },
+    title: `Bấm: chọn · Bấm đúp hoặc Enter: mở thành tab · Space: xem nhanh PDF · F2: đổi tên · Chuột phải: thao tác khác · Kéo vào mục ở cây: chuyển đề${tabs.ids.includes(e.id) ? ' · Đề này đang mở' : ''}`,
   });
-  /** một hàng của chế độ Danh sách */
-  const row = (e: ExamSummary) => {
+  const stop = { onClick: (ev: React.MouseEvent) => ev.stopPropagation(), onDoubleClick: (ev: React.MouseEvent) => ev.stopPropagation(), onPointerDown: (ev: React.PointerEvent) => ev.stopPropagation() };
+  /** một hàng của bảng (kèm các hàng tệp bên trong đề khi đã mở) */
+  const fxRows = (e: ExamSummary): React.ReactNode[] => {
     const c = catOfType(e.metadata.examType);
-    const at = examTrail(e, tax).filter((x) => !HIDE_IN_WHERE.has(x));
+    const open = openRows.has(e.id);
     const warn = (e.warningCount > 0 ? e.warningCount : 0) + (!e.mainFile ? 1 : 0);
-    return (
-      <button key={e.id} type="button" className={`xr tone-${catTone(c)}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
-        <span className="xr-name">{tabs.ids.includes(e.id) && <span className="xc-open" title="Đang mở ở một tab">● </span>}{e.name}{warn > 0 && <span className="xr-warn" title={!e.mainFile ? 'Chưa chọn tệp chính' : `${e.warningCount} cảnh báo`}> ⚠</span>}</span>
-        <span className="xr-type"><span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span></span>
-        <span className="xr-where">{at.length ? at.join(' › ') : 'Chưa xếp lớp'}{e.folder ? ` · 📁 ${e.folder}` : ''}</span>
-        <span className="xr-st"><span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span></span>
-        <span className="xr-num" title="Năm học">{e.metadata.schoolYear ?? ''}</span>
-        <span className="xr-num" title={`${e.fileCount} tệp · ${formatBytes(e.totalBytes)}`}>{qn.get(e.id) ? `${qn.get(e.id)} câu` : e.fileCount > 1 ? `${e.fileCount} tệp` : 'Soạn tay'}</span>
-        <span className="xr-num" title={dateText(e.updatedAt)}>{dateText(e.updatedAt).split(' ')[0]}</span>
-      </button>
-    );
+    const out: React.ReactNode[] = [
+      <div key={e.id} data-xid={e.id} role="row" aria-selected={sel === e.id} className={`fx-row tone-${catTone(c)}${sel === e.id ? ' sel' : ''}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
+        <span className="fx-cell c-name">
+          <button type="button" className={`fx-tw${open ? ' open' : ''}`} aria-label={open ? 'Thu gọn tệp của đề' : 'Xem tệp bên trong đề'} aria-expanded={open} {...stop} onClick={(ev) => { ev.stopPropagation(); toggleRow(e); }}>▸</button>
+          <svg className="fx-ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d={open ? 'M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2H19.5A1.5 1.5 0 0 1 21 8.5V9H6.2a1.5 1.5 0 0 0-1.43 1.05L3 15.7z M4.4 19 6.6 11.3A1 1 0 0 1 7.56 10.6H21.4a.8.8 0 0 1 .77 1.02L20.1 18.3a1 1 0 0 1-.96.7z' : 'M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2H19.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z'} /></svg>
+          <span className="fx-nm" title={e.name}>{tabs.ids.includes(e.id) && <span className="xc-open" title="Đang mở ở một tab">● </span>}{e.name}</span>
+          {warn > 0 && <span className="xr-warn" title={!e.mainFile ? 'Chưa chọn tệp chính' : `${e.warningCount} cảnh báo`}>⚠</span>}
+          <button type="button" className={`fx-star${isStar(e) ? ' on' : ''}`} title={isStar(e) ? 'Bỏ gắn sao' : 'Gắn sao'} aria-label={isStar(e) ? 'Bỏ gắn sao' : 'Gắn sao'} aria-pressed={isStar(e)} {...stop} onClick={(ev) => { ev.stopPropagation(); void toggleStar(e); }}>★</button>
+        </span>
+        <span className="fx-cell c-type"><span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span></span>
+        <span className="fx-cell c-grade">{e.metadata.grade ?? ''}</span>
+        <span className="fx-cell c-year">{e.metadata.schoolYear ?? ''}</span>
+        <span className="fx-cell c-status"><span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span></span>
+        <span className="fx-cell c-count" title="Số câu (đề tạo từ ngân hàng)">{qn.get(e.id) ?? ''}</span>
+        <span className="fx-cell c-files">{e.fileCount}</span>
+        <span className="fx-cell c-size">{formatBytes(e.totalBytes)}</span>
+        <span className="fx-cell c-updated" title={dateText(e.updatedAt)}>{dateText(e.updatedAt).split(' ')[0]}</span>
+      </div>,
+    ];
+    if (open) {
+      const fs = rowFiles.get(e.id);
+      if (!fs) out.push(<div key={`${e.id}#load`} className="fx-row fx-child"><span className="fx-cell c-name">Đang đọc danh sách tệp…</span></div>);
+      else {
+        const { rows, hidden } = fileRows(fs);
+        for (const f of rows) {
+          out.push(
+            <div key={`${e.id}#${f.rel}`} role="row" className={`fx-row fx-child${sel === e.id ? ' of-sel' : ''}`} title={`${f.rel} · bấm đúp để mở đề`} onClick={() => setSel(e.id)} onDoubleClick={() => openDoc(e)}>
+              <span className="fx-cell c-name"><span className={`fx-fk k-${f.kind}`} aria-hidden="true">{FILE_KIND_LABEL[f.kind]}</span><span className="fx-nm">{f.dir && <span className="fx-dir">{f.dir}/</span>}{f.name}{f.rel === e.mainFile && <span className="fx-main"> · tệp chính</span>}</span></span>
+              <span className="fx-cell c-type">{FILE_KIND_LABEL[f.kind]}</span><span className="fx-cell c-grade" /><span className="fx-cell c-year" /><span className="fx-cell c-status" /><span className="fx-cell c-count" /><span className="fx-cell c-files" />
+              <span className="fx-cell c-size">{formatBytes(f.bytes)}</span><span className="fx-cell c-updated" />
+            </div>,
+          );
+        }
+        if (hidden > 0) out.push(<div key={`${e.id}#more`} className="fx-row fx-child"><span className="fx-cell c-name xl-meta">…và {hidden} tệp khác</span></div>);
+      }
+    }
+    return out;
   };
 
   const card = (e: ExamSummary) => {
@@ -363,7 +447,7 @@ export function ExamLibraryScreen() {
     const at = examTrail(e, tax);
     const flags = [!e.mainFile && 'Chưa chọn tệp chính', e.skippedCount > 0 && `${e.skippedCount} mục không chép`, e.warningCount > 0 && `${e.warningCount} cảnh báo`].filter(Boolean) as string[];
     return (
-      <button key={e.id} type="button" className={`xc tone-${catTone(c)}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
+      <button key={e.id} type="button" data-xid={e.id} className={`xc tone-${catTone(c)}${sel === e.id ? ' sel' : ''}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
         <span className="xc-top">
           <span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span>
           <span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span>
@@ -407,11 +491,59 @@ export function ExamLibraryScreen() {
   return (
     <>
       {tabBar}
-      <header className="page-head bank-head">
-        <h1>Thư viện đề thi</h1>
-        <div className="head-actions">
+      <div className="fx">
+        <div className="fx-bar">
+          <div className="fx-crumb" title="Vị trí đang xem">
+            <b>{smart ? SMART_LABEL[smart] : trail.length ? trail.join(' › ') : 'Tất cả đề'}</b>
+            {place && !smart && <button type="button" className="btn btn-sm btn-ghost" disabled={!desktop || busy} onClick={() => setNewName('')} title="Tạo một đề trống ngay trong mục này">+ Đề trống tại đây</button>}
+          </div>
+          <span className="fx-sp" />
+          <span className="xl-seg" role="group" aria-label="Kiểu xem">
+            <button type="button" className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
+            <button type="button" className={view === 'card' ? 'on' : ''} aria-pressed={view === 'card'} onClick={() => setView('card')}>Biểu tượng</button>
+          </span>
+          {view === 'card' && (
+            <label className="qsel" title="Sắp xếp">
+              <select value={colSort.key} onChange={(e) => setColSort({ key: e.target.value as ColSort['key'], dir: colSort.dir })} aria-label="Sắp xếp theo">
+                {COL_ORDER.map((k) => <option key={k} value={k}>{COL_LABEL[k]}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="search sm fx-search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <span className="sr-only">Tìm đề</span>
+            <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Tìm đề…" />
+          </label>
           <span className="xl-menu">
-            <button type="button" className="btn btn-outline" disabled={!desktop} aria-haspopup="menu" aria-expanded={menu === 'tools'} onClick={() => setMenu(menu === 'tools' ? null : 'tools')}>Công cụ ▾</button>
+            <button type="button" className={`btn btn-sm fs-open${nFilters ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={menu === 'filter'} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}>Bộ lọc ▾{nFilters > 0 && <em className="fs-badge">{nFilters}</em>}</button>
+            {menu === 'filter' && (
+              <span className="more-menu xl-pop xl-filter" role="dialog" aria-label="Bộ lọc">
+                <label>Năm học
+                  <select className="xl-in" value={year ?? ''} onChange={(e) => setYear(e.target.value || null)}>
+                    <option value="">Mọi năm học</option>{years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </label>
+                <label>Trạng thái
+                  <select className="xl-in" value={status ?? ''} onChange={(e) => setStatus((e.target.value || null) as ExamStatus | null)}>
+                    <option value="">Mọi trạng thái</option>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                  </select>
+                </label>
+                <button type="button" className="btn btn-sm" disabled={!nFilters && !text && !node && !smart} onClick={() => { clearAll(); setMenu(null); }}>Xoá mọi bộ lọc</button>
+              </span>
+            )}
+          </span>
+          <span className="xl-menu">
+            <button type="button" className="btn btn-sm" disabled={!desktop || !selE || busy} aria-haspopup="menu" aria-expanded={menu === 'export'} onClick={() => setMenu(menu === 'export' ? null : 'export')} title={selE ? `Xuất PDF của “${selE.name}”` : 'Chọn một đề để xuất PDF'}>Xuất PDF ▾</button>
+            {menu === 'export' && selE && (
+              <span className="more-menu xl-pop" role="menu">
+                {selGoods.length === 0 && <span className="xl-meta" style={{ padding: '8px 12px', display: 'block', maxWidth: 260 }}>Đề này chưa có PDF đã biên dịch. Mở đề rồi bấm “Biên dịch”; biên dịch thành công là xuất được.</span>}
+                {selGoods.map((g) => <button key={g.mode} type="button" role="menuitem" onClick={() => { setMenu(null); void exportOne(selE, g.mode as ExamMode); }}><b>{modeLabel(g.mode)}…</b><small>{g.pages ?? '?'} trang · {dateText(g.at)}</small></button>)}
+                {selGoods.length > 1 && <><hr /><button type="button" role="menuitem" onClick={() => { setMenu(null); void exportEvery(selE); }}><b>Xuất tất cả các bản…</b><small>Vào một thư mục</small></button></>}
+              </span>
+            )}
+          </span>
+          <span className="xl-menu">
+            <button type="button" className="btn btn-sm" disabled={!desktop} aria-haspopup="menu" aria-expanded={menu === 'tools'} onClick={() => setMenu(menu === 'tools' ? null : 'tools')}>Công cụ ▾</button>
             {menu === 'tools' && (
               <span className="more-menu xl-pop" role="menu">
                 <button type="button" role="menuitem" onClick={() => { setMenu(null); setPanel('trash'); }}><b>Thùng rác đề</b><small>Khôi phục đề đã xoá</small></button>
@@ -420,7 +552,7 @@ export function ExamLibraryScreen() {
             )}
           </span>
           <span className="xl-menu">
-            <button type="button" className="btn btn-accent" disabled={!desktop || busy} aria-haspopup="menu" aria-expanded={menu === 'add'} onClick={() => setMenu(menu === 'add' ? null : 'add')}>+ Thêm đề ▾</button>
+            <button type="button" className="btn btn-sm btn-accent" disabled={!desktop || busy} aria-haspopup="menu" aria-expanded={menu === 'add'} onClick={() => setMenu(menu === 'add' ? null : 'add')}>+ Thêm đề ▾</button>
             {menu === 'add' && (
               <span className="more-menu xl-pop" role="menu">
                 <button type="button" role="menuitem" onClick={() => { setMenu(null); go({ screen: 'exam' }); }}><b>Tạo đề từ ngân hàng</b><small>Chọn câu theo ma trận, trộn mã đề</small></button>
@@ -433,108 +565,103 @@ export function ExamLibraryScreen() {
             )}
           </span>
         </div>
-      </header>
 
-      {!desktop && <div className="note warn xl-note" role="status"><div className="note-body"><b>Chỉ có trên app Windows</b><span>Thư viện đề lưu tệp trên máy nên không dùng được ở bản xem thử trên trình duyệt.</span></div></div>}
-      {load === 'error' && <div className="note bad xl-note" role="alert"><div className="note-body"><b>Chưa đọc được thư viện đề</b><span>{err} Tệp của bạn trong thư viện không bị xoá.</span></div></div>}
+        {!desktop && <div className="note warn xl-note" role="status"><div className="note-body"><b>Chỉ có trên app Windows</b><span>Thư viện đề lưu tệp trên máy nên không dùng được ở bản xem thử trên trình duyệt.</span></div></div>}
+        {load === 'error' && <div className="note bad xl-note" role="alert"><div className="note-body"><b>Chưa đọc được thư viện đề</b><span>{err} Tệp của bạn trong thư viện không bị xoá.</span></div></div>}
 
-      <div className="body-row">
-        <aside className="fside" aria-label="Cây đề thi">
-          <div className="fs-top"><h2>Cây mục lục</h2></div>
-          <div className="fs-scroll">
-            <ExamTree tree={tree} total={base.length} sel={node} showEmpty={showEmpty} onShowEmpty={setShowEmpty} onPick={setNode} />
-          </div>
-        </aside>
+        <div className="fx-main">
+          <aside className="fx-side" aria-label="Cây đề thi">
+            <div className="fs-scroll">
+              <ExamTree tree={tree} total={base.length} sel={smart ? `smart:${smart}` : node} showEmpty={showEmpty} onShowEmpty={setShowEmpty} onPick={(k) => { setSmart(null); setNode(k); }}
+                smart={[{ key: 'recent', label: SMART_LABEL.recent, count: smartCounts.recent, icon: 'clock' }, { key: 'star', label: SMART_LABEL.star, count: smartCounts.star, icon: 'star' }, { key: 'review', label: SMART_LABEL.review, count: smartCounts.review, icon: 'flag' }]}
+                onSmart={(k) => { setNode(null); setSmart(k as SmartKey); }} />
+            </div>
+          </aside>
 
-        <section className="qlist" aria-label="Danh sách đề">
-          <div className="qbar">
-            <label className="search sm">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-              <span className="sr-only">Tìm đề</span>
-              <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Tìm theo tên đề, nhãn, năm học, tệp chính…" />
-            </label>
-            <span className="xl-menu">
-              <button type="button" className={`btn btn-sm fs-open${nFilters ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={menu === 'filter'} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}>Bộ lọc ▾{nFilters > 0 && <em className="fs-badge">{nFilters}</em>}</button>
-              {menu === 'filter' && (
-                <span className="more-menu xl-pop xl-filter" role="dialog" aria-label="Bộ lọc">
-                  <label>Năm học
-                    <select className="xl-in" value={year ?? ''} onChange={(e) => setYear(e.target.value || null)}>
-                      <option value="">Mọi năm học</option>{years.map((y) => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </label>
-                  <label>Trạng thái
-                    <select className="xl-in" value={status ?? ''} onChange={(e) => setStatus((e.target.value || null) as ExamStatus | null)}>
-                      <option value="">Mọi trạng thái</option>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                    </select>
-                  </label>
-                  <button type="button" className="btn btn-sm" disabled={!nFilters && !text && !node} onClick={() => { clearAll(); setMenu(null); }}>Xoá mọi bộ lọc</button>
-                </span>
-              )}
-            </span>
-            <label className="qsel" title="Sắp xếp">
-              <select value={sort} onChange={(e) => setSort(e.target.value as ExamSort)} aria-label="Sắp xếp">
-                {(Object.keys(SORT_LABEL) as ExamSort[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
-              </select>
-            </label>
-            <span className="xl-seg" role="group" aria-label="Kiểu xem">
-              <button type="button" className={view === 'card' ? 'on' : ''} aria-pressed={view === 'card'} onClick={() => setView('card')}>Thẻ</button>
-              <button type="button" className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
-            </span>
-          </div>
+          <section className="fx-list" aria-label="Danh sách đề" tabIndex={0} onKeyDown={onListKey} onClick={(ev) => { if (ev.target === ev.currentTarget) setSel(null); }}>
+            {load === 'loading' && <p className="aid-wait" role="status">Đang đọc thư viện đề…</p>}
+            {load === 'ok' && desktop && items.length === 0 && (
+              <div className="empty" role="status">
+                <b>Thư viện đề chưa có đề nào.</b>
+                <span>Tạo đề từ ngân hàng câu hỏi, tạo đề trống, hoặc nhập file .tex / thư mục / gói đề có sẵn bằng nút “+ Thêm đề”. Hoặc kéo tệp .tex / thư mục vào đây.</span>
+              </div>
+            )}
+            {items.length > 0 && list.length === 0 && (
+              <div className="empty" role="status">
+                <b>{nFilters || text ? 'Không có đề nào khớp bộ lọc.' : smart ? 'Chưa có đề nào ở đây.' : 'Mục này chưa có đề.'}</b>
+                {smart === 'star' && <span>Bấm ngôi sao ★ ở đầu hàng để gắn sao đề hay dùng.</span>}
+                {place && !smart && <span>Bấm “+ Đề trống tại đây”, hoặc “+ Thêm đề” để nhập đề vào đúng mục này.</span>}
+                {(nFilters > 0 || !!text) && <button type="button" className="btn btn-sm" onClick={clearAll}>Xoá bộ lọc</button>}
+              </div>
+            )}
+            {shown.length > 0 && view === 'list' && (
+              <div className="fx-table" role="treegrid" aria-label="Đề thi">
+                <div className="fx-head" role="row">
+                  {COL_ORDER.map((k) => (
+                    <button key={k} type="button" className={`fx-h c-${k}${colSort.key === k ? ' on' : ''}`} aria-sort={colSort.key === k ? (colSort.dir === 1 ? 'ascending' : 'descending') : 'none'} onClick={() => setColSort(clickCol(colSort, k))} title={`Sắp xếp theo ${COL_LABEL[k].toLowerCase()}`}>
+                      {COL_LABEL[k]}{colSort.key === k && <i aria-hidden="true">{colSort.dir === 1 ? '▲' : '▼'}</i>}
+                    </button>
+                  ))}
+                </div>
+                {shown.flatMap(fxRows)}
+              </div>
+            )}
+            {shown.length > 0 && view === 'card' && <div className="xc-grid">{shown.map(card)}</div>}
+            {pages > 1 && (
+              <nav className="pager" aria-label="Phân trang">
+                <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => setPage(cur - 1)}>‹ Trước</button>
+                <span>Trang <b>{cur + 1}</b> / {nf.format(pages)}</span>
+                <button type="button" className="btn btn-sm" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>Sau ›</button>
+              </nav>
+            )}
+          </section>
 
-          <div className="xl-crumb">
-            <b>{trail.length ? trail.join(' › ') : 'Tất cả đề'}</b>
-            {place && <button type="button" className="btn btn-sm" disabled={!desktop || busy} onClick={() => setNewName('')}>+ Tạo đề trống tại đây</button>}
-          </div>
-
-          {inNode.length > 0 && (
-            <div className="qstats" role="group" aria-label="Thống kê trạng thái (bấm để lọc)">
-              <span className="qs-title">Thống kê</span>
-              <div className="qs-grp">
-                <span className="qs-col qs-head"><span>Trạng thái</span><span>Số đề</span></span>
-                {STATUSES.map((s) => (
-                  <button key={s} type="button" className={`qs-col qs-btn xs-${s}`} aria-pressed={status === s} title={`${STATUS_LABEL[s]}: bấm để lọc (bấm lần nữa để bỏ)`} onClick={() => setStatus(status === s ? null : s)}>
-                    <span>{STATUS_LABEL[s]}</span><span>{nf.format(byStatus.get(s) ?? 0)}</span>
-                  </button>
+          {selE && (
+            <aside className="fx-insp" aria-label="Thông tin đề đang chọn">
+              <div className="fx-insp-h">
+                <span className={`xc-type tone-${catTone(catOfType(selE.metadata.examType))}`}>{typeText(selE.metadata.examType)}</span>
+                <span className={`xc-st st-${selE.status}`}>{STATUS_LABEL[selE.status]}</span>
+              </div>
+              <div className="fx-insp-name">{selE.name}</div>
+              <dl className="fx-kv">
+                <div><dt>Vị trí</dt><dd>{examTrail(selE, tax).filter((x) => !HIDE_IN_WHERE.has(x)).join(' › ') || 'Chưa xếp lớp'}{selE.folder ? ` · 📁 ${selE.folder}` : ''}</dd></div>
+                <div><dt>Năm học</dt><dd>{selE.metadata.schoolYear ?? '—'}</dd></div>
+                <div><dt>Tệp chính</dt><dd>{selE.mainFile ? <code>{selE.mainFile}</code> : 'chưa chọn'}</dd></div>
+                <div><dt>Nội dung</dt><dd>{qn.get(selE.id) ? `${qn.get(selE.id)} câu · ` : ''}{selE.fileCount} tệp · {formatBytes(selE.totalBytes)}</dd></div>
+                <div><dt>Tạo lúc</dt><dd>{dateText(selE.createdAt)}</dd></div>
+                <div><dt>Sửa lúc</dt><dd>{dateText(selE.updatedAt)}</dd></div>
+                {selE.warningCount > 0 && <div><dt>Cảnh báo</dt><dd>{selE.warningCount}</dd></div>}
+              </dl>
+              <div className="fx-pdfs">
+                <b>PDF đã biên dịch</b>
+                {selGoods.length === 0 && <span className="xl-meta">Chưa có. Mở đề, bấm “Biên dịch”; biên dịch thành công thì xuất PDF được ở đây.</span>}
+                {selGoods.map((g) => (
+                  <div key={g.mode} className="fx-pdf">
+                    <span><b>{modeLabel(g.mode)}</b> · {g.pages ?? '?'} trang · {g.engine}<br /><small className="xl-meta">{dateText(g.at)}</small></span>
+                    <span className="fx-pdf-b">
+                      <button type="button" className="btn btn-sm" onClick={() => setPeek({ id: selE.id, name: selE.name, mode: g.mode as ExamMode })}>Xem</button>
+                      <button type="button" className="btn btn-sm btn-accent" disabled={busy} onClick={() => void exportOne(selE, g.mode as ExamMode)}>Xuất…</button>
+                    </span>
+                  </div>
                 ))}
+                {selGoods.length > 1 && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void exportEvery(selE)}>Xuất tất cả các bản…</button>}
               </div>
-              <div className="qs-grp qs-end">
-                {status
-                  ? <button type="button" className="qs-col qs-btn qs-sum" title="Bỏ lọc trạng thái" onClick={() => setStatus(null)}><span>Bỏ lọc ✕</span><span>{nf.format(list.length)}</span></button>
-                  : <span className="qs-col qs-sum"><span>Tổng</span><span>{nf.format(list.length)}</span></span>}
+              <div className="fx-acts">
+                <button type="button" className="btn btn-sm btn-accent" onClick={() => openDoc(selE)}>Mở đề</button>
+                <button type="button" className="btn btn-sm" onClick={() => { infoFrom.current = null; setActiveId(selE.id); }}>Thông tin…</button>
+                <button type="button" className="btn btn-sm" onClick={() => setRenaming({ e: selE, name: selE.name })}>Đổi tên</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void toggleStar(selE)}>{isStar(selE) ? '★ Bỏ gắn sao' : '☆ Gắn sao'}</button>
+                <button type="button" className="btn btn-sm" onClick={() => reveal(selE.id)}>Hiện trong Explorer</button>
               </div>
-            </div>
+            </aside>
           )}
+        </div>
 
-          {load === 'loading' && <p className="aid-wait" role="status">Đang đọc thư viện đề…</p>}
-          {load === 'ok' && desktop && items.length === 0 && (
-            <div className="empty" role="status">
-              <b>Thư viện đề chưa có đề nào.</b>
-              <span>Tạo đề từ ngân hàng câu hỏi, tạo đề trống, hoặc nhập file .tex / thư mục / gói đề có sẵn bằng nút “+ Thêm đề”.</span>
-            </div>
-          )}
-          {items.length > 0 && list.length === 0 && (
-            <div className="empty" role="status">
-              <b>{nFilters || text ? 'Không có đề nào khớp bộ lọc.' : 'Mục này chưa có đề.'}</b>
-              {place && <span>Bấm “+ Tạo đề trống tại đây”, hoặc “+ Thêm đề” để nhập đề vào đúng mục này.</span>}
-              {(nFilters > 0 || !!text) && <button type="button" className="btn btn-sm" onClick={clearAll}>Xoá bộ lọc</button>}
-            </div>
-          )}
-          {shown.length > 0 && view === 'card' && <div className="xc-grid">{shown.map(card)}</div>}
-          {shown.length > 0 && view === 'list' && (
-            <div className="xr-list" role="list" aria-label="Danh sách đề">
-              <div className="xr-head" aria-hidden="true"><span>Tên đề</span><span>Loại</span><span>Vị trí</span><span>Trạng thái</span><span>Năm học</span><span>Nội dung</span><span>Sửa</span></div>
-              {shown.map(row)}
-            </div>
-          )}
-          {pages > 1 && (
-            <nav className="pager" aria-label="Phân trang">
-              <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => setPage(cur - 1)}>‹ Trước</button>
-              <span>Trang <b>{cur + 1}</b> / {nf.format(pages)}</span>
-              <button type="button" className="btn btn-sm" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>Sau ›</button>
-            </nav>
-          )}
-        </section>
+        <div className="fx-status" role="status">
+          <span>{nf.format(list.length)} đề{selE ? ' · 1 đang chọn' : ''}{status ? ` · lọc: ${STATUS_LABEL[status]}` : ''}</span>
+          <span className="fx-status-path">{smart ? SMART_LABEL[smart] : trail.length ? trail.join(' › ') : 'Tất cả đề'}</span>
+          <span>{formatBytes(list.reduce((s, e) => s + e.totalBytes, 0))}</span>
+        </div>
       </div>
 
       {newName !== null && (
@@ -645,9 +772,12 @@ export function ExamLibraryScreen() {
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}
       {peek && <PdfViewer id={peek.id} title={peek.name} stale={false} mode={peek.mode} note={`Xem nhanh: ${modeLabel(peek.mode)}. ${MODE_NOTE[peek.mode]}`} onClose={() => setPeek(null)} />}
       {ctx && (
-        <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 450) }}>
+        <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 520) }}>
           <button type="button" role="menuitem" autoFocus onClick={() => { setCtx(null); openDoc(ctx.e); }}><b>Mở đề</b><small>{tabs.ids.includes(ctx.e.id) ? 'Đang mở: chuyển sang tab của đề' : 'Biên tập, biên dịch trong một tab'}</small></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); quickLook(ctx.e); }}><b>Xem nhanh PDF</b><small>Phím Space</small></button>
+          {ctx.e.id === sel && selGoods.map((g) => <button key={g.mode} type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void exportOne(ctx.e, g.mode as ExamMode); }}><b>Xuất PDF: {modeLabel(g.mode)}…</b><small>{g.pages ?? '?'} trang</small></button>)}
+          {(ctx.e.id !== sel || selGoods.length === 0) && <button type="button" role="menuitem" disabled><b>Xuất PDF…</b><small>Chưa có bản đã biên dịch</small></button>}
+          <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void toggleStar(ctx.e); }}><b>{isStar(ctx.e) ? 'Bỏ gắn sao' : 'Gắn sao'}</b></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); setRenaming({ e: ctx.e, name: ctx.e.name }); }}><b>Đổi tên…</b><small>Phím F2</small></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); infoFrom.current = null; setActiveId(ctx.e.id); }}><b>Thông tin…</b><small>Tên, lớp, loại đề, chốt đề, tệp</small></button>
           {ctx.e.status === 'draft' && <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void markStatus(ctx.e, 'needs_review'); }}><b>Đánh dấu cần rà soát</b></button>}
