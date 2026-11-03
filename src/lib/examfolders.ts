@@ -1,6 +1,7 @@
 // Thao tác trên thư mục riêng của Thư viện đề (thuần). Thư mục chỉ là NHÃN ghi trong từng đề ("A/B/C"), không phải thư mục trên đĩa:
 // đổi tên / di chuyển / xoá thư mục = ghi lại nhãn của các đề bên trong. Thư mục trống (chưa có đề) lưu riêng trong `extras`.
 import type { ExamSummary } from './examlib';
+import { invoke } from './platform';
 
 export const MAX_DEPTH = 5;
 export const MAX_NAME = 60;
@@ -81,9 +82,19 @@ export function deleteFolder(list: readonly ExamSummary[], extras: readonly stri
 /** Số đề nằm trong thư mục (kể cả thư mục con). */
 export const folderExamCount = (list: readonly ExamSummary[], path: string): number => list.filter((e) => within(e.folder, path)).length;
 
-// ---- thư mục trống: nhớ theo máy ----
-const KEY = 'hedu.examfolders.empty.v1';
-export function loadExtras(): string[] {
-  try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length < 400).slice(0, 500) : []; } catch { return []; }
+// ---- thư mục trống: lưu trong dữ liệu ứng dụng (exam-library/folders.json), không phụ thuộc trình duyệt ----
+const LEGACY_KEY = 'hedu.examfolders.empty.v1';
+const legacy = (): string[] => {
+  try { const v = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; } catch { return []; }
+};
+/** Đọc danh sách thư mục trống; lần đầu sau khi nâng cấp thì chuyển dữ liệu cũ (lưu theo trình duyệt) sang dữ liệu ứng dụng. */
+export async function loadFolders(): Promise<string[]> {
+  const cur = await invoke<string[]>('exam_folders_load');
+  const old = legacy();
+  if (!old.length) return cur;
+  const merged = [...new Set([...cur, ...old])];
+  await invoke<void>('exam_folders_save', { folders: merged });
+  try { localStorage.removeItem(LEGACY_KEY); } catch { /* bỏ qua */ }
+  return invoke<string[]>('exam_folders_load');
 }
-export function saveExtras(x: readonly string[]): void { try { localStorage.setItem(KEY, JSON.stringify(x.slice(0, 500))); } catch { /* chỉ là tiện lợi */ } }
+export const saveFolders = (x: readonly string[]) => invoke<void>('exam_folders_save', { folders: [...x] });

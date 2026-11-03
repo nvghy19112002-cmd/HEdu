@@ -984,8 +984,14 @@ pub fn search_text(lib: &Path, query: &str) -> Vec<TextHit> {
             if Read::take(&mut fh, SEARCH_MAX_FILE).read_to_end(&mut b).is_err() {
                 continue;
             }
-            for (i, line) in String::from_utf8_lossy(&b).lines().enumerate() {
-                if crate::khohinh::fold(line).contains(&q) {
+            let text = String::from_utf8_lossy(&b);
+            let folded = crate::khohinh::fold_lines(&text);
+            // đa số tệp không khớp: một lượt tìm trên cả tệp, chỉ khi có mới đi tìm số dòng
+            if !folded.contains(&q) {
+                continue;
+            }
+            for (i, (fl, line)) in folded.lines().zip(text.lines()).enumerate() {
+                if fl.contains(&q) {
                     n += 1;
                     if first.is_none() {
                         first = Some((f.rel.clone(), i + 1, line.trim().chars().take(160).collect()));
@@ -1023,6 +1029,28 @@ mod tests {
         let p = d.join(rel);
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(p, b).unwrap();
+    }
+
+    /// Đo tốc độ tìm trong nội dung trên thư viện lớn (chạy tay: cargo test --lib bench_tim_noi_dung -- --ignored --nocapture).
+    #[test]
+    #[ignore]
+    fn bench_tim_noi_dung() {
+        let d = tmp("bench");
+        let lib = d.join("lib");
+        let body: String = (0..2500).map(|i| format!("\\item Cho hàm số $y=x^{{{i}}}+{i}x$ có đồ thị (C). Tính đạo hàm của hàm số tại điểm x = {i}.\n")).collect();
+        let tex = format!("\\documentclass{{article}}\n\\begin{{document}}\n{body}\\end{{document}}\n");
+        println!("mỗi đề {} KB", tex.len() / 1024);
+        for i in 0..300 {
+            put(&d, &format!("src/{i}/de.tex"), tex.as_bytes());
+            import(&lib, &d.join(format!("src/{i}/de.tex")), &format!("Đề {i}"), None).unwrap();
+        }
+        let t = std::time::Instant::now();
+        let h = search_text(&lib, "dao ham cua ham so");
+        println!("300 đề × {} KB: tìm {} đề khớp trong {:?}", tex.len() / 1024, h.len(), t.elapsed());
+        let t = std::time::Instant::now();
+        let h = search_text(&lib, "khong co dau");
+        println!("không khớp: {} đề trong {:?}", h.len(), t.elapsed());
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]

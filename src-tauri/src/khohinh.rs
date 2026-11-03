@@ -92,6 +92,54 @@ pub fn fold(s: &str) -> String {
     out
 }
 
+/// Chữ cái tiếng Việt → chữ không dấu (bảng tra băm, thay cho duyệt tuyến tính qua `VN`).
+fn vn_base(c: char) -> char {
+    static MAP: std::sync::OnceLock<std::collections::HashMap<char, char>> = std::sync::OnceLock::new();
+    let m = MAP.get_or_init(|| VN.iter().flat_map(|(set, b)| set.chars().map(move |c| (c, *b))).collect());
+    m.get(&c).copied().unwrap_or(c)
+}
+
+/// Như `fold` nhưng GIỮ ranh giới dòng (mỗi dòng được gom khoảng trắng và cắt đầu/cuối riêng), có đường nhanh cho ký tự ASCII.
+/// Dùng để quét cả tệp lớn một lượt: số dòng của kết quả luôn bằng số dòng của đầu vào.
+pub fn fold_lines(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut sp = true;
+    let end_line = |out: &mut String| {
+        while out.ends_with(' ') {
+            out.pop();
+        }
+    };
+    let push = |out: &mut String, c: char, sp: &mut bool| {
+        if c.is_whitespace() {
+            if !*sp {
+                out.push(' ');
+            }
+            *sp = true;
+        } else {
+            out.push(c);
+            *sp = false;
+        }
+    };
+    for c in s.chars() {
+        if c == '\n' {
+            end_line(&mut out);
+            out.push('\n');
+            sp = true;
+        } else if c.is_ascii() {
+            push(&mut out, c.to_ascii_lowercase(), &mut sp);
+        } else {
+            for lc in c.to_lowercase() {
+                if ('\u{0300}'..='\u{036f}').contains(&lc) {
+                    continue;
+                }
+                push(&mut out, vn_base(lc), &mut sp);
+            }
+        }
+    }
+    end_line(&mut out);
+    out
+}
+
 // ---------- phân loại và dấu vân ----------
 
 /// Loại hình theo mã (cùng quy tắc với bản quét kho): bbt, 3d, do-thi, tkz-euclide, khac.
@@ -927,6 +975,16 @@ mod tests {
         .unwrap();
         for (id, node, title, code, grades) in items {
             c.execute("INSERT INTO tikz_items(id,node_id,title,code,grades,topics,source_key,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,'đạo hàm','bank:x#1','2026-01-01','2026-01-01')", params![id, node, title, code, grades]).unwrap();
+        }
+    }
+
+    #[test]
+    fn fold_lines_giu_dong_va_khop_voi_fold_tung_dong() {
+        let src = "  Cho  HÀM số\t$y=x$ \r\n\nĐạo hàm   của Đồ thị\n";
+        let f = fold_lines(src);
+        assert_eq!(f.lines().count(), src.lines().count());
+        for (a, b) in f.lines().zip(src.lines()) {
+            assert_eq!(a, fold(b), "{b:?}");
         }
     }
 
