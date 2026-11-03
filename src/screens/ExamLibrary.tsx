@@ -15,7 +15,9 @@ import { PdfViewer } from '../components/PdfViewer';
 import { useTaxonomy } from '../lib/curriculum';
 import { examCompileAll, MODE_NOTE, modeLabel, type ExamMode, type GoodInfo } from '../lib/examcompile';
 import { allFolders } from '../lib/examfacets';
-import { CAT_LABEL, catOfType, examCounts, examTrail, examTree, filterByNode, movePatch, nodeTrail, placementOf, type ExamCat } from '../lib/examtree';
+import { CAT_LABEL, CAT_NONE, CATS, catOfType, examCounts, examTrail, examTree, filterByNode, matchesCat, movePatch, nodeTrail, placementOf, type ExamCat } from '../lib/examtree';
+import { NO_SELECTION, clickSelect, pickedItems, pruneSelection, runBatch, selectAll, stepSelect, type Selection } from '../lib/examselect';
+import { createFolder, deleteFolder, folderExamCount, knownFolders, loadExtras, moveFolder, renameFolder, saveExtras, type FolderResult } from '../lib/examfolders';
 import { startDrag } from '../lib/examdrag';
 import { clickCol, COL_LABEL, COL_ORDER, DEFAULT_COL_SORT, FILE_KIND_LABEL, fileRows, inSmart, isStar, parseColSort, SMART_LABEL, sortByCol, withStar, type ColSort, type SmartKey } from '../lib/examcols';
 import { exportAllPdf, exportPdf } from '../lib/exampdf';
@@ -23,8 +25,8 @@ import { isDesktop, listen } from '../lib/platform';
 import { scanUsage } from '../lib/examusage';
 import {
   bundleFolderName, chooseProjectFolder, chooseTexFile, dateText, describeScan, examBundleExport, examBundleImport, examCreate, examDuplicate, examGet, examImport, examList, examMetaUpdate,
-  examReveal, examScan, examTrash, examVerify, filterExams, formatBytes, needsMainChoice, STATUS_LABEL,
-  type ExamManifest, type ExamMetaIn, type ExamScan, type ExamStatus, type ExamSummary, type ExamVerify,
+  examReveal, examScan, examSearchText, examTrash, examVerify, filterExams, formatBytes, needsMainChoice, STATUS_LABEL,
+  type ExamManifest, type ExamMetaIn, type ExamScan, type ExamStatus, type ExamSummary, type ExamVerify, type TextHit,
 } from '../lib/examlib';
 import { ExamWorkspace, type ExamWorkspaceHandle } from './ExamWorkspace';
 import { closeTab, cycleTab, keepExisting, loadTabs, MAX_TABS, openTab, saveTabs, type TabsState, type TabStatus } from '../lib/examtabs';
@@ -84,7 +86,21 @@ export function ExamLibraryScreen() {
   const [colSort, setColSortState] = useState<ColSort>(() => { try { return parseColSort(localStorage.getItem(COLSORT_KEY)); } catch { return DEFAULT_COL_SORT; } });
   const setColSort = (s: ColSort) => { setColSortState(s); try { localStorage.setItem(COLSORT_KEY, JSON.stringify(s)); } catch { /* không nhớ được thì thôi */ } };
   /** kiểu Finder: bấm = chọn (hiện thông tin bên phải), bấm đúp / Enter = mở thành tab */
-  const [sel, setSel] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(NO_SELECTION);
+  const sel = selection.primary;
+  const setSel = (id: string | null) => setSelection(id ? { primary: id, picked: new Set([id]), anchor: id } : NO_SELECTION);
+  /** lọc theo loại đề (null = mọi loại) */
+  const [cat, setCat] = useState<ExamCat | typeof CAT_NONE | null>(null);
+  /** thư mục riêng còn trống (chưa có đề), nhớ theo máy */
+  const [extras, setExtrasState] = useState<string[]>(loadExtras);
+  const setExtras = (x: string[]) => { setExtrasState(x); saveExtras(x); };
+  /** menu chuột phải trên một thư mục ở cây; hộp thoại tạo/đổi tên/chuyển/xoá thư mục */
+  const [fctx, setFctx] = useState<{ path: string; x: number; y: number } | null>(null);
+  const [fdlg, setFdlg] = useState<null | { kind: 'new' | 'rename'; path: string; name: string } | { kind: 'move'; path: string; to: string } | { kind: 'delete'; path: string }>(null);
+  /** hộp "Chuyển tới…" cho một nhóm đề */
+  const [movePick, setMovePick] = useState<{ items: ExamSummary[]; key: string | null } | null>(null);
+  /** nhóm đề chờ xác nhận chuyển vào Thùng rác */
+  const [askTrashMany, setAskTrashMany] = useState<ExamSummary[] | null>(null);
   const [smart, setSmart] = useState<SmartKey | null>(null);
   const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
   const [rowFiles, setRowFiles] = useState<ReadonlyMap<string, ExamManifest['files']>>(new Map());
@@ -200,24 +216,52 @@ export function ExamLibraryScreen() {
   }, [menu]);
 
   // lọc theo năm học/chữ trước (cây đếm theo kết quả này), rồi theo mục cây, rồi theo trạng thái (thống kê đếm theo mục)
-  const base = useMemo(() => filterExams(items.filter((e) => !year || e.metadata.schoolYear === year), { text, kind: 'all', status: 'all' }), [items, year, text]);
+  // tìm chữ: khớp tên/thông tin đề HOẶC nội dung các tệp .tex (đọc ở nền, chờ gõ xong)
+  const [hits, setHits] = useState<ReadonlyMap<string, TextHit>>(new Map());
+  useEffect(() => {
+    const q = text.trim();
+    if (!desktop || q.length < 2) { setHits((h) => (h.size ? new Map() : h)); return; }
+    let dead = false;
+    const t = window.setTimeout(() => { examSearchText(q).then((h) => { if (!dead) setHits(new Map(h.map((x) => [x.id, x] as const))); }).catch(() => undefined); }, 350);
+    return () => { dead = true; window.clearTimeout(t); };
+  }, [desktop, text, items]);
+  const base = useMemo(() => {
+    const yr = items.filter((e) => !year || e.metadata.schoolYear === year);
+    const meta = new Set(filterExams(yr, { text, kind: 'all', status: 'all' }).map((e) => e.id));
+    return yr.filter((e) => meta.has(e.id) || (!!text.trim() && hits.has(e.id)));
+  }, [items, year, text, hits]);
   const counts = useMemo(() => examCounts(base, tax), [base, tax]);
-  const tree = useMemo(() => examTree(tax, counts, base, showEmpty), [tax, counts, base, showEmpty]);
+  const tree = useMemo(() => examTree(tax, counts, base, showEmpty, extras), [tax, counts, base, showEmpty, extras]);
   const inNode = useMemo(() => filterByNode(base, node, tax), [base, node, tax]);
   const nowMs = useMemo(() => Date.now(), [items]); // eslint-disable-line react-hooks/exhaustive-deps
   const inScope = useMemo(() => (smart ? base.filter((e) => inSmart(e, smart, nowMs)) : inNode), [smart, base, inNode, nowMs]);
-  const list = useMemo(() => sortByCol(status ? inScope.filter((e) => e.status === status) : inScope, colSort, qn), [inScope, status, colSort, qn]);
+  const list = useMemo(() => sortByCol(inScope.filter((e) => (!status || e.status === status) && matchesCat(e, cat)), colSort, qn), [inScope, status, cat, colSort, qn]);
+  const listIds = useMemo(() => list.map((x) => x.id), [list]);
+  const pickedE = useMemo(() => pickedItems(list, selection), [list, selection]);
+  const multi = pickedE.length > 1;
+  const ctxGroup = ctx && selection.picked.has(ctx.e.id) && pickedE.length > 1 ? pickedE : null;
+  const multiStat = useMemo(() => {
+    const st = new Map<string, number>(), ty = new Map<string, number>();
+    let bytes = 0;
+    for (const e of pickedE) { st.set(STATUS_LABEL[e.status], (st.get(STATUS_LABEL[e.status]) ?? 0) + 1); const t = typeText(e.metadata.examType); ty.set(t, (ty.get(t) ?? 0) + 1); bytes += e.totalBytes; }
+    const fmt = (m: Map<string, number>) => [...m].map(([k, v]) => `${k} ${v}`).join(' · ');
+    return { bytes, status: fmt(st), type: fmt(ty), allStar: pickedE.length > 0 && pickedE.every(isStar) };
+  }, [pickedE]);
+  // đề không còn hiện (bị lọc mất, đã xoá) thì bỏ khỏi vùng chọn
+  useEffect(() => { setSelection((s) => pruneSelection(s, new Set(listIds))); }, [listIds]);
   const smartCounts = useMemo(() => ({ recent: base.filter((e) => inSmart(e, 'recent', nowMs)).length, star: base.filter(isStar).length, review: base.filter((e) => e.status === 'needs_review').length }), [base, nowMs]);
   const selE = items.find((x) => x.id === sel) ?? null;
   const years = useMemo(() => [...new Set(items.map((e) => e.metadata.schoolYear).filter((y): y is string => !!y))].sort().reverse(), [items]);
   const folders = useMemo(() => allFolders(items), [items]);
+  const allFolderPaths = useMemo(() => knownFolders(items, extras), [items, extras]);
   const pages = Math.max(1, Math.ceil(list.length / perPage));
   const cur = Math.min(page, pages - 1);
   const shown = list.slice(cur * perPage, cur * perPage + perPage);
-  useEffect(() => { setPage(0); }, [node, smart, text, status, year, colSort, view]);
-  const trail = nodeTrail(examTree(tax, counts, base, true), node);
+  useEffect(() => { setPage(0); }, [node, smart, text, status, cat, year, colSort, view]);
+  const fullTree = useMemo(() => examTree(tax, counts, base, true, extras), [tax, counts, base, extras]);
+  const trail = nodeTrail(fullTree, node);
   const place = placementOf(node);
-  const nFilters = (status ? 1 : 0) + (year ? 1 : 0);
+  const nFilters = (status ? 1 : 0) + (year ? 1 : 0) + (cat ? 1 : 0);
   const activeSum = items.find((x) => x.id === activeId);
 
   const run = async (f: () => Promise<void>) => {
@@ -317,6 +361,56 @@ export function ExamLibraryScreen() {
     await reload();
     toast(status === 'needs_review' ? `Đã đánh dấu “${e.name}” cần rà soát.` : `Đã bỏ dấu cần rà soát của “${e.name}”.`);
   });
+  /** chạy một thao tác cho cả nhóm đề: một đề lỗi không làm dừng cả lô; tải lại một lần; báo gọn kết quả */
+  const bulk = (label: string, items: ExamSummary[], f: (e: ExamSummary) => Promise<void>) => run(async () => {
+    const r = await runBatch(items, f);
+    await reload();
+    const bad = r.failed.slice(0, 3).map((x) => `“${x.item.name}” (${x.error})`).join('; ');
+    toast(r.failed.length ? `${label}: xong ${r.done.length}/${items.length} đề. Lỗi: ${bad}${r.failed.length > 3 ? '…' : ''}` : `${label}: ${r.done.length} đề.`);
+  });
+  const setStar = (items: ExamSummary[], on: boolean) => bulk(on ? 'Đã gắn sao' : 'Đã bỏ sao', items, (e) => examMetaUpdate(e.id, metaOf(e, { tags: withStar(e.metadata.tags ?? [], on) })).then(() => undefined));
+  const setReview = (items: ExamSummary[], on: boolean) => {
+    const ok = items.filter((e) => e.status === (on ? 'draft' : 'needs_review'));
+    if (!ok.length) { toast(on ? 'Chỉ đề “Đang soạn” mới đánh dấu cần rà soát được (đề đã chốt giữ nguyên).' : 'Không có đề nào đang ở “Cần rà soát”.'); return Promise.resolve(); }
+    const skipped = items.length - ok.length;
+    return bulk(`${on ? 'Đã đánh dấu cần rà soát' : 'Đã bỏ dấu cần rà soát'}${skipped ? ` (${skipped} đề khác trạng thái được giữ nguyên)` : ''}`, ok, (e) => examMetaUpdate(e.id, metaOf(e, { status: on ? 'needs_review' : 'draft' })).then(() => undefined));
+  };
+  /** chuyển nhóm đề tới một mục của cây (cùng quy tắc với kéo-thả một đề) */
+  const moveExams = (items: ExamSummary[], key: string) => {
+    const todo = items.filter((e) => !!movePatch(e, key));
+    if (!todo.length) { toast('Các đề đã chọn đã nằm ở mục này.'); return Promise.resolve(); }
+    const where = nodeTrail(fullTree, key).join(' › ') || key;
+    return bulk(`Đã chuyển tới ${where}`, todo, (e) => examMetaUpdate(e.id, metaOf(e, movePatch(e, key)!)).then(() => undefined));
+  };
+  /** hỏi trước khi chuyển nhóm đề vào Thùng rác (đề đang mở ở tab thì bỏ qua và báo) */
+  const askToTrashMany = (items: ExamSummary[]) => {
+    if (items.length === 1) { askToTrash(items[0]); return; }
+    const ok = items.filter((e) => !tabs.ids.includes(e.id));
+    if (!ok.length) { toast('Các đề này đang mở ở tab. Đóng tab trước rồi mới chuyển vào Thùng rác.'); return; }
+    if (ok.length < items.length) toast(`${items.length - ok.length} đề đang mở ở tab sẽ được giữ lại.`);
+    setAskTrashMany(ok);
+  };
+  const trashMany = () => run(async () => {
+    const items = askTrashMany;
+    if (!items) return;
+    const r = await runBatch(items, (e) => examTrash(e.id));
+    setAskTrashMany(null);
+    if (activeId && r.done.some((e) => e.id === activeId)) setActiveId(null);
+    await reload();
+    toast(r.failed.length ? `Đã chuyển ${r.done.length}/${items.length} đề vào Thùng rác. Lỗi: ${r.failed.slice(0, 2).map((x) => `“${x.item.name}” (${x.error})`).join('; ')}` : `Đã chuyển ${r.done.length} đề vào Thùng rác đề. Khôi phục ở Công cụ › Thùng rác đề.`);
+  });
+  /** áp kết quả thao tác thư mục: ghi lại nhãn của các đề bên trong rồi lưu danh sách thư mục trống */
+  const applyFolder = (r: FolderResult, from: string | null, done: string) => run(async () => {
+    if (!r.ok) { toast(r.error); return; }
+    const byId = new Map(items.map((e) => [e.id, e] as const));
+    const res = await runBatch(r.patches, async (pt) => { const e = byId.get(pt.id); if (e) await examMetaUpdate(e.id, metaOf(e, { folder: pt.folder })); });
+    await reload();
+    if (res.failed.length) { toast(`Chỉ ghi được ${res.done.length}/${r.patches.length} đề (${res.failed[0].error}). Thư mục chưa đổi hết, hãy thử lại.`); return; }
+    setExtras(r.extras);
+    setFdlg(null);
+    if (from !== null && node && (node === `f:${from}` || node.startsWith(`f:${from}/`))) setNode(r.path === null ? null : `f:${r.path}${node.slice(`f:${from}`.length)}`);
+    toast(done);
+  });
   const renameExam = () => run(async () => {
     const r = renaming;
     if (!r) return;
@@ -329,13 +423,7 @@ export function ExamLibraryScreen() {
     toast(`Đã đổi tên thành “${name}”.`);
   });
   /** kéo thẻ/hàng đề vào một mục của cây: ghi lớp, loại, chương, bài hoặc thư mục theo mục đó */
-  const moveExam = (e: ExamSummary, key: string) => run(async () => {
-    const p = movePatch(e, key);
-    if (!p) return;
-    await examMetaUpdate(e.id, metaOf(e, p));
-    await reload();
-    toast(`Đã chuyển “${e.name}” tới ${nodeTrail(examTree(tax, counts, base, true), key).join(' › ') || key}.`);
-  });
+  const moveExam = (e: ExamSummary, key: string) => moveExams([e], key);
   const reveal = (id: string) => void examReveal(id).catch((err) => toast(msg(err)));
   const exportOne = (e: ExamSummary, mode: ExamMode) => run(async () => {
     const dest = await exportPdf(e.id, e.name, mode);
@@ -358,16 +446,23 @@ export function ExamLibraryScreen() {
   const onListKey = (ev: React.KeyboardEvent<HTMLElement>) => {
     if ((ev.target as HTMLElement).closest('input, textarea, select')) return;
     const ids = shown.map((x) => x.id);
-    const i = sel ? ids.indexOf(sel) : -1;
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
-      const n = ev.key === 'ArrowDown' ? Math.min(ids.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
-      if (ids[n]) { setSel(ids[n]); document.querySelector(`[data-xid="${ids[n]}"]`)?.scrollIntoView({ block: 'nearest' }); }
+      const ns = stepSelect(selection, ids, ev.key === 'ArrowDown' ? 1 : -1, ev.shiftKey);
+      setSelection(ns);
+      if (ns.primary) document.querySelector(`[data-xid="${ns.primary}"]`)?.scrollIntoView({ block: 'nearest' });
+    } else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'a') {
+      ev.preventDefault();
+      setSelection(selectAll(listIds));
+    } else if (ev.key === 'Escape' && multi) {
+      ev.preventDefault(); ev.stopPropagation();
+      setSel(selection.primary);
+    } else if (ev.key === 'Delete' && pickedE.length) {
+      ev.preventDefault(); askToTrashMany(pickedE);
     } else if (selE) {
       if (ev.key === 'Enter') { ev.preventDefault(); openDoc(selE); }
       else if (ev.key === ' ') { ev.preventDefault(); quickLook(selE); }
       else if (ev.key === 'F2') { ev.preventDefault(); setRenaming({ e: selE, name: selE.name }); }
-      else if (ev.key === 'Delete') { ev.preventDefault(); askToTrash(selE); }
       else if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) { ev.preventDefault(); const r = document.querySelector(`[data-xid="${selE.id}"]`)?.getBoundingClientRect(); setCtx({ e: selE, x: (r?.left ?? 200) + 24, y: (r?.top ?? 200) + 24 }); }
     }
   };
@@ -380,6 +475,23 @@ export function ExamLibraryScreen() {
     document.addEventListener('mousedown', h); document.addEventListener('keydown', k, true); window.addEventListener('scroll', sc, true); window.addEventListener('resize', sc);
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k, true); window.removeEventListener('scroll', sc, true); window.removeEventListener('resize', sc); };
   }, [ctx]);
+  // menu chuột phải của thư mục: bấm ra ngoài / Esc / cuộn thì đóng
+  useEffect(() => {
+    if (!fctx) return;
+    const h = (ev: MouseEvent) => { if (!(ev.target as HTMLElement).closest?.('.xl-cmenu')) setFctx(null); };
+    const k = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); setFctx(null); } };
+    const sc = () => setFctx(null);
+    document.addEventListener('mousedown', h); document.addEventListener('keydown', k, true); window.addEventListener('scroll', sc, true); window.addEventListener('resize', sc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k, true); window.removeEventListener('scroll', sc, true); window.removeEventListener('resize', sc); };
+  }, [fctx]);
+  const submitFolder = () => {
+    const d = fdlg;
+    if (!d) return;
+    if (d.kind === 'new') { const r = createFolder(items, extras, d.path, d.name); void applyFolder(r, null, r.ok ? `Đã tạo thư mục “${r.path}”.` : ''); }
+    else if (d.kind === 'rename') { const r = renameFolder(items, extras, d.path, d.name); void applyFolder(r, d.path, r.ok ? `Đã đổi tên thành “${r.path}”${r.patches.length ? ` (${r.patches.length} đề)` : ''}.` : ''); }
+    else if (d.kind === 'move') { const r = moveFolder(items, extras, d.path, d.to); void applyFolder(r, d.path, r.ok ? `Đã chuyển thư mục tới “${r.path}”${r.patches.length ? ` (${r.patches.length} đề)` : ''}.` : ''); }
+    else { const n = folderExamCount(items, d.path); void applyFolder(deleteFolder(items, extras, d.path), d.path, `Đã xoá thư mục “${d.path}”${n ? `; ${n} đề được giữ lại` : ''}.`); }
+  };
   // kéo-thả tệp .tex / thư mục từ Explorer vào Thư viện để nhập (sự kiện kéo-thả của cửa sổ Tauri; chỉ khi đang ở tab Thư viện, không có hộp thoại)
   const dropOk = useRef<() => boolean>(() => false);
   dropOk.current = () => !tabs.front && !pending && !busyRef.current && !document.querySelector('.qm, .cfm, .pv:not(.pv-embedded)');
@@ -400,15 +512,20 @@ export function ExamLibraryScreen() {
     ];
     return () => { for (const o of offs) void o.then((f) => f()).catch(() => undefined); };
   }, [desktop, toast]);
-  const clearAll = () => { setText(''); setStatus(null); setYear(null); setNode(null); setSmart(null); };
+  const clearAll = () => { setText(''); setStatus(null); setYear(null); setCat(null); setNode(null); setSmart(null); };
 
   /** thao tác chung của thẻ và hàng: bấm = chọn, bấm đúp = mở tab, chuột phải = menu, kéo vào mục ở cây = chuyển đề */
   const itemProps = (e: ExamSummary) => ({
-    onClick: () => setSel(e.id),
-    onDoubleClick: () => openDoc(e),
-    onPointerDown: (ev: React.PointerEvent<HTMLElement>) => { if (desktop && ev.button === 0) startDrag(ev.nativeEvent, e.name, (k) => !!movePatch(e, k), (k) => { void moveExam(e, k); }); },
-    onContextMenu: (ev: React.MouseEvent) => { ev.preventDefault(); setSel(e.id); setCtx({ e, x: ev.clientX, y: ev.clientY }); },
-    title: `Bấm: chọn · Bấm đúp hoặc Enter: mở thành tab · Space: xem nhanh PDF · F2: đổi tên · Chuột phải: thao tác khác · Kéo vào mục ở cây: chuyển đề${tabs.ids.includes(e.id) ? ' · Đề này đang mở' : ''}`,
+    onClick: (ev: React.MouseEvent) => setSelection((s) => clickSelect(s, e.id, listIds, { ctrl: ev.ctrlKey || ev.metaKey, shift: ev.shiftKey })),
+    onDoubleClick: (ev: React.MouseEvent) => { if (!ev.ctrlKey && !ev.metaKey && !ev.shiftKey) openDoc(e); },
+    onPointerDown: (ev: React.PointerEvent<HTMLElement>) => {
+      if (!desktop || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+      // kéo một đề đang nằm trong nhóm đã chọn thì kéo cả nhóm
+      const group = selection.picked.has(e.id) && pickedE.length > 1 ? pickedE : [e];
+      startDrag(ev.nativeEvent, group.length > 1 ? `${group.length} đề` : e.name, (k) => group.some((x) => !!movePatch(x, k)), (k) => { void moveExams(group, k); });
+    },
+    onContextMenu: (ev: React.MouseEvent) => { ev.preventDefault(); if (!selection.picked.has(e.id)) setSel(e.id); setCtx({ e, x: ev.clientX, y: ev.clientY }); },
+    title: `Bấm: chọn · Ctrl+bấm: chọn thêm · Shift+bấm: chọn cả đoạn · Bấm đúp hoặc Enter: mở thành tab · Space: xem nhanh PDF · F2: đổi tên · Chuột phải: thao tác khác · Kéo vào mục ở cây: chuyển đề${tabs.ids.includes(e.id) ? ' · Đề này đang mở' : ''}`,
   });
   const stop = { onClick: (ev: React.MouseEvent) => ev.stopPropagation(), onDoubleClick: (ev: React.MouseEvent) => ev.stopPropagation(), onPointerDown: (ev: React.PointerEvent) => ev.stopPropagation() };
   /** một hàng của bảng (kèm các hàng tệp bên trong đề khi đã mở) */
@@ -417,11 +534,12 @@ export function ExamLibraryScreen() {
     const open = openRows.has(e.id);
     const warn = (e.warningCount > 0 ? e.warningCount : 0) + (!e.mainFile ? 1 : 0);
     const out: React.ReactNode[] = [
-      <div key={e.id} data-xid={e.id} role="row" aria-selected={sel === e.id} className={`fx-row tone-${catTone(c)}${sel === e.id ? ' sel' : ''}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
+      <div key={e.id} data-xid={e.id} role="row" aria-selected={selection.picked.has(e.id)} className={`fx-row tone-${catTone(c)}${selection.picked.has(e.id) ? ' sel' : ''}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
         <span className="fx-cell c-name">
           <button type="button" className={`fx-tw${open ? ' open' : ''}`} aria-label={open ? 'Thu gọn tệp của đề' : 'Xem tệp bên trong đề'} aria-expanded={open} {...stop} onClick={(ev) => { ev.stopPropagation(); toggleRow(e); }}>▸</button>
           <svg className="fx-ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d={open ? 'M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2H19.5A1.5 1.5 0 0 1 21 8.5V9H6.2a1.5 1.5 0 0 0-1.43 1.05L3 15.7z M4.4 19 6.6 11.3A1 1 0 0 1 7.56 10.6H21.4a.8.8 0 0 1 .77 1.02L20.1 18.3a1 1 0 0 1-.96.7z' : 'M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2H19.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z'} /></svg>
           <span className="fx-nm" title={e.name}>{tabs.ids.includes(e.id) && <span className="xc-open" title="Đang mở ở một tab">● </span>}{e.name}</span>
+          {text.trim() && hits.has(e.id) && <span className="fx-hit" title={`Khớp trong nội dung: ${hits.get(e.id)!.file}, dòng ${hits.get(e.id)!.line} (${hits.get(e.id)!.matches} dòng khớp) — ${hits.get(e.id)!.snippet}`}>trong nội dung</span>}
           {warn > 0 && <span className="xr-warn" title={!e.mainFile ? 'Chưa chọn tệp chính' : `${e.warningCount} cảnh báo`}>⚠</span>}
           <button type="button" className={`fx-star${isStar(e) ? ' on' : ''}`} title={isStar(e) ? 'Bỏ gắn sao' : 'Gắn sao'} aria-label={isStar(e) ? 'Bỏ gắn sao' : 'Gắn sao'} aria-pressed={isStar(e)} {...stop} onClick={(ev) => { ev.stopPropagation(); void toggleStar(e); }}>★</button>
         </span>
@@ -460,7 +578,7 @@ export function ExamLibraryScreen() {
     const at = examTrail(e, tax);
     const flags = [!e.mainFile && 'Chưa chọn tệp chính', e.skippedCount > 0 && `${e.skippedCount} mục không chép`, e.warningCount > 0 && `${e.warningCount} cảnh báo`].filter(Boolean) as string[];
     return (
-      <button key={e.id} type="button" data-xid={e.id} className={`xc tone-${catTone(c)}${sel === e.id ? ' sel' : ''}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
+      <button key={e.id} type="button" data-xid={e.id} className={`xc tone-${catTone(c)}${selection.picked.has(e.id) ? ' sel' : ''}${ctx?.e.id === e.id ? ' ctx-on' : ''}`} {...itemProps(e)}>
         <span className="xc-top">
           <span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span>
           <span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span>
@@ -536,6 +654,11 @@ export function ExamLibraryScreen() {
                     <option value="">Mọi năm học</option>{years.map((y) => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </label>
+                <label>Loại đề
+                  <select className="xl-in" value={cat ?? ''} onChange={(e) => setCat((e.target.value || null) as ExamCat | typeof CAT_NONE | null)}>
+                    <option value="">Mọi loại đề</option>{CATS.map((c) => <option key={c} value={c}>{CAT_LABEL[c]}</option>)}<option value={CAT_NONE}>Chưa phân loại</option>
+                  </select>
+                </label>
                 <label>Trạng thái
                   <select className="xl-in" value={status ?? ''} onChange={(e) => setStatus((e.target.value || null) as ExamStatus | null)}>
                     <option value="">Mọi trạng thái</option>{STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
@@ -559,6 +682,7 @@ export function ExamLibraryScreen() {
             <button type="button" className="btn btn-sm" disabled={!desktop} aria-haspopup="menu" aria-expanded={menu === 'tools'} onClick={() => setMenu(menu === 'tools' ? null : 'tools')}>Công cụ ▾</button>
             {menu === 'tools' && (
               <span className="more-menu xl-pop" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setMenu(null); setFdlg({ kind: 'new', path: node?.startsWith('f:') ? node.slice(2) : '', name: '' }); }}><b>Thư mục mới…</b><small>{node?.startsWith('f:') ? `Tạo trong “${node.slice(2)}”` : 'Thư mục riêng để gom đề theo ý bạn'}</small></button>
                 <button type="button" role="menuitem" onClick={() => { setMenu(null); setPanel('trash'); }}><b>Thùng rác đề</b><small>Khôi phục đề đã xoá</small></button>
                 <button type="button" role="menuitem" onClick={() => { setMenu(null); setPanel('backup'); }}><b>Sao lưu / khôi phục thư viện</b><small>Bản sao toàn bộ đề, riêng với ngân hàng câu hỏi</small></button>
               </span>
@@ -587,7 +711,8 @@ export function ExamLibraryScreen() {
             <div className="fs-scroll">
               <ExamTree tree={tree} total={base.length} sel={smart ? `smart:${smart}` : node} showEmpty={showEmpty} onShowEmpty={setShowEmpty} onPick={(k) => { setSmart(null); setNode(k); }}
                 smart={[{ key: 'recent', label: SMART_LABEL.recent, count: smartCounts.recent, icon: 'clock' }, { key: 'star', label: SMART_LABEL.star, count: smartCounts.star, icon: 'star' }, { key: 'review', label: SMART_LABEL.review, count: smartCounts.review, icon: 'flag' }]}
-                onSmart={(k) => { setNode(null); setSmart(k as SmartKey); }} />
+                onSmart={(k) => { setNode(null); setSmart(k as SmartKey); }}
+                onNodeContext={(k, x, y) => setFctx({ path: k === 'f' ? '' : k.slice(2), x, y })} />
             </div>
           </aside>
           <div className="fx-resize" role="separator" aria-orientation="vertical" aria-label="Kéo để đổi độ rộng thanh bên (bấm đúp: về mặc định)" title="Kéo để đổi độ rộng · bấm đúp: về mặc định" onPointerDown={startResize} onDoubleClick={resetSide} />
@@ -630,7 +755,30 @@ export function ExamLibraryScreen() {
             )}
           </section>
 
-          {selE && (
+          {multi && (
+            <aside className="fx-insp" aria-label="Các đề đang chọn">
+              <div className="fx-insp-h"><b>{pickedE.length} đề đang chọn</b></div>
+              <dl className="fx-kv">
+                <div><dt>Loại</dt><dd>{multiStat.type}</dd></div>
+                <div><dt>Trạng thái</dt><dd>{multiStat.status}</dd></div>
+                <div><dt>Dung lượng</dt><dd>{formatBytes(multiStat.bytes)}</dd></div>
+              </dl>
+              <ul className="fx-multi-list">
+                {pickedE.slice(0, 8).map((e) => <li key={e.id} title={e.name}>{e.name}</li>)}
+                {pickedE.length > 8 && <li className="xl-meta">… và {pickedE.length - 8} đề nữa</li>}
+              </ul>
+              <div className="fx-acts">
+                <button type="button" className="btn btn-sm btn-accent" disabled={busy} onClick={() => setMovePick({ items: pickedE, key: null })}>Chuyển tới…</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void setStar(pickedE, !multiStat.allStar)}>{multiStat.allStar ? '★ Bỏ gắn sao' : '☆ Gắn sao'}</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void setReview(pickedE, true)}>Đánh dấu cần rà soát</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void setReview(pickedE, false)}>Bỏ dấu rà soát</button>
+                <button type="button" className="btn btn-sm btn-danger-soft" disabled={busy} onClick={() => askToTrashMany(pickedE)}>Chuyển vào Thùng rác…</button>
+                <button type="button" className="btn btn-sm" onClick={() => setSel(selection.primary)}>Bỏ chọn</button>
+              </div>
+              <p className="xl-meta">Ctrl+bấm: chọn thêm · Shift+bấm: chọn cả đoạn · Ctrl+A: chọn hết · kéo cả nhóm vào một mục ở cây để chuyển.</p>
+            </aside>
+          )}
+          {selE && !multi && (
             <aside className="fx-insp" aria-label="Thông tin đề đang chọn">
               <div className="fx-insp-h">
                 <span className={`xc-type tone-${catTone(catOfType(selE.metadata.examType))}`}>{typeText(selE.metadata.examType)}</span>
@@ -672,7 +820,7 @@ export function ExamLibraryScreen() {
         </div>
 
         <div className="fx-status" role="status">
-          <span>{nf.format(list.length)} đề{selE ? ' · 1 đang chọn' : ''}{status ? ` · lọc: ${STATUS_LABEL[status]}` : ''}</span>
+          <span>{nf.format(list.length)} đề{pickedE.length ? ` · ${pickedE.length} đang chọn` : ''}{status ? ` · lọc: ${STATUS_LABEL[status]}` : ''}{cat ? ` · loại: ${cat === CAT_NONE ? 'chưa phân loại' : CAT_LABEL[cat]}` : ''}</span>
           <span className="fx-status-path">{smart ? SMART_LABEL[smart] : trail.length ? trail.join(' › ') : 'Tất cả đề'}</span>
           <span>{formatBytes(list.reduce((s, e) => s + e.totalBytes, 0))}</span>
         </div>
@@ -787,6 +935,14 @@ export function ExamLibraryScreen() {
       {peek && <PdfViewer id={peek.id} title={peek.name} stale={false} mode={peek.mode} note={`Xem nhanh: ${modeLabel(peek.mode)}. ${MODE_NOTE[peek.mode]}`} onClose={() => setPeek(null)} />}
       {ctx && (
         <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 520) }}>
+          {ctxGroup ? (<>
+            <button type="button" role="menuitem" autoFocus disabled={busy} onClick={() => { setCtx(null); setMovePick({ items: ctxGroup, key: null }); }}><b>Chuyển {ctxGroup.length} đề tới…</b><small>Lớp, loại đề, thư mục</small></button>
+            <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void setStar(ctxGroup, !ctxGroup.every(isStar)); }}><b>{ctxGroup.every(isStar) ? 'Bỏ gắn sao' : 'Gắn sao'}</b></button>
+            <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void setReview(ctxGroup, true); }}><b>Đánh dấu cần rà soát</b></button>
+            <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void setReview(ctxGroup, false); }}><b>Bỏ dấu cần rà soát</b></button>
+            <hr />
+            <button type="button" role="menuitem" className="xl-cmenu-danger" onClick={() => { setCtx(null); askToTrashMany(ctxGroup); }}><b>Chuyển {ctxGroup.length} đề vào Thùng rác…</b></button>
+          </>) : (<>
           <button type="button" role="menuitem" autoFocus onClick={() => { setCtx(null); openDoc(ctx.e); }}><b>Mở đề</b><small>{tabs.ids.includes(ctx.e.id) ? 'Đang mở: chuyển sang tab của đề' : 'Biên tập, biên dịch trong một tab'}</small></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); quickLook(ctx.e); }}><b>Xem nhanh PDF</b><small>Phím Space</small></button>
           {ctx.e.id === sel && selGoods.map((g) => <button key={g.mode} type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void exportOne(ctx.e, g.mode as ExamMode); }}><b>Xuất PDF: {modeLabel(g.mode)}…</b><small>{g.pages ?? '?'} trang</small></button>)}
@@ -802,7 +958,65 @@ export function ExamLibraryScreen() {
           <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); exportBundle(ctx.e); }}><b>Xuất gói…</b></button>
           <hr />
           <button type="button" role="menuitem" className="xl-cmenu-danger" onClick={() => { setCtx(null); askToTrash(ctx.e); }}><b>Chuyển vào Thùng rác…</b></button>
+          </>)}
         </span>
+      )}
+      {fctx && (
+        <span className="more-menu xl-cmenu" role="menu" aria-label="Thao tác với thư mục" style={{ left: Math.min(fctx.x, window.innerWidth - 250), top: Math.min(fctx.y, window.innerHeight - 260) }}>
+          <button type="button" role="menuitem" autoFocus onClick={() => { const f = fctx; setFctx(null); setFdlg({ kind: 'new', path: f.path, name: '' }); }}><b>{fctx.path ? 'Thư mục con mới…' : 'Thư mục mới…'}</b></button>
+          {fctx.path && <>
+            <button type="button" role="menuitem" onClick={() => { const f = fctx; setFctx(null); setFdlg({ kind: 'rename', path: f.path, name: f.path.split('/').pop()! }); }}><b>Đổi tên…</b></button>
+            <button type="button" role="menuitem" onClick={() => { const f = fctx; setFctx(null); setFdlg({ kind: 'move', path: f.path, to: f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : '' }); }}><b>Chuyển vào…</b><small>Sang thư mục khác</small></button>
+            <hr />
+            <button type="button" role="menuitem" className="xl-cmenu-danger" onClick={() => { const f = fctx; setFctx(null); setFdlg({ kind: 'delete', path: f.path }); }}><b>Xoá thư mục…</b><small>Đề bên trong được giữ lại</small></button>
+          </>}
+        </span>
+      )}
+      {movePick && (
+        <Modal title={<b>Chuyển {movePick.items.length} đề tới…</b>} onClose={() => setMovePick(null)} foot={<span className="qm-nav">
+          <button type="button" className="btn btn-outline" onClick={() => setMovePick(null)}>Huỷ</button>
+          <button type="button" className="btn btn-accent" disabled={busy || !movePick.key || !movePick.items.some((e) => !!movePatch(e, movePick.key))} onClick={() => { const m = movePick; setMovePick(null); if (m.key) void moveExams(m.items, m.key); }}>Chuyển</button>
+        </span>}>
+          <div style={{ maxHeight: '52vh', overflow: 'auto' }}>
+            <ExamTree tree={fullTree} total={base.length} sel={movePick.key} showEmpty onShowEmpty={() => undefined} emptySwitch={false} allLabel="Tất cả đề (chọn một mục bên dưới)" treeLabel="Chọn nơi chuyển đến" onPick={(k) => setMovePick({ ...movePick, key: k })} />
+          </div>
+          <p className="xl-meta">{movePick.key
+            ? (() => { const n = movePick.items.filter((e) => !!movePatch(e, movePick.key)).length; return n ? `Sẽ chuyển ${n}/${movePick.items.length} đề tới: ${nodeTrail(fullTree, movePick.key).join(' › ')}.` : 'Các đề đã chọn đã nằm ở mục này hoặc mục này không nhận đề.'; })()
+            : 'Chọn lớp, loại đề, chương/bài hoặc thư mục riêng. Chọn lớp/loại chỉ đổi lớp/loại; chọn thư mục chỉ đổi thư mục.'}</p>
+        </Modal>
+      )}
+      {askTrashMany && (
+        <ConfirmDialog title={`Chuyển ${askTrashMany.length} đề vào Thùng rác?`} confirmLabel="Chuyển vào Thùng rác" cancelLabel="Giữ lại" busy={busy} onCancel={() => setAskTrashMany(null)} onConfirm={trashMany}>
+          <p>{askTrashMany.length} đề sẽ rời khỏi thư viện nhưng KHÔNG bị xoá: khôi phục được ở Công cụ › Thùng rác đề.</p>
+          <ul className="fx-multi-list">{askTrashMany.slice(0, 6).map((e) => <li key={e.id}>{e.name}</li>)}{askTrashMany.length > 6 && <li className="xl-meta">… và {askTrashMany.length - 6} đề nữa</li>}</ul>
+        </ConfirmDialog>
+      )}
+      {fdlg && (fdlg.kind === 'new' || fdlg.kind === 'rename') && (
+        <Modal title={<b>{fdlg.kind === 'new' ? (fdlg.path ? `Thư mục con mới trong “${fdlg.path}”` : 'Thư mục mới') : 'Đổi tên thư mục'}</b>} onClose={() => setFdlg(null)} foot={<span className="qm-nav">
+          <button type="button" className="btn btn-outline" onClick={() => setFdlg(null)}>Huỷ</button>
+          <button type="button" className="btn btn-accent" disabled={busy} onClick={submitFolder}>{fdlg.kind === 'new' ? 'Tạo' : 'Lưu tên'}</button>
+        </span>}>
+          <label className="xm-field">Tên thư mục <input className="xl-in" value={fdlg.name} autoFocus maxLength={60} onFocus={(ev) => ev.currentTarget.select()} onChange={(ev) => setFdlg({ ...fdlg, name: ev.target.value })} onKeyDown={(ev) => { if (ev.key === 'Enter') submitFolder(); }} /></label>
+          <p className="xl-meta">{fdlg.kind === 'rename' ? 'Chỉ đổi nhãn thư mục của các đề bên trong; không đụng tới tệp của đề.' : 'Thư mục riêng chỉ là nhãn để gom đề; tạo xong có thể kéo đề vào.'}</p>
+        </Modal>
+      )}
+      {fdlg?.kind === 'move' && (
+        <Modal title={<b>Chuyển thư mục “{fdlg.path}”</b>} onClose={() => setFdlg(null)} foot={<span className="qm-nav">
+          <button type="button" className="btn btn-outline" onClick={() => setFdlg(null)}>Huỷ</button>
+          <button type="button" className="btn btn-accent" disabled={busy} onClick={submitFolder}>Chuyển</button>
+        </span>}>
+          <label className="xm-field">Vào thư mục
+            <select className="xl-in" value={fdlg.to} onChange={(ev) => setFdlg({ ...fdlg, to: ev.target.value })}>
+              <option value="">(Ngoài cùng)</option>
+              {allFolderPaths.filter((f) => f !== fdlg.path && !f.startsWith(`${fdlg.path}/`)).map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </label>
+        </Modal>
+      )}
+      {fdlg?.kind === 'delete' && (
+        <ConfirmDialog title="Xoá thư mục?" confirmLabel="Xoá thư mục" cancelLabel="Giữ lại" busy={busy} onCancel={() => setFdlg(null)} onConfirm={submitFolder}>
+          <p>Thư mục “{fdlg.path}” sẽ bị xoá. {folderExamCount(items, fdlg.path) ? `${folderExamCount(items, fdlg.path)} đề bên trong KHÔNG bị xoá, được đưa lên ${fdlg.path.includes('/') ? `“${fdlg.path.slice(0, fdlg.path.lastIndexOf('/'))}”` : 'ngoài cùng'}.` : 'Thư mục đang trống.'}</p>
+        </ConfirmDialog>
       )}
       {dragOver && !tabs.front && <div className="xl-drop" aria-hidden="true"><b>Thả vào đây để nhập đề</b><span>Tệp .tex hoặc thư mục dự án · tệp gốc giữ nguyên{place ? ` · vào mục ${trail.join(' › ')}` : ''}</span></div>}
       {askTrash && (

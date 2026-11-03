@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { catOfType, examCounts, examTrail, examTree, filterByNode, movePatch, nodeTrail, placementOf, CAT_LABEL } from './examtree';
+import { CAT_NONE, catOfType, examCounts, matchesCat, examTrail, examTree, filterByNode, movePatch, nodeTrail, placementOf, CAT_LABEL } from './examtree';
 import { buildDefault } from './taxonomy';
 import type { ExamSummary } from './examlib';
 
@@ -95,5 +95,20 @@ t('kéo đề vào mục của cây: chỉ ghi phần đổi, đề đã ở đ�
   assert.deepEqual(movePatch(gk1, `g:12/bai/c:${ch.id}/l:${ls.id}`), { grade: 12, examType: 'Ôn tập theo bài', chapterId: ch.id, lessonId: ls.id });
   assert.deepEqual(movePatch(gk1, `g:12/bai/c:${ch.id}`), { grade: 12, examType: 'Ôn tập theo chương', chapterId: ch.id, lessonId: null });
   for (const k of ['f', 'none', null]) assert.equal(movePatch(gk1, k), null, `nút không nhận đề: ${k}`);
+});
+console.log('Loại đề và thư mục trống');
+t('lọc theo loại đề', () => {
+  const ids2 = (c: Parameters<typeof matchesCat>[1]) => L.filter((e) => matchesCat(e, c)).map((e) => e.id).sort();
+  assert.equal(ids2(null).length, L.length);
+  assert.deepEqual(ids2('gk1'), ['gk1']);
+  assert.deepEqual(ids2('thi-thu'), ['thithu']);
+  assert.deepEqual(ids2(CAT_NONE), ['la', 'lechlop', 'rong']);
+});
+t('thư mục trống hiện trong cây (kể cả khi chưa có đề nào)', () => {
+  const root = (extra: string[], list: ExamSummary[]) => examTree(tax, examCounts(list, tax), list, false, extra).find((n) => n.key === 'f');
+  assert.equal(root([], [mk('x', { grade: 12 })]), undefined);
+  const r = root(['Mới/Con'], [mk('x', { grade: 12 })])!;
+  assert.deepEqual(r.children.map((c) => [c.key, c.count]), [['f:Mới', 0]]);
+  assert.deepEqual(r.children[0].children.map((c) => c.key), ['f:Mới/Con']);
 });
 console.log('examtree: đạt hết.');
