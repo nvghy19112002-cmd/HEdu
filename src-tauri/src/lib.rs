@@ -9,6 +9,7 @@ mod examcompile;
 mod examexport;
 mod examfiles;
 mod examlib;
+mod exampack;
 mod khohinh;
 mod examprofile;
 mod examsources;
@@ -515,6 +516,10 @@ pub fn run() {
             examadmin::exam_backup_restore,
             examadmin::exam_reveal,
             examlib::exam_search_text,
+            exampack::xlsx_save,
+            exampack::pack_make_dir,
+            exampack::pack_file_info,
+            exampack::exam_spec_text,
             examsources::exam_sources_add,
             examsources::exam_sources_status,
             examsources::exam_sources_forget,

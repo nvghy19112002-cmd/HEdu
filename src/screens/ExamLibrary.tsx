@@ -31,6 +31,9 @@ import {
 import { ExamWorkspace, type ExamWorkspaceHandle } from './ExamWorkspace';
 import { closeTab, cycleTab, keepExisting, loadTabs, MAX_TABS, openTab, saveTabs, type TabsState, type TabStatus } from '../lib/examtabs';
 import { ExamExportDialog } from '../components/ExamExportDialog';
+import { ExamPackDialog } from '../components/ExamPackDialog';
+import { exportMatrixXlsx } from '../lib/exampack';
+import { useBank } from '../lib/store';
 
 const nf = new Intl.NumberFormat('vi-VN');
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -73,6 +76,8 @@ function Modal({ title, onClose, wide, side, children, foot }: { title: React.Re
 export function ExamLibraryScreen() {
   const { toast, go } = useApp();
   const { tax } = useTaxonomy();
+  const bank = useBank();
+  const qmap = useMemo(() => new Map(bank.questions.map((q) => [q.uid, q] as const)), [bank.questions]);
   const desktop = isDesktop();
   const [items, setItems] = useState<ExamSummary[]>([]);
   const [load, setLoad] = useState<'loading' | 'ok' | 'error'>(desktop ? 'loading' : 'ok');
@@ -101,6 +106,8 @@ export function ExamLibraryScreen() {
   const [movePick, setMovePick] = useState<{ items: ExamSummary[]; key: string | null } | null>(null);
   /** nhóm đề chờ xác nhận chuyển vào Thùng rác */
   const [askTrashMany, setAskTrashMany] = useState<ExamSummary[] | null>(null);
+  /** nhóm đề đang mở hộp "Xuất trọn gói" */
+  const [packing, setPacking] = useState<ExamSummary[] | null>(null);
   const [smart, setSmart] = useState<SmartKey | null>(null);
   const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
   const [rowFiles, setRowFiles] = useState<ReadonlyMap<string, ExamManifest['files']>>(new Map());
@@ -424,6 +431,11 @@ export function ExamLibraryScreen() {
   });
   /** kéo thẻ/hàng đề vào một mục của cây: ghi lớp, loại, chương, bài hoặc thư mục theo mục đó */
   const moveExam = (e: ExamSummary, key: string) => moveExams([e], key);
+  const exportMatrix = (e: ExamSummary) => run(async () => {
+    const r = await exportMatrixXlsx(e, tax, (uid) => qmap.get(uid));
+    if (r === 'none') toast('Đề này soạn tay (không tạo từ ngân hàng) nên không có ma trận để xuất.');
+    else if (r) toast(`Đã xuất ma trận Excel: ${r}`);
+  });
   const reveal = (id: string) => void examReveal(id).catch((err) => toast(msg(err)));
   const exportOne = (e: ExamSummary, mode: ExamMode) => run(async () => {
     const dest = await exportPdf(e.id, e.name, mode);
@@ -769,6 +781,7 @@ export function ExamLibraryScreen() {
               </ul>
               <div className="fx-acts">
                 <button type="button" className="btn btn-sm btn-accent" disabled={busy} onClick={() => setMovePick({ items: pickedE, key: null })}>Chuyển tới…</button>
+                <button type="button" className="btn btn-sm" disabled={!desktop || busy} onClick={() => setPacking(pickedE)}>Xuất trọn gói…</button>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void setStar(pickedE, !multiStat.allStar)}>{multiStat.allStar ? '★ Bỏ gắn sao' : '☆ Gắn sao'}</button>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void setReview(pickedE, true)}>Đánh dấu cần rà soát</button>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void setReview(pickedE, false)}>Bỏ dấu rà soát</button>
@@ -813,6 +826,7 @@ export function ExamLibraryScreen() {
                 <button type="button" className="btn btn-sm" onClick={() => { infoFrom.current = null; setActiveId(selE.id); }}>Thông tin…</button>
                 <button type="button" className="btn btn-sm" onClick={() => setRenaming({ e: selE, name: selE.name })}>Đổi tên</button>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void toggleStar(selE)}>{isStar(selE) ? '★ Bỏ gắn sao' : '☆ Gắn sao'}</button>
+                <button type="button" className="btn btn-sm" disabled={!desktop || busy} title="Ma trận đề ra Excel (đề tạo từ ngân hàng)" onClick={() => void exportMatrix(selE)}>Xuất ma trận Excel…</button>
                 <button type="button" className="btn btn-sm" onClick={() => reveal(selE.id)}>Hiện trong Explorer</button>
               </div>
             </aside>
@@ -937,6 +951,7 @@ export function ExamLibraryScreen() {
         <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 520) }}>
           {ctxGroup ? (<>
             <button type="button" role="menuitem" autoFocus disabled={busy} onClick={() => { setCtx(null); setMovePick({ items: ctxGroup, key: null }); }}><b>Chuyển {ctxGroup.length} đề tới…</b><small>Lớp, loại đề, thư mục</small></button>
+            <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); setPacking(ctxGroup); }}><b>Xuất trọn gói…</b><small>PDF, ma trận, đáp án, danh mục</small></button>
             <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void setStar(ctxGroup, !ctxGroup.every(isStar)); }}><b>{ctxGroup.every(isStar) ? 'Bỏ gắn sao' : 'Gắn sao'}</b></button>
             <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void setReview(ctxGroup, true); }}><b>Đánh dấu cần rà soát</b></button>
             <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void setReview(ctxGroup, false); }}><b>Bỏ dấu cần rà soát</b></button>
@@ -956,6 +971,7 @@ export function ExamLibraryScreen() {
           <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); duplicate(ctx.e.id); }}><b>Sao chép thành đề mới</b></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); reveal(ctx.e.id); }}><b>Hiện trong Explorer</b></button>
           <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); exportBundle(ctx.e); }}><b>Xuất gói…</b></button>
+          <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void exportMatrix(ctx.e); }}><b>Xuất ma trận Excel…</b><small>Đề tạo từ ngân hàng</small></button>
           <hr />
           <button type="button" role="menuitem" className="xl-cmenu-danger" onClick={() => { setCtx(null); askToTrash(ctx.e); }}><b>Chuyển vào Thùng rác…</b></button>
           </>)}
@@ -985,6 +1001,7 @@ export function ExamLibraryScreen() {
             : 'Chọn lớp, loại đề, chương/bài hoặc thư mục riêng. Chọn lớp/loại chỉ đổi lớp/loại; chọn thư mục chỉ đổi thư mục.'}</p>
         </Modal>
       )}
+      {packing && <ExamPackDialog exams={packing} qn={qn} tax={tax} question={(uid) => qmap.get(uid)} onClose={() => setPacking(null)} onToast={toast} />}
       {askTrashMany && (
         <ConfirmDialog title={`Chuyển ${askTrashMany.length} đề vào Thùng rác?`} confirmLabel="Chuyển vào Thùng rác" cancelLabel="Giữ lại" busy={busy} onCancel={() => setAskTrashMany(null)} onConfirm={trashMany}>
           <p>{askTrashMany.length} đề sẽ rời khỏi thư viện nhưng KHÔNG bị xoá: khôi phục được ở Công cụ › Thùng rác đề.</p>

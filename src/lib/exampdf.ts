@@ -34,3 +34,20 @@ export async function exportAllPdf(id: string, title: string, modes: readonly Ex
   }
   return { dir, n };
 }
+
+/** Chép PDF của một bản ra đúng đường dẫn `dest` (không hỏi); dùng cho xuất trọn gói. */
+export const exportPdfTo = (id: string, dest: string, mode: ExamMode): Promise<void> => invoke<void>('exam_pdf_export', { id, dest, mode });
+
+/** Hộp "Chọn thư mục" của Windows; null nếu huỷ. */
+export async function chooseFolder(title: string): Promise<string | null> {
+  const d = dlg();
+  if (!d?.open) throw new Error('Hộp chọn thư mục chỉ có trong bản cài trên Windows.');
+  const r = await d.open({ title, directory: true, multiple: false });
+  return r == null ? null : Array.isArray(r) ? r[0] ?? null : r;
+}
+/** Hộp "Lưu thành" cho tệp .xlsx; null nếu huỷ. */
+export async function chooseXlsxPath(title: string, defaultPath: string): Promise<string | null> {
+  const d = dlg();
+  if (!d?.save) throw new Error('Hộp Lưu thành chỉ có trong bản cài trên Windows.');
+  return (await d.save({ title, defaultPath, filters: [{ name: 'Excel', extensions: ['xlsx'] }] })) ?? null;
+}
