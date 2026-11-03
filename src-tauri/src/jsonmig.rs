@@ -574,7 +574,7 @@ mod tests {
     use std::time::Instant;
 
     fn dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("hedu-mig-test-{}-{}", std::process::id(), name));
+        let d = crate::testutil::dir(&format!("mig-{name}"));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(d.join("data")).unwrap();
         d

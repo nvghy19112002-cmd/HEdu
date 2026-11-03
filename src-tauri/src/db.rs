@@ -387,7 +387,7 @@ mod tests {
     use std::time::Instant;
 
     fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("hedu-db-test-{}-{}", std::process::id(), name));
+        let d = crate::testutil::dir(&format!("db-{name}"));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d.join("hedu.db")

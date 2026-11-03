@@ -310,12 +310,7 @@ mod tests {
 
     fn temp_paths() -> Paths {
         let n = N.fetch_add(1, Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!(
-            "hedu-test-{}-{}-{}",
-            std::process::id(),
-            n,
-            now_secs()
-        ));
+        let dir = crate::testutil::dir(&format!("st-{n}"));
         let _ = fs::remove_dir_all(&dir);
         Paths::new(dir)
     }

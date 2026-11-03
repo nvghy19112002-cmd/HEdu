@@ -25,6 +25,8 @@ mod texfolder;
 mod texpkg;
 mod texscratch;
 mod tikz;
+#[cfg(test)]
+mod testutil;
 
 use serde::Serialize;
 use serde_json::Value;
