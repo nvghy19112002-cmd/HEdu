@@ -520,6 +520,8 @@ pub fn run() {
             exampack::pack_make_dir,
             exampack::pack_file_info,
             exampack::exam_spec_text,
+            exampack::exam_folders_load,
+            exampack::exam_folders_save,
             examsources::exam_sources_add,
             examsources::exam_sources_status,
             examsources::exam_sources_forget,

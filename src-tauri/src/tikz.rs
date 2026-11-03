@@ -10,8 +10,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::proc::run_capture;
 use crate::support;
@@ -219,6 +219,7 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
     let svg_path = cache_dir.join(format!("{key}.svg"));
     if let Ok(s) = fs::read_to_string(&svg_path) {
         if !s.is_empty() {
+            touch(&svg_path);
             return Ok(TikzOut { svg: s, cached: true, ms: started.elapsed().as_millis() as u64 });
         }
     }
@@ -332,7 +333,75 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
         let _ = fs::remove_file(&part);
     }
     let _ = fs::remove_dir_all(&work);
+    // cứ mỗi PRUNE_EVERY hình mới thì dọn bớt bộ nhớ đệm nếu vượt trần
+    if WRITES.fetch_add(1, Ordering::Relaxed) % PRUNE_EVERY == PRUNE_EVERY - 1 {
+        let _ = prune_cache(cache_dir, CACHE_MAX_BYTES, CACHE_MAX_FILES);
+    }
     Ok(TikzOut { svg, cached: false, ms: started.elapsed().as_millis() as u64 })
+}
+
+/// Trần bộ nhớ đệm hình: vượt thì xoá các hình lâu không dùng nhất cho tới khi còn ~80% trần.
+pub const CACHE_MAX_BYTES: u64 = 128 * 1024 * 1024;
+pub const CACHE_MAX_FILES: usize = 6000;
+const PRUNE_EVERY: usize = 25;
+static WRITES: AtomicUsize = AtomicUsize::new(0);
+
+/// Đánh dấu hình vừa được dùng (để dọn theo "lâu không dùng"), chỉ ghi lại khi dấu cũ hơn 1 giờ cho đỡ tốn ổ đĩa.
+fn touch(p: &Path) {
+    let now = SystemTime::now();
+    let old = fs::metadata(p).and_then(|m| m.modified()).map(|t| now.duration_since(t).map(|d| d.as_secs() > 3600).unwrap_or(false)).unwrap_or(false);
+    if old {
+        if let Ok(f) = fs::OpenOptions::new().write(true).open(p) {
+            let _ = f.set_modified(now);
+        }
+    }
+}
+
+/// Dọn bộ nhớ đệm: bỏ tệp tạm/dở dang quá 1 giờ, rồi nếu tổng > `max_bytes` hoặc > `max_files` thì xoá hình lâu không dùng nhất
+/// cho tới khi còn ≤ 80% hai trần. Trả về (số tệp đã xoá, số byte đã giải phóng).
+pub fn prune_cache(cache_dir: &Path, max_bytes: u64, max_files: usize) -> io::Result<(usize, u64)> {
+    let now = SystemTime::now();
+    let mut files: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
+    let (mut removed, mut freed) = (0usize, 0u64);
+    for e in fs::read_dir(cache_dir)?.flatten() {
+        let p = e.path();
+        let Ok(md) = e.metadata() else { continue };
+        let age = md.modified().ok().and_then(|t| now.duration_since(t).ok()).map(|d| d.as_secs()).unwrap_or(0);
+        let is_svg = md.is_file() && p.extension().map(|x| x == "svg").unwrap_or(false);
+        if md.is_file() && !is_svg && age > 3600 {
+            // .part dở dang
+            if fs::remove_file(&p).is_ok() {
+                removed += 1;
+                freed += md.len();
+            }
+        } else if md.is_dir() && age > 3600 && p.file_name().map(|n| n.to_string_lossy().starts_with("tmp-")).unwrap_or(false) {
+            // thư mục làm việc bỏ dở
+            if fs::remove_dir_all(&p).is_ok() {
+                removed += 1;
+            }
+        } else if is_svg {
+            files.push((md.modified().unwrap_or(UNIX_EPOCH), md.len(), p));
+        }
+    }
+    let mut total: u64 = files.iter().map(|f| f.1).sum();
+    let mut count = files.len();
+    if total <= max_bytes && count <= max_files {
+        return Ok((removed, freed));
+    }
+    let (goal_bytes, goal_files) = (max_bytes / 5 * 4, max_files * 4 / 5);
+    files.sort_by_key(|f| f.0);
+    for (_, len, p) in files {
+        if total <= goal_bytes && count <= goal_files {
+            break;
+        }
+        if fs::remove_file(&p).is_ok() {
+            total -= len;
+            count -= 1;
+            removed += 1;
+            freed += len;
+        }
+    }
+    Ok((removed, freed))
 }
 
 /// Thử dịch một hình bé xíu để biết máy đã có TeX Live chưa.
@@ -380,6 +449,37 @@ pub(crate) fn hide_console(_c: &mut Command) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn don_bo_nho_dem_bo_hinh_cu_nhat_va_giu_hinh_moi() {
+        let d = std::env::temp_dir().join(format!("hedu-tikz-prune-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let t0 = SystemTime::now() - std::time::Duration::from_secs(10_000);
+        for i in 0..10u64 {
+            let p = d.join(format!("h{i}.svg"));
+            fs::write(&p, vec![b'x'; 100]).unwrap();
+            fs::OpenOptions::new().write(true).open(&p).unwrap().set_modified(t0 + std::time::Duration::from_secs(i * 100)).unwrap();
+        }
+        let part = d.join("a.1-1.part");
+        fs::write(&part, b"dang do").unwrap();
+        fs::OpenOptions::new().write(true).open(&part).unwrap().set_modified(t0).unwrap();
+        // dưới trần: không xoá hình, chỉ bỏ tệp dở dang quá 1 giờ
+        assert_eq!(prune_cache(&d, 10_000, 100).unwrap().0, 1);
+        assert!(!part.exists() && d.join("h0.svg").exists());
+        // vượt trần 600 byte: giữ ≤ 80% = 480 byte => 4 hình mới nhất
+        let (n, freed) = prune_cache(&d, 600, 100).unwrap();
+        assert_eq!((n, freed), (6, 600));
+        for i in 0..6 {
+            assert!(!d.join(format!("h{i}.svg")).exists(), "h{i} phải bị xoá");
+        }
+        for i in 6..10 {
+            assert!(d.join(format!("h{i}.svg")).exists(), "h{i} phải còn");
+        }
+        // trần theo số tệp
+        assert_eq!(prune_cache(&d, 10_000, 3).unwrap().0, 2);
+        let _ = fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn ma_bam_on_dinh_va_khac_nhau() {

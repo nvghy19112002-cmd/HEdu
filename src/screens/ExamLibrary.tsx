@@ -17,7 +17,7 @@ import { examCompileAll, MODE_NOTE, modeLabel, type ExamMode, type GoodInfo } fr
 import { allFolders } from '../lib/examfacets';
 import { CAT_LABEL, CAT_NONE, CATS, catOfType, examCounts, examTrail, examTree, filterByNode, matchesCat, movePatch, nodeTrail, placementOf, type ExamCat } from '../lib/examtree';
 import { NO_SELECTION, clickSelect, pickedItems, pruneSelection, runBatch, selectAll, stepSelect, type Selection } from '../lib/examselect';
-import { createFolder, deleteFolder, folderExamCount, knownFolders, loadExtras, moveFolder, renameFolder, saveExtras, type FolderResult } from '../lib/examfolders';
+import { createFolder, deleteFolder, folderExamCount, knownFolders, loadFolders, moveFolder, renameFolder, saveFolders, type FolderResult } from '../lib/examfolders';
 import { startDrag } from '../lib/examdrag';
 import { clickCol, COL_LABEL, COL_ORDER, DEFAULT_COL_SORT, FILE_KIND_LABEL, fileRows, inSmart, isStar, parseColSort, SMART_LABEL, sortByCol, withStar, type ColSort, type SmartKey } from '../lib/examcols';
 import { exportAllPdf, exportPdf } from '../lib/exampdf';
@@ -97,8 +97,9 @@ export function ExamLibraryScreen() {
   /** lọc theo loại đề (null = mọi loại) */
   const [cat, setCat] = useState<ExamCat | typeof CAT_NONE | null>(null);
   /** thư mục riêng còn trống (chưa có đề), nhớ theo máy */
-  const [extras, setExtrasState] = useState<string[]>(loadExtras);
-  const setExtras = (x: string[]) => { setExtrasState(x); saveExtras(x); };
+  const [extras, setExtrasState] = useState<string[]>([]);
+  useEffect(() => { if (desktop) loadFolders().then(setExtrasState).catch(() => undefined); }, [desktop]);
+  const setExtras = (x: string[]) => { setExtrasState(x); saveFolders(x).catch((e) => toast(`Không lưu được danh sách thư mục: ${msg(e)}`)); };
   /** menu chuột phải trên một thư mục ở cây; hộp thoại tạo/đổi tên/chuyển/xoá thư mục */
   const [fctx, setFctx] = useState<{ path: string; x: number; y: number } | null>(null);
   const [fdlg, setFdlg] = useState<null | { kind: 'new' | 'rename'; path: string; name: string } | { kind: 'move'; path: string; to: string } | { kind: 'delete'; path: string }>(null);

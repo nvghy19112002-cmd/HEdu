@@ -304,6 +304,50 @@ pub async fn exam_spec_text(app: AppHandle, id: String) -> Result<Option<String>
     .await
 }
 
+// ---------- thư mục riêng còn trống (lưu cùng dữ liệu thư viện đề, không phụ thuộc trình duyệt) ----------
+const FOLDERS_FILE: &str = "folders.json";
+const MAX_FOLDERS: usize = 500;
+
+/// Giữ lại các đường dẫn thư mục hợp lệ (không rỗng, <400 ký tự, không ký tự điều khiển, không '/' đầu/cuối, tối đa 5 cấp), bỏ trùng, tối đa 500.
+pub fn clean_folders(x: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for f in x {
+        let ok = !f.is_empty() && f.chars().count() < 400 && !f.chars().any(|c| c.is_control()) && !f.starts_with('/') && !f.ends_with('/') && !f.contains("//") && f.split('/').count() <= 5;
+        if ok && !out.contains(&f) {
+            out.push(f);
+        }
+        if out.len() >= MAX_FOLDERS {
+            break;
+        }
+    }
+    out
+}
+
+pub fn load_folders(lib: &Path) -> Vec<String> {
+    match fs::read(lib.join(FOLDERS_FILE)).ok().and_then(|b| serde_json::from_slice::<Vec<String>>(&b).ok()) {
+        Some(v) => clean_folders(v),
+        None => Vec::new(),
+    }
+}
+
+pub fn save_folders(lib: &Path, x: Vec<String>) -> Result<(), String> {
+    fs::create_dir_all(lib).map_err(|e| format!("Không tạo được thư mục dữ liệu: {e}"))?;
+    let json = serde_json::to_vec(&clean_folders(x)).map_err(|e| e.to_string())?;
+    crate::examlib::atomic_write(&lib.join(FOLDERS_FILE), &json).map_err(|e| format!("Không ghi được danh sách thư mục: {e}"))
+}
+
+#[tauri::command]
+pub async fn exam_folders_load(app: AppHandle) -> Result<Vec<String>, String> {
+    let lib = lib_of(&app)?;
+    blocking(move || Ok(load_folders(&lib))).await
+}
+
+#[tauri::command]
+pub async fn exam_folders_save(app: AppHandle, folders: Vec<String>) -> Result<(), String> {
+    let lib = lib_of(&app)?;
+    blocking(move || save_folders(&lib, folders)).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,6 +417,17 @@ mod tests {
         let m2 = make_dir(&d, "01 Đề: GK1/12").unwrap();
         assert!(m1.ends_with("01 Đề- GK1-12") && m2.ends_with("01 Đề- GK1-12-2"), "{m1} {m2}");
         assert!(Path::new(&m1).is_dir());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn thu_muc_trong_luu_va_doc_lai_va_loc_gia_tri_xau() {
+        let d = tmp("folders");
+        assert!(load_folders(&d).is_empty(), "chưa có tệp: rỗng");
+        save_folders(&d, vec!["A".into(), "A/B".into(), "A".into(), "/x".into(), "y/".into(), "a//b".into(), "".into(), "a/b/c/d/e/f".into(), "t\u{7}".into()]).unwrap();
+        assert_eq!(load_folders(&d), vec!["A".to_string(), "A/B".to_string()]);
+        fs::write(d.join("folders.json"), b"{hong").unwrap();
+        assert!(load_folders(&d).is_empty(), "tệp hỏng: rỗng, không báo lỗi");
         let _ = fs::remove_dir_all(&d);
     }
 
