@@ -781,7 +781,7 @@ pub fn build_package(
 
 // ---------- đọc dự án ----------
 
-fn read_project_text(lib: &Path, id: &str, rel: &str, cap: u64) -> Result<String, String> {
+pub(crate) fn read_project_text(lib: &Path, id: &str, rel: &str, cap: u64) -> Result<String, String> {
     let dir = projects_dir(lib).join(id);
     let mut f = open_inside(&dir, rel)?;
     let mut b = Vec::new();
