@@ -1,3 +1,16 @@
+## Có gì mới trong beta.56 (kênh beta): Thư viện đề chọn nhiều đề, xuất Excel, thư mục riêng, tìm trong nội dung
+Gồm PR #222, #223, #224, #225, #226 (so với beta.55). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử (238 test Rust, test giao diện) và chạy thử trên app Tauri với kho thử; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+
+**Điều chính cần biết**
+- **Thư viện đề kiểu Finder:** bảng 9 cột, thư mục thông minh (Gần đây, Gắn sao, Cần rà soát), cây tệp bên trong mỗi đề, ngăn thông tin, bấm = chọn, bấm đúp = mở, Xuất PDF từ thanh công cụ, chuột phải và ngăn thông tin.
+- **Chọn nhiều đề:** Ctrl+bấm chọn thêm, Shift+bấm chọn cả đoạn, Ctrl+A chọn hết, Shift+mũi tên mở rộng. Với cả nhóm: Chuyển tới… (lớp, loại đề, thư mục), gắn hoặc bỏ sao, đánh dấu cần rà soát, chuyển vào Thùng rác (hỏi trước; đề đang mở ở tab được giữ lại). Kéo cả nhóm vào một mục ở cây để chuyển. Một đề lỗi không làm dừng cả lô.
+- **Thư mục riêng:** chuột phải vào thư mục ở cây (hoặc Công cụ › Thư mục mới…) để tạo, đổi tên, chuyển, xoá. Xoá thư mục KHÔNG xoá đề: đề được đưa lên thư mục cha. Thư mục chỉ là nhãn, không đụng tới tệp của đề. Thư mục còn trống được lưu cùng dữ liệu ứng dụng (tệp `exam-library/folders.json`).
+- **Lọc theo loại đề** (Giữa kỳ 1…, Chưa phân loại) trong bộ lọc.
+- **Tìm trong nội dung đề:** ô tìm quét cả các tệp `.tex` (không cần gõ dấu); đề khớp có nhãn "trong nội dung", rê chuột để xem dòng khớp. Nhanh gấp khoảng 8 lần so với bản đầu (300 đề × 284 KB: 8,2 s → 1,0 s).
+- **Xuất ma trận Excel** cho một đề tạo từ ngân hàng: ma trận Chương × Bài/Dạng × loại câu × mức độ, điểm theo thang lưu trong đề, tỉ lệ, dòng cộng; trang 2 liệt kê câu theo mã đề đầu. Đề soạn tay không có ma trận (app báo rõ).
+- **Xuất trọn gói** nhiều đề: PDF các bản đã dịch, ma trận, đáp án theo mã đề, gói HEdu (tuỳ chọn) vào một thư mục mới `HEdu-xuat-ngày-giờ`, mỗi đề một thư mục con, kèm `Danh-muc.xlsx` (mỗi đề một dòng; trang 2 liệt kê tệp, dung lượng, SHA-256 rút gọn). Không ghi đè; một đề lỗi không dừng cả lô, lý do ghi trong danh mục.
+- **Gọn và nhẹ hơn:** bộ nhớ đệm hình TikZ trước đây không có trần (máy thật đã 75 MB, 1.451 hình) nay có trần 128 MB / 6.000 hình, tự bỏ hình lâu không dùng nhất.
+
 ## Có gì mới trong beta.55 (kênh beta): Kho hình TikZ, mẫu Sky Panel đẹp hơn, sửa lỗi xem trước khi nhập
 Gồm PR #217, #218, #219, #220 (so với beta.54). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, dịch thật bằng TeX Live và chạy thử trên app Tauri với kho 19.853 hình; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
