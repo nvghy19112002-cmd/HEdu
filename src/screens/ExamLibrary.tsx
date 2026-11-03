@@ -36,6 +36,8 @@ const STATUSES: ExamStatus[] = ['draft', 'needs_review', 'finalized'];
 const PER_PAGE = 60;
 const PER_PAGE_LIST = 200;
 const COLSORT_KEY = 'hedu.examcolsort';
+const SIDEW_KEY = 'hedu.examside';
+const SIDEW_DEFAULT = 250;
 const VIEW_KEY = 'hedu.examview';
 type View = 'card' | 'list';
 const loadView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'card' ? 'card' : 'list'; } catch { return 'list'; } };
@@ -87,6 +89,17 @@ export function ExamLibraryScreen() {
   const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
   const [rowFiles, setRowFiles] = useState<ReadonlyMap<string, ExamManifest['files']>>(new Map());
   const [selGoods, setSelGoods] = useState<GoodInfo[]>([]);
+  /** độ rộng thanh bên (kéo mép phải để đổi, nhớ theo máy) */
+  const [sideW, setSideW] = useState<number>(() => { try { const n = Number(localStorage.getItem(SIDEW_KEY)); return n >= 180 && n <= 460 ? n : SIDEW_DEFAULT; } catch { return SIDEW_DEFAULT; } });
+  const startResize = (ev: React.PointerEvent) => {
+    ev.preventDefault();
+    const x0 = ev.clientX, w0 = sideW;
+    let w = w0;
+    const mv = (e: PointerEvent) => { w = Math.max(180, Math.min(460, w0 + e.clientX - x0)); setSideW(w); };
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); try { localStorage.setItem(SIDEW_KEY, String(w)); } catch { /* không nhớ được thì thôi */ } };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+  };
+  const resetSide = () => { setSideW(SIDEW_DEFAULT); try { localStorage.removeItem(SIDEW_KEY); } catch { /* bỏ qua */ } };
   /** kiểu xem: thẻ hoặc danh sách (nhớ theo máy) */
   const [view, setViewState] = useState<View>(loadView);
   const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* không nhớ được thì thôi */ } };
@@ -570,13 +583,14 @@ export function ExamLibraryScreen() {
         {load === 'error' && <div className="note bad xl-note" role="alert"><div className="note-body"><b>Chưa đọc được thư viện đề</b><span>{err} Tệp của bạn trong thư viện không bị xoá.</span></div></div>}
 
         <div className="fx-main">
-          <aside className="fx-side" aria-label="Cây đề thi">
+          <aside className="fx-side" aria-label="Cây đề thi" style={{ flexBasis: sideW, width: sideW }}>
             <div className="fs-scroll">
               <ExamTree tree={tree} total={base.length} sel={smart ? `smart:${smart}` : node} showEmpty={showEmpty} onShowEmpty={setShowEmpty} onPick={(k) => { setSmart(null); setNode(k); }}
                 smart={[{ key: 'recent', label: SMART_LABEL.recent, count: smartCounts.recent, icon: 'clock' }, { key: 'star', label: SMART_LABEL.star, count: smartCounts.star, icon: 'star' }, { key: 'review', label: SMART_LABEL.review, count: smartCounts.review, icon: 'flag' }]}
                 onSmart={(k) => { setNode(null); setSmart(k as SmartKey); }} />
             </div>
           </aside>
+          <div className="fx-resize" role="separator" aria-orientation="vertical" aria-label="Kéo để đổi độ rộng thanh bên (bấm đúp: về mặc định)" title="Kéo để đổi độ rộng · bấm đúp: về mặc định" onPointerDown={startResize} onDoubleClick={resetSide} />
 
           <section className="fx-list" aria-label="Danh sách đề" tabIndex={0} onKeyDown={onListKey} onClick={(ev) => { if (ev.target === ev.currentTarget) setSel(null); }}>
             {load === 'loading' && <p className="aid-wait" role="status">Đang đọc thư viện đề…</p>}
