@@ -2119,3 +2119,59 @@ body.xdragging, body.xdragging * { cursor: grabbing !important; user-select: non
 @media (max-width: 900px) { .kh-dlg { grid-template-columns: 1fr; } .kh-dlg-view { position: static; } }
 textarea.kh-code { height: 240px; min-height: 200px; }
 details textarea.kh-code { height: 110px; }
+
+/* ---- Thư viện đề kiểu Finder (macOS) ---- */
+.fx { display: flex; flex-direction: column; height: 100vh; min-height: 0; background: var(--paper); }
+.xt-bar:not(.over) ~ .fx { height: calc(100vh - 38px); }
+.fx-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--paper-2); flex-wrap: wrap; }
+.fx-crumb { display: flex; align-items: center; gap: 8px; font-size: 14px; min-width: 0; }
+.fx-sp { flex: 1 1 auto; }
+.fx-search { width: 190px; }
+.fx-main { flex: 1 1 auto; min-height: 0; display: flex; }
+.fx-side { flex: 0 0 220px; border-right: 1px solid var(--line); background: var(--paper-2); overflow: auto; padding: 8px 6px; }
+.fx-list { flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; display: flex; flex-direction: column; gap: 8px; padding: 0 0 8px; }
+.fx-list > .empty, .fx-list > .aid-wait, .fx-list > .xc-grid, .fx-list > .pager { margin: 12px 14px 0; }
+.fx-insp { flex: 0 0 270px; border-left: 1px solid var(--line); background: var(--paper-2); overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.fx-insp-h { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.fx-insp-name { font-size: 15px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.fx-kv { margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.fx-kv > div { display: grid; grid-template-columns: 72px 1fr; gap: 6px; }
+.fx-kv dt { color: var(--ink-3); } .fx-kv dd { margin: 0; overflow-wrap: anywhere; }
+.fx-pdfs { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.fx-pdf { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.fx-pdf-b { display: flex; gap: 4px; flex: none; }
+.fx-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.fx-status { display: flex; justify-content: space-between; gap: 12px; padding: 3px 14px; font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--line); background: var(--paper-2); }
+.fx-status-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-table { display: flex; flex-direction: column; }
+.fx-head, .fx-row { display: grid; grid-template-columns: minmax(240px, 3.2fr) 108px 46px 84px 92px 48px 48px 78px 74px; align-items: center; gap: 10px; padding: 0 14px; }
+.fx-head { position: sticky; top: 0; z-index: 2; height: 28px; background: var(--paper-2); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
+.fx-h { font: inherit; background: none; border: 0; padding: 0; text-align: left; color: inherit; cursor: pointer; white-space: nowrap; }
+.fx-h:hover, .fx-h.on { color: var(--ink); } .fx-h i { font-style: normal; font-size: 9px; margin-left: 4px; }
+.fx-h.c-count, .fx-h.c-files, .fx-h.c-size, .fx-h.c-updated, .fx-h.c-grade { text-align: right; }
+.fx-row { min-height: 32px; font-size: 13px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); cursor: default; user-select: none; }
+.fx-row:nth-child(even) { background: color-mix(in srgb, var(--paper-2) 55%, transparent); }
+.fx-row:hover { background: var(--hover); }
+.fx-row.sel, .fx-row.of-sel { background: var(--pri-soft); }
+.fx-row.sel { box-shadow: inset 3px 0 0 var(--pri); }
+.fx-row.ctx-on { background: var(--pri-soft); }
+.fx-cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.fx-cell.c-name { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+.fx-cell.c-count, .fx-cell.c-files, .fx-cell.c-size, .fx-cell.c-updated, .fx-cell.c-grade { text-align: right; font-variant-numeric: tabular-nums; }
+.fx-nm { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.fx-ico { flex: none; color: #E0A526; }
+.fx-tw { flex: none; width: 16px; height: 16px; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; font-size: 11px; line-height: 1; transition: transform .1s; }
+.fx-tw.open { transform: rotate(90deg); }
+.fx-star { flex: none; border: 0; background: none; padding: 0 2px; font-size: 13px; color: transparent; cursor: pointer; }
+.fx-row:hover .fx-star { color: var(--ink-3); } .fx-star.on { color: #E0A526 !important; }
+.fx-child .fx-cell.c-name { padding-left: 34px; } .fx-child .fx-nm { font-weight: 400; }
+.fx-dir { color: var(--ink-3); } .fx-main { color: var(--pri); font-size: 12px; }
+.fx-fk { flex: none; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; color: #fff; background: #6B7280; }
+.fx-fk.k-tex { background: #2563EB; } .fx-fk.k-pdf { background: #DC2626; } .fx-fk.k-img { background: #059669; } .fx-fk.k-pkg { background: #7C3AED; }
+.xc.sel { outline: 2px solid var(--pri); outline-offset: 1px; }
+@media (max-width: 1280px) { .fx-head, .fx-row { grid-template-columns: minmax(200px, 3fr) 104px 44px 90px 70px; } .c-year, .c-count, .c-files, .c-size { display: none; } .fx-insp { flex-basis: 230px; } }
+@media (max-width: 980px) { .fx-insp { display: none; } }
+.fx-side { flex: 0 0 auto; min-width: 180px; max-width: 460px; }
+.fx-resize { flex: 0 0 6px; margin-left: -3px; cursor: col-resize; z-index: 3; touch-action: none; }
+.fx-resize:hover, .fx-resize:active { background: var(--pri-soft); }
+.fx-side .bt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
