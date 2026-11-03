@@ -32,6 +32,8 @@ interface Props {
   /** thư mục thông minh hiện trên đầu cây (Gần đây, Gắn sao, Cần rà soát) */
   smart?: { key: string; label: string; count: number; icon: 'clock' | 'star' | 'flag' }[];
   onSmart?(key: string): void;
+  /** chuột phải vào thư mục riêng (khoá 'f' = gốc, 'f:<đường dẫn>' = thư mục) */
+  onNodeContext?(key: string, x: number, y: number): void;
 }
 
 /** Lọc cây theo chữ tìm: giữ nút khớp và đường tới nó. */
@@ -46,7 +48,7 @@ function search(ns: readonly ExamNode[], q: string): ExamNode[] {
   return out;
 }
 
-export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, onShowEmpty, onPick, allLabel = 'Tất cả đề', emptySwitch = true, treeLabel = 'Cây đề thi', smart, onSmart }: Props) {
+export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, onShowEmpty, onPick, allLabel = 'Tất cả đề', emptySwitch = true, treeLabel = 'Cây đề thi', smart, onSmart, onNodeContext }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Set<string>>(loadOpen);
   // mở đường tới mục đang chọn
@@ -67,7 +69,7 @@ export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, on
     const isSel = sel === x.key;
     return (
       <li key={x.key} role="treeitem" aria-level={depth + 1} aria-selected={isSel} aria-expanded={has ? isOpen : undefined}>
-        <div data-node={x.key} className={`bt-row k-${x.kind === 'grade' ? 'grade' : x.kind === 'group' ? 'branch' : x.kind === 'chapter' ? 'chapter' : 'lesson'}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 4 + depth * 12 }}>
+        <div data-node={x.key} onContextMenu={onNodeContext && (x.kind === 'folder' || x.key === 'f') ? (ev) => { ev.preventDefault(); onNodeContext(x.key, ev.clientX, ev.clientY); } : undefined} className={`bt-row k-${x.kind === 'grade' ? 'grade' : x.kind === 'group' ? 'branch' : x.kind === 'chapter' ? 'chapter' : 'lesson'}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 4 + depth * 12 }}>
           {has
             ? <button type="button" className="bt-caret" aria-label={isOpen ? `Thu gọn ${x.label}` : `Mở ${x.label}`} tabIndex={-1} onClick={() => toggle(x.key)}><svg className={isOpen ? 'is-open' : undefined} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
             : <span className="bt-caret" aria-hidden="true" />}

@@ -514,6 +514,7 @@ pub fn run() {
             examadmin::exam_backup_verify,
             examadmin::exam_backup_restore,
             examadmin::exam_reveal,
+            examlib::exam_search_text,
             examsources::exam_sources_add,
             examsources::exam_sources_status,
             examsources::exam_sources_forget,

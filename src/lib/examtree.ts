@@ -80,6 +80,11 @@ export function examCounts(list: readonly ExamSummary[], tax: Taxonomy): Map<str
   return m;
 }
 
+/** Giá trị lọc "chưa phân loại" của bộ lọc loại đề. */
+export const CAT_NONE = 'none';
+/** Bộ lọc loại đề: null = mọi loại; CAT_NONE = chưa nhận ra loại; còn lại = đúng loại chuẩn. */
+export const matchesCat = (e: ExamSummary, cat: ExamCat | typeof CAT_NONE | null): boolean => cat === null || (catOfType(e.metadata.examType) ?? CAT_NONE) === cat;
+
 export const examInNode = (e: ExamSummary, key: string | null, tax: Taxonomy): boolean => key === null || examKeys(e, index(tax)).includes(key);
 export function filterByNode(list: readonly ExamSummary[], key: string | null, tax: Taxonomy): ExamSummary[] {
   if (key === null) return [...list];
@@ -88,7 +93,7 @@ export function filterByNode(list: readonly ExamSummary[], key: string | null, t
 }
 
 /** Dựng cây đầy đủ. Chỉ hiện mục đã có đề (kể cả nhóm cố định như Đề kiểm tra GK1…CK2); showEmpty hiện cả mục chưa có đề để chọn tạo đề vào đó. */
-export function examTree(tax: Taxonomy, counts: ReadonlyMap<string, number>, list: readonly ExamSummary[], showEmpty = false): ExamNode[] {
+export function examTree(tax: Taxonomy, counts: ReadonlyMap<string, number>, list: readonly ExamSummary[], showEmpty = false, extraFolders: readonly string[] = []): ExamNode[] {
   const n = (k: string) => counts.get(k) ?? 0;
   const keep = (x: ExamNode) => x.count > 0 || showEmpty;
   const grades = new Set<number>(tax.grades.map((g) => g.grade));
@@ -118,6 +123,8 @@ export function examTree(tax: Taxonomy, counts: ReadonlyMap<string, number>, lis
   const root: ExamNode = { key: 'f', label: 'Thư mục riêng', kind: 'group', count: n('f'), children: [], fixed: true };
   const paths = new Set<string>();
   for (const e of list) if (e.folder) e.folder.split('/').forEach((_, i, a) => paths.add(a.slice(0, i + 1).join('/')));
+  // thư mục trống (người dùng tự tạo, chưa có đề) vẫn hiện để kéo đề vào
+  for (const f of extraFolders) f.split('/').forEach((_, i, a) => paths.add(a.slice(0, i + 1).join('/')));
   const byPath = new Map<string, ExamNode>();
   for (const p of [...paths].sort((a, b) => a.localeCompare(b, 'vi', { numeric: true, sensitivity: 'base' }))) {
     const node: ExamNode = { key: `f:${p}`, label: p.split('/').pop()!, kind: 'folder', count: n(`f:${p}`), children: [] };
@@ -127,7 +134,7 @@ export function examTree(tax: Taxonomy, counts: ReadonlyMap<string, number>, lis
   }
   out.push(root);
   if (n('none') > 0) out.push({ key: 'none', label: 'Chưa xếp lớp', kind: 'none', count: n('none'), children: [] });
-  return out.filter(keep);
+  return out.filter((x) => keep(x) || (x === root && paths.size > 0));
 }
 
 /** Thông tin điền sẵn khi tạo đề trong một nút (null = nút không gợi ý gì). */

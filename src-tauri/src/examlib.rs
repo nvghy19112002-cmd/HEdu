@@ -950,6 +950,65 @@ pub async fn exam_lib_verify(app: AppHandle, id: String) -> Result<VerifyOut, St
     blocking(move || verify(&lib, &id)).await
 }
 
+// ---------- tìm trong nội dung đề ----------
+
+/// Một đề có nội dung khớp từ khoá (dòng khớp đầu tiên + tổng số dòng khớp).
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextHit {
+    pub id: String,
+    pub file: String,
+    pub line: usize,
+    pub snippet: String,
+    pub matches: usize,
+}
+
+const SEARCH_MAX_FILE: u64 = 2 * 1024 * 1024;
+const SEARCH_MAX_HITS: usize = 300;
+
+/// Tìm không phân biệt hoa/thường và dấu trong các tệp .tex của mọi đề (chỉ đọc, đi qua `open_inside` nên không theo liên kết).
+pub fn search_text(lib: &Path, query: &str) -> Vec<TextHit> {
+    let q = crate::khohinh::fold(query);
+    if q.chars().count() < 2 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for sum in list(lib) {
+        let Ok(m) = read_manifest(lib, &sum.id) else { continue };
+        let pd = projects_dir(lib).join(&sum.id);
+        let mut first: Option<(String, usize, String)> = None;
+        let mut n = 0usize;
+        for f in m.files.iter().filter(|f| f.rel.to_lowercase().ends_with(".tex") && f.bytes <= SEARCH_MAX_FILE) {
+            let Ok(mut fh) = open_inside(&pd, &f.rel) else { continue };
+            let mut b = Vec::new();
+            if Read::take(&mut fh, SEARCH_MAX_FILE).read_to_end(&mut b).is_err() {
+                continue;
+            }
+            for (i, line) in String::from_utf8_lossy(&b).lines().enumerate() {
+                if crate::khohinh::fold(line).contains(&q) {
+                    n += 1;
+                    if first.is_none() {
+                        first = Some((f.rel.clone(), i + 1, line.trim().chars().take(160).collect()));
+                    }
+                }
+            }
+        }
+        if let Some((file, line, snippet)) = first {
+            out.push(TextHit { id: sum.id.clone(), file, line, snippet, matches: n });
+            if out.len() >= SEARCH_MAX_HITS {
+                break;
+            }
+        }
+    }
+    out
+}
+
+#[tauri::command]
+pub async fn exam_search_text(app: AppHandle, query: String) -> Result<Vec<TextHit>, String> {
+    let lib = lib_root(&app)?;
+    blocking(move || Ok(search_text(&lib, &query))).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -964,6 +1023,23 @@ mod tests {
         let p = d.join(rel);
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(p, b).unwrap();
+    }
+
+    #[test]
+    fn tim_trong_noi_dung_khong_phan_biet_dau() {
+        let d = tmp("search");
+        let lib = d.join("lib");
+        put(&d, "a/de.tex", "\\documentclass{article}\n\\begin{document}\nCho hàm số $y=x^2$\nTính đạo hàm của hàm số\n\\end{document}\n".as_bytes());
+        put(&d, "b/de.tex", b"\\documentclass{article}\n\\begin{document}\nxac suat\n\\end{document}\n");
+        let a = import(&lib, &d.join("a/de.tex"), "A", None).unwrap();
+        let _b = import(&lib, &d.join("b/de.tex"), "B", None).unwrap();
+        let h = search_text(&lib, "HAM SO");
+        assert_eq!(h.len(), 1);
+        assert_eq!((h[0].id.as_str(), h[0].file.as_str(), h[0].line, h[0].matches), (a.id.as_str(), "de.tex", 3, 2));
+        assert!(h[0].snippet.contains("Cho hàm số"));
+        assert!(search_text(&lib, "x").is_empty(), "từ khoá quá ngắn không tìm");
+        assert!(search_text(&lib, "không có đâu").is_empty());
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]

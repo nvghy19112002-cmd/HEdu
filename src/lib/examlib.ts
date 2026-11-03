@@ -122,6 +122,10 @@ export const examBackupCreate = () => invoke<BackupInfo>('exam_backup_create');
 export const examBackupList = () => invoke<BackupInfo[]>('exam_backup_list');
 export const examBackupVerify = (name: string) => invoke<BackupCheck>('exam_backup_verify', { name });
 export const examBackupRestore = (name: string, ids: string[]) => invoke<ExamSummary[]>('exam_backup_restore', { name, ids });
+/** Một đề có nội dung (.tex) khớp từ khoá tìm. */
+export interface TextHit { id: string; file: string; line: number; snippet: string; matches: number }
+/** Tìm trong nội dung các tệp .tex của mọi đề (không phân biệt hoa/thường, dấu). */
+export const examSearchText = (query: string) => invoke<TextHit[]>('exam_search_text', { query });
 export const examReveal = (id: string) => invoke<void>('exam_reveal', { id });
 
 /** Tên thư mục gói an toàn từ tên đề (Windows). */
