@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ExamTree } from '../components/ExamTree';
 import { KhoHinhPanel } from '../components/KhoHinhPanel';
 import { KhoThumb, type ThumbResult } from '../components/KhoThumb';
+import { KhoHinhGiong, KhoQuetNen } from '../components/KhoCongCu';
 import { IcPlus } from '../components/Icons';
 import {
   KHO_LOAI, khoCay, khoDatTrangThai, khoLay, khoNutDoiTen, khoNutThem, khoNutXoa, khoSua, khoThem, khoTim, khoTrangThai, khoXoa, loaiText,
@@ -198,6 +199,7 @@ export function KhoHinhScreen() {
   const [nutDlg, setNutDlg] = useState<null | 'them' | 'ten'>(null);
   const [askNut, setAskNut] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [tool, setTool] = useState<null | 'quet' | 'giong'>(null);
   const [err, setErr] = useState<string | null>(null);
   const [codes, setCodes] = useState<ReadonlyMap<string, { code: string; defs: string }>>(new Map());
 
@@ -284,6 +286,9 @@ export function KhoHinhScreen() {
                 <button type="button" role="menuitem" onClick={() => { setMenu(false); setNutDlg('them'); }}><b>Thêm mục{nodeName ? ' con' : ''}</b><small>{nodeName ? `Trong “${nodeName}”` : 'Ở cấp ngoài cùng'}</small></button>
                 <button type="button" role="menuitem" disabled={!node} onClick={() => { setMenu(false); setNutDlg('ten'); }}><b>Đổi tên mục đang chọn</b></button>
                 <button type="button" role="menuitem" disabled={!node} onClick={() => { setMenu(false); setAskNut(true); }}><b>Xoá mục đang chọn</b><small>Chỉ xoá được mục trống</small></button>
+                <hr />
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); setTool('quet'); }}><b>Quét nền: dịch thử cả kho</b><small>Ghi Dịch được / Dịch lỗi cho mọi hình chưa dịch</small></button>
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); setTool('giong'); }}><b>Tìm hình giống nhau</b><small>Chỉ khác số liệu, khoảng trắng, chú thích</small></button>
               </span>
             )}
           </span>
@@ -384,6 +389,8 @@ export function KhoHinhScreen() {
           <p>Mục “{nodeName}” chỉ xoá được khi không còn mục con và không còn hình nào (kể cả trong thùng rác). Nếu còn, HEdu sẽ báo và không xoá gì.</p>
         </ConfirmDialog>
       )}
+      {tool === 'quet' && <KhoQuetNen onClose={() => setTool(null)} onChanged={changed} />}
+      {tool === 'giong' && <KhoHinhGiong onClose={() => setTool(null)} onChanged={changed} />}
     </>
   );
 }

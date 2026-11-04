@@ -3,7 +3,7 @@
 import { invoke, isDesktop } from './platform';
 
 export interface TikzOut { svg: string; cached: boolean; ms: number }
-export interface TikzErr { message: string; log: string; stage: 'latex' | 'svg' | 'thieu-texlive' | 'qua-lau' }
+export interface TikzErr { message: string; log: string; stage: 'latex' | 'svg' | 'thieu-texlive' | 'qua-lau' | 'huy' }
 
 export interface TikzSettings {
   /** tự vẽ hình khi mở câu hỏi; tắt thì chỉ vẽ khi bấm nút */
@@ -86,3 +86,6 @@ export function asTikzErr(e: unknown): TikzErr {
   }
   return { message: String(e), log: '', stage: 'latex' };
 }
+
+/** Dừng ngay mọi hình đang dịch hoặc đang xếp hàng (cả tiến trình TeX con); chỉ có ở bản cài Windows. */
+export const cancelTikz = (): Promise<void> => invoke<void>('tikz_cancel').catch(() => undefined);

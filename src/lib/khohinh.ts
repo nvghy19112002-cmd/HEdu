@@ -52,3 +52,9 @@ export function kichThuocText(n: number): string {
   if (n >= 1024) return `${Math.round(n / 1024)} KB`;
   return `${n} B`;
 }
+
+/** Hình chưa dịch (chưa chuyển vào thùng rác), tối đa `limit`, kèm mã để dịch nền. */
+export interface KhoCanDich { id: string; code: string; extra_preamble: string }
+export const khoCanDich = (limit = 40) => invoke<KhoCanDich[]>('kho_hinh_can_dich', { limit });
+/** Các nhóm hình giống nhau (cùng cấu trúc mã, chỉ khác số liệu/khoảng trắng/chú thích), nhóm lớn trước. */
+export const khoNhomGiong = (maxNhom = 300) => invoke<KhoMuc[][]>('kho_hinh_nhom_giong', { maxNhom });

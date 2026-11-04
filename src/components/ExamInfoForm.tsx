@@ -6,6 +6,7 @@ import { parseTags, STATUS_LABEL, type ExamManifest, type ExamMetaIn, type ExamS
 import { CAT_LABEL, CATS, catOfType } from '../lib/examtree';
 import { chaptersOfGrade } from '../lib/taxonomy';
 import { useTaxonomy } from '../lib/curriculum';
+import { CHECK_ICON, failCount, warnCount, type ExamCheck } from '../lib/examcheck';
 
 interface Props {
   detail: ExamManifest;
@@ -13,12 +14,14 @@ interface Props {
   busy: boolean;
   /** có PDF biên dịch gần nhất (điều kiện cần để chốt đề) */
   hasPdf: boolean;
+  /** kết quả kiểm tra trước khi chốt (null = đang kiểm) */
+  checks?: ExamCheck[] | null;
   onSave(m: ExamMetaIn): void;
   /** mở sẵn phần thông tin */
   open?: boolean;
 }
 
-export function ExamInfoForm({ detail, folders, busy, hasPdf, onSave, open }: Props) {
+export function ExamInfoForm({ detail, folders, busy, hasPdf, checks, onSave, open }: Props) {
   const init = () => ({
     name: detail.name, folder: detail.folder ?? '', grade: detail.metadata.grade ? String(detail.metadata.grade) : '', year: detail.metadata.schoolYear ?? '',
     type: detail.metadata.examType ?? '', tags: detail.metadata.tags.join(', '), status: detail.status as ExamStatus,
@@ -27,6 +30,9 @@ export function ExamInfoForm({ detail, folders, busy, hasPdf, onSave, open }: Pr
   const { tax } = useTaxonomy();
   const [f, setF] = useState(init);
   const [ask, setAsk] = useState(false);
+  const [okFail, setOkFail] = useState(false);
+  useEffect(() => { if (!ask) setOkFail(false); }, [ask]);
+  const nFail = checks ? failCount(checks) : 0;
   useEffect(() => { setF(init()); }, [detail.projectId, detail.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   const final = detail.status === 'finalized';
   const build = (status: ExamStatus): ExamMetaIn => ({
@@ -86,10 +92,20 @@ export function ExamInfoForm({ detail, folders, busy, hasPdf, onSave, open }: Pr
           <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>Lưu thông tin</button>
           {!final && <button type="button" className="btn btn-sm" disabled={busy || !hasPdf} title={hasPdf ? '' : 'Cần có PDF biên dịch thành công trước'} onClick={() => setAsk(true)}>Chốt đề…</button>}
         </div>
+        {!final && checks && (
+          <details className="xl-checks" open={nFail > 0}>
+            <summary>Kiểm tra trước khi chốt: {nFail ? `${nFail} chưa đạt` : 'đạt'}{warnCount(checks) ? ` · ${warnCount(checks)} cảnh báo` : ''}</summary>
+            <ul className="xl-lines">{checks.map((c) => <li key={c.key} className={`xl-chk ${c.level}`}><b aria-hidden="true">{CHECK_ICON[c.level]}</b> <span>{c.title}</span>{c.detail && <span className="xl-meta"> — {c.detail}</span>}</li>)}</ul>
+          </details>
+        )}
         {final && <p className="xl-meta">Đề đã chốt: không sửa trực tiếp và không bỏ chốt được. Muốn sửa, bấm “Sao chép” để tạo phiên bản mới.</p>}
       </form>
       {ask && (
-        <ConfirmDialog title="Chốt đề này?" confirmLabel="Chốt đề" cancelLabel="Chưa chốt" busy={busy} onCancel={() => setAsk(false)} onConfirm={() => { setAsk(false); onSave(build('finalized')); }}>
+        <ConfirmDialog title="Chốt đề này?" confirmLabel="Chốt đề" cancelLabel="Chưa chốt" busy={busy} disabled={nFail > 0 && !okFail} onCancel={() => setAsk(false)} onConfirm={() => { setAsk(false); onSave(build('finalized')); }}>
+          {checks && (
+            <ul className="xl-lines">{checks.filter((c) => c.level !== 'ok').map((c) => <li key={c.key} className={`xl-chk ${c.level}`}><b aria-hidden="true">{CHECK_ICON[c.level]}</b> <span>{c.title}</span>{c.detail && <span className="xl-meta"> — {c.detail}</span>}</li>)}</ul>
+          )}
+          {nFail > 0 && <label className="sw"><input type="checkbox" checked={okFail} onChange={(e) => setOkFail(e.target.checked)} />Tôi đã xem {nFail} mục chưa đạt ở trên và vẫn muốn chốt đề</label>}
           <p>Chỉ chốt sau khi bạn đã XEM PDF và thấy đúng. Sau khi chốt, đề không sửa trực tiếp được và không bỏ chốt được; muốn sửa phải tạo phiên bản mới (Sao chép).</p>
           <p className="xl-meta">HEdu chỉ cho chốt khi PDF còn khớp đúng nội dung hiện tại.</p>
         </ConfirmDialog>

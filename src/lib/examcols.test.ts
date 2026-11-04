@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { clickCol, DEFAULT_COL_SORT, fileKind, fileRows, inSmart, isRecent, isStar, parseColSort, sortByCol, STAR, withStar } from './examcols';
+import { clickCol, COL_ORDER, DEFAULT_COL_SORT, gridTemplate, hiddenClass, parseColVis, serializeColVis, shownCols, fileKind, fileRows, inSmart, isRecent, isStar, parseColSort, sortByCol, STAR, withStar } from './examcols';
 import type { ExamSummary } from './examlib';
 
 const t = (name: string, f: () => void) => { f(); console.log('  ✓ ' + name); };
@@ -58,5 +58,25 @@ t('loại tệp và cây tệp của một đề: .tex trước, rồi PDF, gói
   assert.deepEqual([r.rows[0].dir, r.rows[0].name], ['', 'main.tex']);
   const f = fileRows([{ rel: 'Picture/h1.png', bytes: 3 }]);
   assert.deepEqual([f.rows[0].dir, f.rows[0].name], ['Picture', 'h1.png']);
+});
+console.log('Cột hiện / ẩn');
+t('mặc định hiện đủ; Tên luôn hiện; giá trị hỏng hoặc lạ thì về mặc định / bỏ qua', () => {
+  assert.equal(parseColVis(null).size, COL_ORDER.length);
+  assert.equal(parseColVis('{hong').size, COL_ORDER.length);
+  assert.deepEqual([...parseColVis('["size","khong-co",5]')].sort(), ['name', 'size']);
+  assert.ok(parseColVis('[]').has('name'));
+});
+t('lưu rồi đọc lại đúng, theo thứ tự chuẩn', () => {
+  const v = parseColVis('["updated","type"]');
+  assert.equal(serializeColVis(v), '["name","type","updated"]');
+  assert.deepEqual([...parseColVis(serializeColVis(v))].sort(), [...v].sort());
+});
+t('cửa sổ hẹp tự ẩn cột phụ dù đang bật; lưới và lớp ẩn khớp số cột', () => {
+  const all = parseColVis(null);
+  const wide = shownCols(all, false), narrow = shownCols(all, true);
+  assert.equal(wide.length, 9); assert.deepEqual(narrow, ['name', 'type', 'grade', 'status', 'updated']);
+  assert.equal(gridTemplate(['name', 'type']), 'minmax(240px, 3.2fr) 108px');
+  assert.equal(hiddenClass(narrow), 'hc-year hc-count hc-files hc-size');
+  assert.equal(hiddenClass(wide), '');
 });
 console.log('examcols: đạt hết.');

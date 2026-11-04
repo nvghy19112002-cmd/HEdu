@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CompiledView, FailureBox } from '../components/CompiledView';
 import { compileBatch, CATEGORY_ORDER, type Category, type Failure } from '../lib/xemchuan';
-import { isTikzReady } from '../lib/tikz';
+import { cancelTikz, isTikzReady } from '../lib/tikz';
 import { useApp } from '../app-context';
 import { PackagePanel } from '../components/PackagePanel';
 import { firstLocation, getTaxonomy, grades, useTaxonomy } from '../lib/curriculum';
@@ -304,7 +304,7 @@ export function ImportScreen() {
     });
     if (stopRef.current === sig) setTexRun(false);
   };
-  const stopTex = () => { stopRef.current.stop = true; setTexRun(false); };
+  const stopTex = () => { stopRef.current.stop = true; setTexRun(false); void cancelTikz(); };
   const texLive = rows.map((_, i) => texOf(i)).filter((x): x is Tex => !!x);
   const texDone = texLive.length;
   const texFail = texLive.filter((x) => !x.ok) as { ok: false; fail: Failure }[];

@@ -6,20 +6,20 @@ import { invoke } from '../lib/platform';
 import { pdfFileName, type ExamMode } from '../lib/examcompile';
 import { canvasShrink, clampZoom, currentPage, fitPage, fitWidth, layoutPages, matchPages, nextMatch, pagesToRelease, scrollTopFor, stepZoom, visibleRange } from '../lib/pdfview';
 
-interface PdfPage {
+export interface PdfPage {
   getViewport(o: { scale: number }): { width: number; height: number };
   render(o: { canvasContext: CanvasRenderingContext2D; viewport: unknown }): { promise: Promise<void>; cancel(): void };
   getTextContent(): Promise<{ items: { str?: string }[] }>;
 }
-interface PdfDoc { numPages: number; getPage(n: number): Promise<PdfPage>; destroy(): Promise<void> }
-interface PdfLib {
+export interface PdfDoc { numPages: number; getPage(n: number): Promise<PdfPage>; destroy(): Promise<void> }
+export interface PdfLib {
   getDocument(o: object): { promise: Promise<PdfDoc>; destroy(): Promise<void> };
   GlobalWorkerOptions: { workerSrc: string };
 }
 
 let libPromise: Promise<PdfLib> | null = null;
 /** Nạp pdf.js lúc cần (không làm nặng lúc mở app). Đường dẫn tương đối với trang gốc nên chạy được cả bản dev và bản cài. */
-function loadLib(): Promise<PdfLib> {
+export function loadLib(): Promise<PdfLib> {
   libPromise ??= import(/* @vite-ignore */ new URL('./pdf.mjs', document.baseURI).href).then((m: PdfLib) => {
     m.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.mjs', document.baseURI).href;
     return m;

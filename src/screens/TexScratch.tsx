@@ -19,6 +19,8 @@ import { blockInfos, ID_STATE_LABEL, scanScratch, type BlockInfo } from '../lib/
 import type { Diag } from '../lib/examcompile';
 import { missingPackages } from '../lib/missingpkg';
 import { invoke, isDesktop } from '../lib/platform';
+import { chenText } from '../lib/khochen';
+import { KhoPicker } from '../components/KhoDialogs';
 import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
 import { FIX_RULES, planFix, planSort } from '../lib/texfix';
 import { ScratchReplace } from '../components/ScratchReplace';
@@ -66,6 +68,7 @@ export function TexScratchScreen() {
   const [showSol, setShowSol] = useState(true);
   const [askClear, setAskClear] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [khoOpen, setKhoOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [claudeOpen, setClaudeOpen] = useState(false);
   /** các câu đang tick (theo số thứ tự khối); thao tác "đã chọn" chỉ chạy trên các câu này */
@@ -436,6 +439,7 @@ export function TexScratchScreen() {
                 <button type="button" role="menuitem" disabled={!ix.active} onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'rename', initial: nameOf(ix, ix.active) }); }}>Đổi tên bàn nháp này…</button>
                 <button type="button" role="menuitem" className="danger" disabled={!ix.active} onClick={() => { setToolsOpen(false); setAskDelete(true); }}>Xoá bàn nháp này…</button>
                 <hr className="tsx-hr" />
+                <button type="button" role="menuitem" disabled={!!blocked || !isDesktop()} onClick={() => { setToolsOpen(false); setKhoOpen(true); }} title="Chọn một hình trong Kho hình và chèn vào chỗ con trỏ">Chèn hình từ Kho hình…</button>
                 <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
                 <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <hr className="tsx-hr" />
@@ -591,6 +595,7 @@ export function TexScratchScreen() {
         <button type="button" className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`} onClick={() => setTab('pdf')} title="Xem khung PDF">{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</button>
       </footer>
 
+      {khoOpen && <KhoPicker onClose={() => setKhoOpen(false)} onPick={(h) => { setKhoOpen(false); if (ed.current?.insertAtCursor(KEY, chenText(h))) toast(`Đã chèn hình “${h.title}” vào chỗ con trỏ.`); else toast('Không chèn được: bàn nháp đang chỉ đọc.'); }} />}
       {nameDlg && <NameDialog title={nameDlg.kind === 'new' ? 'Bàn nháp mới' : nameDlg.kind === 'rename' ? 'Đổi tên bàn nháp' : 'Lưu thành đề trong Thư viện'} initial={nameDlg.initial} confirmLabel={nameDlg.kind === 'new' ? 'Tạo' : nameDlg.kind === 'rename' ? 'Đổi tên' : 'Lưu thành đề'} hint={nameDlg.kind === 'exam' ? 'Tạo một đề mới trong mục Đề thi, câu chép nguyên văn. Bàn nháp không bị xoá hay đổi.' : undefined} onOk={(n) => void (nameDlg.kind === 'new' ? createDraft(n) : nameDlg.kind === 'rename' ? renameCurrent(n) : saveAsExam(n))} onCancel={() => setNameDlg(null)} />}
       {askDelete && (
         <ConfirmDialog title={`Xoá “${nameOf(ix, ix.active)}”?`} confirmLabel="Xoá bàn nháp" danger onConfirm={() => void deleteCurrent()} onCancel={() => setAskDelete(false)}>

@@ -6,6 +6,8 @@ export interface LatexEditorHandle {
   /** Chèn đoạn mã; ký tự '|' trong đoạn là vị trí đặt con trỏ sau khi chèn */
   insert(snippet: string, opts?: { wrapMath?: boolean }): void;
   focus(): void;
+  /** Chèn NGUYÊN VĂN tại con trỏ (không đổi gì; '|' trong mã TikZ không phải dấu đặt con trỏ). Giữ được Ctrl+Z. */
+  insertRaw(text: string): void;
 }
 
 interface Props {
@@ -110,6 +112,7 @@ export const LatexEditor = forwardRef<LatexEditorHandle, Props>(function LatexEd
 
   useImperativeHandle(ref, () => ({
     focus: () => ta.current?.focus(),
+    insertRaw(text) { insertText(text); requestAnimationFrame(report); },
     insert(snippet, opts) {
       const el = ta.current;
       if (!el) return;

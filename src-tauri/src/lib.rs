@@ -275,9 +275,10 @@ async fn tikz_render(
     std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
     let o = opts.unwrap_or_default();
     let sup = support::prepare(root.root());
+    let epoch = tikz::current_epoch();
     tauri::async_runtime::spawn_blocking(move || {
         let _slot = RENDER_SLOTS.acquire();
-        tikz::render(&dir, &sup, &code, &defs, &o)
+        tikz::render_at(&dir, &sup, &code, &defs, &o, epoch)
     })
         .await
         .map_err(|e| err(e.to_string()))?
@@ -294,6 +295,12 @@ async fn tikz_probe(app: AppHandle, tex_bin: Option<String>) -> Result<String, t
     tauri::async_runtime::spawn_blocking(move || tikz::probe(&dir, &sup, tex_bin))
         .await
         .map_err(|e| err(e.to_string()))?
+}
+
+/// Nút Dừng của Xem chuẩn hàng loạt: dừng NGAY mọi hình đang dịch hoặc đang xếp hàng (cả cây tiến trình TeX).
+#[tauri::command]
+fn tikz_cancel() {
+    tikz::cancel_running();
 }
 
 #[tauri::command]
@@ -428,6 +435,7 @@ pub fn run() {
             backup_info,
             restore_backup,
             tikz_render,
+            tikz_cancel,
             tikz_probe,
             tikz_clear_cache,
             tikz_default_preamble,
@@ -487,6 +495,8 @@ pub fn run() {
             khohinh::kho_hinh_nut_chuyen,
             khohinh::kho_hinh_nut_xoa,
             khohinh::kho_hinh_dat_trang_thai,
+            khohinh::kho_hinh_can_dich,
+            khohinh::kho_hinh_nhom_giong,
             examcompile::exam_compile,
             examcompile::exam_compile_cancel,
             examcompile::exam_compile_last,

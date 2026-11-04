@@ -18,10 +18,15 @@ import { TexScratchScreen } from './screens/TexScratch';
 import { CurriculumScreen } from './screens/Curriculum';
 import { SystemScreen } from './screens/System';
 import { TrashScreen } from './screens/Trash';
+import { HealthScreen } from './screens/Health';
 import { loadDecisions, trashCount, useDecisions } from './lib/dupdecisions';
 import { loadIdReview } from './lib/idreview';
 import { loadTemplates } from './lib/examtemplates';
 import { UpdateProvider, useUpdates } from './update-context';
+import { dataSig, runAutoBackup } from './lib/autobackup';
+import { examList } from './lib/examlib';
+import { getState } from './lib/store';
+import { isDesktop } from './lib/platform';
 
 // "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
 const NAV: { s: Screen; label: string; Icon: typeof IcEdit; feature?: FeatureKey }[] = [
@@ -83,6 +88,19 @@ function Shell({ recovered }: { recovered: boolean }) {
   useEffect(() => startZoom(), []);
   // nạp tệp phụ (quyết định trùng, thùng rác) ngay khi mở app để sao lưu luôn đầy đủ
   useEffect(() => { void loadDecisions(); void loadIdReview(); void loadTemplates(); }, []);
+  // sao lưu tự động theo lịch (nếu đến hạn và dữ liệu đã đổi); chỉ bản cài Windows, trễ để không tranh việc lúc mở app
+  useEffect(() => {
+    if (!isDesktop()) return;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        const st = getState();
+        const sig = dataSig({ count: st.questions.length, maxUpdated: st.questions.reduce((m, q) => Math.max(m, q.updatedAt), 0) }, await examList().catch(() => []));
+        const r = await runAutoBackup(sig, Date.now());
+        if (r.ran && r.message) toast(r.message);
+      })();
+    }, 30_000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     if (recovered) toast('File dữ liệu bị lỗi nên HEdu đã lấy lại từ bản dự phòng. Nên kiểm tra các câu vừa soạn gần đây.');
@@ -134,6 +152,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {screen === 'curriculum' && <CurriculumScreen />}
         {screen === 'khohinh' && <KhoHinhScreen />}
         {screen === 'trash' && <TrashScreen />}
+        {screen === 'health' && <HealthScreen />}
         {screen === 'system' && <SystemScreen />}
       </main>
     </div>

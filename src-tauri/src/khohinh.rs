@@ -951,6 +951,97 @@ pub async fn kho_hinh_dat_trang_thai(app: AppHandle, items: Vec<DatTrangThai>) -
     blocking(move || dat_trang_thai(&d, &items)).await
 }
 
+// ---------- quét nền và hình giống nhau ----------
+
+/// Một hình chưa dịch (để giao diện dịch nền và ghi kết quả về).
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct CanDich {
+    pub id: String,
+    pub code: String,
+    pub extra_preamble: String,
+}
+
+/// Tối đa `limit` hình chưa dịch (không tính hình trong thùng rác), theo thứ tự ổn định.
+pub fn can_dich(dest: &Path, limit: i64) -> Result<Vec<CanDich>, String> {
+    let Some(c) = open_existing(dest)? else { return Ok(Vec::new()) };
+    let mut st = c
+        .prepare("SELECT id, code, extra_preamble FROM item WHERE da_xoa = 0 AND status = 'chua' ORDER BY id LIMIT ?1")
+        .map_err(|e| e.to_string())?;
+    let it = st.query_map(params![limit.clamp(1, 500)], |r| Ok(CanDich { id: r.get(0)?, code: r.get(1)?, extra_preamble: r.get(2)? })).map_err(|e| e.to_string())?;
+    it.map(|x| x.map_err(|e| e.to_string())).collect()
+}
+
+/// Dạng chuẩn để nhận ra hình "giống nhau": bỏ chú thích %, bỏ mọi khoảng trắng, thay mỗi dãy chữ số (kể cả số thập phân) bằng '#'.
+/// Hai hình chỉ khác số liệu, tên điểm gõ cách hay chú thích sẽ cho cùng dạng chuẩn.
+pub fn dang_chuan(code: &str) -> String {
+    let mut out = String::with_capacity(code.len());
+    for line in code.lines() {
+        let mut esc = false;
+        let mut body = String::new();
+        for ch in line.chars() {
+            if esc { body.push(ch); esc = false; continue; }
+            if ch == '\\' { body.push(ch); esc = true; continue; }
+            if ch == '%' { break; }
+            body.push(ch);
+        }
+        let mut digits = false;
+        for ch in body.chars() {
+            if ch.is_ascii_digit() || (digits && ch == '.') {
+                if !digits { out.push('#'); digits = true; }
+            } else {
+                digits = false;
+                if !ch.is_whitespace() { out.push(ch); }
+            }
+        }
+        digits = false;
+        let _ = digits;
+    }
+    out
+}
+
+/// Các nhóm hình có cùng dạng chuẩn (≥ 2 hình, không tính thùng rác), nhóm lớn trước; tối đa `max_nhom` nhóm.
+pub fn nhom_giong(dest: &Path, max_nhom: usize) -> Result<Vec<Vec<Muc>>, String> {
+    let Some(c) = open_existing(dest)? else { return Ok(Vec::new()) };
+    let mut st = c
+        .prepare("SELECT id, title, node_id, grades, kind, status, LENGTH(code), code FROM item WHERE da_xoa = 0")
+        .map_err(|e| e.to_string())?;
+    let it = st
+        .query_map([], |r| Ok((Muc { id: r.get(0)?, title: r.get(1)?, node_id: r.get(2)?, grades: r.get(3)?, kind: r.get(4)?, status: r.get(5)?, code_len: r.get(6)? }, r.get::<_, String>(7)?)))
+        .map_err(|e| e.to_string())?;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut groups: std::collections::HashMap<u64, Vec<Muc>> = std::collections::HashMap::new();
+    for x in it {
+        let (m, code) = x.map_err(|e| e.to_string())?;
+        let norm = dang_chuan(&code);
+        if norm.len() < 20 {
+            continue; // quá ngắn: chuẩn hoá thành giống nhau một cách vô nghĩa
+        }
+        let mut h = DefaultHasher::new();
+        norm.hash(&mut h);
+        groups.entry(h.finish()).or_default().push(m);
+    }
+    let mut out: Vec<Vec<Muc>> = groups.into_values().filter(|g| g.len() >= 2).collect();
+    for g in out.iter_mut() {
+        g.sort_by(|a, b| a.title.cmp(&b.title).then(a.id.cmp(&b.id)));
+    }
+    out.sort_by(|a, b| b.len().cmp(&a.len()).then(a[0].title.cmp(&b[0].title)));
+    out.truncate(max_nhom);
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn kho_hinh_can_dich(app: AppHandle, limit: Option<i64>) -> Result<Vec<CanDich>, String> {
+    let d = dest_of(&app)?;
+    blocking(move || can_dich(&d, limit.unwrap_or(40))).await
+}
+
+#[tauri::command]
+pub async fn kho_hinh_nhom_giong(app: AppHandle, max_nhom: Option<usize>) -> Result<Vec<Vec<Muc>>, String> {
+    let d = dest_of(&app)?;
+    blocking(move || nhom_giong(&d, max_nhom.unwrap_or(300).clamp(1, 1000))).await
+}
+
 // ---------- kiểm thử ----------
 
 #[cfg(test)]
@@ -1061,6 +1152,38 @@ mod tests {
         assert_eq!((o2.moi, o2.da_co, o2.trung, o2.loi), (0, 3, 1, 1));
         assert_eq!(lay(&dest, "a").unwrap().unwrap().title, "Tên đã sửa");
         assert_eq!(trang_thai(&dest).unwrap().hinh, 3);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn dang_chuan_bo_so_khoang_trang_va_chu_thich() {
+        let a = "\\draw (0,0)--(3.5,2); % hình mẫu\n\\node at (1,1) {A};";
+        let b = "\\draw  (0, 0) -- (10,7.25);\n\\node at (4,4) {A}; % khác ghi chú";
+        assert_eq!(dang_chuan(a), dang_chuan(b));
+        assert_ne!(dang_chuan(a), dang_chuan("\\draw (0,0)--(3,2); \\node at (1,1) {B};"));
+        assert!(dang_chuan("a \\% b % c").contains("\\%"), "dấu \\% là chữ, không phải chú thích");
+    }
+
+    #[test]
+    fn nhom_giong_chi_nhom_hinh_cung_khung_va_can_dich_bo_thung_rac() {
+        let d = tmp("nhomgiong");
+        let (src, dest) = (d.join("mathhub.db"), d.join("kho-hinh.db"));
+        make_src(&src, &[
+            ("a", "g12-c1", "Tam giác A", "\\begin{tikzpicture}\\draw (0,0)--(3,0)--(1.5,2.6)--cycle;\\node at (1.5,0.8) {S};\\end{tikzpicture}", "12"),
+            ("b", "g12-c1", "Tam giác B", "\\begin{tikzpicture}\\draw (0,0)--(5,0)--(2.5,4.1)--cycle;\\node at (2.5,1.2) {S};\\end{tikzpicture}", "12"),
+            ("c", "g12-c1", "Hình tròn", "\\begin{tikzpicture}\\draw (0,0) circle (2); \\node at (0,0) {O}; \\end{tikzpicture}", "12"),
+        ]);
+        nap(&dest, &src, |_, _| {}).unwrap();
+        let g = nhom_giong(&dest, 10).unwrap();
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), vec!["Tam giác A", "Tam giác B"]);
+        // đưa một hình vào thùng rác ⇒ nhóm không còn đủ 2 hình
+        xoa(&dest, &[g[0][1].id.clone()], true).unwrap();
+        assert!(nhom_giong(&dest, 10).unwrap().is_empty());
+        let cd = can_dich(&dest, 40).unwrap();
+        assert_eq!(cd.len(), 2, "chỉ hình chưa dịch và chưa vào thùng rác");
+        dat_trang_thai(&dest, &[DatTrangThai { id: cd[0].id.clone(), status: "ok".into(), err: String::new() }]).unwrap();
+        assert_eq!(can_dich(&dest, 40).unwrap().len(), 1);
         let _ = std::fs::remove_dir_all(&d);
     }
 

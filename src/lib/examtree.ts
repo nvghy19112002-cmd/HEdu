@@ -195,3 +195,13 @@ export function examTrail(e: ExamSummary, tax: Taxonomy): string[] {
   const deepest = keys.reduce((a, b) => (b.split('/').length > a.split('/').length ? b : a));
   return nodeTrail(examTree(tax, examCounts([e], tax), [e], true), deepest);
 }
+
+/** Khoá các nút từ gốc tới nút `key` (rỗng nếu không thấy): dùng cho chế độ xem Cột. */
+export function nodePath(tree: readonly ExamNode[], key: string | null): string[] {
+  if (!key) return [];
+  const walk = (ns: readonly ExamNode[], acc: string[]): string[] | null => {
+    for (const x of ns) { const a = [...acc, x.key]; if (x.key === key) return a; const r = walk(x.children, a); if (r) return r; }
+    return null;
+  };
+  return walk(tree, []) ?? [];
+}
