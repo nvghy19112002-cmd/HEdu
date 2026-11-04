@@ -2224,3 +2224,5 @@ details textarea.kh-code { height: 110px; }
 .fx-pthumb { all: unset; display: block; cursor: zoom-in; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 4px; text-align: center; max-width: 100%; }
 .fx-pthumb img { display: block; max-width: 100%; height: auto; }
 .fx-pthumb:disabled { cursor: default; }
+
+.kh-selbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 10px; margin-bottom: 8px; border: 1px solid var(--pri); border-radius: 8px; background: var(--pri-soft); }
