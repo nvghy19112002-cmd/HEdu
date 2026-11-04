@@ -14,6 +14,8 @@ const MAX_KEEP: usize = 2 * 1024 * 1024;
 pub struct Captured {
     pub success: bool,
     pub timed_out: bool,
+    /// bị dừng theo lệnh (chỉ khi chạy qua `run_job_fn`)
+    pub cancelled: bool,
     pub stdout: String,
     pub stderr: String,
 }
@@ -63,7 +65,7 @@ pub fn run_capture(cmd: &mut Command, limit: Duration) -> io::Result<Captured> {
         }
         h.and_then(|j| j.join().ok()).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default()
     };
-    Ok(Captured { success, timed_out, stdout: take(out_h), stderr: take(err_h) })
+    Ok(Captured { success, timed_out, cancelled: false, stdout: take(out_h), stderr: take(err_h) })
 }
 
 // ---------- chạy có Job Object: dừng được CẢ CÂY tiến trình (E2a) ----------
@@ -145,6 +147,11 @@ pub fn run_job(cmd: &mut Command, limit: Duration, cancel: &AtomicBool) -> io::R
 
 /// Như `run_job`, và báo mã tiến trình (PID) của tiến trình vừa sinh ra ngay sau khi sinh (dùng để kiểm thử huỷ cả cây tiến trình).
 pub fn run_job_notify(cmd: &mut Command, limit: Duration, cancel: &AtomicBool, on_spawn: impl FnOnce(u32)) -> io::Result<JobOut> {
+    run_job_fn(cmd, limit, &|| cancel.load(Ordering::SeqCst), on_spawn)
+}
+
+/// Như `run_job_notify` nhưng việc huỷ do một hàm quyết định (vd. so "thế hệ" huỷ chung của nhiều tác vụ).
+pub fn run_job_fn(cmd: &mut Command, limit: Duration, cancelled_now: &dyn Fn() -> bool, on_spawn: impl FnOnce(u32)) -> io::Result<JobOut> {
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
     on_spawn(child.id());
@@ -161,7 +168,7 @@ pub fn run_job_notify(cmd: &mut Command, limit: Duration, cancel: &AtomicBool, o
         match child.try_wait()? {
             Some(st) => break (Some(st), false, false),
             None => {
-                let (c, t) = (cancel.load(Ordering::SeqCst), start.elapsed() > limit);
+                let (c, t) = (cancelled_now(), start.elapsed() > limit);
                 if c || t {
                     #[cfg(windows)]
                     match &job {

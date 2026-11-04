@@ -5,7 +5,7 @@ import { flushIdReview, freezeIdReview } from './idreview';
 import { flushTemplates, freezeTemplates } from './examtemplates';
 import { flushSave, isLastSaveOk } from './store';
 
-export type PointReason = 'nhap-hang-loat' | 'xoa-hang-loat' | 'don-sach-thung-rac' | 'khoi-phuc-tu-tep' | 'truoc-khoi-phuc' | 'thu-cong';
+export type PointReason = 'nhap-hang-loat' | 'xoa-hang-loat' | 'don-sach-thung-rac' | 'khoi-phuc-tu-tep' | 'truoc-khoi-phuc' | 'thu-cong' | 'tu-dong';
 export const REASON_LABEL: Record<string, string> = {
   'nhap-hang-loat': 'Trước khi nhập hàng loạt',
   'xoa-hang-loat': 'Trước khi xoá hàng loạt',

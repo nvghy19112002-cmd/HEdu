@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 pub const KEEP_POINTS: usize = 5;
 /// Lý do được phép (chỉ chữ ASCII — dùng thẳng làm một phần tên tệp, không để giao diện chèn đường dẫn).
-pub const REASONS: [&str; 6] = ["nhap-hang-loat", "xoa-hang-loat", "don-sach-thung-rac", "khoi-phuc-tu-tep", "truoc-khoi-phuc", "thu-cong"];
+pub const REASONS: [&str; 7] = ["nhap-hang-loat", "xoa-hang-loat", "don-sach-thung-rac", "khoi-phuc-tu-tep", "truoc-khoi-phuc", "thu-cong", "tu-dong"];
 
 type R<T> = Result<T, DbError>;
 

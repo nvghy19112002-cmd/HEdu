@@ -19,19 +19,28 @@ import { CAT_LABEL, CAT_NONE, CATS, catOfType, examCounts, examTrail, examTree, 
 import { NO_SELECTION, clickSelect, pickedItems, pruneSelection, runBatch, selectAll, stepSelect, type Selection } from '../lib/examselect';
 import { createFolder, deleteFolder, folderExamCount, knownFolders, loadFolders, moveFolder, renameFolder, saveFolders, type FolderResult } from '../lib/examfolders';
 import { startDrag } from '../lib/examdrag';
-import { clickCol, COL_LABEL, COL_ORDER, DEFAULT_COL_SORT, FILE_KIND_LABEL, fileRows, inSmart, isStar, parseColSort, SMART_LABEL, sortByCol, withStar, type ColSort, type SmartKey } from '../lib/examcols';
+import { clickCol, COL_LABEL, COL_ORDER, DEFAULT_COL_SORT, gridTemplate, hiddenClass, parseColVis, serializeColVis, shownCols, FILE_KIND_LABEL, fileRows, inSmart, isStar, parseColSort, SMART_LABEL, sortByCol, withStar, type ColSort, type SmartKey } from '../lib/examcols';
 import { exportAllPdf, exportPdf } from '../lib/exampdf';
-import { isDesktop, listen } from '../lib/platform';
+import { invoke, isDesktop, listen } from '../lib/platform';
 import { scanUsage } from '../lib/examusage';
 import {
   bundleFolderName, chooseProjectFolder, chooseTexFile, dateText, describeScan, examBundleExport, examBundleImport, examCreate, examDuplicate, examGet, examImport, examList, examMetaUpdate,
-  examReveal, examScan, examSearchText, examTrash, examVerify, filterExams, formatBytes, needsMainChoice, STATUS_LABEL,
+  examReveal, examScan, examSearchText, examTrash, examTrashRestore, examVerify, filterExams, formatBytes, needsMainChoice, STATUS_LABEL,
   type ExamManifest, type ExamMetaIn, type ExamScan, type ExamStatus, type ExamSummary, type ExamVerify, type TextHit,
 } from '../lib/examlib';
 import { ExamWorkspace, type ExamWorkspaceHandle } from './ExamWorkspace';
 import { closeTab, cycleTab, keepExisting, loadTabs, MAX_TABS, openTab, saveTabs, type TabsState, type TabStatus } from '../lib/examtabs';
 import { ExamExportDialog } from '../components/ExamExportDialog';
 import { ExamPackDialog } from '../components/ExamPackDialog';
+import { ExamColumns } from '../components/ExamColumns';
+import { PdfThumb } from '../components/PdfThumb';
+import { ExamBatchImportDialog } from '../components/ExamBatchImportDialog';
+import { batchCandidates, type BatchCandidate } from '../lib/examimportbatch';
+import { chooseFolder as chooseSourceFolder, scanSources } from '../lib/importfiles';
+import { checkExam, type ExamCheck } from '../lib/examcheck';
+import { UndoStack, undoMessage, type UndoEntry } from '../lib/examundo';
+import { hasControlChars } from '../lib/examgen';
+import { parseMatrixSpec } from '../lib/exammatrix';
 import { exportMatrixXlsx } from '../lib/exampack';
 import { useBank } from '../lib/store';
 
@@ -44,8 +53,9 @@ const COLSORT_KEY = 'hedu.examcolsort';
 const SIDEW_KEY = 'hedu.examside';
 const SIDEW_DEFAULT = 250;
 const VIEW_KEY = 'hedu.examview';
-type View = 'card' | 'list';
-const loadView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'card' ? 'card' : 'list'; } catch { return 'list'; } };
+type View = 'card' | 'list' | 'cols';
+const loadView = (): View => { try { const v = localStorage.getItem(VIEW_KEY); return v === 'card' || v === 'cols' ? v : 'list'; } catch { return 'list'; } };
+const COLVIS_KEY = 'hedu.examcolvis';
 /** màu thẻ theo nhóm loại đề */
 const catTone = (c: ExamCat | null): string => (c === 'gk1' || c === 'gk2' ? 'gk' : c === 'ck1' || c === 'ck2' ? 'ck' : c === 'thi-thu' ? 'tt' : c === 'on-bai' || c === 'on-chuong' || c === 'on-tap' ? 'ot' : c === 'kt-khac' ? 'kt' : 'na');
 /** nhóm trung gian và tên loại (đã có ở nhãn màu) không lặp lại ở dòng vị trí của thẻ */
@@ -109,6 +119,8 @@ export function ExamLibraryScreen() {
   const [askTrashMany, setAskTrashMany] = useState<ExamSummary[] | null>(null);
   /** nhóm đề đang mở hộp "Xuất trọn gói" */
   const [packing, setPacking] = useState<ExamSummary[] | null>(null);
+  /** hộp nhập nhiều đề từ một thư mục */
+  const [batchImp, setBatchImp] = useState<{ folder: string; items: BatchCandidate[]; truncated: boolean } | null>(null);
   const [smart, setSmart] = useState<SmartKey | null>(null);
   const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
   const [rowFiles, setRowFiles] = useState<ReadonlyMap<string, ExamManifest['files']>>(new Map());
@@ -127,12 +139,30 @@ export function ExamLibraryScreen() {
   /** kiểu xem: thẻ hoặc danh sách (nhớ theo máy) */
   const [view, setViewState] = useState<View>(loadView);
   const setView = (v: View) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* không nhớ được thì thôi */ } };
-  const perPage = view === 'list' ? PER_PAGE_LIST : PER_PAGE;
+  const perPage = view === 'list' || view === 'cols' ? PER_PAGE_LIST : PER_PAGE;
+  /** cột hiện/ẩn của bảng (nhớ theo máy); cửa sổ hẹp tự ẩn các cột phụ */
+  const [colVis, setColVisState] = useState(() => { try { return parseColVis(localStorage.getItem(COLVIS_KEY)); } catch { return parseColVis(null); } });
+  const setColVis = (v: ReadonlySet<(typeof COL_ORDER)[number]>) => { setColVisState(v); try { localStorage.setItem(COLVIS_KEY, serializeColVis(v)); } catch { /* không nhớ được thì thôi */ } };
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 1280px)').matches);
+  useEffect(() => {
+    const m = window.matchMedia?.('(max-width: 1280px)');
+    if (!m) return;
+    const f = () => setNarrow(m.matches);
+    m.addEventListener('change', f);
+    return () => m.removeEventListener('change', f);
+  }, []);
+  const cols = useMemo(() => shownCols(colVis, narrow), [colVis, narrow]);
   const [page, setPage] = useState(0);
-  const [menu, setMenu] = useState<null | 'add' | 'tools' | 'filter' | 'export'>(null);
+  const [menu, setMenu] = useState<null | 'add' | 'tools' | 'filter' | 'export' | 'cols'>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ExamManifest | null>(null);
   const [check, setCheck] = useState<ExamVerify | null>(null);
+  /** kiểm tra trước khi chốt của đề đang mở hộp Thông tin */
+  const [checks, setChecks] = useState<ExamCheck[] | null>(null);
+  /** hoàn tác: mỗi mục nhớ thông tin TRƯỚC khi đổi (chỉ trong phiên này) */
+  const undoRef = useRef(new UndoStack());
+  const [undoLabel, setUndoLabel] = useState<string | null>(null);
+  const rememberUndo = (e: UndoEntry) => { undoRef.current.push(e); setUndoLabel(undoRef.current.peek()?.label ?? null); };
   const [goods, setGoods] = useState<GoodInfo[]>([]);
   const [viewing, setViewing] = useState<ExamMode | null>(null);
   /** các đề đang mở thành tab + tab đang xem (null = Thư viện) */
@@ -175,6 +205,17 @@ export function ExamLibraryScreen() {
     return () => { dead = true; };
   }, [desktop, sel, items]);
 
+  useEffect(() => {
+    setChecks(null);
+    if (!desktop || !activeId || !detail || detail.projectId !== activeId) return;
+    let dead = false;
+    const run = (spec: ReturnType<typeof parseMatrixSpec>) => { if (!dead) setChecks(checkExam({
+      mainFile: detail.mainFile, warningCount: detail.warnings.length, skippedCount: detail.skipped.length, goods, spec,
+      question: (uid) => { const q = qmap.get(uid); return q ? { review: q.review, ctrl: hasControlChars(q) } : undefined; },
+    })); };
+    invoke<string | null>('exam_spec_text', { id: activeId }).then((t) => run(t ? parseMatrixSpec(t) : null)).catch(() => run(null));
+    return () => { dead = true; };
+  }, [desktop, activeId, detail, goods, qmap]);
   const loadDetail = useCallback((id: string) => {
     examGet(id).then(setDetail).catch((e) => toast(`Không đọc được đề: ${msg(e)}`));
     examCompileAll(id).then(setGoods).catch(() => undefined);
@@ -307,6 +348,14 @@ export function ExamLibraryScreen() {
     setActiveId(s.id);
     toast(`Đã nhập gói thành đề mới “${s.name}”. Từng tệp được đối chiếu với sổ của gói.`);
   });
+  const chooseBatch = () => run(async () => {
+    setMenu(null);
+    const folder = await chooseSourceFolder();
+    if (!folder) return;
+    const sc = await scanSources([folder]);
+    const r = batchCandidates(folder, sc.files);
+    setBatchImp({ folder, items: r.items, truncated: r.truncated || sc.truncated });
+  });
   const createBlank = () => run(async () => {
     const s = await placeNew(await examCreate(newName ?? ''));
     setNewName(null);
@@ -330,6 +379,8 @@ export function ExamLibraryScreen() {
   });
   const saveMeta = (m: Parameters<typeof examMetaUpdate>[1]) => run(async () => {
     if (!activeId) return;
+    const before = items.find((x) => x.id === activeId);
+    if (before && m.status !== 'finalized') rememberUndo({ label: 'Sửa thông tin đề', metas: [{ id: before.id, meta: metaOf(before) }] });
     const s = await examMetaUpdate(activeId, m);
     await reload();
     loadDetail(activeId);
@@ -345,6 +396,7 @@ export function ExamLibraryScreen() {
     const e = askTrash;
     if (!e) return;
     await examTrash(e.id);
+    rememberUndo({ label: 'Chuyển đề vào Thùng rác', metas: [], trashed: [e.id] });
     setAskTrash(null);
     if (activeId === e.id) setActiveId(null);
     await reload();
@@ -365,12 +417,14 @@ export function ExamLibraryScreen() {
     return { name: e.name, folder: e.folder ?? null, grade: m.grade ?? null, schoolYear: m.schoolYear ?? null, examType: m.examType ?? null, tags: m.tags ?? [], status: e.status, chapterId: m.chapterId ?? null, lessonId: m.lessonId ?? null, ...o };
   };
   const markStatus = (e: ExamSummary, status: ExamStatus) => run(async () => {
+    rememberUndo({ label: status === 'needs_review' ? 'Đánh dấu cần rà soát' : 'Bỏ dấu cần rà soát', metas: [{ id: e.id, meta: metaOf(e) }] });
     await examMetaUpdate(e.id, metaOf(e, { status }));
     await reload();
     toast(status === 'needs_review' ? `Đã đánh dấu “${e.name}” cần rà soát.` : `Đã bỏ dấu cần rà soát của “${e.name}”.`);
   });
   /** chạy một thao tác cho cả nhóm đề: một đề lỗi không làm dừng cả lô; tải lại một lần; báo gọn kết quả */
   const bulk = (label: string, items: ExamSummary[], f: (e: ExamSummary) => Promise<void>) => run(async () => {
+    rememberUndo({ label: `${(l => l.charAt(0).toUpperCase() + l.slice(1))(label.replace(/^Đã /, '').replace(/ \(.*$/, ''))} (${items.length} đề)`, metas: items.map((e) => ({ id: e.id, meta: metaOf(e) })) });
     const r = await runBatch(items, f);
     await reload();
     const bad = r.failed.slice(0, 3).map((x) => `“${x.item.name}” (${x.error})`).join('; ');
@@ -402,6 +456,7 @@ export function ExamLibraryScreen() {
     const items = askTrashMany;
     if (!items) return;
     const r = await runBatch(items, (e) => examTrash(e.id));
+    rememberUndo({ label: `Chuyển ${r.done.length} đề vào Thùng rác`, metas: [], trashed: r.done.map((e) => e.id) });
     setAskTrashMany(null);
     if (activeId && r.done.some((e) => e.id === activeId)) setActiveId(null);
     await reload();
@@ -411,6 +466,7 @@ export function ExamLibraryScreen() {
   const applyFolder = (r: FolderResult, from: string | null, done: string) => run(async () => {
     if (!r.ok) { toast(r.error); return; }
     const byId = new Map(items.map((e) => [e.id, e] as const));
+    rememberUndo({ label: 'Thao tác thư mục', metas: r.patches.flatMap((pt) => { const e = byId.get(pt.id); return e ? [{ id: e.id, meta: metaOf(e) }] : []; }), extras: [...extras] });
     const res = await runBatch(r.patches, async (pt) => { const e = byId.get(pt.id); if (e) await examMetaUpdate(e.id, metaOf(e, { folder: pt.folder })); });
     await reload();
     if (res.failed.length) { toast(`Chỉ ghi được ${res.done.length}/${r.patches.length} đề (${res.failed[0].error}). Thư mục chưa đổi hết, hãy thử lại.`); return; }
@@ -419,12 +475,24 @@ export function ExamLibraryScreen() {
     if (from !== null && node && (node === `f:${from}` || node.startsWith(`f:${from}/`))) setNode(r.path === null ? null : `f:${r.path}${node.slice(`f:${from}`.length)}`);
     toast(done);
   });
+  /** Hoàn tác thao tác gần nhất: ghi lại thông tin cũ của từng đề, khôi phục từ Thùng rác, trả danh sách thư mục trống. */
+  const undo = () => run(async () => {
+    const e = undoRef.current.pop();
+    setUndoLabel(undoRef.current.peek()?.label ?? null);
+    if (!e) { toast('Không còn gì để hoàn tác.'); return; }
+    const a = await runBatch(e.metas, (m) => examMetaUpdate(m.id, m.meta).then(() => undefined));
+    const b = await runBatch(e.trashed ?? [], (id) => examTrashRestore(id).then(() => undefined));
+    if (e.extras) setExtras(e.extras);
+    await reload();
+    toast(undoMessage(e, a.failed.length + b.failed.length));
+  });
   const renameExam = () => run(async () => {
     const r = renaming;
     if (!r) return;
     const name = r.name.replace(/\s+/g, ' ').trim();
     if (!name) { toast('Tên đề không được để trống.'); return; }
     if (name === r.e.name) { setRenaming(null); return; }
+    rememberUndo({ label: 'Đổi tên đề', metas: [{ id: r.e.id, meta: metaOf(r.e) }] });
     await examMetaUpdate(r.e.id, metaOf(r.e, { name }));
     setRenaming(null);
     await reload();
@@ -447,6 +515,7 @@ export function ExamLibraryScreen() {
     if (r) toast(`Đã xuất ${r.n} bản PDF vào ${r.dir}`);
   });
   const toggleStar = (e: ExamSummary) => run(async () => {
+    rememberUndo({ label: isStar(e) ? 'Bỏ gắn sao' : 'Gắn sao', metas: [{ id: e.id, meta: metaOf(e) }] });
     await examMetaUpdate(e.id, metaOf(e, { tags: withStar(e.metadata.tags ?? [], !isStar(e)) }));
     await reload();
   });
@@ -456,6 +525,19 @@ export function ExamLibraryScreen() {
     if (!rowFiles.has(e.id)) examGet(e.id).then((m) => setRowFiles((o) => new Map(o).set(e.id, m.files))).catch((err) => toast(`Không đọc được danh sách tệp: ${msg(err)}`));
   };
   /** phím trong danh sách: ↑↓ chọn, Enter mở, Space xem nhanh, F2 đổi tên, Delete vào Thùng rác */
+  // Ctrl+Z hoàn tác thao tác gần nhất ở tab Thư viện (không khi đang gõ trong ô nhập hoặc đang mở hộp thoại)
+  const undoKey = useRef<() => void>(() => undefined);
+  undoKey.current = () => { if (!tabs.front && !busyRef.current && !document.querySelector('.qm, .cfm, .pv:not(.pv-embedded)') && undoRef.current.size) void undo(); };
+  useEffect(() => {
+    const k = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey || ev.altKey || ev.key.toLowerCase() !== 'z') return;
+      if ((ev.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"], .cm-editor')) return;
+      ev.preventDefault();
+      undoKey.current();
+    };
+    document.addEventListener('keydown', k);
+    return () => document.removeEventListener('keydown', k);
+  }, []);
   const onListKey = (ev: React.KeyboardEvent<HTMLElement>) => {
     if ((ev.target as HTMLElement).closest('input, textarea, select')) return;
     const ids = shown.map((x) => x.id);
@@ -645,8 +727,24 @@ export function ExamLibraryScreen() {
           <span className="xl-seg" role="group" aria-label="Kiểu xem">
             <button type="button" className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             <button type="button" className={view === 'card' ? 'on' : ''} aria-pressed={view === 'card'} onClick={() => setView('card')}>Biểu tượng</button>
+            <button type="button" className={view === 'cols' ? 'on' : ''} aria-pressed={view === 'cols'} onClick={() => setView('cols')}>Cột</button>
           </span>
-          {view === 'card' && (
+          {view === 'list' && (
+            <span className="more-wrap" style={{ position: 'relative' }}>
+              <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={menu === 'cols'} onClick={() => setMenu(menu === 'cols' ? null : 'cols')} title="Chọn các cột hiện trong bảng">Cột ▾</button>
+              {menu === 'cols' && (
+                <span className="more-menu xl-pop" role="group" aria-label="Cột hiện trong bảng">
+                  {COL_ORDER.map((k) => (
+                    <label key={k} className="sw" style={{ display: 'flex', gap: 8, padding: '3px 8px' }}>
+                      <input type="checkbox" checked={colVis.has(k)} disabled={k === 'name'} onChange={(e) => { const n = new Set(colVis); if (e.target.checked) n.add(k); else n.delete(k); setColVis(n); }} />{COL_LABEL[k]}
+                    </label>
+                  ))}
+                  <button type="button" className="btn btn-sm" onClick={() => setColVis(parseColVis(null))}>Hiện đủ cột</button>
+                </span>
+              )}
+            </span>
+          )}
+          {view !== 'list' && (
             <label className="qsel" title="Sắp xếp">
               <select value={colSort.key} onChange={(e) => setColSort({ key: e.target.value as ColSort['key'], dir: colSort.dir })} aria-label="Sắp xếp theo">
                 {COL_ORDER.map((k) => <option key={k} value={k}>{COL_LABEL[k]}</option>)}
@@ -692,6 +790,7 @@ export function ExamLibraryScreen() {
             )}
           </span>
           <span className="xl-menu">
+            <button type="button" className="btn btn-sm" disabled={!desktop || busy || !undoLabel} onClick={() => void undo()} title={undoLabel ? `Hoàn tác: ${undoLabel} (Ctrl+Z)` : 'Chưa có gì để hoàn tác'}>↶ Hoàn tác</button>
             <button type="button" className="btn btn-sm" disabled={!desktop} aria-haspopup="menu" aria-expanded={menu === 'tools'} onClick={() => setMenu(menu === 'tools' ? null : 'tools')}>Công cụ ▾</button>
             {menu === 'tools' && (
               <span className="more-menu xl-pop" role="menu">
@@ -710,6 +809,7 @@ export function ExamLibraryScreen() {
                 <hr />
                 <button type="button" role="menuitem" onClick={() => pick(chooseTexFile)}><b>Nhập file .tex</b><small>Sao chép vào thư viện, tệp gốc giữ nguyên</small></button>
                 <button type="button" role="menuitem" onClick={() => pick(chooseProjectFolder)}><b>Nhập thư mục dự án</b><small>Đề nhiều tệp (hình, gói riêng…)</small></button>
+                <button type="button" role="menuitem" onClick={chooseBatch}><b>Nhập nhiều đề từ thư mục</b><small>Mỗi tệp .tex hoặc thư mục con là một đề</small></button>
                 <button type="button" role="menuitem" onClick={importBundle}><b>Nhập gói đề HEdu</b><small>Gói xuất từ máy khác</small></button>
               </span>
             )}
@@ -747,7 +847,7 @@ export function ExamLibraryScreen() {
               </div>
             )}
             {shown.length > 0 && view === 'list' && (
-              <div className="fx-table" role="treegrid" aria-label="Đề thi">
+              <div className={`fx-table ${hiddenClass(cols)}`} style={{ ['--fx-cols' as string]: gridTemplate(cols) }} role="treegrid" aria-label="Đề thi">
                 <div className="fx-head" role="row">
                   {COL_ORDER.map((k) => (
                     <button key={k} type="button" className={`fx-h c-${k}${colSort.key === k ? ' on' : ''}`} aria-sort={colSort.key === k ? (colSort.dir === 1 ? 'ascending' : 'descending') : 'none'} onClick={() => setColSort(clickCol(colSort, k))} title={`Sắp xếp theo ${COL_LABEL[k].toLowerCase()}`}>
@@ -759,6 +859,7 @@ export function ExamLibraryScreen() {
               </div>
             )}
             {shown.length > 0 && view === 'card' && <div className="xc-grid">{shown.map(card)}</div>}
+            {view === 'cols' && load !== 'loading' && <ExamColumns tree={tree} node={node} exams={shown} picked={selection.picked} rowProps={itemProps} onNode={(k) => { setSmart(null); setNode(k); }} tabIds={tabs.ids} renderMeta={(e) => (qn.get(e.id) ? `${qn.get(e.id)} câu` : '')} />}
             {pages > 1 && (
               <nav className="pager" aria-label="Phân trang">
                 <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => setPage(cur - 1)}>‹ Trước</button>
@@ -808,6 +909,7 @@ export function ExamLibraryScreen() {
                 <div><dt>Sửa lúc</dt><dd>{dateText(selE.updatedAt)}</dd></div>
                 {selE.warningCount > 0 && <div><dt>Cảnh báo</dt><dd>{selE.warningCount}</dd></div>}
               </dl>
+              {selGoods.length > 0 && (() => { const g = selGoods.find((x) => x.mode === 'de' || x.mode === 'de-in') ?? selGoods[0]; return <PdfThumb id={selE.id} mode={g.mode} stamp={g.at} onOpen={() => quickLook(selE)} />; })()}
               <div className="fx-pdfs">
                 <b>PDF đã biên dịch</b>
                 {selGoods.length === 0 && <span className="xl-meta">Chưa có. Mở đề, bấm “Biên dịch”; biên dịch thành công thì xuất PDF được ở đây.</span>}
@@ -915,7 +1017,7 @@ export function ExamLibraryScreen() {
                 <div><dt>Sửa lúc</dt><dd>{dateText(detail.updatedAt)}</dd></div>
                 {goods.map((g) => <div key={g.mode}><dt>PDF {modeLabel(g.mode)}</dt><dd>{g.pages ?? '?'} trang · {g.engine} · {dateText(g.at)}</dd></div>)}
               </dl>
-              <ExamInfoForm detail={detail} folders={folders} busy={busy} hasPdf={goods.length > 0} onSave={saveMeta} open />
+              <ExamInfoForm detail={detail} folders={folders} busy={busy} hasPdf={goods.length > 0} checks={checks} onSave={saveMeta} open />
               {detail.warnings.length > 0 && <div className="note warn"><div className="note-body">{detail.warnings.map((w, i) => <span key={i}>{w}</span>)}</div></div>}
               {detail.skipped.length > 0 && <details><summary>{detail.skipped.length} mục không được chép</summary><ul className="xl-lines">{detail.skipped.map((k, i) => <li key={i}><code>{k.rel}</code>: {k.reason}</li>)}</ul></details>}
               <details><summary>{detail.files.length} tệp trong đề</summary>
@@ -1002,6 +1104,7 @@ export function ExamLibraryScreen() {
             : 'Chọn lớp, loại đề, chương/bài hoặc thư mục riêng. Chọn lớp/loại chỉ đổi lớp/loại; chọn thư mục chỉ đổi thư mục.'}</p>
         </Modal>
       )}
+      {batchImp && <ExamBatchImportDialog folder={batchImp.folder} candidates={batchImp.items} truncated={batchImp.truncated} place={place ? trail.join(' › ') : ''} placeNew={placeNew} onClose={() => { setBatchImp(null); void reload(); }} onDone={(m) => { toast(m); void reload(); }} />}
       {packing && <ExamPackDialog exams={packing} qn={qn} tax={tax} question={(uid) => qmap.get(uid)} onClose={() => setPacking(null)} onToast={toast} />}
       {askTrashMany && (
         <ConfirmDialog title={`Chuyển ${askTrashMany.length} đề vào Thùng rác?`} confirmLabel="Chuyển vào Thùng rác" cancelLabel="Giữ lại" busy={busy} onCancel={() => setAskTrashMany(null)} onConfirm={trashMany}>

@@ -17,6 +17,7 @@ const SCREENS: { s: Screen; name: string }[] = [
   { s: 'curriculum', name: 'Xem khung chương trình' },
   { s: 'khohinh', name: 'Mở Kho hình TikZ: tìm và quản lý hình vẽ' },
   { s: 'trash', name: 'Mở Thùng rác' },
+  { s: 'health', name: 'Sức khoẻ ngân hàng: đếm câu cần xem lại' },
   { s: 'system', name: 'Cài đặt: cập nhật, sao lưu và khôi phục' },
 ];
 

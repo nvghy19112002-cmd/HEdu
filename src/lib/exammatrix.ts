@@ -11,6 +11,8 @@ export interface MatrixSpec {
   /** mã đề đầu tiên: phần → [{uid, đáp án}] */
   firstCode: { code: string; parts: Record<PartKey, { uid: string; key: string }[]> } | null;
   codes: number;
+  /** từng mã đề: số câu, uid (để kiểm trùng/thiếu) và số câu thiếu đáp án */
+  perCode: { code: string; n: number; uids: string[]; noKey: number }[];
 }
 export interface MatrixMeta { name: string; grade?: number | null; schoolYear?: string | null; examType?: string | null }
 
@@ -38,13 +40,18 @@ export function parseMatrixSpec(text: string): MatrixSpec | null {
   const f = obj(md[0]);
   const parts = { p1: [], p2: [], p3: [], p4: [] } as Record<PartKey, { uid: string; key: string }[]>;
   for (const p of PARTS) for (const s of Array.isArray(obj(f.phan)[p]) ? (obj(f.phan)[p] as unknown[]) : []) { const o = obj(s); if (typeof o.uid === 'string') parts[p].push({ uid: o.uid, key: typeof o.dapAn === 'string' ? o.dapAn : '' }); }
+  const perCode = md.map((m) => {
+    const o = obj(m), ph = obj(o.phan);
+    const items = PARTS.flatMap((p) => (Array.isArray(ph[p]) ? (ph[p] as unknown[]) : []).map((s) => obj(s)));
+    return { code: typeof o.ma === 'string' ? o.ma : '', n: items.length, uids: items.map((s) => (typeof s.uid === 'string' ? s.uid : '')), noKey: items.filter((s) => typeof s.dapAn !== 'string' || !s.dapAn.trim()).length };
+  });
   const pol = j.chinhSach;
   return {
     title: typeof obj(j.thongTin).title === 'string' ? (obj(j.thongTin).title as string) : '',
     policy: pol === 'duyet' || pol === 'xac-minh' || pol === 'tat-ca' ? pol : null,
     seed: num(j.hatGiong), scoring, rows,
     firstCode: md.length ? { code: typeof f.ma === 'string' ? f.ma : '', parts } : null,
-    codes: md.length,
+    codes: md.length, perCode,
   };
 }
 

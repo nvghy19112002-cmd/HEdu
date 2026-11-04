@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { CAT_NONE, catOfType, examCounts, matchesCat, examTrail, examTree, filterByNode, movePatch, nodeTrail, placementOf, CAT_LABEL } from './examtree';
+import { nodePath, CAT_NONE, catOfType, examCounts, matchesCat, examTrail, examTree, filterByNode, movePatch, nodeTrail, placementOf, CAT_LABEL } from './examtree';
 import { buildDefault } from './taxonomy';
 import type { ExamSummary } from './examlib';
 
@@ -110,5 +110,11 @@ t('thư mục trống hiện trong cây (kể cả khi chưa có đề nào)', (
   const r = root(['Mới/Con'], [mk('x', { grade: 12 })])!;
   assert.deepEqual(r.children.map((c) => [c.key, c.count]), [['f:Mới', 0]]);
   assert.deepEqual(r.children[0].children.map((c) => c.key), ['f:Mới/Con']);
+});
+t('đường đi tới một nút (chế độ Cột)', () => {
+  const tr = examTree(tax, examCounts(L, tax), L, false);
+  assert.deepEqual(nodePath(tr, 'g:12/kt/gk1'), ['g:12', 'g:12/kt', 'g:12/kt/gk1']);
+  assert.deepEqual(nodePath(tr, null), []);
+  assert.deepEqual(nodePath(tr, 'khong-co'), []);
 });
 console.log('examtree: đạt hết.');

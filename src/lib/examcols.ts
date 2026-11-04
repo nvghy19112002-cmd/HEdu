@@ -88,3 +88,27 @@ export function fileRows(files: readonly { rel: string; bytes: number }[], max =
   all.sort((a, b) => rank[a.kind] - rank[b.kind] || a.rel.localeCompare(b.rel, 'vi', { numeric: true, sensitivity: 'base' }));
   return { rows: all.slice(0, max), hidden: Math.max(0, all.length - max) };
 }
+
+// ---- cột hiện / ẩn (nhớ theo máy) ----
+/** Độ rộng từng cột trong lưới (cột Tên co giãn). */
+export const COL_WIDTH: Readonly<Record<ColKey, string>> = { name: 'minmax(240px, 3.2fr)', type: '108px', grade: '46px', year: '84px', status: '92px', count: '48px', files: '48px', size: '78px', updated: '74px' };
+/** Cửa sổ hẹp tự ẩn các cột phụ này (kể cả khi đang bật). */
+export const NARROW_HIDE: readonly ColKey[] = ['year', 'count', 'files', 'size'];
+export const DEFAULT_COL_VIS: readonly ColKey[] = COL_ORDER;
+/** Cột Tên luôn hiện; giá trị lạ/hỏng ⇒ hiện đủ mọi cột. */
+export function parseColVis(raw: string | null): ReadonlySet<ColKey> {
+  try {
+    const v = JSON.parse(raw ?? 'null') as unknown;
+    if (Array.isArray(v)) {
+      const ok = v.filter((k): k is ColKey => typeof k === 'string' && (COL_ORDER as readonly string[]).includes(k));
+      return new Set<ColKey>(['name', ...ok]);
+    }
+  } catch { /* hỏng thì dùng mặc định */ }
+  return new Set(DEFAULT_COL_VIS);
+}
+export const serializeColVis = (v: ReadonlySet<ColKey>): string => JSON.stringify(COL_ORDER.filter((k) => v.has(k)));
+/** Các cột đang hiện thật sự (theo thứ tự chuẩn), có tính chế độ cửa sổ hẹp. */
+export const shownCols = (v: ReadonlySet<ColKey>, narrow: boolean): ColKey[] => COL_ORDER.filter((k) => k === 'name' || (v.has(k) && !(narrow && NARROW_HIDE.includes(k))));
+export const gridTemplate = (cols: readonly ColKey[]): string => cols.map((k) => COL_WIDTH[k]).join(' ');
+/** Lớp CSS ẩn các cột không hiện (để cả tiêu đề và hàng đều ẩn đúng). */
+export const hiddenClass = (cols: readonly ColKey[]): string => COL_ORDER.filter((k) => !cols.includes(k)).map((k) => `hc-${k}`).join(' ');

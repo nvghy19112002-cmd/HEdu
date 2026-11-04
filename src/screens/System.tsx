@@ -2,6 +2,9 @@
 // sao lưu tự động trước cập nhật, sao lưu thủ công, dữ liệu mẫu.
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { dataSig, FREQ_LABEL, loadPrefs, runAutoBackup, savePrefs, type BackupFreq } from '../lib/autobackup';
+import { examList } from '../lib/examlib';
+import { getState } from '../lib/store';
 import { IcAlert, IcCheckCircle } from '../components/Icons';
 import { isDesktop } from '../lib/platform';
 import { getStorageMode, storageSummary } from '../lib/storage';
@@ -55,6 +58,8 @@ export function SystemScreen() {
   const [confirmRollback, setConfirmRollback] = useState(false);
 
   const [backup, setBackup] = useState<BackupMeta | null>(null);
+  const [autoPrefs, setAutoPrefs] = useState(loadPrefs);
+  const [autoBusy, setAutoBusy] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [restoreErr, setRestoreErr] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<{ name: string; text: string } | null>(null);
@@ -220,10 +225,36 @@ export function SystemScreen() {
               <span className="sys-hint">{!desktop ? 'Chỉ dùng được trong bản cài trên Windows.' : aiText} · gửi câu hỏi lên AI: {aiPrefs.consent ? 'đã đồng ý (mỗi lượt vẫn hỏi lại)' : 'đang tắt'}</span>
               <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('ai', 'AI (Gemini)')}>Mở AI Gemini</button></div>
             </section>
+            <section className="panel" aria-label="Sức khoẻ ngân hàng">
+              <h2>Sức khoẻ ngân hàng</h2>
+              <span className="sys-hint">Quét mọi câu: lỗi xem trước, đáp án không đọc được, chưa phân loại, chưa kiểm tra… (chỉ đọc, không sửa gì).</span>
+              <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'health' })}>Mở bảng sức khoẻ</button></div>
+            </section>
             <section className="panel" aria-label="Sao lưu (tóm tắt)">
               <h2>Sao lưu</h2>
               <span className="sys-hint">{!desktop ? 'Sao lưu trước cập nhật chỉ có trong bản cài trên Windows.' : backup ? `Bản trước cập nhật: ${backup.kind === 'swapped' ? 'dữ liệu trước lần khôi phục gần nhất' : `trước khi lên v${backup.toVersion}`} · ${when(backup.at * 1000)}` : 'Chưa có bản sao lưu trước cập nhật.'}</span>
               <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => open('backup', 'Sao lưu thủ công')}>Tạo / khôi phục file sao lưu</button></div>
+              {desktop && (
+                <div className="head-actions" style={{ marginTop: 8, alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <label className="lbl" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>Sao lưu tự động
+                    <select className="sel" value={autoPrefs.freq} onChange={(e) => { const p = { ...autoPrefs, freq: e.target.value as BackupFreq }; setAutoPrefs(p); savePrefs(p); }}>
+                      {(Object.keys(FREQ_LABEL) as BackupFreq[]).map((k) => <option key={k} value={k}>{FREQ_LABEL[k]}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" className="btn btn-sm" disabled={autoBusy} onClick={() => {
+                    setAutoBusy(true);
+                    void (async () => {
+                      const st = getState();
+                      const sig = dataSig({ count: st.questions.length, maxUpdated: st.questions.reduce((m, q) => Math.max(m, q.updatedAt), 0) }, await examList().catch(() => []));
+                      const r = await runAutoBackup(sig, Date.now(), true);
+                      setAutoPrefs(loadPrefs());
+                      toast(r.message || 'Không có gì để sao lưu.');
+                      setAutoBusy(false);
+                    })();
+                  }}>{autoBusy ? 'Đang sao lưu…' : 'Sao lưu ngay'}</button>
+                  <span className="sys-hint">{autoPrefs.last ? `Lần gần nhất: ${new Date(autoPrefs.last).toLocaleString('vi-VN')}.` : 'Chưa sao lưu tự động lần nào.'} Chỉ sao lưu khi dữ liệu có thay đổi; mỗi loại giữ 5 bản gần nhất.</span>
+                </div>
+              )}
             </section>
             <section className="panel" aria-label="Thùng rác (tóm tắt)">
               <h2>Thùng rác</h2>

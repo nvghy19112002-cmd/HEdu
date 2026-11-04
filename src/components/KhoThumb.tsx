@@ -34,6 +34,7 @@ export function KhoThumb({ id, code, defs, onResult, big, again }: { id: string;
           if (job === j) job = null;
           if (!alive || e instanceof CancelledError) return;
           const er = asTikzErr(e);
+          if (er.stage === 'huy') { setSt({ s: 'cho' }); return; } // bị dừng theo lệnh: không phải hình lỗi, dịch lại khi cuộn tới
           setSt({ s: 'loi', msg: er.message });
           cb.current?.({ id, ok: false, err: er.message });
         });

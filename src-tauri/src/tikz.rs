@@ -13,7 +13,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::proc::run_capture;
+use crate::proc::{run_capture, run_job_fn, Captured};
 use crate::support;
 
 /// Số thứ tự để mỗi lần dịch có thư mục tạm riêng (hai hình giống nhau dịch cùng lúc không giẫm chân nhau).
@@ -203,8 +203,33 @@ pub(crate) fn missing_tool(name: &str) -> TikzErr {
     }
 }
 
+/// "Thế hệ" huỷ chung: `cancel_running()` tăng số này, mọi hình đang dịch thấy khác với lúc bắt đầu thì dừng NGAY cả cây tiến trình
+/// (latex/dvisvgm và con cháu của chúng) và trả lỗi giai đoạn "huy". Dùng cho nút Dừng của "Xem chuẩn hàng loạt".
+static CANCEL_EPOCH: AtomicU64 = AtomicU64::new(0);
+pub fn cancel_running() {
+    CANCEL_EPOCH.fetch_add(1, Ordering::SeqCst);
+}
+
+/// Như `run_capture` nhưng nằm trong Job Object (dừng được cả cây tiến trình khi hết giờ) và dừng được theo `cancel_running()`.
+fn run_c(cmd: &mut Command, limit: Duration, epoch: u64) -> io::Result<Captured> {
+    let o = run_job_fn(cmd, limit, &|| CANCEL_EPOCH.load(Ordering::SeqCst) != epoch, |_| {})?;
+    Ok(Captured { success: o.success, timed_out: o.timed_out, cancelled: o.cancelled, stdout: o.stdout, stderr: o.stderr })
+}
+fn cancelled_err() -> TikzErr {
+    TikzErr { message: String::from("Đã dừng theo yêu cầu."), log: String::new(), stage: String::from("huy") }
+}
+
 /// Dịch một hình. `cache_dir` là nơi giữ các .svg đã dịch.
 pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs: &str, opts: &TikzOpts) -> Result<TikzOut, TikzErr> {
+    render_at(cache_dir, support_dir, code, defs, opts, current_epoch())
+}
+
+/// Thế hệ huỷ hiện tại; lệnh gọi từ giao diện chụp số này TRƯỚC khi chờ lượt, để hình đang xếp hàng lúc bấm Dừng cũng bị dừng.
+pub fn current_epoch() -> u64 {
+    CANCEL_EPOCH.load(Ordering::SeqCst)
+}
+
+pub fn render_at(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs: &str, opts: &TikzOpts, epoch: u64) -> Result<TikzOut, TikzErr> {
     let started = Instant::now();
     let preamble = opts.preamble.clone().unwrap_or_else(|| DEFAULT_PREAMBLE.to_string());
     let engine = engine_name(&opts.engine);
@@ -224,6 +249,9 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
         }
     }
 
+    if current_epoch() != epoch {
+        return Err(cancelled_err());
+    }
     let job = JOB.fetch_add(1, Ordering::Relaxed);
     let work = cache_dir.join(format!("tmp-{key}-{}-{job}", std::process::id()));
     let _ = fs::remove_dir_all(&work);
@@ -253,14 +281,14 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
         c.arg("-interaction=nonstopmode").arg("-halt-on-error").arg("-no-shell-escape").arg("hinh.tex");
         support::apply(&mut c, support_dir);
         hide_console(&mut c);
-        run_capture(&mut c, limit)
+        run_c(&mut c, limit, epoch)
     };
     // Đường DVI (mặc định): phần đầu tệp được nạp sẵn thành định dạng (.fmt) nên mỗi hình chỉ còn dịch phần thân (~3 lần nhanh hơn).
     // Định dạng hỏng/không khớp bản TeX ⇒ bỏ định dạng đó và dịch lại như cũ: kết quả không bao giờ phụ thuộc vào việc có định dạng hay không.
     let fmt = if via_dvi { format_for(cache_dir, support_dir, &head, opts, limit) } else { None };
     let mut res = run_tex(fmt.as_deref());
     if let (Some(f), Ok(r)) = (&fmt, &res) {
-        if !r.timed_out && (!r.success || !work.join("hinh.dvi").exists()) {
+        if !r.timed_out && !r.cancelled && (!r.success || !work.join("hinh.dvi").exists()) {
             let _ = fs::remove_file(f);
             let _ = fs::write(f.with_extension("fail"), b"");
             res = run_tex(None);
@@ -278,6 +306,10 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
             return Err(TikzErr { message: format!("Không chạy được {tex_prog}: {e}"), log: String::new(), stage: String::from("latex") });
         }
     };
+    if res.cancelled {
+        let _ = fs::remove_dir_all(&work);
+        return Err(cancelled_err());
+    }
     let log = fs::read_to_string(work.join("hinh.log")).unwrap_or_else(|_| res.stdout.clone());
     if res.timed_out {
         let _ = fs::remove_dir_all(&work);
@@ -306,7 +338,11 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
         .arg(if via_dvi { "hinh.dvi" } else { "hinh.pdf" });
     support::apply(&mut d, support_dir);
     hide_console(&mut d);
-    let svg = match run_capture(&mut d, limit) {
+    let svg = match run_c(&mut d, limit, epoch) {
+        Ok(o) if o.cancelled => {
+            let _ = fs::remove_dir_all(&work);
+            return Err(cancelled_err());
+        }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             let _ = fs::remove_dir_all(&work);
             return Err(missing_tool("dvisvgm"));
@@ -549,6 +585,24 @@ mod tests {
     }
     fn expanded_or_default(o: &TikzOpts) -> String {
         o.preamble.clone().unwrap_or_else(|| DEFAULT_PREAMBLE.to_string())
+    }
+
+    #[test]
+    fn lenh_dung_chan_hinh_dang_xep_hang_va_tra_loi_huy() {
+        let d = std::env::temp_dir().join(format!("hedu-tikz-cancel-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let opts = TikzOpts { tex_bin: Some("khong-co-thu-muc-nay".into()), ..Default::default() };
+        let before = current_epoch();
+        cancel_running();
+        assert_eq!(current_epoch(), before + 1);
+        // hình đã chụp thế hệ cũ (đang xếp hàng lúc bấm Dừng) bị dừng ngay, không chạy TeX
+        let e = render_at(&d, &None, "\\draw (0,0)--(1,1);", "", &opts, before).err().expect("phải bị huỷ");
+        assert_eq!(e.stage, "huy");
+        // hình mới (thế hệ hiện tại) không bị chặn: tới bước chạy TeX và báo thiếu công cụ chứ không phải "huy"
+        let e2 = render_at(&d, &None, "\\draw (0,0)--(2,2);", "", &opts, current_epoch()).err().expect("không có TeX");
+        assert_ne!(e2.stage, "huy");
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]
