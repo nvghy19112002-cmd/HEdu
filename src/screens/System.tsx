@@ -22,6 +22,7 @@ import { FigScalePanel, ZoomPanel } from '../components/ZoomControl';
 import { AiSettingsPanel } from '../components/AiSettingsPanel';
 import { ExamThemePanel } from '../components/ExamThemePanel';
 import { SqlitePanel } from '../components/SqlitePanel';
+import { ShareDialog } from '../components/ShareDialog';
 import { ImportLogPanel } from '../components/ImportLogPanel';
 import { KhoHinhPanel } from '../components/KhoHinhPanel';
 import { ensureRestorePoint, isSqlite } from '../lib/dbbackup';
@@ -44,6 +45,7 @@ type Phase = 'idle' | 'installing' | 'restarting';
 
 export function SystemScreen() {
   const { toast, showFile, go } = useApp();
+  const [sharing, setSharing] = useState(false);
   useDecisions();
   const trashN = trashCount();
   const { questions } = useBank();
@@ -400,6 +402,13 @@ export function SystemScreen() {
           )}
           {confirmRestore && <span className="sys-hint">Dữ liệu hiện tại sẽ trở thành bản sao lưu, nên nếu bấm nhầm bạn vẫn khôi phục lại được.</span>}
           {restoreErr && <div className="note bad"><IcAlert /><div className="note-body"><b>Không khôi phục được</b><span>{restoreErr}</span></div></div>}
+        </section>
+
+        <section className="panel" aria-label="Chia sẻ với đồng nghiệp">
+          <h2>Chia sẻ với đồng nghiệp</h2>
+          <span className="sys-hint">Gửi một phần ngân hàng cho đồng nghiệp bằng một tệp, hoặc nhận gói của họ: câu mới được thêm, câu họ sửa được cập nhật, câu cả hai cùng sửa thì bạn chọn từng câu. Không ghi đè mà không hỏi.</span>
+          <div className="head-actions"><button type="button" className="btn btn-dark btn-sm" onClick={() => setSharing(true)}>Chia sẻ ngân hàng…</button></div>
+          {sharing && <ShareDialog onClose={() => setSharing(false)} onToast={toast} />}
         </section>
 
         <section className="panel" aria-label="Sao lưu thủ công">
