@@ -3,6 +3,7 @@
 // - Bản cài Windows: lưu thành file trong thư mục dữ liệu của app (Rust, src-tauri/src/storage.rs),
 //   ghi an toàn, có bản dự phòng, và nằm ngoài thư mục cài nên cập nhật app không đụng tới.
 // Phần giao diện chỉ làm việc với useBank() và các hàm bên dưới, không biết dữ liệu nằm ở đâu.
+import { recordVersion } from './qhistory';
 import { useSyncExternalStore } from 'react';
 import { parseExTest } from './extest';
 import { sameExceptId, writeHeadId } from './idtex';
@@ -220,6 +221,7 @@ export function saveQuestion(draft: Draft, existingUid?: string): Question {
     const old = state.questions.find((q) => q.uid === existingUid);
     if (old) {
       const q: Question = { ...old, ...draft, type, updatedAt: now };
+      if (old.latex !== draft.latex) recordVersion(old.uid, old.latex, old.updatedAt > 946684800000 ? old.updatedAt : now); // lịch sử phiên bản: cất bản cũ
       // Nội dung đã được duyệt/đánh dấu nhưng LaTeX hoặc loại câu đổi → phải kiểm tra lại.
       // Chỉ thêm/đổi ID trong vùng `%[ID]` (đổi vị trí, mức độ) KHÔNG phải sửa nội dung ⇒ giữ trạng thái kiểm duyệt.
       if (old.review && (!sameExceptId(draft.latex, old.latex) || type !== old.type)) delete q.review;
