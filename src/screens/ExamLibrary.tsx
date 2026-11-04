@@ -947,7 +947,7 @@ export function ExamLibraryScreen() {
       ))}
       {panel === 'trash' && <ExamTrashPanel toast={toast} onClose={() => setPanel(null)} onChanged={(rid) => { void reload().then(() => { if (rid) setActiveId(rid); }); }} />}
       {panel === 'backup' && <ExamBackupPanel toast={toast} onClose={() => setPanel(null)} onChanged={() => void reload()} />}
-      {peek && <PdfViewer id={peek.id} title={peek.name} stale={false} mode={peek.mode} note={`Xem nhanh: ${modeLabel(peek.mode)}. ${MODE_NOTE[peek.mode]}`} onClose={() => setPeek(null)} />}
+      {peek && <PdfViewer id={peek.id} title={peek.name} stale={false} mode={peek.mode} note={`Xem nhanh: ${modeLabel(peek.mode)}.${MODE_NOTE[peek.mode] ? ' ' + MODE_NOTE[peek.mode] : ''}`} onClose={() => setPeek(null)} />}
       {ctx && (
         <span className="more-menu xl-cmenu" role="menu" aria-label={`Thao tác với đề ${ctx.e.name}`} style={{ left: Math.min(ctx.x, window.innerWidth - 250), top: Math.min(ctx.y, window.innerHeight - 520) }}>
           {ctxGroup ? (<>

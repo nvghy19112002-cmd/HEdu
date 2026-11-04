@@ -2178,3 +2178,9 @@ details textarea.kh-code { height: 110px; }
 .fx-resize { flex: 0 0 6px; margin-left: -3px; cursor: col-resize; z-index: 3; touch-action: none; }
 .fx-resize:hover, .fx-resize:active { background: var(--pri-soft); }
 .fx-side .bt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.chk-lines { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.chk-lines li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 4px 6px; border-radius: 6px; border-left: 3px solid var(--line); background: var(--paper-2); font-size: 12.5px; }
+.chk-lines li.loi { border-left-color: var(--danger, #c0392b); background: color-mix(in srgb, var(--danger, #c0392b) 10%, transparent); }
+.chk-lines li.canh { border-left-color: var(--warn, #b7791f); background: color-mix(in srgb, var(--warn, #b7791f) 10%, transparent); }
+.chk-lines code { flex: 1 1 220px; overflow-wrap: anywhere; }

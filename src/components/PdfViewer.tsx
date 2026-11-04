@@ -222,7 +222,7 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
         </span>
       </div>
       {stale && <div className="note warn pv-note" role="status"><div className="note-body"><b>BẢN CŨ</b><span>Lần biên dịch gần nhất không thành công; đây là PDF tốt gần nhất trước đó.</span></div></div>}
-      <div className="note warn pv-note" role="note"><div className="note-body"><span>{note}</span></div></div>
+      {note.trim() && <div className="note warn pv-note" role="note"><div className="note-body"><span>{note}</span></div></div>}
       {msg && <div className="note bad pv-note" role="alert"><div className="note-body"><span>{msg}</span></div></div>}
       {err && <div className="note bad pv-note" role="alert"><div className="note-body"><b>Không mở được PDF</b><span>{err}</span></div></div>}
       {!doc && !err && <p className="aid-wait" role="status">Đang mở PDF…</p>}

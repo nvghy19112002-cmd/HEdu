@@ -149,3 +149,31 @@ export function worstLevel(issues: Issue[]): IssueLevel | null {
 }
 
 export const LEVEL_TEXT: Record<IssueLevel, string> = { loi: 'Lỗi', canh: 'Cần xem lại', tin: 'Ghi chú' };
+
+/** Một dòng của mã câu liên quan tới một vấn đề đã báo (số dòng tính từ 1 trong CHÍNH câu đó). */
+export interface IssueLine { line: number; text: string; level: IssueLevel; message: string }
+
+/**
+ * Chỉ ra dòng nào trong mã câu gây ra các vấn đề (Lỗi/Cảnh báo) bằng cách tìm đoạn mã `detail` đi kèm vấn đề.
+ * Vấn đề không có đoạn mã (vd "Thiếu \\True") không có dòng cụ thể nên không có mặt ở đây. Mỗi dòng chỉ liệt kê một lần (vấn đề nặng nhất).
+ */
+export function issueLines(latex: string, issues: readonly Issue[]): IssueLine[] {
+  const lines = latex.split('\n');
+  const starts: number[] = [];
+  let at = 0;
+  for (const l of lines) { starts.push(at); at += l.length + 1; }
+  const lineOf = (idx: number) => { let lo = 0, hi = starts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= idx) lo = mid; else hi = mid - 1; } return lo; };
+  const out = new Map<number, IssueLine>();
+  const rank: Record<IssueLevel, number> = { loi: 0, canh: 1, tin: 2 };
+  for (const it of issues) {
+    if (it.level === 'tin' || !it.detail) continue;
+    const snip = it.detail.replace(/(…|\.\.\.)\s*$/, '').trim();
+    if (snip.length < 3) continue;
+    const idx = latex.indexOf(snip);
+    if (idx < 0) continue;
+    const ln = lineOf(idx);
+    const cur = out.get(ln);
+    if (!cur || rank[it.level] < rank[cur.level]) out.set(ln, { line: ln + 1, text: lines[ln], level: it.level, message: it.message });
+  }
+  return [...out.values()].sort((a, b) => a.line - b.line);
+}

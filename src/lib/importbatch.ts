@@ -115,3 +115,22 @@ export function planLots(files: readonly { srcIdx: number; blocks: number }[], m
   if (cur.length) lots.push(cur);
   return { lots, tooBig };
 }
+
+export interface SourceEdit { /** dòng bắt đầu câu trong ô dán (từ 1) */ line: number; oldLatex: string; newLatex: string }
+/**
+ * Ghi các bản sửa tại chỗ về ô dán: thay đúng các dòng của câu cũ bằng bản sửa. Chỉ thay khi các dòng đó VẪN đúng là câu cũ
+ * (so sánh sau khi bỏ khoảng trắng cuối dòng); không khớp thì bỏ qua câu đó và báo, không đoán.
+ */
+export function applyEditsToSource(src: string, edits: readonly SourceEdit[]): { text: string; applied: number; skipped: number[] } {
+  const lines = src.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
+  let applied = 0;
+  const skipped: number[] = [];
+  for (const e of [...edits].sort((a, b) => b.line - a.line)) {
+    const n = e.oldLatex.split('\n').length;
+    const cur = lines.slice(e.line - 1, e.line - 1 + n).map((l) => l.replace(/[ \t]+$/, '')).join('\n');
+    if (e.line < 1 || cur !== e.oldLatex) { skipped.push(e.line); continue; }
+    lines.splice(e.line - 1, n, ...e.newLatex.replace(/\r\n?/g, '\n').split('\n'));
+    applied++;
+  }
+  return { text: lines.join('\n'), applied, skipped: skipped.sort((a, b) => a - b) };
+}

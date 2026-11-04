@@ -9,7 +9,7 @@ import { firstLocation, getTaxonomy, grades, useTaxonomy } from '../lib/curricul
 import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
-import { BATCH_MAX, buildRows, defaultBatchName, perFile, planLots, sourceIssues, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
+import { applyEditsToSource, BATCH_MAX, buildRows, defaultBatchName, perFile, planLots, sourceIssues, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
 import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
 import { isDesktop } from '../lib/platform';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
@@ -21,7 +21,7 @@ import { taxRevision } from '../lib/taxpath';
 import { idRowsOf, planDrafts, readIds } from '../lib/importplan';
 import { commitRecs, effectiveOf, getRec, makeRec, useIdReview } from '../lib/idreview';
 import { decide, effectiveDecision, isFresh, summarizeVerify, usableDecision, verificationSig, verifierFor, verifyId, VERDICT_LABEL, type IdChoice, type IdDecision, type IdVerification, type LevelChoice } from '../lib/idverify';
-import { checkQuestion, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
+import { checkQuestion, issueLines, LEVEL_TEXT, worstLevel, type Issue } from '../lib/check';
 import { DUP_KIND_LABEL, type DupKind } from '../lib/dup2';
 import { analyzeDrafts, bankHitSignature, BLOCKING, defaultDecisions, hitsForTrust, summarize, type AnalyzeResult, type Decision, type DraftHit } from '../lib/dupimport';
 import { PairCompare } from '../components/PairCompare';
@@ -491,6 +491,16 @@ export function ImportScreen() {
     toast(`Đã nhập ${added.length} câu, bỏ qua ${sum.skipN} câu.${approvedN ? ` Đã duyệt theo lô ${approvedN} câu.` : ''}`);
     finish(report);
   };
+  /** Chỉ khi nhập bằng ô dán: ghi mọi bản sửa tại chỗ vào chính ô dán (nhập nhiều tệp thì không có ô dán để ghi). */
+  const writeEditsBack = () => {
+    const list = Object.entries(edits).map(([k, lx]) => ({ line: rows[+k].line, oldLatex: rows[+k].latex, newLatex: lx }));
+    if (!list.length) return;
+    const r = applyEditsToSource(src, list);
+    if (!r.applied) { toast('Không ghi được: ô dán đã đổi so với lúc nạp nên không còn khớp các câu đã sửa.'); return; }
+    setSrc(r.text);
+    setEdits({});
+    toast(r.skipped.length ? `Đã ghi ${r.applied} bản sửa về ô dán; ${r.skipped.length} câu (dòng ${r.skipped.join(', ')}) không còn khớp nên giữ ở dạng sửa tại chỗ.` : `Đã ghi ${r.applied} bản sửa về ô dán.`);
+  };
   const retrySave = async () => { await flushSave(); if (isLastSaveOk()) { setSaveErr(null); toast('Đã ghi xuống đĩa.'); finish(pendingReport.current); } };
   const setDec = (i: number, d: Decision) => setUserDec((u) => ({ ...u, [`d${i}`]: d }));
   const sureRows = rows.map((_, i) => i).filter((i) => statusOf(i).key === 'sure' && decOf(i) !== 'skip');
@@ -863,7 +873,34 @@ export function ImportScreen() {
                       <label className="lbl">Sửa câu mới (chỉ áp dụng cho lần nhập này, không đổi ô dán ở trên)
                         <textarea value={latexOf(i)} onChange={(e) => setEdits((c) => ({ ...c, [i]: e.target.value }))} spellCheck={false} aria-label={`Mã LaTeX câu mới ${i + 1}`} />
                       </label>
-                      {edits[i] != null && <button type="button" className="btn btn-sm" onClick={() => setEdits((c) => { const n = { ...c }; delete n[i]; return n; })}>Khôi phục bản gốc</button>}
+                      {(() => {
+                        const il = issueLines(latexOf(i), issues[i] ?? []);
+                        if (!il.length) return null;
+                        const goTo = (ln: number) => {
+                          const ta = document.querySelector<HTMLTextAreaElement>(`textarea[aria-label="Mã LaTeX câu mới ${i + 1}"]`);
+                          if (!ta) return;
+                          const parts = ta.value.split('\n');
+                          const from = parts.slice(0, ln - 1).reduce((a, l) => a + l.length + 1, 0);
+                          ta.focus(); ta.setSelectionRange(from, from + (parts[ln - 1]?.length ?? 0));
+                          const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+                          ta.scrollTop = Math.max(0, (ln - 3) * lh);
+                        };
+                        return (
+                          <ul className="chk-lines" aria-label="Dòng cần xem trong câu này">
+                            {il.map((x) => (
+                              <li key={x.line} className={x.level}>
+                                <button type="button" className="btn btn-sm" onClick={() => goTo(x.line)} title="Bấm để chọn dòng này trong khung sửa">Dòng {x.line}</button>
+                                <code>{x.text.trim() || '(dòng trống)'}</code>
+                                <span>{x.message}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      })()}
+                      <div className="head-actions">
+                        {edits[i] != null && <button type="button" className="btn btn-sm" onClick={() => setEdits((c) => { const n = { ...c }; delete n[i]; return n; })}>Khôi phục bản gốc</button>}
+                        {!multi && Object.keys(edits).length > 0 && <button type="button" className="btn btn-sm btn-accent" onClick={writeEditsBack} title="Thay các câu đã sửa vào chính ô dán ở trên (không đụng tệp nào trên máy)">Ghi {Object.keys(edits).length} bản sửa về ô dán</button>}
+                      </div>
                     </div>
                   )}
                   {openRow === i && (issues[i]?.length ?? 0) > 0 && (
