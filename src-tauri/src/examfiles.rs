@@ -520,6 +520,64 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Sen
     tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
+// ---------- xem lại các bản cũ của một tệp (HEdu chụp bản cũ mỗi lần lưu: tối đa KEEP_VERSIONS bản) ----------
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct VersionInfo {
+    /// thời điểm bản này bị thay thế (ms từ 1970)
+    pub at: u64,
+    pub bytes: u64,
+}
+
+/// Các bản cũ của tệp `rel` (mới nhất trước). Không có thư mục bản cũ ⇒ rỗng.
+pub fn list_versions(lib: &Path, id: &str, rel: &str) -> Result<Vec<VersionInfo>, String> {
+    let dir = project_dir(lib, id)?;
+    if let Some(why) = bad_rel(rel) {
+        return Err(format!("Đường dẫn không an toàn '{rel}': {why}"));
+    }
+    let vd = versions_dir(&dir, rel);
+    match fs::symlink_metadata(&vd) {
+        Ok(md) if is_link(&md) => return Err("Thư mục bản cũ là liên kết nên không đọc (an toàn).".into()),
+        Ok(md) if md.is_dir() => {}
+        _ => return Ok(Vec::new()),
+    }
+    let mut out: Vec<VersionInfo> = Vec::new();
+    for e in fs::read_dir(&vd).map_err(|e| format!("Không đọc được thư mục bản cũ: {e}"))?.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(stem) = name.strip_suffix(".bak") else { continue };
+        let Ok(at) = stem.parse::<u64>() else { continue };
+        if let Ok(md) = e.metadata() {
+            if md.is_file() {
+                out.push(VersionInfo { at, bytes: md.len() });
+            }
+        }
+    }
+    out.sort_by(|a, b| b.at.cmp(&a.at));
+    Ok(out)
+}
+
+/// Nội dung một bản cũ (đã giải mã, xuống dòng về '\n').
+pub fn read_version(lib: &Path, id: &str, rel: &str, at: u64) -> Result<String, String> {
+    let dir = project_dir(lib, id)?;
+    if let Some(why) = bad_rel(rel) {
+        return Err(format!("Đường dẫn không an toàn '{rel}': {why}"));
+    }
+    let name = rel.replace('/', "__");
+    let (b, _) = read_all(&dir, &format!(".hedu/versions/{name}/{at:015}.bak"), MAX_EDIT_BYTES)?;
+    decode(&b).map(|(t, _, _)| t)
+}
+
+#[tauri::command]
+pub async fn exam_file_versions(app: AppHandle, id: String, rel: String) -> Result<Vec<VersionInfo>, String> {
+    let lib = lib_of(&app)?;
+    blocking(move || list_versions(&lib, &id, &rel)).await
+}
+#[tauri::command]
+pub async fn exam_file_version_read(app: AppHandle, id: String, rel: String, at: u64) -> Result<String, String> {
+    let lib = lib_of(&app)?;
+    blocking(move || read_version(&lib, &id, &rel, at)).await
+}
+
 #[tauri::command]
 pub async fn exam_file_list(app: AppHandle, id: String) -> Result<ListOut, String> {
     let lib = lib_of(&app)?;
@@ -594,6 +652,29 @@ mod tests {
     }
     fn on_disk(lib: &Path, id: &str, rel: &str) -> Vec<u8> {
         fs::read(projects_dir(lib).join(id).join(rel)).unwrap()
+    }
+
+    #[test]
+    fn xem_lai_cac_ban_cu_cua_tep() {
+        let (d, lib, id) = proj("versions-xem", &[("main.tex", b"v1
+"), ("sub/a.tex", b"A1
+")]);
+        let rel = "main.tex";
+        assert!(list_versions(&lib, &id, rel).unwrap().is_empty(), "chưa lưu lần nào ⇒ chưa có bản cũ");
+        let sha1 = read_text_file(&lib, &id, rel).unwrap().sha256;
+        let _ = write_text_file(&lib, &id, rel, "v2\n", "lf", false, &sha1).unwrap();
+        let sha2 = read_text_file(&lib, &id, rel).unwrap().sha256;
+        let _ = write_text_file(&lib, &id, "sub/a.tex", "A2\n", "lf", false, &read_text_file(&lib, &id, "sub/a.tex").unwrap().sha256).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(3));
+        let _ = write_text_file(&lib, &id, rel, "v3\n", "lf", false, &sha2).unwrap();
+        let v = list_versions(&lib, &id, rel).unwrap();
+        assert_eq!(v.len(), 2, "hai lần lưu ⇒ hai bản cũ (v1, v2)");
+        assert!(v[0].at > v[1].at, "mới nhất trước");
+        assert_eq!(read_version(&lib, &id, rel, v[0].at).unwrap(), "v2\n");
+        assert_eq!(read_version(&lib, &id, rel, v[1].at).unwrap(), "v1\n");
+        assert_eq!(list_versions(&lib, &id, "sub/a.tex").unwrap().len(), 1, "mỗi tệp một thư mục bản cũ riêng");
+        assert!(list_versions(&lib, &id, "../x").is_err() && read_version(&lib, &id, rel, 7).is_err());
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]
