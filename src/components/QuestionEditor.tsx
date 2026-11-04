@@ -11,6 +11,8 @@ import { questionCode, seqLabel } from '../lib/id';
 import { chenText } from '../lib/khochen';
 import { isDesktop } from '../lib/platform';
 import { KhoPicker, KhoSaveDialog } from './KhoDialogs';
+import { LintDialog } from './LintDialog';
+import { getSettings } from '../lib/tikz';
 import { idStatus, LATEX_ID_LABEL, strictCode } from '../lib/idsync';
 import { sameCode, writeHeadId } from '../lib/idtex';
 import { commitRecs, getRec, keepNoId, makeRec } from '../lib/idreview';
@@ -89,6 +91,7 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
 
   const [latex, setLatex] = useState(init.latex);
   const [khoDlg, setKhoDlg] = useState<null | 'chen' | 'luu'>(null);
+  const [lintOpen, setLintOpen] = useState(false);
   const [loc, setLoc] = useState<Location>(init.loc);
   const [level, setLevel] = useState<Level>(init.level);
   const [tags, setTags] = useState<string[]>(init.tags);
@@ -414,11 +417,13 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
           <div className="qe-bar">
             <h2>Mã LaTeX</h2>
             <span className="qe-pos">ex_test · dòng {pos.line}, cột {pos.col}</span>
+            {isDesktop() && <button type="button" className="btn btn-sm" onClick={() => setLintOpen(true)} title="Kiểm ngoặc, dấu $ và các lỗi mã LaTeX hay gặp bằng ChkTeX">Kiểm lỗi mã</button>}
             {isDesktop() && <button type="button" className="btn btn-sm" onClick={() => setKhoDlg('chen')} title="Chọn một hình trong Kho hình và chèn vào chỗ con trỏ">Chèn hình từ Kho</button>}
             {isDesktop() && <button type="button" className="btn btn-sm" onClick={() => setKhoDlg('luu')} title="Lưu hình TikZ có trong câu này vào Kho hình">Lưu hình vào Kho</button>}
             <SymbolPalette onPick={(snippet, raw) => ed.current?.insert(snippet, { wrapMath: !raw })} />
           </div>
           <LatexEditor ref={ed} value={latex} onChange={setLatex} onCursor={(line, col) => setPos({ line, col })} />
+          {lintOpen && <LintDialog text={latex} texBin={getSettings().texBin || undefined} onJump={(l) => ed.current?.selectLine(l)} onClose={() => setLintOpen(false)} />}
           {khoDlg === 'chen' && <KhoPicker onClose={() => setKhoDlg(null)} onPick={(h) => { setKhoDlg(null); ed.current?.insertRaw(chenText(h)); toast(`Đã chèn hình “${h.title}” vào chỗ con trỏ.`); }} />}
           {khoDlg === 'luu' && <KhoSaveDialog latex={latex} stem={parsed.stem} onClose={() => setKhoDlg(null)} onDone={(m) => { setKhoDlg(null); toast(m); }} />}
         </section>

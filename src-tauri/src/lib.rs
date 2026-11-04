@@ -1,6 +1,7 @@
 // Lõi desktop của HEdu: lưu dữ liệu an toàn + cập nhật hai kênh + quay lại bản trước.
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod ai;
+mod chktex;
 mod db;
 mod dbbackup;
 mod dbcmd;
@@ -504,6 +505,9 @@ pub fn run() {
             examcompile::exam_profiles,
             examcompile::exam_pdf_read,
             examcompile::exam_pdf_export,
+            examcompile::exam_synctex_edit,
+            examcompile::exam_synctex_view,
+            chktex::chktex_check,
             examcompile::exam_pdf_open_external,
             examfiles::exam_file_list,
             examfiles::exam_file_read,

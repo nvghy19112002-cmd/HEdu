@@ -31,9 +31,14 @@ export function loadLib(): Promise<PdfLib> {
 type Fit = 'width' | 'page' | number;
 const GAP = 12;
 
-interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; /** chế độ PDF cần xem (mặc định nguyên văn) */ mode?: ExamMode; onClose?(): void; /** nhúng trong khung (không phủ toàn màn hình, không có nút Đóng) */ embedded?: boolean; /** nguồn PDF khác (vd bàn nháp Xử lí TeX); mặc định đọc PDF tốt gần nhất của dự án `id` */ load?(): Promise<ArrayBuffer> }
+interface Props { id: string; title: string; /** lần biên dịch gần nhất KHÔNG thành công: đây là bản cũ */ stale: boolean; note: string; /** chế độ PDF cần xem (mặc định nguyên văn) */ mode?: ExamMode; /** SyncTeX: Ctrl+bấm hoặc bấm đúp lên trang ⇒ gọi với (trang từ 1, x, y theo điểm từ góc trên trái) */ onSourceAt?(page: number, x: number, y: number): void; /** SyncTeX: tô hộp này (đổi `n` để tô lại) và cuộn tới */ mark?: { page: number; x: number; y: number; w: number; h: number; n: number } | null; onClose?(): void; /** nhúng trong khung (không phủ toàn màn hình, không có nút Đóng) */ embedded?: boolean; /** nguồn PDF khác (vd bàn nháp Xử lí TeX); mặc định đọc PDF tốt gần nhất của dự án `id` */ load?(): Promise<ArrayBuffer> }
 
-export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'nguyen-van', load }: Props) {
+export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'nguyen-van', load, onSourceAt, mark }: Props) {
+  const [flash, setFlash] = useState(false);
+  /** khung ghi chú: một dòng gọn, bấm để mở rộng */
+  const [noteOpen, setNoteOpen] = useState(false);
+  /** menu "⋯" gom các nút phụ khi nhúng trong khung hẹp */
+  const [moreOpen, setMoreOpen] = useState(false);
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -147,6 +152,15 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
 
   const raf = useRef(0);
   const onScroll = () => { cancelAnimationFrame(raf.current); raf.current = requestAnimationFrame(refresh); };
+  // SyncTeX: cuộn tới hộp được đánh dấu rồi tô sáng vài giây
+  useEffect(() => {
+    if (!mark) return;
+    setFlash(true);
+    const el = scroller.current;
+    if (el && layout.tops[mark.page - 1] !== undefined) el.scrollTop = Math.max(0, layout.tops[mark.page - 1] + (mark.y - mark.h) * scale - el.clientHeight / 3);
+    const t = window.setTimeout(() => setFlash(false), 3500);
+    return () => window.clearTimeout(t);
+  }, [mark?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const goto = (i: number) => { const el = scroller.current; if (el) el.scrollTop = scrollTopFor(layout, i, GAP); };
 
   const doSearch = async () => {
@@ -216,20 +230,40 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
           </>}
         </form>
         <span className="pv-grp pv-right">
-          {!load && <button type="button" className="btn btn-sm" onClick={save}>Lưu bản sao…</button>}
-          {!load && <button type="button" className="btn btn-sm" onClick={external}>Mở bằng ứng dụng khác</button>}
+          {!load && embedded && (
+            <span className="pv-more">
+              <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreOpen} title="Lưu bản sao, mở bằng ứng dụng khác" onClick={() => setMoreOpen((o) => !o)}>⋯</button>
+              {moreOpen && (
+                <span className="more-menu xl-pop" role="menu" onMouseLeave={() => setMoreOpen(false)}>
+                  <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); void save(); }}><b>Lưu bản sao…</b></button>
+                  <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); void external(); }}><b>Mở bằng ứng dụng khác</b></button>
+                </span>
+              )}
+            </span>
+          )}
+          {!load && !embedded && <button type="button" className="btn btn-sm" onClick={save}>Lưu bản sao…</button>}
+          {!load && !embedded && <button type="button" className="btn btn-sm" onClick={external}>Mở bằng ứng dụng khác</button>}
           {onClose && <button type="button" className="btn btn-sm btn-primary" onClick={onClose}>Đóng</button>}
         </span>
       </div>
       {stale && <div className="note warn pv-note" role="status"><div className="note-body"><b>BẢN CŨ</b><span>Lần biên dịch gần nhất không thành công; đây là PDF tốt gần nhất trước đó.</span></div></div>}
-      {note.trim() && <div className="note warn pv-note" role="note"><div className="note-body"><span>{note}</span></div></div>}
+      {note.trim() && (
+        <button type="button" className={`pv-note-line${noteOpen ? ' open' : ''}`} aria-expanded={noteOpen} onClick={() => setNoteOpen((o) => !o)} title={noteOpen ? 'Thu gọn' : note}>
+          <span aria-hidden="true">ⓘ</span><span className="pv-note-t">{note}</span>
+        </button>
+      )}
       {msg && <div className="note bad pv-note" role="alert"><div className="note-body"><span>{msg}</span></div></div>}
       {err && <div className="note bad pv-note" role="alert"><div className="note-body"><b>Không mở được PDF</b><span>{err}</span></div></div>}
       {!doc && !err && <p className="aid-wait" role="status">Đang mở PDF…</p>}
       <div className="pv-scroll" ref={scroller} onScroll={onScroll} tabIndex={0} aria-label="Các trang PDF">
         <div className="pv-pages" style={{ height: layout.total, width: Math.max(...sizes.map((s) => s.w * scale), 0) + 2 * GAP }}>
           {sizes.map((s, i) => (
-            <div key={i} className="pv-page" style={{ top: layout.tops[i], width: s.w * scale, height: s.h * scale }} ref={(el) => { holders.current[i] = el; }} role="img" aria-label={`Trang ${i + 1}`} />
+            <div key={i} className="pv-page" style={{ top: layout.tops[i], width: s.w * scale, height: s.h * scale }} ref={(el) => { holders.current[i] = el; }} role="img" aria-label={`Trang ${i + 1}`}
+              title={onSourceAt ? 'Ctrl+bấm hoặc bấm đúp: nhảy tới dòng mã nguồn tương ứng' : undefined}
+              onClick={onSourceAt ? (ev) => { if (!(ev.ctrlKey || ev.metaKey)) return; const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); onSourceAt(i + 1, (ev.clientX - r.left) / scale, (ev.clientY - r.top) / scale); } : undefined}
+              onDoubleClick={onSourceAt ? (ev) => { const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); onSourceAt(i + 1, (ev.clientX - r.left) / scale, (ev.clientY - r.top) / scale); } : undefined}>
+              {flash && mark && mark.page === i + 1 && <span className="pv-mark" aria-hidden="true" style={{ left: Math.max(0, mark.x * scale - 4), top: Math.max(0, (mark.y - mark.h) * scale - 3), width: Math.max(24, mark.w * scale + 8), height: (mark.h + 5) * scale }} />}
+            </div>
           ))}
         </div>
       </div>
