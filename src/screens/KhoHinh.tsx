@@ -8,6 +8,7 @@ import { ExamTree } from '../components/ExamTree';
 import { KhoHinhPanel } from '../components/KhoHinhPanel';
 import { KhoThumb, type ThumbResult } from '../components/KhoThumb';
 import { KhoHinhGiong, KhoQuetNen } from '../components/KhoCongCu';
+import { FigureBuilder } from '../components/FigureBuilder';
 import { startDrag } from '../lib/examdrag';
 import { NO_SELECTION, clickSelect, pruneSelection, runBatch, selectAll, type Selection } from '../lib/examselect';
 import { IcPlus } from '../components/Icons';
@@ -201,7 +202,7 @@ export function KhoHinhScreen() {
   const [nutDlg, setNutDlg] = useState<null | 'them' | 'ten'>(null);
   const [askNut, setAskNut] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [tool, setTool] = useState<null | 'quet' | 'giong'>(null);
+  const [tool, setTool] = useState<null | 'quet' | 'giong' | 've'>(null);
   /** hình đang chọn (Ctrl/Shift+bấm), để chuyển mục / bỏ vào thùng rác hàng loạt hoặc kéo cả nhóm vào mục ở cây */
   const [selection, setSelection] = useState<Selection>(NO_SELECTION);
   const [moveTo, setMoveTo] = useState('');
@@ -309,6 +310,7 @@ export function KhoHinhScreen() {
                 <button type="button" role="menuitem" disabled={!node} onClick={() => { setMenu(false); setNutDlg('ten'); }}><b>Đổi tên mục đang chọn</b></button>
                 <button type="button" role="menuitem" disabled={!node} onClick={() => { setMenu(false); setAskNut(true); }}><b>Xoá mục đang chọn</b><small>Chỉ xoá được mục trống</small></button>
                 <hr />
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); setTool('ve'); }}><b>Vẽ bằng công cụ…</b><small>Bảng biến thiên, bảng xét dấu, đồ thị hàm số</small></button>
                 <button type="button" role="menuitem" onClick={() => { setMenu(false); setTool('quet'); }}><b>Quét nền: dịch thử cả kho</b><small>Ghi Dịch được / Dịch lỗi cho mọi hình chưa dịch</small></button>
                 <button type="button" role="menuitem" onClick={() => { setMenu(false); setTool('giong'); }}><b>Tìm hình giống nhau</b><small>Chỉ khác số liệu, khoảng trắng, chú thích</small></button>
               </span>
@@ -430,6 +432,7 @@ export function KhoHinhScreen() {
         </ConfirmDialog>
       )}
       {tool === 'quet' && <KhoQuetNen onClose={() => setTool(null)} onChanged={changed} />}
+      {tool === 've' && <FigureBuilder onClose={() => { setTool(null); changed(); }} onSaved={(m) => { toast(m); changed(); }} />}
       {tool === 'giong' && <KhoHinhGiong onClose={() => setTool(null)} onChanged={changed} />}
     </>
   );
