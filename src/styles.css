@@ -1234,12 +1234,17 @@ a { color: var(--accent); }
 
 /* Trình xem PDF (E2b) */
 .pv { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--paper); outline: none; }
-.pv-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line-2); }
+.pv-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line-2); }
 .pv-title { font-size: 14px; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pv-grp { display: flex; align-items: center; gap: 6px; }
 .pv-right { margin-left: auto; }
 .pv-page-in { width: 52px; text-align: center; }
 .pv-note { margin: 6px 16px 0; padding: 8px 12px; }
+.pv-note-line { all: unset; box-sizing: border-box; display: flex; gap: 6px; align-items: baseline; margin: 4px 10px 0; padding: 3px 10px; border-radius: 6px; background: color-mix(in srgb, var(--warn, #b7791f) 12%, transparent); font-size: 12px; line-height: 1.4; cursor: pointer; color: var(--ink-2); }
+.pv-note-line .pv-note-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-note-line.open .pv-note-t { white-space: normal; }
+.pv-note-line:focus-visible { outline: 2px solid var(--pri); outline-offset: 1px; }
+.pv-more { position: relative; }
 .pv-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--line-2); }
 .pv-pages { position: relative; margin: 0 auto; min-width: 100%; }
 .pv-page { position: absolute; left: 50%; transform: translateX(-50%); background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 25%); }
@@ -2226,3 +2231,11 @@ details textarea.kh-code { height: 110px; }
 .fx-pthumb:disabled { cursor: default; }
 
 .kh-selbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 10px; margin-bottom: 8px; border: 1px solid var(--pri); border-radius: 8px; background: var(--pri-soft); }
+
+.pv-mark { position: absolute; pointer-events: none; border-radius: 3px; background: color-mix(in srgb, #ffd54a 55%, transparent); outline: 2px solid #e0a800; animation: pv-mark-fade 3.5s ease-out forwards; }
+@keyframes pv-mark-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+.pv-embedded .pv-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; gap: 6px; padding: 4px 8px; }
+.pv-embedded .pv-grp { flex: 0 0 auto; }
+.pv-embedded .pv-grp input[type="search"] { width: 110px; }
+.pv-embedded .pv-page-in { width: 42px; }

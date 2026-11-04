@@ -27,6 +27,8 @@ export interface CodeEditorHandle {
   text(key: string): string | null;
   drop(key: string): void;
   jump(key: string, line: number): void;
+  /** Dòng (từ 1) và cột (từ 0) của con trỏ trong tệp `key` (null nếu tệp không đang mở). */
+  cursor(key: string): { line: number; col: number } | null;
   focus(): void;
   find(): void;
 }
@@ -174,6 +176,13 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
       const pos = v.state.doc.line(n).from;
       v.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
       v.focus();
+    },
+    cursor(key) {
+      const v = view.current;
+      if (!v || current.current !== key) return null;
+      const head = v.state.selection.main.head;
+      const ln = v.state.doc.lineAt(head);
+      return { line: ln.number, col: head - ln.from };
     },
     focus() { view.current?.focus(); },
     find() { if (view.current) openSearchPanel(view.current); },

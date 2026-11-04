@@ -7,6 +7,8 @@ import { exportPdf } from '../lib/exampdf';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
 import { BankPicker } from '../components/BankPicker';
 import { PdfViewer } from '../components/PdfViewer';
+import { mapSyncFile, synctexEdit, synctexView, type SyncPos } from '../lib/synctex';
+import { LintDialog } from '../components/LintDialog';
 import { SourcesPanel } from '../components/SourcesPanel';
 import { canJump, ENGINES, examCompile, examCompileAll, examCompileCancel, examProfiles, groupDiagnostics, MODE_NOTE, MODES, modeLabel, summarize, type CompileOut, type Engine, type ExamMode, type GoodInfo, type ProfileInfo } from '../lib/examcompile';
 import { insertionText, norm, sourcesAdd, sourcesForget, sourcesStatus, toSource, type SourceIn, type SourceItem, type SourceStatus } from '../lib/examsources';
@@ -316,6 +318,33 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
     } catch (e) { setNote(msg(e)); }
   };
 
+  /** SyncTeX: vị trí đang tô trên PDF (từ dòng mã) */
+  const [syncMark, setSyncMark] = useState<(SyncPos & { n: number }) | null>(null);
+  const syncN = useRef(0);
+  const [lintOpen, setLintOpen] = useState(false);
+  /** bấm trên PDF ⇒ nhảy tới dòng mã nguồn */
+  const fromPdf = async (page: number, x: number, y: number) => {
+    try {
+      const r = await synctexEdit(id, viewMode, page, x, y, getSettings().texBin || undefined);
+      if (!r) { setNote('Không tìm thấy dòng mã tương ứng với chỗ vừa bấm (có thể là khoảng trắng hoặc hình).'); return; }
+      const rel = mapSyncFile(r.file, list.files.map((f) => f.rel));
+      if (!rel) { setNote('Chỗ này thuộc phần đầu do HEdu ghép khi in (hoặc gói hệ thống), không nằm trong tệp của đề.'); return; }
+      await jump(rel, r.line);
+    } catch (e) { setNote(msg(e)); }
+  };
+  /** từ dòng mã (con trỏ) ⇒ tô vị trí trên PDF */
+  const toPdf = async () => {
+    const tab = active;
+    const cur = tab ? ed.current?.cursor(tab) : null;
+    if (!tab || !cur) { setNote('Đặt con trỏ vào một dòng trong tệp đang mở rồi bấm lại.'); return; }
+    try {
+      const r = await synctexView(id, viewMode, tab, cur.line, cur.col, getSettings().texBin || undefined);
+      if (!r) { setNote('Dòng này chưa có chỗ tương ứng trên PDF (dòng trống, chú thích hoặc lệnh không in gì).'); return; }
+      setPane('pdf');
+      setSyncMark({ ...r, n: ++syncN.current });
+    } catch (e) { setNote(msg(e)); }
+  };
+  const lintText = () => (active ? ed.current?.text(active) ?? loaded.current.get(active) ?? '' : '');
   const jump = async (file: string, line: number) => {
     const f = list.files.find((x) => x.rel === file);
     if (!f) return;
@@ -440,6 +469,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
 
   return (
     <div className={`ew tabbed${hidden ? ' off' : ''}`} role="dialog" aria-modal={!hidden} aria-hidden={hidden || undefined} aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
+      {lintOpen && <LintDialog text={lintText()} texBin={getSettings().texBin || undefined} onJump={(l) => { if (active) { setPane('edit'); window.setTimeout(() => ed.current?.jump(active, l), 60); } }} onClose={() => setLintOpen(false)} />}
       <header className="ew-head">
         <button type="button" className="btn btn-sm btn-ghost ew-back" onClick={onLibrary} title="Về Thư viện đề (đề vẫn mở ở tab trên cùng) · Esc" aria-label="Về Thư viện đề">←</button>
         <div className="ew-title"><b title={name}>{name}</b>{active && <span className="ew-path" title={active}>{active}</span>}</div>
@@ -467,6 +497,8 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
             </div>
           </details>
           {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch</button> : <button type="button" className="btn btn-sm" title={queued ? 'Đang chờ lượt: 2 đề khác đang biên dịch' : undefined} onClick={() => { if (queued) { gen.current++; setQueued(false); setCompiling(false); } else void examCompileCancel(id); }}>{queued ? 'Huỷ chờ' : 'Dừng'}</button>}
+          <button type="button" className="btn btn-sm" disabled={!goods.length || !active} onClick={() => { void toPdf(); }} title="Tô trên PDF chỗ ứng với dòng đang đặt con trỏ (Ctrl+bấm hoặc bấm đúp trên PDF thì đi ngược lại)">Tới chỗ này trên PDF</button>
+          <button type="button" className="btn btn-sm" disabled={!active} onClick={() => setLintOpen(true)} title="Kiểm ngoặc, dấu $ và lỗi mã LaTeX hay gặp trong tệp đang mở (ChkTeX)">Kiểm lỗi mã</button>
           <button type="button" className="btn btn-sm" disabled={compiling || result?.status !== 'ok'} title={result?.status === 'ok' ? `Xuất PDF “${modeLabel(result.mode as ExamMode)}” vừa biên dịch thành công ra một tệp` : 'Biên dịch thành công rồi mới xuất được PDF'} onClick={() => { if (result) void exportPdf(id, name, result.mode as ExamMode).then((d) => { if (d) toast(`Đã xuất PDF: ${d}`); }).catch((e) => toast(e instanceof Error ? e.message : String(e))); }}>Xuất PDF…</button>
         </span>
         <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Thông tin đề: đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
@@ -534,7 +566,8 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
         {!narrow && <div className="ew-split" role="separator" aria-orientation="vertical" aria-label="Kéo để đổi bề rộng khung PDF" tabIndex={0} onPointerDown={startDrag('pdf')} onKeyDown={nudge('pdf')} onDoubleClick={() => setLay((l) => { const n = { ...l, pdf: 42 }; saveLayout(n); return n; })} title="Kéo để đổi bề rộng · bấm đúp: về mặc định" />}
         {showPdf && (
           <section className="ew-pdf" aria-label="PDF">
-            {goods.length > 0 && (
+            {/* chỉ một bản PDF và đang xem đúng bản đó: không cần dải tab (đỡ một hàng trống; ghi chú bên dưới đã nêu loại bản) */}
+            {(goods.length > 1 || (goods.length === 1 && viewMode !== goods[0].mode)) && (
               <div className="ew-tabbar" role="tablist" aria-label="Bản PDF">
                 {MODES.filter((m) => goods.some((g) => g.mode === m.id)).map((m) => (
                   <span key={m.id} className={`ew-tabitem${viewMode === m.id ? ' on' : ''}`}>
@@ -544,7 +577,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
               </div>
             )}
             {goods.find((g) => g.mode === viewMode)
-              ? <PdfViewer key={viewMode + goods.find((g) => g.mode === viewMode)!.fingerprint + goods.find((g) => g.mode === viewMode)!.at} embedded id={id} mode={viewMode} title={name} stale={stale && mode === viewMode} note={MODE_NOTE[viewMode]} />
+              ? <PdfViewer key={viewMode + goods.find((g) => g.mode === viewMode)!.fingerprint + goods.find((g) => g.mode === viewMode)!.at} embedded id={id} mode={viewMode} title={name} stale={stale && mode === viewMode} note={MODE_NOTE[viewMode]} onSourceAt={(p, x, y) => { void fromPdf(p, x, y); }} mark={syncMark} />
               : <p className="xl-meta ew-empty">Chưa có PDF {viewMode === 'nguyen-van' ? '' : `bản “${modeLabel(viewMode)}” `}cho đề này. Chọn bản và bấm “Biên dịch PDF”.</p>}
           </section>
         )}

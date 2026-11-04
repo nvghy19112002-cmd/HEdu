@@ -537,6 +537,12 @@ pub(crate) fn publish(root: &Path, id: &str, pdf: &Path, info: &GoodInfo) -> Res
     let dest = out.join(&pn);
     let mut src = fs::File::open(pdf).map_err(|e| format!("Không mở được PDF vừa dịch: {e}"))?;
     copy_atomic(&mut src, &dest).map_err(|e| format!("Không xuất bản được PDF: {e}"))?;
+    // SyncTeX: chép cùng tên gốc với PDF đã xuất bản (synctex tìm <tên>.synctex.gz cạnh <tên>.pdf); không có thì xoá bản cũ để khỏi lệch
+    let (sy_src, sy_dest) = (pdf.with_extension("synctex.gz"), dest.with_extension("synctex.gz"));
+    match fs::File::open(&sy_src) {
+        Ok(mut f) => { let _ = copy_atomic(&mut f, &sy_dest); }
+        Err(_) => { let _ = fs::remove_file(&sy_dest); }
+    }
     let bytes = fs::metadata(&dest).map(|m| m.len()).map_err(|e| e.to_string())?;
     let rec = GoodInfo { bytes, pdf_path: dest.to_string_lossy().into_owned(), ..info.clone() };
     let part = out.join(format!("{jn}.part"));
@@ -780,7 +786,7 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             break;
         }
         let mut c = engine_command(&tex_bin, engine, support_dir, &cwd);
-        c.args(["-interaction=nonstopmode", "-file-line-error", "-no-shell-escape"]).arg(format!("-jobname={JOBNAME}")).arg(&compile_name);
+        c.args(["-interaction=nonstopmode", "-file-line-error", "-no-shell-escape", "-synctex=1"]).arg(format!("-jobname={JOBNAME}")).arg(&compile_name);
         let r = match run_job(&mut c, left, &cancel_flag) {
             Ok(r) => r,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -995,12 +1001,131 @@ pub fn exam_pdf_open_external(app: AppHandle, id: String, mode: Option<String>) 
     open_external(&root_of(&app)?, &id, mode_of(&mode)?)
 }
 
+// ---------- SyncTeX: bấm trên PDF ⇒ dòng mã nguồn, và từ dòng mã ⇒ vị trí trên PDF (dùng công cụ `synctex` của TeX Live) ----------
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct SyncSrc {
+    /// đường dẫn tệp nguồn do TeX ghi (có thể tương đối với thư mục dịch); giao diện tự đối chiếu với các tệp của đề
+    pub file: String,
+    pub line: u32,
+    pub col: i32,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct SyncPos {
+    pub page: u32,
+    /// hộp chứa dòng mã trên trang, đơn vị điểm (1/72 inch) từ góc trên trái: x, y của đáy-trái chữ, rộng, cao
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+fn kv(line: &str) -> Option<(&str, &str)> {
+    let (k, v) = line.split_once(':')?;
+    Some((k.trim(), v.trim()))
+}
+
+/// Đọc kết quả `synctex edit`.
+pub fn parse_edit(out: &str) -> Option<SyncSrc> {
+    let (mut file, mut line, mut col) = (None, None, -1);
+    for l in out.lines() {
+        match kv(l) {
+            Some(("Input", v)) if file.is_none() => file = Some(v.to_string()),
+            Some(("Line", v)) if line.is_none() => line = v.parse::<i64>().ok().filter(|n| *n > 0).map(|n| n as u32),
+            Some(("Column", v)) => col = v.parse().unwrap_or(-1),
+            _ => {}
+        }
+    }
+    Some(SyncSrc { file: file?, line: line?, col })
+}
+
+/// Đọc kết quả `synctex view` (lấy bản ghi đầu tiên).
+pub fn parse_view(out: &str) -> Option<SyncPos> {
+    let (mut page, mut x, mut y, mut h, mut v, mut w, mut hh) = (None, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    for l in out.lines() {
+        match kv(l) {
+            Some(("Page", s)) if page.is_none() => page = s.parse::<u32>().ok(),
+            Some(("x", s)) if page.is_some() && x == 0.0 => x = s.parse().unwrap_or(0.0),
+            Some(("y", s)) if page.is_some() && y == 0.0 => y = s.parse().unwrap_or(0.0),
+            Some(("h", s)) if page.is_some() && h == 0.0 => h = s.parse().unwrap_or(0.0),
+            Some(("v", s)) if page.is_some() && v == 0.0 => v = s.parse().unwrap_or(0.0),
+            Some(("W", s)) if page.is_some() && w == 0.0 => w = s.parse().unwrap_or(0.0),
+            Some(("H", s)) if page.is_some() && hh == 0.0 => hh = s.parse().unwrap_or(0.0),
+            _ => {}
+        }
+        if l.trim() == "SyncTeX result end" { break; }
+    }
+    let _ = (x, y);
+    Some(SyncPos { page: page?, x: h, y: v, w, h: hh })
+}
+
+fn synctex_pdf(root: &Path, id: &str, mode: &str) -> Result<PathBuf, String> {
+    let g = last_good_mode(root, id, mode).ok_or("Chưa có PDF để tra vị trí. Hãy biên dịch đề trước.")?;
+    let pdf = PathBuf::from(g.pdf_path);
+    if !pdf.with_extension("synctex.gz").is_file() && !pdf.with_extension("synctex").is_file() {
+        return Err("PDF này chưa có dữ liệu SyncTeX (dịch bằng bản HEdu cũ hơn). Biên dịch lại là có.".into());
+    }
+    Ok(pdf)
+}
+
+fn run_synctex(tex_bin: &Option<String>, args: &[&str]) -> Result<String, String> {
+    let mut c = Command::new(tikz::prog(tex_bin, "synctex"));
+    c.args(args);
+    tikz::hide_console(&mut c);
+    let o = crate::proc::run_capture(&mut c, Duration::from_secs(15)).map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { "Không tìm thấy công cụ synctex của TeX Live.".to_string() } else { format!("Không chạy được synctex: {e}") })?;
+    if o.timed_out { return Err("synctex chạy quá lâu nên đã dừng.".into()); }
+    Ok(o.stdout)
+}
+
+/// Từ vị trí bấm trên PDF (trang từ 1, x/y đơn vị điểm từ góc trên trái) ra dòng mã nguồn.
+pub fn synctex_edit(root: &Path, id: &str, mode: &str, page: u32, x: f64, y: f64, tex_bin: &Option<String>) -> Result<Option<SyncSrc>, String> {
+    let pdf = synctex_pdf(root, id, mode)?;
+    let spec = format!("{page}:{x:.2}:{y:.2}:{}", pdf.to_string_lossy());
+    let out = run_synctex(tex_bin, &["edit", "-o", &spec])?;
+    Ok(parse_edit(&out))
+}
+
+/// Từ dòng mã (tệp tương đối trong đề) ra hộp trên PDF.
+pub fn synctex_view(root: &Path, id: &str, mode: &str, file: &str, line: u32, col: u32, tex_bin: &Option<String>) -> Result<Option<SyncPos>, String> {
+    let pdf = synctex_pdf(root, id, mode)?;
+    let spec = format!("{line}:{col}:{file}");
+    let out = run_synctex(tex_bin, &["view", "-i", &spec, "-o", &pdf.to_string_lossy()])?;
+    Ok(parse_view(&out))
+}
+
+#[tauri::command]
+pub async fn exam_synctex_edit(app: AppHandle, id: String, mode: Option<String>, page: u32, x: f64, y: f64, tex_bin: Option<String>) -> Result<Option<SyncSrc>, String> {
+    let root = root_of(&app)?;
+    let mode = mode_of(&mode)?.to_string();
+    tauri::async_runtime::spawn_blocking(move || synctex_edit(&root, &id, &mode, page, x, y, &tex_bin)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn exam_synctex_view(app: AppHandle, id: String, mode: Option<String>, file: String, line: u32, col: Option<u32>, tex_bin: Option<String>) -> Result<Option<SyncPos>, String> {
+    let root = root_of(&app)?;
+    let mode = mode_of(&mode)?.to_string();
+    tauri::async_runtime::spawn_blocking(move || synctex_view(&root, &id, &mode, &file, line, col.unwrap_or(0), &tex_bin)).await.map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn wf(p: &str) -> WrapFile {
         WrapFile { path: p.into(), text: "x".into() }
+    }
+
+    #[test]
+    fn doc_ket_qua_synctex_edit_va_view() {
+        let e = "This is SyncTeX command line utility, version 1.5\nSyncTeX result begin\nOutput:C:/x/last-good.pdf\nInput:C:/x/work/main.tex\nLine:12\nColumn:-1\nOffset:0\nContext:\nSyncTeX result end\n";
+        assert_eq!(parse_edit(e), Some(SyncSrc { file: "C:/x/work/main.tex".into(), line: 12, col: -1 }));
+        assert_eq!(parse_edit("SyncTeX result begin\nSyncTeX result end"), None);
+        assert_eq!(parse_edit("Input:a.tex\nLine:0\n"), None, "dòng 0 không hợp lệ");
+        let v = "SyncTeX result begin\nOutput:x.pdf\nPage:2\nx:133.7\ny:134.8\nh:100.5\nv:142.4\nW:343.7\nH:9.96\nbefore:\noffset:0\nmiddle:\nafter:\nPage:3\nh:1\nv:2\nW:3\nH:4\nSyncTeX result end\n";
+        let p = parse_view(v).unwrap();
+        assert_eq!((p.page, p.x, p.y, p.w, p.h), (2, 100.5, 142.4, 343.7, 9.96), "lấy bản ghi đầu, không trộn với bản ghi sau");
+        assert_eq!(parse_view("SyncTeX result begin\nSyncTeX result end"), None);
     }
 
     #[test]
@@ -1163,7 +1288,7 @@ mod tests {
     // ---- biên dịch thật qua "TeX giả" (tệp .bat) để kiểm thành công/thất bại/hết giờ/huỷ mà không cần TeX Live ----
 
     #[cfg(windows)]
-    const FAKE_TEX: &str = "@echo off\r\nif \"%~1\"==\"--version\" (echo FakeTeX 1.0 & exit /b 0)\r\nif exist hang.flag ping -n 40 127.0.0.1 >nul\r\nif exist fail.flag (\r\n  echo ./%~5:3: Undefined control sequence.>hedu-out.log\r\n  echo l.3 \\foo>>hedu-out.log\r\n  echo PDF-HONG>hedu-out.pdf\r\n  exit /b 1\r\n)\r\nif exist fatal0.flag (\r\n  echo ! Emergency stop.>hedu-out.log\r\n  echo PDF-HONG>hedu-out.pdf\r\n  exit /b 0\r\n)\r\necho Output written on hedu-out.pdf (2 pages, 100 bytes).>hedu-out.log\r\ntype main.tex>hedu-out.pdf\r\nexit /b 0\r\n";
+    const FAKE_TEX: &str = "@echo off\r\nif \"%~1\"==\"--version\" (echo FakeTeX 1.0 & exit /b 0)\r\nif exist hang.flag ping -n 40 127.0.0.1 >nul\r\nif exist fail.flag (\r\n  echo ./%~6:3: Undefined control sequence.>hedu-out.log\r\n  echo l.3 \\foo>>hedu-out.log\r\n  echo PDF-HONG>hedu-out.pdf\r\n  exit /b 1\r\n)\r\nif exist fatal0.flag (\r\n  echo ! Emergency stop.>hedu-out.log\r\n  echo PDF-HONG>hedu-out.pdf\r\n  exit /b 0\r\n)\r\necho Output written on hedu-out.pdf (2 pages, 100 bytes).>hedu-out.log\r\ntype main.tex>hedu-out.pdf\r\nexit /b 0\r\n";
 
     #[cfg(windows)]
     struct Env {

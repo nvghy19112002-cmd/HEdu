@@ -8,6 +8,8 @@ export interface LatexEditorHandle {
   focus(): void;
   /** Chèn NGUYÊN VĂN tại con trỏ (không đổi gì; '|' trong mã TikZ không phải dấu đặt con trỏ). Giữ được Ctrl+Z. */
   insertRaw(text: string): void;
+  /** Đưa con trỏ tới đầu dòng `line` (từ 1) và chọn cả dòng. */
+  selectLine(line: number): void;
 }
 
 interface Props {
@@ -113,6 +115,16 @@ export const LatexEditor = forwardRef<LatexEditorHandle, Props>(function LatexEd
   useImperativeHandle(ref, () => ({
     focus: () => ta.current?.focus(),
     insertRaw(text) { insertText(text); requestAnimationFrame(report); },
+    selectLine(line) {
+      const el = ta.current;
+      if (!el) return;
+      const parts = el.value.split('\n');
+      const n = Math.min(Math.max(1, line), parts.length);
+      const from = parts.slice(0, n - 1).reduce((a, l) => a + l.length + 1, 0);
+      el.focus(); el.setSelectionRange(from, from + parts[n - 1].length);
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
+      el.scrollTop = Math.max(0, (n - 3) * lh);
+    },
     insert(snippet, opts) {
       const el = ta.current;
       if (!el) return;
