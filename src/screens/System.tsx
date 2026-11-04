@@ -227,7 +227,7 @@ export function SystemScreen() {
             </section>
             <section className="panel" aria-label="Sức khoẻ ngân hàng">
               <h2>Sức khoẻ ngân hàng</h2>
-              <span className="sys-hint">Quét mọi câu: lỗi xem trước, đáp án không đọc được, chưa phân loại, chưa kiểm tra… (chỉ đọc, không sửa gì).</span>
+              <span className="sys-hint">Quét mọi câu: lỗi xem trước, đáp án không đọc được, chưa phân loại, chưa kiểm tra… (chỉ đọc, không sửa gì). Cũng có ở mục Sức khoẻ trên thanh bên trái.</span>
               <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'health' })}>Mở bảng sức khoẻ</button></div>
             </section>
             <section className="panel" aria-label="Sao lưu (tóm tắt)">

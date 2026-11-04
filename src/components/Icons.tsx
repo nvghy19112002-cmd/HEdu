@@ -14,6 +14,7 @@ export const IcBackup = ({ size = 22 }: P) => <svg {...base(size)}><path d="M4 7
 export const IcSearch = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>;
 export const IcCopy = ({ size = 18 }: P) => <svg {...base(size)}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>;
 export const IcMore = ({ size = 18 }: P) => <svg {...base(size)}><circle cx="5" cy="12" r="1.4" fill="currentColor" /><circle cx="12" cy="12" r="1.4" fill="currentColor" /><circle cx="19" cy="12" r="1.4" fill="currentColor" /></svg>;
+export const IcHealth = ({ size = 22 }: P) => <svg {...base(size)}><path d="M3 12h4l2.5-6 4 12 2.5-6H21" /></svg>;
 export const IcTrash = ({ size = 18 }: P) => <svg {...base(size)}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>;
 export const IcCheck = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2.25}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>;
 export const IcCheckCircle = ({ size = 22 }: P) => <svg {...base(size)} strokeWidth={2}><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" /></svg>;

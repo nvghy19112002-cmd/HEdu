@@ -5,7 +5,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { ZoomIndicator } from './components/ZoomControl';
 import { startZoom } from './lib/zoom';
 import { FileDialog } from './components/FileDialog';
-import { IcBackup, IcBank, IcEdit, IcExam, IcImport, IcLibrary, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
+import { IcBackup, IcBank, IcEdit, IcExam, IcHealth, IcImport, IcLibrary, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
 import { featureOn, type FeatureKey } from './lib/features';
 import type { BootResult } from './lib/store';
 import { BankScreen } from './screens/Bank';
@@ -37,6 +37,7 @@ const NAV: { s: Screen; label: string; Icon: typeof IcEdit; feature?: FeatureKey
   { s: 'tex', label: 'Xử lí TeX', Icon: IcTex },
   { s: 'curriculum', label: 'Chương trình', Icon: IcTree },
   { s: 'khohinh', label: 'Kho hình', Icon: IcShapes },
+  { s: 'health', label: 'Sức khoẻ', Icon: IcHealth },
   { s: 'trash', label: 'Thùng rác', Icon: IcTrash },
 ];
 
