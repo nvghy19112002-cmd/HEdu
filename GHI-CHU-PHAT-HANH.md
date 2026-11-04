@@ -1,3 +1,27 @@
+## Có gì mới trong beta.58 (kênh beta): Sức khoẻ ngân hàng, Kho hình dùng được trong câu, Thư viện đề hoàn chỉnh hơn
+Gồm PR #230, #231, #232 (so với beta.57). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử (240 test Rust, test giao diện) và chạy thử từng tính năng trên app Tauri với kho thử; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+
+**Ngân hàng và Nhập liệu**
+- **Sức khoẻ ngân hàng** (Cài đặt › Mở bảng sức khoẻ, hoặc Ctrl+K): quét mọi câu (không treo giao diện) và đếm lỗi xem trước, ký tự điều khiển ẩn, đáp án không đọc được, chưa phân loại, Dạng/mức độ chưa xác minh, chưa kiểm tra, chưa có lời giải. Mỗi nhóm có danh sách và nút Sửa. Chỉ đọc, không sửa gì.
+- **Ô sửa câu ở Nhập liệu** chỉ ra **dòng có vấn đề** (tô đỏ/vàng, bấm để chọn dòng trong khung sửa) và có nút **Ghi N bản sửa về ô dán**.
+- Bỏ khung vàng "PDF ĐỀ: HEdu đã biên dịch với ex_test…".
+
+**Kho hình**
+- **Chèn hình từ Kho** vào câu đang soạn và vào bàn nháp Xử lí TeX; **Lưu hình vào Kho** từ câu đang soạn (Kho báo nếu hình đã có).
+- **Quét nền** dịch thử cả kho (ghi Dịch được / Dịch lỗi, dừng và tiếp tục được); **Tìm hình giống nhau** (chỉ khác số liệu, khoảng trắng, chú thích) để giữ một bản; **chọn nhiều hình** (Ctrl/Shift+bấm), chuyển mục hàng loạt, kéo hình vào mục ở cây.
+
+**Thư viện đề**
+- **Kiểm tra trước khi chốt**: tệp chính, PDF, tổng điểm, tỉ lệ mức độ, mã đề/đáp án/lặp câu, câu bị xoá hoặc "Cần sửa". Mục chưa đạt thì phải tự xác nhận mới chốt được.
+- **Hoàn tác** (nút ↶ và Ctrl+Z) cho chuyển đề, đổi tên, gắn sao, đổi trạng thái, thao tác thư mục và Thùng rác. Chỉ nhớ trong phiên làm việc; chốt đề không hoàn tác được.
+- **Nhập nhiều đề từ thư mục** (mỗi tệp .tex hoặc thư mục con là một đề).
+- **Chế độ xem Cột** như Finder; **chọn cột hiện trong bảng** (nhớ theo máy); **ảnh xem trước trang đầu PDF** trong ngăn thông tin.
+
+**Hệ thống**
+- **Sao lưu tự động** (Cài đặt › Sao lưu): mặc định mỗi ngày, chỉ khi dữ liệu có thay đổi, mỗi loại giữ 5 bản gần nhất; có nút **Sao lưu ngay**.
+- **Nút Dừng của Biên dịch thử hàng loạt dừng hẳn tiến trình TeX** (cả tiến trình con), không còn chạy ngầm.
+
+**Còn mở:** lưu đầu tệp (preamble) theo từng câu (cần đổi schema, chờ duyệt riêng); PDF "bị mờ" ở Xử lí TeX và chân trang "Trang 3/??" (cần thêm thông tin của bạn để chẩn đoán).
+
 ## Có gì mới trong beta.57 (kênh beta): sửa lỗi màn Nhập liệu, dịch hình TikZ nhanh gấp đôi
 Gồm PR #228 (so với beta.56). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, đo bằng TeX Live 2026 thật và chạy thử trên app Tauri với kho thử; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
