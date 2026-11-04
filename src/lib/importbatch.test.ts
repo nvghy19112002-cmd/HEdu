@@ -1,4 +1,4 @@
-import { BATCH_MAX, buildRows, defaultBatchName, parseExtraTags, PASTE_SOURCE_NAME, perFile, planLots, tagsFor, type BatchInfo, type ImportSource } from './importbatch';
+import { applyEditsToSource, BATCH_MAX, buildRows, defaultBatchName, parseExtraTags, PASTE_SOURCE_NAME, perFile, planLots, tagsFor, type BatchInfo, type ImportSource } from './importbatch';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 
@@ -46,5 +46,20 @@ console.log('Chia lô tự động');
   ok(JSON.stringify(planLots(fs([0, 5000, 0]), 5000).lots) === '[[0,1,2]]', 'tệp 0 câu không làm tách lô');
 }
 
+console.log('Ghi bản sửa về ô dán');
+{
+  const src = [ex('2D1H1-1', 1), '', 'văn bản ngoài khối', ex(null, 2), ex('2D1H1-1', 3)].join('\n');
+  const rows = buildRows([{ name: '', rel: '', text: src }]);
+  const edits = rows.map((r, i) => ({ line: r.line, oldLatex: r.latex, newLatex: i === 0 ? r.latex.replace('tính', 'rút gọn') : i === 2 ? r.latex.replace('\\end{ex}', '  % thêm dòng\n\\end{ex}') : r.latex })).filter((e, i) => i !== 1);
+  const r = applyEditsToSource(src, edits);
+  ok(r.applied === 2 && r.skipped.length === 0, 'ghi 2 bản sửa (một đổi chữ, một thêm dòng) mà không lệch số dòng của câu kia');
+  const after = buildRows([{ name: '', rel: '', text: r.text }]);
+  ok(after.length === 3 && after[0].latex.includes('rút gọn') && after[2].latex.includes('% thêm dòng') && after[1].latex === rows[1].latex, 'dựng lại từ ô dán mới thấy đúng bản sửa; câu không sửa giữ nguyên');
+  ok(r.text.includes('văn bản ngoài khối'), 'nội dung ngoài khối ex được giữ nguyên');
+  const stale = applyEditsToSource(src.replace('Câu 1', 'Câu 9'), edits);
+  ok(stale.applied === 1 && stale.skipped.length === 1 && stale.skipped[0] === rows[0].line, 'ô dán đã đổi sau khi sửa: câu không còn khớp bị bỏ qua và báo, không ghi bừa');
+  const crlf = applyEditsToSource(src.replace(/\n/g, '\r\n'), edits);
+  ok(crlf.applied === 2 && !crlf.text.includes('\r'), 'ô dán có CRLF vẫn khớp (chuẩn hoá về LF)');
+}
 if (fail) { console.error(`\n${fail} lỗi`); process.exit(1); }
 console.log('\nimportbatch: đạt hết.');

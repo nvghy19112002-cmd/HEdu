@@ -36,7 +36,7 @@ export const examProfiles = (id: string) => invoke<ProfileInfo>('exam_profiles',
 
 /** Nhãn và lời nhắc theo chế độ PDF. */
 export const MODE_NOTE: Record<ExamMode, string> = {
-  de: 'PDF ĐỀ: HEdu đã biên dịch với ex_test ở chế độ không lời giải (bản dẫn xuất trong thư mục build, tệp nguồn không đổi).',
+  de: '', // bản Đề là bản thường dùng nhất: không cần khung nhắc mỗi lần mở
   'de-in': 'PDF ĐỀ in trắng đen (mẫu HyMath, không lời giải).',
   loigiai: 'PDF LỜI GIẢI: có lời giải. KHÔNG phát cho học sinh.',
   'nguyen-van': 'PDF biên dịch nguyên văn: HEdu chưa xác định đây là bản ĐỀ hay bản LỜI GIẢI, nên có thể chứa lời giải. Đừng phát cho học sinh khi chưa xem lại.',
