@@ -1,3 +1,17 @@
+## Có gì mới trong beta.57 (kênh beta): sửa lỗi màn Nhập liệu, dịch hình TikZ nhanh gấp đôi
+Gồm PR #228 (so với beta.56). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, đo bằng TeX Live 2026 thật và chạy thử trên app Tauri với kho thử; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+
+**Sửa lỗi ở màn Nhập liệu**
+- **Câu bạn sửa tại chỗ được kiểm lỗi lại.** Trước đây nhãn Lỗi/Cảnh báo, số đếm, báo cáo và **Duyệt theo lô** vẫn dùng kết quả của bản gốc, nên câu bị sửa thành lỗi vẫn có thể bị đánh "Đã duyệt".
+- **Biên dịch thử gắn với đúng mã đã dịch:** sửa câu sau khi dịch thì nhãn "TeX đạt/lỗi" cũ không còn hiệu lực.
+- **Bỏ tick rồi tick lại một tệp không làm mất công sửa** (bản sửa, quyết định trùng, quyết định ID, gợi ý ID). Nếu nguồn đổi thật thì app báo số bản sửa bị bỏ.
+- **Nút "Mở file .tex"** trên Windows nhận đúng bảng mã (UTF-8, UTF-16, Windows-1258 có xác nhận chữ mẫu) như nút chọn nhiều tệp.
+- **Báo rõ khối `\begin{bt}` / `\begin{vd}` bị bỏ** (số khối, dòng đầu): HEdu chỉ nhập khối `\begin{ex}`.
+
+**Nhanh hơn**
+- **Dịch hình TikZ và "Xem chuẩn" nhanh gấp khoảng 2 lần** (đo: 2,29 giây xuống 1,09 giây mỗi hình mới; hình ra giống hệt từng byte). Phần đầu tệp được nạp sẵn một lần; nếu nạp sẵn hỏng, app tự dịch lại như cũ.
+- **Rà trùng khi sửa câu** chỉ so lại câu vừa sửa thay vì cả lô với cả ngân hàng. Phạm vi rà không đổi: vẫn so với toàn bộ ngân hàng và với các câu khác trong lô.
+
 ## Có gì mới trong beta.56 (kênh beta): Thư viện đề chọn nhiều đề, xuất Excel, thư mục riêng, tìm trong nội dung
 Gồm PR #222, #223, #224, #225, #226 (so với beta.55). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử (238 test Rust, test giao diện) và chạy thử trên app Tauri với kho thử; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
