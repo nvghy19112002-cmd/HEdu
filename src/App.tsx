@@ -38,7 +38,6 @@ const NAV: { s: Screen; label: string; Icon: typeof IcEdit; feature?: FeatureKey
   { s: 'curriculum', label: 'Chương trình', Icon: IcTree },
   { s: 'khohinh', label: 'Kho hình', Icon: IcShapes },
   { s: 'health', label: 'Sức khoẻ', Icon: IcHealth },
-  { s: 'trash', label: 'Thùng rác', Icon: IcTrash },
 ];
 
 export function App({ boot }: { boot: BootResult }) {
@@ -132,12 +131,16 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
       <nav className="rail" aria-label="Điều hướng chính">
         <div className="logo" aria-label="HEdu">√</div>
         {NAV.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, Icon }) => (
-          <button key={s} type="button" className="rb" aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })} aria-label={s === 'trash' && trashN > 0 ? `Thùng rác, ${trashN} câu` : undefined}>
-            <span className="rb-ico"><Icon />{s === 'trash' && trashN > 0 && <span className="rb-count" aria-hidden="true">{trashN > 999 ? '999+' : trashN}</span>}</span>
+          <button key={s} type="button" className="rb" aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
+            <span className="rb-ico"><Icon /></span>
             <span>{label}</span>
           </button>
         ))}
         <div className="rail-spacer" />
+        <button type="button" className="rb" aria-current={screen === 'trash' ? 'page' : undefined} onClick={() => go({ screen: 'trash' })} aria-label={trashN > 0 ? `Thùng rác, ${trashN} câu` : undefined}>
+          <span className="rb-ico"><IcTrash />{trashN > 0 && <span className="rb-count" aria-hidden="true">{trashN > 999 ? '999+' : trashN}</span>}</span>
+          <span>Thùng rác</span>
+        </button>
         <button type="button" className="rb" aria-current={screen === 'system' ? 'page' : undefined} onClick={() => go({ screen: 'system' })}>
           <span className="rb-ico"><IcBackup />{available && <span className="dot" role="img" aria-label={`Có bản mới v${available.version}`} />}</span>
           <span>Cài đặt</span>
