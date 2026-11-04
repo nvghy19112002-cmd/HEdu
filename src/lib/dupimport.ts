@@ -41,42 +41,68 @@ export interface AnalyzeResult { rows: (DraftAnalysis | undefined)[]; complete: 
  * Phân tích cả lô bằng phép nối ĐẦY ĐỦ (dupjoin.ts): mọi câu mới được so với MỌI câu trong kho và trong lô có thể trùng —
  * không giới hạn ứng viên. Chưa xong (huỷ giữa chừng) ⇒ complete=false và các dòng chưa xử lý là undefined — KHÔNG được coi là "không trùng".
  */
+/**
+ * Kết quả lần rà gần nhất, để lần sau (giáo viên sửa vài câu trong lô) chỉ so lại các câu ĐÃ ĐỔI thay vì cả lô × cả kho.
+ * Chỉ dùng lại khi cùng kho (cùng mảng), cùng chỉ mục, cùng danh sách id nháp; khác thì rà lại từ đầu.
+ */
+interface Memo { bank: readonly QLike[]; idx: DupIndex; ids: string[]; latex: string[]; fps: Fingerprint[]; hits: DraftHit[][]; trimmed: boolean[] }
+let memo: Memo | null = null;
+
 export async function analyzeDrafts(drafts: DraftIn[], bank: QLike[], opt: AnalyzeOptions = {}): Promise<AnalyzeResult> {
   const idx = opt.index ?? getSharedIndex();
   const rows: (DraftAnalysis | undefined)[] = new Array(drafts.length).fill(undefined);
   if (!(await idx.sync(bank, { signal: opt.signal, onProgress: (d, t) => opt.onProgress?.(d, t, 'bank') }))) return { rows, complete: false };
 
-  // phía B = kho + lô; phía A = lô. Bản nháp KHÔNG được đưa vào chỉ mục dùng chung.
+  // phía B = kho + lô; phía A = lô (hoặc chỉ các câu vừa đổi khi dùng lại lần rà trước). Bản nháp KHÔNG được đưa vào chỉ mục dùng chung.
   const nb = bank.length, n = nb + drafts.length;
+  const m = memo;
+  let reuse = !!m && m.bank === bank && m.idx === idx && m.ids.length === drafts.length && drafts.every((d, i) => d.id === m.ids[i]);
+  const changed = drafts.map((d, i) => !reuse || d.latex !== m!.latex[i]);
+  const changedIds = new Set(drafts.filter((_, i) => changed[i]).map((d) => d.id));
+  // danh sách cũ đã bị cắt bớt mà nay mất phần tử (do câu đổi) thì không còn chắc đủ: rà lại từ đầu
+  let start: DraftHit[][] = [];
+  if (reuse) {
+    start = m!.hits.map((l, i) => (changed[i] ? [] : l.filter((h) => !(h.with === 'batch' && changedIds.has(h.other)))));
+    if (start.some((l, i) => !changed[i] && m!.trimmed[i] && l.length < m!.hits[i].length)) reuse = false;
+  }
+  if (!reuse) { start = drafts.map(() => []); changed.fill(true); }
+
   const fps: Fingerprint[] = bank.map((q) => idx.get(q.uid)!);
   const sl = new Slicer(opt.signal);
   for (let i = 0; i < drafts.length; i++) {
-    fps.push(fingerprint(drafts[i].latex));
+    fps.push(changed[i] ? fingerprint(drafts[i].latex) : m!.fps[i]);
     if ((i & 63) === 0 && !(await sl.step())) return { rows, complete: false };
   }
-  const inA = new Uint8Array(n).fill(1, nb);
+  const inA = new Uint8Array(n);
+  for (let i = 0; i < drafts.length; i++) if (changed[i]) inA[nb + i] = 1;
   const SCALE = 1000;
-  const cand = await candidatePairs(fps, inA, { signal: opt.signal, onProgress: (f) => opt.onProgress?.(Math.round(f * SCALE * 0.8), SCALE, 'draft') });
-  if (!cand) return { rows, complete: false };
-
-  const hits: DraftHit[][] = drafts.map(() => []);
-  const add = (d: number, h: DraftHit) => { const l = hits[d]; l.push(h); if (l.length >= 4 * MAX_HITS) { l.sort(cmp); l.length = MAX_HITS; } };
-  for (let k = 0; k < cand.length; k++) {
-    if ((k & 1023) === 0) { opt.onProgress?.(Math.round(SCALE * (0.8 + (0.2 * k) / cand.length)), SCALE, 'draft'); if (!(await sl.step())) return { rows, complete: false }; }
-    const i = Math.floor(cand[k] / n), j = cand[k] - i * n; // i < j, j luôn là bản nháp
-    const r = comparePair(fps[i], fps[j]);
-    if (!KEEP.includes(r.kind)) continue;
-    const dj = j - nb;
-    if (i < nb) add(dj, { with: 'bank', other: bank[i].uid, kind: r.kind, result: r });
-    else { const di = i - nb; add(di, { with: 'batch', other: drafts[dj].id, kind: r.kind, result: r }); add(dj, { with: 'batch', other: drafts[di].id, kind: r.kind, result: r }); }
+  const hits: DraftHit[][] = start;
+  const trimmed: boolean[] = reuse ? m!.trimmed.map((t, i) => !changed[i] && t) : drafts.map(() => false);
+  if (inA.includes(1)) {
+    const cand = await candidatePairs(fps, inA, { signal: opt.signal, onProgress: (f) => opt.onProgress?.(Math.round(f * SCALE * 0.8), SCALE, 'draft') });
+    if (!cand) return { rows, complete: false };
+    const add = (d: number, h: DraftHit) => { const l = hits[d]; l.push(h); if (l.length >= 4 * MAX_HITS) { l.sort(cmp); l.length = MAX_HITS; trimmed[d] = true; } };
+    for (let k = 0; k < cand.length; k++) {
+      if ((k & 1023) === 0) { opt.onProgress?.(Math.round(SCALE * (0.8 + (0.2 * k) / cand.length)), SCALE, 'draft'); if (!(await sl.step())) return { rows, complete: false }; }
+      const i = Math.floor(cand[k] / n), j = cand[k] - i * n; // i < j, j luôn là bản nháp
+      const r = comparePair(fps[i], fps[j]);
+      if (!KEEP.includes(r.kind)) continue;
+      const dj = j - nb;
+      if (i < nb) add(dj, { with: 'bank', other: bank[i].uid, kind: r.kind, result: r });
+      else { const di = i - nb; add(di, { with: 'batch', other: drafts[dj].id, kind: r.kind, result: r }); add(dj, { with: 'batch', other: drafts[di].id, kind: r.kind, result: r }); }
+    }
   }
   drafts.forEach((d, i) => {
     const h = hits[i].sort(cmp);
     rows[i] = { id: d.id, hits: h.slice(0, MAX_HITS), worst: h[0]?.kind ?? null, unreadable: !fps[nb + i].complete };
   });
+  memo = { bank, idx, ids: drafts.map((d) => d.id), latex: drafts.map((d) => d.latex), fps: fps.slice(nb), hits, trimmed };
   opt.onProgress?.(SCALE, SCALE, 'draft');
   return { rows, complete: true };
 }
+
+/** Bỏ kết quả rà đã nhớ (dùng trong test). */
+export const resetAnalyzeMemo = () => { memo = null; };
 
 /**
  * Quyết định mặc định cho từng câu (giáo viên đổi được):

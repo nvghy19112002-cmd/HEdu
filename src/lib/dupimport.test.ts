@@ -1,4 +1,4 @@
-import { analyzeDrafts, bankHitSignature, defaultDecisions, hitsForTrust, summarize, type DraftIn } from './dupimport';
+import { analyzeDrafts, resetAnalyzeMemo, bankHitSignature, defaultDecisions, hitsForTrust, summarize, type DraftIn } from './dupimport';
 import { DupIndex, type QLike } from './dupindex';
 
 let failed = 0;
@@ -124,6 +124,35 @@ const bank = (...l: string[]): QLike[] => l.map((latex, i) => ({ uid: 'b' + i, l
     ok(hitsForTrust(r.rows[1]!, 1, ord)!.some((h) => h.kind === 'same'), 'bản sau: vẫn là trùng chắc');
     const bk = await analyzeDrafts(dr, bank(E(S1)), { index: idx() });
     ok(hitsForTrust(bk.rows[0]!, 0, ord)!.some((h) => h.with === 'bank'), 'trùng với KHO thì bản đầu vẫn bị chặn');
+  }
+  console.log('Rà soát nhập: sửa vài câu ⇒ chỉ so lại câu đã đổi, kết quả y như rà lại từ đầu');
+  {
+    const S4 = 'Tìm giá trị lớn nhất của hàm số $y=-x^2+4x$ trên đoạn $[0;3]$ và giá trị nhỏ nhất tương ứng.';
+    const bk = bank(E(S1), E(S2), E(S3), E(S4));
+    const ix = idx();
+    const base = D(E(S1), E(S2 + ' '), E('Câu hoàn toàn mới về hình học không gian có $3$ mặt phẳng cắt nhau.'), E(S1, '\\choice{$1$}{\\True $2$}{$3$}{$4$}'), E(S3));
+    const strip = (r: Awaited<ReturnType<typeof analyzeDrafts>>) => JSON.stringify(r.rows);
+    resetAnalyzeMemo();
+    await analyzeDrafts(base, bk, { index: ix });
+    const steps: DraftIn[][] = [
+      base.map((d, i) => (i === 0 ? { ...d, latex: E(S4) } : d)),                        // đổi câu thành trùng câu khác trong kho
+      base.map((d, i) => (i === 2 ? { ...d, latex: E(S1) } : i === 0 ? { ...d, latex: E(S4) } : d)), // thêm câu trùng câu khác trong lô
+      base.map((d, i) => (i === 2 ? { ...d, latex: E(S1) } : d)),                         // sửa ngược
+      base,                                                                               // về như ban đầu
+    ];
+    let same = true;
+    for (const st of steps) {
+      const inc = await analyzeDrafts(st, bk, { index: ix });
+      resetAnalyzeMemo();
+      const full = await analyzeDrafts(st, bk, { index: new DupIndex() });
+      if (strip(inc) !== strip(full)) same = false;
+      await analyzeDrafts(st, bk, { index: ix }); // đưa bộ nhớ về đúng bước này cho bước sau
+    }
+    ok(same, 'mọi bước sửa: kết quả rà tăng dần trùng khít rà lại từ đầu');
+    const other = bank(E(S1));
+    const r = await analyzeDrafts(base, other, { index: ix });
+    resetAnalyzeMemo();
+    ok(strip(r) === strip(await analyzeDrafts(base, other, { index: new DupIndex() })), 'kho đổi ⇒ rà lại từ đầu (không dùng kết quả cũ)');
   }
   if (failed) { console.log(`\n${failed} kiểm thử dupimport lỗi`); process.exit(1); }
   console.log('dupimport: đạt hết.');

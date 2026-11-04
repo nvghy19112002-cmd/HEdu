@@ -64,5 +64,13 @@ console.log('Lấy đủ khối và giữ nguyên ID');
   const pre = normalizeEx(`%[2D1H1-1]\n${ex(1)}`);
   ok(pre.blocks.length === 1 && pre.issues.some((i) => /NGOÀI khối/.test(i.message)), 'ID đặt trước \\begin{ex}: báo (app không đọc ID này)');
 }
+{
+  const r = normalizeEx(`${ex(1)}\n\\begin{bt}\n  Giải phương trình.\n\\end{bt}\n%\\begin{bt} bị comment\n\\begin{bt}x\\end{bt}\n\\begin{vd}y\\end{vd}`);
+  const bt = r.issues.find((i) => i.kind === 'moi-truong-khac' && i.message.includes('{bt}'));
+  const vd = r.issues.find((i) => i.kind === 'moi-truong-khac' && i.message.includes('{vd}'));
+  ok(r.blocks.length === 1 && !!bt && /Có 2 khối/.test(bt.message) && bt.line === 5, 'khối \\begin{bt} bị bỏ: báo rõ số khối (không đếm khối bị comment) và dòng đầu');
+  ok(!!vd && /Có 1 khối/.test(vd.message), 'khối \\begin{vd} bị bỏ: báo rõ');
+  ok(!normalizeEx(ex(1)).issues.some((i) => i.kind === 'moi-truong-khac'), 'tệp chỉ có ex: không báo');
+}
 if (fail) { console.log(`\n${fail} thất bại`); process.exit(1); }
 console.log('\nOK');

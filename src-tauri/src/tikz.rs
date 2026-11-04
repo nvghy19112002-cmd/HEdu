@@ -244,16 +244,30 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
 
     let limit = Duration::from_secs(opts.timeout_secs.unwrap_or(40).clamp(5, 180));
 
-    let mut c = Command::new(prog(&opts.tex_bin, tex_prog));
-    c.current_dir(&work)
-        .arg("-interaction=nonstopmode")
-        .arg("-halt-on-error")
-        .arg("-no-shell-escape")
-        .arg("hinh.tex");
-    support::apply(&mut c, support_dir);
-    hide_console(&mut c);
+    let run_tex = |fmt: Option<&Path>| {
+        let mut c = Command::new(prog(&opts.tex_bin, tex_prog));
+        c.current_dir(&work);
+        if let Some(f) = fmt {
+            c.arg(format!("-fmt={}", f.with_extension("").to_string_lossy().replace('\\', "/")));
+        }
+        c.arg("-interaction=nonstopmode").arg("-halt-on-error").arg("-no-shell-escape").arg("hinh.tex");
+        support::apply(&mut c, support_dir);
+        hide_console(&mut c);
+        run_capture(&mut c, limit)
+    };
+    // Đường DVI (mặc định): phần đầu tệp được nạp sẵn thành định dạng (.fmt) nên mỗi hình chỉ còn dịch phần thân (~3 lần nhanh hơn).
+    // Định dạng hỏng/không khớp bản TeX ⇒ bỏ định dạng đó và dịch lại như cũ: kết quả không bao giờ phụ thuộc vào việc có định dạng hay không.
+    let fmt = if via_dvi { format_for(cache_dir, support_dir, &head, opts, limit) } else { None };
+    let mut res = run_tex(fmt.as_deref());
+    if let (Some(f), Ok(r)) = (&fmt, &res) {
+        if !r.timed_out && (!r.success || !work.join("hinh.dvi").exists()) {
+            let _ = fs::remove_file(f);
+            let _ = fs::write(f.with_extension("fail"), b"");
+            res = run_tex(None);
+        }
+    }
 
-    let res = match run_capture(&mut c, limit) {
+    let res = match res {
         Ok(v) => v,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             let _ = fs::remove_dir_all(&work);
@@ -338,6 +352,57 @@ pub fn render(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, defs:
         let _ = prune_cache(cache_dir, CACHE_MAX_BYTES, CACHE_MAX_FILES);
     }
     Ok(TikzOut { svg, cached: false, ms: started.elapsed().as_millis() as u64 })
+}
+
+/// Định dạng dựng sẵn (.fmt) cho phần đầu tệp `head` của đường DVI, nằm ở `<cache>/fmt/<khoá>.fmt`.
+/// Khoá gồm phần đầu tệp, phiên bản gói nhúng và bộ dịch đang dùng. Dựng một lần (khoá loại trừ để không dựng trùng);
+/// dựng hỏng thì ghi dấu `.fail` để không thử lại mãi. Giữ tối đa 3 định dạng (mỗi cái ~10 MB). Không có mylatexformat ⇒ None.
+fn format_for(cache_dir: &Path, support_dir: &Option<PathBuf>, head: &str, opts: &TikzOpts, limit: Duration) -> Option<PathBuf> {
+    static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let dir = cache_dir.join("fmt");
+    let key = hash64(&[head, &support::rev(), opts.tex_bin.as_deref().unwrap_or(""), "fmt-v1"]);
+    let fmt = dir.join(format!("{key}.fmt"));
+    if fmt.exists() {
+        touch(&fmt);
+        return Some(fmt);
+    }
+    if fmt.with_extension("fail").exists() {
+        return None;
+    }
+    let _g = BUILD.lock().ok()?;
+    if fmt.exists() {
+        return Some(fmt);
+    }
+    fs::create_dir_all(&dir).ok()?;
+    let work = dir.join(format!("tmp-{key}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&work);
+    fs::create_dir_all(&work).ok()?;
+    let ok = (|| {
+        fs::write(work.join("pre.tex"), format!("{head}\n\\begin{{document}}\n\\end{{document}}\n")).ok()?;
+        let mut c = Command::new(prog(&opts.tex_bin, "latex"));
+        c.current_dir(&work).args(["-ini", "-interaction=nonstopmode", "-halt-on-error", "-no-shell-escape", "-jobname=pre", "&latex", "mylatexformat.ltx", "pre.tex"]);
+        support::apply(&mut c, support_dir);
+        hide_console(&mut c);
+        let r = run_capture(&mut c, limit).ok()?;
+        let built = work.join("pre.fmt");
+        (r.success && !r.timed_out && built.exists()).then_some(())?;
+        fs::rename(&built, &fmt).ok()
+    })()
+    .is_some();
+    let _ = fs::remove_dir_all(&work);
+    if !ok {
+        let _ = fs::write(fmt.with_extension("fail"), b"");
+        return None;
+    }
+    // chỉ giữ 3 định dạng dùng gần nhất
+    if let Ok(rd) = fs::read_dir(&dir) {
+        let mut fs_: Vec<(SystemTime, PathBuf)> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().map(|x| x == "fmt").unwrap_or(false)).map(|p| (fs::metadata(&p).and_then(|m| m.modified()).unwrap_or(UNIX_EPOCH), p)).collect();
+        fs_.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, p) in fs_.into_iter().skip(3) {
+            let _ = fs::remove_file(p);
+        }
+    }
+    Some(fmt)
 }
 
 /// Trần bộ nhớ đệm hình: vượt thì xoá các hình lâu không dùng nhất cho tới khi còn ~80% trần.
@@ -449,6 +514,42 @@ pub(crate) fn hide_console(_c: &mut Command) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Chạy tay với TeX Live thật: HEDU_TEX_BIN=<thư mục bin> HEDU_SUPPORT=<thư mục gói nhúng> cargo test --lib fmt_dung_san -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn fmt_dung_san_nhanh_va_giong_het_cach_cu() {
+        let bin = std::env::var("HEDU_TEX_BIN").expect("HEDU_TEX_BIN");
+        let sup = std::env::var("HEDU_SUPPORT").ok().map(PathBuf::from);
+        let d = std::env::temp_dir().join(format!("hedu-tikz-fmt-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let opts = TikzOpts { tex_bin: Some(bin), ..Default::default() };
+        let fig = |i: u32| format!("\\begin{{tikzpicture}}\\draw[->](0,0)--({i},1) node[right]{{$y=x^{i}$}};\\end{{tikzpicture}}");
+        // lần đầu: dựng định dạng
+        let t = Instant::now();
+        let a = render(&d, &sup, &fig(1), "", &opts).map_err(|e| e.message).unwrap();
+        println!("lần đầu (kèm dựng định dạng): {:?}", t.elapsed());
+        assert!(d.join("fmt").read_dir().unwrap().flatten().any(|e| e.path().extension().map(|x| x == "fmt").unwrap_or(false)), "phải có .fmt");
+        let t = Instant::now();
+        let b = render(&d, &sup, &fig(2), "", &opts).map_err(|e| e.message).unwrap();
+        let fast = t.elapsed();
+        println!("hình mới có định dạng: {fast:?}");
+        // so với cách cũ: xoá định dạng, đánh dấu hỏng để không dựng lại, dịch đúng hình 2 ở bộ đệm khác
+        let d2 = d.join("cu");
+        fs::create_dir_all(d2.join("fmt")).unwrap();
+        let key = hash64(&[&format!("\\def\\pgfsysdriver{{pgfsys-dvisvgm.def}}\n{}", expanded_or_default(&opts)), &support::rev(), opts.tex_bin.as_deref().unwrap_or(""), "fmt-v1"]);
+        fs::write(d2.join("fmt").join(format!("{key}.fail")), b"").unwrap();
+        let t = Instant::now();
+        let c = render(&d2, &sup, &fig(2), "", &opts).map_err(|e| e.message).unwrap();
+        println!("hình mới cách cũ: {:?}", t.elapsed());
+        assert_eq!(b.svg, c.svg, "SVG phải giống hệt cách cũ");
+        assert!(!a.cached && !b.cached && !c.cached);
+        let _ = fs::remove_dir_all(&d);
+    }
+    fn expanded_or_default(o: &TikzOpts) -> String {
+        o.preamble.clone().unwrap_or_else(|| DEFAULT_PREAMBLE.to_string())
+    }
 
     #[test]
     fn don_bo_nho_dem_bo_hinh_cu_nhat_va_giu_hinh_moi() {
