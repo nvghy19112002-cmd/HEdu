@@ -145,7 +145,29 @@ export function ImportScreen() {
   const [confirm, setConfirm] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [bulkAsk, setBulkAsk] = useState(false);
-  useEffect(() => { setEdits({}); setUserDec({}); setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false); setIdPicks(null); setIdDecs({}); setOnlyIdBD(false); }, [batchKey]);
+  // Đổi lô: chỉ bỏ/tick tệp (cùng các tệp đã đọc) ⇒ GIỮ bản sửa, quyết định trùng, quyết định ID, gợi ý ID, kết quả biên dịch thử
+  // bằng cách chuyển theo khoá ổn định "tệp:dòng"; nguồn đổi thật (dán khác, đọc tệp khác) ⇒ làm lại từ đầu và báo số bản sửa bị bỏ.
+  const prevBatch = useRef<{ srcs: typeof srcs; keys: string[] } | null>(null);
+  const editsN = useRef(0);
+  editsN.current = Object.keys(edits).length;
+  useEffect(() => {
+    const keys = rows.map((r) => `${r.srcIdx}:${r.line}`);
+    const prev = prevBatch.current;
+    prevBatch.current = { srcs, keys };
+    setCmpKey(null); setEditRow(null); setConfirm(false); setSaveErr(null); setBulkAsk(false);
+    if (prev && multi && prev.srcs === srcs && keys.length) {
+      const at = new Map(keys.map((k, i) => [k, i] as const));
+      const to = (i: number) => at.get(prev.keys[i]);
+      const move = <T,>(m: Record<number, T>): Record<number, T> => { const n: Record<number, T> = {}; for (const [k, v] of Object.entries(m)) { const j = to(+k); if (j !== undefined) n[j] = v; } return n; };
+      setEdits(move); setIdDecs(move); setTex(move);
+      setUserDec((u) => { const n: Record<string, Decision> = {}; for (const [k, v] of Object.entries(u)) { const j = to(+k.slice(1)); if (j !== undefined) n[`d${j}`] = v; } return n; });
+      setIdPicks((m) => (m ? new Map([...m].flatMap(([i, v]) => { const j = to(i); return j === undefined ? [] : [[j, v] as const]; })) : m));
+      setVerifs((m) => new Map([...m].flatMap(([i, v]) => { const j = to(i); return j === undefined ? [] : [[j, v] as const]; })));
+      return;
+    }
+    if (editsN.current) toast(`Nguồn nhập đã đổi nên ${editsN.current} bản sửa tại chỗ đã được bỏ.`);
+    setEdits({}); setUserDec({}); setIdPicks(null); setIdDecs({}); setOnlyIdBD(false); setTex({});
+  }, [batchKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // Gán ID tự động cho câu không có %[ID] hợp lệ (chỉ metadata bản nháp; đổi lớp đích ⇒ gợi ý cũ bỏ)
   const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
   /** câu mà AI không đủ căn cứ chọn Dạng: cần giáo viên chọn, nếu không sẽ vào vị trí chung (phải xác nhận trước khi nhập) */
@@ -220,7 +242,7 @@ export function ImportScreen() {
   }, [rows, ana]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kiểm tra lỗi xem trước theo từng đợt 15 câu, nhường chỗ cho giao diện giữa các đợt.
-  const [issues, setIssues] = useState<(Issue[] | undefined)[]>([]);
+  const [baseIssues, setIssues] = useState<(Issue[] | undefined)[]>([]);
   useEffect(() => {
     setIssues(new Array(rows.length));
     if (!rows.length) return;
@@ -238,6 +260,17 @@ export function ImportScreen() {
     return () => { stop = true; clearTimeout(t); };
   }, [rows]);
 
+  // câu đã sửa tại chỗ: kiểm lại theo bản sửa (kết quả của bản gốc không còn đúng)
+  // nhớ theo đúng mã đã kiểm: gõ sửa một câu không làm kiểm lại mọi câu đã sửa khác
+  const checkMemo = useRef(new Map<string, Issue[]>());
+  const checkOnce = (lx: string, line: number): Issue[] => {
+    const k = `${line}|${lx}`;
+    let v = checkMemo.current.get(k);
+    if (!v) { v = checkQuestion(parseExTest(lx), lx, line); if (checkMemo.current.size > 500) checkMemo.current.clear(); checkMemo.current.set(k, v); }
+    return v;
+  };
+  const editIssues = useMemo(() => new Map(Object.entries(edits).map(([k, lx]) => [+k, checkOnce(lx, (rows[+k]?.line ?? 1) - 1)] as const)), [edits, rows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const issues = useMemo(() => (editIssues.size ? baseIssues.map((x, i) => editIssues.get(i) ?? x) : baseIssues), [baseIssues, editIssues]);
   const done = issues.filter(Boolean).length;
   const checking = rows.length > 0 && done < rows.length;
   const worstOf = (i: number) => (issues[i] ? worstLevel(issues[i]!) : null);
@@ -249,28 +282,32 @@ export function ImportScreen() {
   const [pkgFilter, setPkgFilter] = useState<{ rows: number[]; key: string } | null>(null);
   const [limit, setLimit] = useState(200);
   // Biên dịch thử bằng TeX Live (Xem chuẩn hàng loạt)
-  type Tex = { ok: true; ms: number; cached: boolean } | { ok: false; fail: Failure };
+  type Tex = ({ ok: true; ms: number; cached: boolean } | { ok: false; fail: Failure }) & { src: string };
   const [tex, setTex] = useState<Record<number, Tex>>({});
   const [texRun, setTexRun] = useState(false);
   const [texSol, setTexSol] = useState(true);
   const [texOnlyBad, setTexOnlyBad] = useState(false);
   const [exactRow, setExactRow] = useState<number | null>(null);
   const stopRef = useRef({ stop: false });
-  useEffect(() => { stopRef.current.stop = true; setTex({}); setTexRun(false); setExactRow(null); }, [batchKey]);
+  useEffect(() => { stopRef.current.stop = true; setTexRun(false); setExactRow(null); }, [batchKey]);
+  /** kết quả biên dịch thử còn hiệu lực: đúng mã đang nhập (câu sửa sau khi dịch ⇒ chưa dịch) */
+  const texOf = (i: number): Tex | undefined => { const t = tex[i]; return t && t.src === latexOf(i) ? t : undefined; };
   const startTex = async () => {
     const sig = { stop: false };
     stopRef.current = sig;
     setTex({});
     setTexRun(true);
-    await compileBatch(rows.map((r) => r.latex), texSol, {
+    const lx = rows.map((_, i) => latexOf(i));
+    await compileBatch(lx, texSol, {
       signal: sig,
-      onEach: (i, r) => { if (!sig.stop) setTex((cur) => ({ ...cur, [i]: r.ok ? { ok: true, ms: r.ms, cached: r.cached } : { ok: false, fail: r.fail } })); },
+      onEach: (i, r) => { if (!sig.stop) setTex((cur) => ({ ...cur, [i]: r.ok ? { ok: true, ms: r.ms, cached: r.cached, src: lx[i] } : { ok: false, fail: r.fail, src: lx[i] } })); },
     });
     if (stopRef.current === sig) setTexRun(false);
   };
   const stopTex = () => { stopRef.current.stop = true; setTexRun(false); };
-  const texDone = Object.keys(tex).length;
-  const texFail = Object.values(tex).filter((x) => !x.ok) as { ok: false; fail: Failure }[];
+  const texLive = rows.map((_, i) => texOf(i)).filter((x): x is Tex => !!x);
+  const texDone = texLive.length;
+  const texFail = texLive.filter((x) => !x.ok) as { ok: false; fail: Failure }[];
   const texByCat = texFail.reduce<Partial<Record<Category, number>>>((a, x) => ({ ...a, [x.fail.category]: (a[x.fail.category] ?? 0) + 1 }), {});
   const blocks = useMemo(() => rows.map((r) => r.latex), [rows]);
   useEffect(() => { setPkgFilter(null); setLimit(200); setFileF('all'); }, [batchKey]);
@@ -289,7 +326,7 @@ export function ImportScreen() {
     .filter(({ r }) => fileF === 'all' || r.srcIdx === fileF)
     .filter(({ i }) => !onlyIdBD || verifOf(i)?.verdict === 'bat-dong')
     .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i))
-    .filter(({ i }) => !texOnlyBad || tex[i]?.ok === false)
+    .filter(({ i }) => !texOnlyBad || texOf(i)?.ok === false)
     .filter(({ i }) => statusF === 'all' || (statusF === 'hold' ? decOf(i) === 'hold' : statusOf(i).key === statusF));
 
 
@@ -386,7 +423,7 @@ export function ImportScreen() {
       return {
         file: r.file, rel: r.rel, line: r.line, decision: dec === 'import' ? 'import' : ['sure', 'near', 'conflict'].includes(key) ? 'skip-dup' : 'skip-user',
         reason: dec === 'import' ? (key === 'new' ? 'Mới' : ['sure', 'near', 'conflict'].includes(key) ? statusOf(i).label + ' (bạn giữ lại)' : statusOf(i).label) : statusOf(i).label,
-        idState: st, idPlace: place, preview: w === 'loi' || w === 'canh' ? w : '', tex: tex[i] ? (tex[i].ok ? 'ok' : 'loi') : '', uid: q?.uid, seq: q?.seq,
+        idState: st, idPlace: place, preview: w === 'loi' || w === 'canh' ? w : '', tex: texOf(i) ? (texOf(i)!.ok ? 'ok' : 'loi') : '', uid: q?.uid, seq: q?.seq,
       };
     });
     const rep = buildReport({ at: Date.now(), name: info.name, batchTag: info.tagBatch && info.name.trim() ? `Lô: ${info.name}` : undefined, paste: !multi, restorePoint, rows: rr, warnings: readFailed.map((f) => `Không đọc được tệp ${f.rel ? f.rel + '/' : ''}${f.name}: ${f.message}`) });
@@ -497,7 +534,7 @@ export function ImportScreen() {
             {isDesktop() && <button type="button" className="btn btn-sm btn-accent" disabled={!!loadProg} onClick={() => { void chooseFiles().then(loadPaths); }}>Chọn nhiều tệp…</button>}
             {isDesktop() && <button type="button" className="btn btn-sm btn-accent" disabled={!!loadProg} onClick={() => { void chooseFolder().then((d) => (d ? loadPaths([d]) : undefined)); }}>Chọn thư mục…</button>}
             {multi && <button type="button" className="btn btn-sm btn-danger-soft" disabled={!!loadProg} onClick={clearAll}>Bỏ các tệp, quay lại dán trực tiếp</button>}
-            <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}>Mở file .tex</button>
+            <button type="button" className="btn btn-sm" disabled={!!loadProg} onClick={() => { if (isDesktop()) void chooseFiles().then(loadPaths); else file.current?.click(); }}>Mở file .tex</button>
             <button type="button" className="btn btn-sm" onClick={() => toast('Nhập từ Word (.docx có Equation) sẽ có ở bản cài trên Windows.')}>Mở file Word</button>
             <input ref={file} type="file" accept=".tex,.txt" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setSrc(await readFile(f)); e.target.value = ''; }} />
           </div>
@@ -643,7 +680,7 @@ export function ImportScreen() {
             <div className="chk-sum">
               {checking && <span className="chk-pill">Đang kiểm tra {done}/{rows.length}…</span>}
               {!checking && <span className={`chk-pill${nErr ? ' bad' : ' ok'}`}>{nErr ? `${nErr} câu lỗi xem trước` : 'Không câu nào lỗi xem trước'}</span>}
-              {!checking && nErr > 0 && (() => { const soft = issues.filter((x, k) => x && worstLevel(x) === 'loi' && tex[k]?.ok === true).length; return soft > 0 ? <span className="chk-pill ok" title="Biên dịch thử bằng TeX Live đã dịch được các câu này; chỉ bản xem trước nhanh chưa dựng được.">{soft} câu trong số đó TeX Live vẫn dịch được</span> : null; })()}
+              {!checking && nErr > 0 && (() => { const soft = issues.filter((x, k) => x && worstLevel(x) === 'loi' && texOf(k)?.ok === true).length; return soft > 0 ? <span className="chk-pill ok" title="Biên dịch thử bằng TeX Live đã dịch được các câu này; chỉ bản xem trước nhanh chưa dựng được.">{soft} câu trong số đó TeX Live vẫn dịch được</span> : null; })()}
               {nWarn > 0 && <span className="chk-pill warn">{nWarn} câu cần xem lại</span>}
               {nFig > 0 && <span className="chk-pill">{nFig} câu có hình TikZ</span>}
               {(nErr > 0 || nWarn > 0) && (
@@ -726,7 +763,7 @@ export function ImportScreen() {
             )}
             <ol className="chk-list">
               {shownRows.slice(0, limit).map(({ r, i }) => (
-                <li key={i} className={`chk-row l-${(worstOf(i) === 'loi' && tex[i]?.ok === true ? 'canh' : worstOf(i)) ?? 'sach'} dec-${decOf(i)}`}>
+                <li key={i} className={`chk-row l-${(worstOf(i) === 'loi' && texOf(i)?.ok === true ? 'canh' : worstOf(i)) ?? 'sach'} dec-${decOf(i)}`}>
                   <div className="chk-line">
                   <button type="button" className="chk-head" aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
                     <span className="chk-n" title={`Bắt đầu ở dòng ${r.line} của ${multi ? `tệp ${r.file}` : 'file'}`}>{i + 1}</span>{multi && <span className="chk-tag tin" title={r.rel ? `${r.rel}/${r.file}` : r.file}>{r.file}</span>}
@@ -736,10 +773,10 @@ export function ImportScreen() {
                     <span className="chk-stem">{r.p.stem.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '[hình]').replace(/\s+/g, ' ').slice(0, 70)}</span>
                     {anaDone && statusOf(i).key !== 'new' && <span className={`chk-tag dup d-${statusOf(i).key}`}>{statusOf(i).label}{(ana!.rows[i]?.hits.length ?? 0) > 0 ? ` · ${ana!.rows[i]!.hits.length}` : ''}</span>}
                     {edits[i] != null && <span className="chk-tag tin">đã sửa tại chỗ</span>}
-                    {tex[i] && <span className={`chk-tag ${tex[i].ok ? 'tin' : 'loi'}`}>{tex[i].ok ? 'TeX đạt' : `TeX: ${(tex[i] as { fail: Failure }).fail.label}`}</span>}
+                    {texOf(i) && <span className={`chk-tag ${texOf(i)!.ok ? 'tin' : 'loi'}`}>{texOf(i)!.ok ? 'TeX đạt' : `TeX: ${(texOf(i) as { fail: Failure }).fail.label}`}</span>}
                     {worstOf(i) && (() => {
                       // xem trước báo lỗi nhưng TeX Live đã biên dịch được: chỉ bản xem trước nhanh của HEdu chưa dựng được ⇒ nhãn vàng, không đỏ
-                      const soft = worstOf(i) === 'loi' && tex[i]?.ok === true;
+                      const soft = worstOf(i) === 'loi' && texOf(i)?.ok === true;
                       const lv = soft ? 'canh' : worstOf(i)!;
                       return <span className={`chk-tag ${lv}`} title={soft ? 'TeX Live biên dịch được câu này; chỉ bản xem trước nhanh của HEdu chưa dựng được. Nhập vẫn an toàn.' : undefined}>{lv === 'tin' ? 'có hình' : soft ? 'Xem trước chưa dựng được' : LEVEL_TEXT[lv]}</span>;
                     })()}
@@ -786,7 +823,7 @@ export function ImportScreen() {
                       {exactRow === i
                         ? <CompiledView latex={r.latex} solution={texSol} onBack={() => setExactRow(null)} />
                         : <>
-                            {tex[i] && !tex[i].ok && <FailureBox fail={(tex[i] as { fail: Failure }).fail} />}
+                            {texOf(i) && !texOf(i)!.ok && <FailureBox fail={(texOf(i) as { fail: Failure }).fail} />}
                             <button type="button" className="btn btn-sm" onClick={() => setExactRow(i)}>Xem chuẩn câu này</button>
                           </>}
                     </div>

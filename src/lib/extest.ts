@@ -315,7 +315,7 @@ export function splitExBlocks(src: string): string[] {
   return out;
 }
 
-export type ExIssueKind = 'chua-dong' | 'thua-end' | 'ngoai-khoi' | 'khoi-rong' | 'chu-thich';
+export type ExIssueKind = 'chua-dong' | 'thua-end' | 'ngoai-khoi' | 'khoi-rong' | 'chu-thich' | 'moi-truong-khac';
 export interface ExIssue { kind: ExIssueKind; line: number; message: string }
 export interface ExNormalized { blocks: { text: string; line: number }[]; issues: ExIssue[] }
 
@@ -377,6 +377,13 @@ export function normalizeEx(raw: string): ExNormalized {
   if (open >= 0) issues.push({ kind: 'chua-dong', line: lineAt(open), message: 'Khối \\begin{ex} đến hết tệp vẫn thiếu \\end{ex}: đã bỏ khối dở' });
   else takeOutside(src.length);
   if (idOutside) issues.push({ kind: 'ngoai-khoi', line: 0, message: `${idOutside} chú thích ID %[…] nằm NGOÀI khối ex (trước \\begin{ex}) nên không được đọc: đặt ID ngay sau hoặc cuối dòng \\begin{ex}` });
+  // khối câu hỏi viết bằng môi trường khác của ex_test (bt = bài tập tự luận, vd = ví dụ): HEdu chỉ nhập \begin{ex}, báo rõ số khối bị bỏ
+  for (const env of ['bt', 'vd']) {
+    const reEnv = new RegExp(`\\\\begin\\{${env}\\}`, 'g');
+    let n = 0, first = 0;
+    for (let mm: RegExpExecArray | null; (mm = reEnv.exec(src)); ) if (!inComment(src, mm.index)) { if (!n) first = lineAt(mm.index); n++; }
+    if (n) issues.push({ kind: 'moi-truong-khac', line: first, message: `Có ${n} khối \\begin{${env}}${env === 'bt' ? ' (bài tập tự luận)' : ' (ví dụ)'} — HEdu chỉ nhập khối \\begin{ex}…\\end{ex}, nên các khối này bị bỏ qua. Muốn nhập thì đổi thành \\begin{ex}…\\end{ex}.` });
+  }
   if (outside.length && blocks.length) issues.push({ kind: 'ngoai-khoi', line: 0, message: `Bỏ ${outside.length} dòng chữ nằm ngoài khối ex (vd: ${outside[0].slice(0, 60)})` });
   return { blocks, issues };
 }
