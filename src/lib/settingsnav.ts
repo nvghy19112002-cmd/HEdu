@@ -31,6 +31,7 @@ export const ENTRIES: SettingEntry[] = [
   { pane: 'backup', label: 'Lưu trữ SQLite: bản chụp, điểm khôi phục, xuất JSON, kiểm tra toàn vẹn', target: 'Lưu trữ SQLite', words: 'sqlite chụp điểm khôi phục toàn vẹn xuất json khôi phục .db' },
   { pane: 'backup', label: 'Sao lưu trước cập nhật', target: 'Sao lưu trước cập nhật', words: 'sao lưu backup trước cập nhật khôi phục bản trước' },
   { pane: 'backup', label: 'Sao lưu thủ công / khôi phục từ file', target: 'Sao lưu thủ công', words: 'sao lưu file tải về khôi phục từ file json nhập xuất' },
+  { pane: 'backup', label: 'Chia sẻ ngân hàng với đồng nghiệp', target: 'Chia sẻ với đồng nghiệp', words: 'chia sẻ đồng nghiệp gửi nhận gói gộp ngân hàng giáo viên' },
   { pane: 'backup', label: 'Thùng rác', target: 'Thùng rác', words: 'thùng rác câu đã xoá khôi phục xoá hẳn' },
   { pane: 'backup', label: 'Nhật ký nhập', target: 'Nhật ký nhập', words: 'nhật ký nhập báo cáo lô nhập csv tệp' },
   { pane: 'updates', label: 'Phiên bản và cập nhật', target: 'Phiên bản và cập nhật', words: 'cập nhật update beta stable kênh phiên bản bản mới' },
