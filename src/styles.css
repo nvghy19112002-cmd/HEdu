@@ -83,7 +83,7 @@ a { color: var(--accent); }
 
 /* ---------- Khung app ---------- */
 .app { display: flex; min-height: 100%; }
-.rail { flex: 0 0 64px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; background: var(--rail); position: sticky; top: 0; height: 100vh; }
+.rail { flex: 0 0 64px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; background: var(--rail); position: sticky; top: 0; height: 100vh; overflow-y: auto; scrollbar-width: none; }
 .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--bg); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; flex: none; font-family: var(--f-math); font-size: 24px; font-weight: 600; color: var(--brand); }
 .rb { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 2px; border-radius: 12px; color: var(--rail-ink); background: transparent; border: none; font-size: 12px; font-weight: 500; min-height: 44px; width: 100%; }
 .rb:hover, .rb[aria-current="page"] { background: var(--rail-hover); color: var(--on-dark); }
