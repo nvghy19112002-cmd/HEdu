@@ -8,6 +8,8 @@ import { ExamTree } from '../components/ExamTree';
 import { KhoHinhPanel } from '../components/KhoHinhPanel';
 import { KhoThumb, type ThumbResult } from '../components/KhoThumb';
 import { KhoHinhGiong, KhoQuetNen } from '../components/KhoCongCu';
+import { startDrag } from '../lib/examdrag';
+import { NO_SELECTION, clickSelect, pruneSelection, runBatch, selectAll, type Selection } from '../lib/examselect';
 import { IcPlus } from '../components/Icons';
 import {
   KHO_LOAI, khoCay, khoDatTrangThai, khoLay, khoNutDoiTen, khoNutThem, khoNutXoa, khoSua, khoThem, khoTim, khoTrangThai, khoXoa, loaiText,
@@ -200,6 +202,9 @@ export function KhoHinhScreen() {
   const [askNut, setAskNut] = useState(false);
   const [menu, setMenu] = useState(false);
   const [tool, setTool] = useState<null | 'quet' | 'giong'>(null);
+  /** hình đang chọn (Ctrl/Shift+bấm), để chuyển mục / bỏ vào thùng rác hàng loạt hoặc kéo cả nhóm vào mục ở cây */
+  const [selection, setSelection] = useState<Selection>(NO_SELECTION);
+  const [moveTo, setMoveTo] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [codes, setCodes] = useState<ReadonlyMap<string, { code: string; defs: string }>>(new Map());
 
@@ -257,6 +262,23 @@ export function KhoHinhScreen() {
   }, [flush]);
 
   const changed = () => { reloadMeta(); load(); };
+  const resIds = useMemo(() => res.muc.map((m) => m.id), [res]);
+  useEffect(() => { setSelection((s) => pruneSelection(s, new Set(resIds))); }, [resIds]);
+  const nodeIds = useMemo(() => new Set(cay.map((n) => n.id)), [cay]);
+  /** chuyển nhóm hình sang một mục (kéo-thả hoặc chọn ở ô "Chuyển tới") */
+  const moveHinh = async (ids: string[], to: string) => {
+    const mine = res.muc.filter((m) => ids.includes(m.id) && m.node_id !== to).map((m) => m.id);
+    if (!mine.length) { toast('Các hình đã nằm ở mục này.'); return; }
+    const r = await runBatch(mine, (id) => khoSua(id, { node_id: to }));
+    setSelection(NO_SELECTION); setMoveTo('');
+    changed();
+    toast(r.failed.length ? `Chuyển được ${r.done.length}/${mine.length} hình (${r.failed[0].error}).` : `Đã chuyển ${r.done.length} hình tới “${cay.find((n) => n.id === to)?.name ?? to}”.`);
+  };
+  const trashPicked = async () => {
+    const ids = [...selection.picked];
+    if (!ids.length) return;
+    try { await khoXoa(ids, true); setSelection(NO_SELECTION); changed(); toast(`Đã chuyển ${ids.length} hình vào thùng rác của kho (khôi phục được).`); } catch (e) { toast(msg(e)); }
+  };
   const pages = Math.max(1, Math.ceil(res.tong / PER_PAGE));
   const cur = Math.min(page, pages - 1);
   const nFilters = (kind ? 1 : 0) + (lop ? 1 : 0) + (status ? 1 : 0);
@@ -350,12 +372,30 @@ export function KhoHinhScreen() {
                 {(nFilters > 0 || !!q || !!node) && <button type="button" className="btn btn-sm" onClick={clearAll}>Xoá bộ lọc</button>}
               </div>
             )}
-            {res.muc.length > 0 && (
+            {res.muc.length > 0 && (<>
+              {!trash && selection.picked.size > 0 && (
+                <div className="kh-selbar" role="toolbar" aria-label="Hình đang chọn">
+                  <b>{selection.picked.size} hình đã chọn</b>
+                  <select className="xl-in" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} aria-label="Chuyển tới mục">
+                    <option value="">Chuyển tới mục…</option>{nodes.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
+                  </select>
+                  <button type="button" className="btn btn-sm" disabled={!moveTo} onClick={() => { void moveHinh([...selection.picked], moveTo); }}>Chuyển</button>
+                  <button type="button" className="btn btn-sm btn-danger-soft" onClick={() => { void trashPicked(); }}>Vào thùng rác</button>
+                  <button type="button" className="btn btn-sm" onClick={() => setSelection(selectAll(resIds))}>Chọn hết trang</button>
+                  <button type="button" className="btn btn-sm" onClick={() => setSelection(NO_SELECTION)}>Bỏ chọn</button>
+                </div>
+              )}
               <div className="kh-grid">
                 {res.muc.map((m: KhoMuc) => {
                   const c = codes.get(m.id);
                   return (
-                    <button key={m.id} type="button" className="kh-card" onClick={() => setOpen({ id: m.id })} title={m.title}>
+                    <button key={m.id} type="button" className={`kh-card${selection.picked.has(m.id) ? ' sel' : ''}`} aria-pressed={selection.picked.has(m.id)} title={`${m.title} · Ctrl+bấm: chọn nhiều · kéo vào mục ở cây để chuyển`}
+                      onClick={(ev) => { if (ev.ctrlKey || ev.metaKey || ev.shiftKey) { setSelection((s) => clickSelect(s, m.id, resIds, { ctrl: ev.ctrlKey || ev.metaKey, shift: ev.shiftKey })); return; } setSelection(NO_SELECTION); setOpen({ id: m.id }); }}
+                      onPointerDown={(ev) => {
+                        if (!desktop || trash || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+                        const group = selection.picked.has(m.id) && selection.picked.size > 1 ? [...selection.picked] : [m.id];
+                        startDrag(ev.nativeEvent, group.length > 1 ? `${group.length} hình` : m.title, (k) => nodeIds.has(k), (k) => { void moveHinh(group, k); });
+                      }}>
                       {c ? <KhoThumb id={m.id} code={c.code} defs={c.defs} onResult={trash ? undefined : onThumb} /> : <div className="kh-thumb"><span className="kh-thumb-wait" /></div>}
                       <span className="kh-card-b">
                         <span className="kh-title">{m.title}</span>
@@ -369,7 +409,7 @@ export function KhoHinhScreen() {
                   );
                 })}
               </div>
-            )}
+            </>)}
             {pages > 1 && (
               <nav className="pager" aria-label="Phân trang">
                 <button type="button" className="btn btn-sm" disabled={cur === 0} onClick={() => setPage(cur - 1)}>‹ Trước</button>
