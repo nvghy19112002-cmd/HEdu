@@ -9,12 +9,13 @@ import { BankPicker } from '../components/BankPicker';
 import { PdfViewer } from '../components/PdfViewer';
 import { mapSyncFile, synctexEdit, synctexView, type SyncPos } from '../lib/synctex';
 import { LintDialog } from '../components/LintDialog';
+import { HistoryDialog, type HistVersion } from '../components/HistoryDialog';
 import { SourcesPanel } from '../components/SourcesPanel';
 import { canJump, ENGINES, examCompile, examCompileAll, examCompileCancel, examProfiles, groupDiagnostics, MODE_NOTE, MODES, modeLabel, summarize, type CompileOut, type Engine, type ExamMode, type GoodInfo, type ProfileInfo } from '../lib/examcompile';
 import { insertionText, norm, sourcesAdd, sourcesForget, sourcesStatus, toSource, type SourceIn, type SourceItem, type SourceStatus } from '../lib/examsources';
 import type { Question } from '../lib/types';
 import {
-  anyDirty, buildTree, draftClear, draftRead, draftWrite, externalState, fileCreate, fileImage, fileList, fileRead, fileStat, fileWrite, kindIcon, newFileProblem, saveBadge, savePlan,
+  anyDirty, buildTree, draftClear, draftRead, draftWrite, externalState, fileCreate, fileImage, fileList, fileRead, fileStat, fileVersionRead, fileVersions, fileWrite, kindIcon, newFileProblem, saveBadge, savePlan,
   type Draft, type FileEntry, type ListOut, type TabInfo, type TreeNode,
 } from '../lib/examfiles';
 import { getSettings } from '../lib/tikz';
@@ -322,6 +323,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
   const [syncMark, setSyncMark] = useState<(SyncPos & { n: number }) | null>(null);
   const syncN = useRef(0);
   const [lintOpen, setLintOpen] = useState(false);
+  const [hist, setHist] = useState<{ rel: string; versions: HistVersion[] } | null>(null);
   /** bấm trên PDF ⇒ nhảy tới dòng mã nguồn */
   const fromPdf = async (page: number, x: number, y: number) => {
     try {
@@ -342,6 +344,13 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
       if (!r) { setNote('Dòng này chưa có chỗ tương ứng trên PDF (dòng trống, chú thích hoặc lệnh không in gì).'); return; }
       setPane('pdf');
       setSyncMark({ ...r, n: ++syncN.current });
+    } catch (e) { setNote(msg(e)); }
+  };
+  const openHistory = async () => {
+    if (!active) return;
+    try {
+      const vs = await fileVersions(id, active);
+      setHist({ rel: active, versions: vs.map((v) => ({ key: String(v.at), label: new Date(v.at).toLocaleString('vi-VN'), load: () => fileVersionRead(id, active, v.at) })) });
     } catch (e) { setNote(msg(e)); }
   };
   const lintText = () => (active ? ed.current?.text(active) ?? loaded.current.get(active) ?? '' : '');
@@ -469,6 +478,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
 
   return (
     <div className={`ew tabbed${hidden ? ' off' : ''}`} role="dialog" aria-modal={!hidden} aria-hidden={hidden || undefined} aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
+      {hist && <HistoryDialog title={`Lịch sử phiên bản của ${hist.rel}`} current={ed.current?.text(hist.rel) ?? loaded.current.get(hist.rel) ?? ''} versions={hist.versions} onRestore={(t) => { ed.current?.replaceDoc(hist.rel, t); setNote('Đã đưa bản cũ vào khung soạn (chưa lưu). Xem lại rồi bấm Lưu.'); }} onClose={() => setHist(null)} />}
       {lintOpen && <LintDialog text={lintText()} texBin={getSettings().texBin || undefined} onJump={(l) => { if (active) { setPane('edit'); window.setTimeout(() => ed.current?.jump(active, l), 60); } }} onClose={() => setLintOpen(false)} />}
       <header className="ew-head">
         <button type="button" className="btn btn-sm btn-ghost ew-back" onClick={onLibrary} title="Về Thư viện đề (đề vẫn mở ở tab trên cùng) · Esc" aria-label="Về Thư viện đề">←</button>
@@ -499,6 +509,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch</button> : <button type="button" className="btn btn-sm" title={queued ? 'Đang chờ lượt: 2 đề khác đang biên dịch' : undefined} onClick={() => { if (queued) { gen.current++; setQueued(false); setCompiling(false); } else void examCompileCancel(id); }}>{queued ? 'Huỷ chờ' : 'Dừng'}</button>}
           <button type="button" className="btn btn-sm" disabled={!goods.length || !active} onClick={() => { void toPdf(); }} title="Tô trên PDF chỗ ứng với dòng đang đặt con trỏ (Ctrl+bấm hoặc bấm đúp trên PDF thì đi ngược lại)">Tới chỗ này trên PDF</button>
           <button type="button" className="btn btn-sm" disabled={!active} onClick={() => setLintOpen(true)} title="Kiểm ngoặc, dấu $ và lỗi mã LaTeX hay gặp trong tệp đang mở (ChkTeX)">Kiểm lỗi mã</button>
+          <button type="button" className="btn btn-sm" disabled={!active} onClick={() => { void openHistory(); }} title="Xem các bản cũ của tệp đang mở (HEdu giữ 10 bản gần nhất mỗi lần lưu), so sánh và khôi phục">Lịch sử</button>
           <button type="button" className="btn btn-sm" disabled={compiling || result?.status !== 'ok'} title={result?.status === 'ok' ? `Xuất PDF “${modeLabel(result.mode as ExamMode)}” vừa biên dịch thành công ra một tệp` : 'Biên dịch thành công rồi mới xuất được PDF'} onClick={() => { if (result) void exportPdf(id, name, result.mode as ExamMode).then((d) => { if (d) toast(`Đã xuất PDF: ${d}`); }).catch((e) => toast(e instanceof Error ? e.message : String(e))); }}>Xuất PDF…</button>
         </span>
         <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Thông tin đề: đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>

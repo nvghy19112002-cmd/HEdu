@@ -12,6 +12,9 @@ import { chenText } from '../lib/khochen';
 import { isDesktop } from '../lib/platform';
 import { KhoPicker, KhoSaveDialog } from './KhoDialogs';
 import { LintDialog } from './LintDialog';
+import { HistoryDialog } from './HistoryDialog';
+import { onQHistory, versionsOf } from '../lib/qhistory';
+import { FigureBuilder } from './FigureBuilder';
 import { getSettings } from '../lib/tikz';
 import { idStatus, LATEX_ID_LABEL, strictCode } from '../lib/idsync';
 import { sameCode, writeHeadId } from '../lib/idtex';
@@ -92,6 +95,10 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
   const [latex, setLatex] = useState(init.latex);
   const [khoDlg, setKhoDlg] = useState<null | 'chen' | 'luu'>(null);
   const [lintOpen, setLintOpen] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
+  const [histN, setHistN] = useState(() => (editing ? versionsOf(editing.uid).length : 0));
+  useEffect(() => { if (!editing) return; const f = () => setHistN(versionsOf(editing.uid).length); f(); return onQHistory(f); }, [editing?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [figOpen, setFigOpen] = useState(false);
   const [loc, setLoc] = useState<Location>(init.loc);
   const [level, setLevel] = useState<Level>(init.level);
   const [tags, setTags] = useState<string[]>(init.tags);
@@ -417,12 +424,16 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
           <div className="qe-bar">
             <h2>Mã LaTeX</h2>
             <span className="qe-pos">ex_test · dòng {pos.line}, cột {pos.col}</span>
+            {editing && <button type="button" className="btn btn-sm" onClick={() => setHistOpen(true)} title="Xem các bản cũ của câu này, so sánh và khôi phục">Lịch sử{histN ? ` (${histN})` : ''}</button>}
+            {isDesktop() && <button type="button" className="btn btn-sm" onClick={() => setFigOpen(true)} title="Vẽ bảng biến thiên, bảng xét dấu, đồ thị hàm số rồi chèn vào câu">Vẽ hình</button>}
             {isDesktop() && <button type="button" className="btn btn-sm" onClick={() => setLintOpen(true)} title="Kiểm ngoặc, dấu $ và các lỗi mã LaTeX hay gặp bằng ChkTeX">Kiểm lỗi mã</button>}
             {isDesktop() && <button type="button" className="btn btn-sm" onClick={() => setKhoDlg('chen')} title="Chọn một hình trong Kho hình và chèn vào chỗ con trỏ">Chèn hình từ Kho</button>}
             {isDesktop() && <button type="button" className="btn btn-sm" onClick={() => setKhoDlg('luu')} title="Lưu hình TikZ có trong câu này vào Kho hình">Lưu hình vào Kho</button>}
             <SymbolPalette onPick={(snippet, raw) => ed.current?.insert(snippet, { wrapMath: !raw })} />
           </div>
           <LatexEditor ref={ed} value={latex} onChange={setLatex} onCursor={(line, col) => setPos({ line, col })} />
+          {histOpen && editing && <HistoryDialog title={`Lịch sử phiên bản của câu ${seqLabel(editing.seq)}`} current={latex} versions={versionsOf(editing.uid).map((v) => ({ key: String(v.at), label: new Date(v.at).toLocaleString('vi-VN'), load: async () => v.latex }))} onRestore={(t) => { setLatex(t); toast('Đã đưa bản cũ vào khung soạn. Xem lại rồi bấm Lưu để giữ.'); }} onClose={() => setHistOpen(false)} />}
+          {figOpen && <FigureBuilder onClose={() => setFigOpen(false)} onInsert={(c) => { setFigOpen(false); ed.current?.insertRaw(chenText({ code: c, extra_preamble: '' })); toast('Đã chèn hình vào chỗ con trỏ.'); }} onSaved={(m) => toast(m)} />}
           {lintOpen && <LintDialog text={latex} texBin={getSettings().texBin || undefined} onJump={(l) => ed.current?.selectLine(l)} onClose={() => setLintOpen(false)} />}
           {khoDlg === 'chen' && <KhoPicker onClose={() => setKhoDlg(null)} onPick={(h) => { setKhoDlg(null); ed.current?.insertRaw(chenText(h)); toast(`Đã chèn hình “${h.title}” vào chỗ con trỏ.`); }} />}
           {khoDlg === 'luu' && <KhoSaveDialog latex={latex} stem={parsed.stem} onClose={() => setKhoDlg(null)} onDone={(m) => { setKhoDlg(null); toast(m); }} />}

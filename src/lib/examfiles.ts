@@ -110,3 +110,8 @@ export function newFileProblem(rel: string): string | null {
 }
 
 export const kindIcon = (k: FileKind | undefined, dir: boolean): string => (dir ? '▸' : k === 'text' ? '≡' : k === 'image' ? '▣' : k === 'pdf' ? '▤' : '·');
+
+export interface FileVersion { /** thời điểm bản này bị thay thế (ms từ 1970) */ at: number; bytes: number }
+/** Các bản cũ của một tệp trong đề (HEdu chụp bản cũ mỗi lần lưu, tối đa 10), mới nhất trước. */
+export const fileVersions = (id: string, rel: string) => invoke<FileVersion[]>('exam_file_versions', { id, rel });
+export const fileVersionRead = (id: string, rel: string, at: number) => invoke<string>('exam_file_version_read', { id, rel, at });

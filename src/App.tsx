@@ -21,6 +21,8 @@ import { TrashScreen } from './screens/Trash';
 import { HealthScreen } from './screens/Health';
 import { loadDecisions, trashCount, useDecisions } from './lib/dupdecisions';
 import { loadIdReview } from './lib/idreview';
+import { loadQHistory } from './lib/qhistory';
+import { getStorageMode } from './lib/storage';
 import { loadTemplates } from './lib/examtemplates';
 import { UpdateProvider, useUpdates } from './update-context';
 import { dataSig, runAutoBackup } from './lib/autobackup';
@@ -87,7 +89,7 @@ function Shell({ recovered }: { recovered: boolean }) {
 
   useEffect(() => startZoom(), []);
   // nạp tệp phụ (quyết định trùng, thùng rác) ngay khi mở app để sao lưu luôn đầy đủ
-  useEffect(() => { void loadDecisions(); void loadIdReview(); void loadTemplates(); }, []);
+  useEffect(() => { void loadDecisions(); void loadIdReview(); void loadTemplates(); void loadQHistory(isDesktop() ? (getStorageMode() === 'sqlite' ? 'sqlite' : 'none') : 'web'); }, []);
   // sao lưu tự động theo lịch (nếu đến hạn và dữ liệu đã đổi); chỉ bản cài Windows, trễ để không tranh việc lúc mở app
   useEffect(() => {
     if (!isDesktop()) return;

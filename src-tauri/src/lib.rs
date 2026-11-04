@@ -512,6 +512,8 @@ pub fn run() {
             examfiles::exam_file_list,
             examfiles::exam_file_read,
             examfiles::exam_file_write,
+            examfiles::exam_file_versions,
+            examfiles::exam_file_version_read,
             examfiles::exam_file_create,
             examfiles::exam_file_stat,
             examfiles::exam_file_image,
