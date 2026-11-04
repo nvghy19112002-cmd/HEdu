@@ -32,6 +32,7 @@ import { ExamWorkspace, type ExamWorkspaceHandle } from './ExamWorkspace';
 import { closeTab, cycleTab, keepExisting, loadTabs, MAX_TABS, openTab, saveTabs, type TabsState, type TabStatus } from '../lib/examtabs';
 import { ExamExportDialog } from '../components/ExamExportDialog';
 import { ExamPackDialog } from '../components/ExamPackDialog';
+import { ExamStatsDialog } from '../components/ExamStatsDialog';
 import { ExamColumns } from '../components/ExamColumns';
 import { PdfThumb } from '../components/PdfThumb';
 import { ExamBatchImportDialog } from '../components/ExamBatchImportDialog';
@@ -119,6 +120,8 @@ export function ExamLibraryScreen() {
   const [askTrashMany, setAskTrashMany] = useState<ExamSummary[] | null>(null);
   /** nhóm đề đang mở hộp "Xuất trọn gói" */
   const [packing, setPacking] = useState<ExamSummary[] | null>(null);
+  /** hộp thống kê sau thi của một đề (có hedu-de.json) */
+  const [stats, setStats] = useState<{ name: string; spec: NonNullable<ReturnType<typeof parseMatrixSpec>> } | null>(null);
   /** hộp nhập nhiều đề từ một thư mục */
   const [batchImp, setBatchImp] = useState<{ folder: string; items: BatchCandidate[]; truncated: boolean } | null>(null);
   const [smart, setSmart] = useState<SmartKey | null>(null);
@@ -504,6 +507,12 @@ export function ExamLibraryScreen() {
     const r = await exportMatrixXlsx(e, tax, (uid) => qmap.get(uid));
     if (r === 'none') toast('Đề này soạn tay (không tạo từ ngân hàng) nên không có ma trận để xuất.');
     else if (r) toast(`Đã xuất ma trận Excel: ${r}`);
+  });
+  const openStats = (e: ExamSummary) => run(async () => {
+    const t = await invoke<string | null>('exam_spec_text', { id: e.id });
+    const spec = t ? parseMatrixSpec(t) : null;
+    if (!spec || !spec.perCode.length) { toast('Thống kê sau thi cần đáp án từng mã đề, chỉ có với đề tạo từ ngân hàng (Tạo đề).'); return; }
+    setStats({ name: e.name, spec });
   });
   const reveal = (id: string) => void examReveal(id).catch((err) => toast(msg(err)));
   const exportOne = (e: ExamSummary, mode: ExamMode) => run(async () => {
@@ -930,6 +939,7 @@ export function ExamLibraryScreen() {
                 <button type="button" className="btn btn-sm" onClick={() => setRenaming({ e: selE, name: selE.name })}>Đổi tên</button>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void toggleStar(selE)}>{isStar(selE) ? '★ Bỏ gắn sao' : '☆ Gắn sao'}</button>
                 <button type="button" className="btn btn-sm" disabled={!desktop || busy} title="Ma trận đề ra Excel (đề tạo từ ngân hàng)" onClick={() => void exportMatrix(selE)}>Xuất ma trận Excel…</button>
+                <button type="button" className="btn btn-sm" disabled={!desktop || busy} title="Dán bài làm của học sinh để xem điểm, độ khó, độ phân biệt từng câu (đề tạo từ ngân hàng)" onClick={() => void openStats(selE)}>Thống kê sau thi…</button>
                 <button type="button" className="btn btn-sm" onClick={() => reveal(selE.id)}>Hiện trong Explorer</button>
               </div>
             </aside>
@@ -1105,6 +1115,7 @@ export function ExamLibraryScreen() {
         </Modal>
       )}
       {batchImp && <ExamBatchImportDialog folder={batchImp.folder} candidates={batchImp.items} truncated={batchImp.truncated} place={place ? trail.join(' › ') : ''} placeNew={placeNew} onClose={() => { setBatchImp(null); void reload(); }} onDone={(m) => { toast(m); void reload(); }} />}
+      {stats && <ExamStatsDialog name={stats.name} spec={stats.spec} onClose={() => setStats(null)} onToast={toast} />}
       {packing && <ExamPackDialog exams={packing} qn={qn} tax={tax} question={(uid) => qmap.get(uid)} onClose={() => setPacking(null)} onToast={toast} />}
       {askTrashMany && (
         <ConfirmDialog title={`Chuyển ${askTrashMany.length} đề vào Thùng rác?`} confirmLabel="Chuyển vào Thùng rác" cancelLabel="Giữ lại" busy={busy} onCancel={() => setAskTrashMany(null)} onConfirm={trashMany}>

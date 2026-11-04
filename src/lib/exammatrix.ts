@@ -12,7 +12,7 @@ export interface MatrixSpec {
   firstCode: { code: string; parts: Record<PartKey, { uid: string; key: string }[]> } | null;
   codes: number;
   /** từng mã đề: số câu, uid (để kiểm trùng/thiếu) và số câu thiếu đáp án */
-  perCode: { code: string; n: number; uids: string[]; noKey: number }[];
+  perCode: { code: string; n: number; uids: string[]; noKey: number; /** đáp án theo thứ tự đề (phần I→IV) */ items: { part: PartKey; uid: string; key: string }[] }[];
 }
 export interface MatrixMeta { name: string; grade?: number | null; schoolYear?: string | null; examType?: string | null }
 
@@ -42,8 +42,12 @@ export function parseMatrixSpec(text: string): MatrixSpec | null {
   for (const p of PARTS) for (const s of Array.isArray(obj(f.phan)[p]) ? (obj(f.phan)[p] as unknown[]) : []) { const o = obj(s); if (typeof o.uid === 'string') parts[p].push({ uid: o.uid, key: typeof o.dapAn === 'string' ? o.dapAn : '' }); }
   const perCode = md.map((m) => {
     const o = obj(m), ph = obj(o.phan);
-    const items = PARTS.flatMap((p) => (Array.isArray(ph[p]) ? (ph[p] as unknown[]) : []).map((s) => obj(s)));
-    return { code: typeof o.ma === 'string' ? o.ma : '', n: items.length, uids: items.map((s) => (typeof s.uid === 'string' ? s.uid : '')), noKey: items.filter((s) => typeof s.dapAn !== 'string' || !s.dapAn.trim()).length };
+    const typed = PARTS.flatMap((p) => (Array.isArray(ph[p]) ? (ph[p] as unknown[]) : []).map((s) => ({ part: p, s: obj(s) })));
+    const items = typed.map((x) => x.s);
+    return {
+      code: typeof o.ma === 'string' ? o.ma : '', n: items.length, uids: items.map((s) => (typeof s.uid === 'string' ? s.uid : '')), noKey: items.filter((s) => typeof s.dapAn !== 'string' || !s.dapAn.trim()).length,
+      items: typed.map((x) => ({ part: x.part, uid: typeof x.s.uid === 'string' ? x.s.uid : '', key: typeof x.s.dapAn === 'string' ? x.s.dapAn : '' })),
+    };
   });
   const pol = j.chinhSach;
   return {
@@ -169,3 +173,14 @@ export function matrixBook(spec: MatrixSpec, meta: MatrixMeta, tax: Taxonomy, qu
   return { sheets: [m1, m2] };
 }
 
+
+/** Đáp án của một mã đề thành danh sách câu có nhãn I.1, I.2, …, II.1, … (dùng cho thống kê sau thi). */
+export function codeKeyItems(spec: MatrixSpec, code: string): { q: string; part: PartKey; key: string }[] {
+  const c = spec.perCode.find((x) => x.code === code);
+  if (!c) return [];
+  const count: Record<string, number> = {};
+  return c.items.map((it) => {
+    count[it.part] = (count[it.part] ?? 0) + 1;
+    return { q: `${ROMAN[PARTS.indexOf(it.part)]}.${count[it.part]}`, part: it.part, key: it.key };
+  });
+}
