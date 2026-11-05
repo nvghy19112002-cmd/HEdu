@@ -1,3 +1,21 @@
+## Có gì mới trong beta.59 (kênh beta): xuất Word và nhập Word (công thức MathType), thống kê sau thi, lịch sử phiên bản, vẽ bảng biến thiên/đồ thị, SyncTeX
+Gồm PR #234, #235, #236, #237, #238, #239, #241, #242 (so với beta.58). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, chạy thử từng tính năng trên app Tauri với kho thử, và mở thử tệp .docx xuất ra bằng Word thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+
+**Word**
+- **Xuất Word (.docx)** từng mã đề (Thư viện đề › Xuất Word…, hoặc màn Đề): công thức là **Equation của Word** (sửa được), hình TikZ thành ảnh 300 dpi, bảng, câu đúng/sai, trả lời ngắn; tuỳ chọn kèm lời giải, **bản giáo viên** (tô đáp án đúng). Cần Pandoc (đặt ở `HEdu-tools\pandoc` cạnh app); cài cho máy khác sẽ cần đóng gói kèm.
+- **Nhập đề Word** (Nhập liệu › Mở file Word): đọc .docx (và .doc nếu máy có Word), **đổi công thức MathType sang LaTeX**, tách câu trắc nghiệm / đúng sai / trả lời ngắn, phương án gạch chân là đáp án đúng, tách lời giải. **Gắn đáp án từ tệp Word** (bảng đáp án theo mã đề). Hình trong Word chưa nhập: chỗ cần hình có dòng ghi chú "HÌNH TRONG WORD". Điều không chắc chắn thì để trống và ghi vào báo cáo.
+
+**Thống kê và phiên bản**
+- **Thống kê sau thi** (Thư viện đề › Thống kê sau thi…): dán bài làm từ Excel, tính điểm, độ khó/độ phân biệt từng câu, phổ điểm, xuất Excel.
+- **Lịch sử phiên bản**: câu hỏi (cất bản cũ mỗi lần lưu có đổi) và tệp của đề; so sánh theo dòng, khôi phục vào khung soạn.
+
+**Soạn và vẽ**
+- **Vẽ hình bằng công cụ**: bảng biến thiên (mũi tên suy từ dấu y'), bảng xét dấu, đồ thị hàm số (TikZ kiểu MathHub), xem trước ngay, chèn vào câu/bàn nháp hoặc lưu vào Kho.
+- **SyncTeX hai chiều** (bấm PDF ⇄ dòng mã), **Kiểm lỗi mã bằng ChkTeX**, khung PDF gọn hơn.
+- Thùng rác nằm ngay trên Cài đặt; Sức khoẻ ngân hàng thành mục chính ở thanh bên.
+
+**Còn mở:** nhập hình trong Word; .doc cũ chưa kiểm chứng trong app; bảng đáp án Word mới thử một kiểu; lưu đầu tệp theo từng câu; PDF "bị mờ"; chân trang "Trang 3/??".
+
 ## Có gì mới trong beta.58 (kênh beta): Sức khoẻ ngân hàng, Kho hình dùng được trong câu, Thư viện đề hoàn chỉnh hơn
 Gồm PR #230, #231, #232 (so với beta.57). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử (240 test Rust, test giao diện) và chạy thử từng tính năng trên app Tauri với kho thử; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
