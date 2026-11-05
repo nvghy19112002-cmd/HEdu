@@ -509,7 +509,7 @@ export function TexScratchScreen() {
             <div className="tsx-pdf">
               {busy && <p className="sys-hint" role="status">Đang biên dịch bằng TeX Live… (Dừng ở nút trên cùng)</p>}
               {!busy && !out && <p className="sys-hint">Bấm <b>Biên dịch PDF</b> (Ctrl+Enter) để TeX Live dịch cả bàn nháp. Khai báo gói có sẵn; chỉ dịch khi bạn bấm.</p>}
-              {out && !busy && (
+              {out && !busy && !(out.status === 'ok' && !out.warningCount && errs.length === 0 && hints.length === 0) && (
                 <div className={`note ${out.status === 'ok' ? (out.warningCount ? 'warn' : 'ok') : 'bad'}`} role="status">
                   <div className="note-body">
                     <b>{out.message}</b>
