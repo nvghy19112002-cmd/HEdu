@@ -337,7 +337,7 @@ export function ImportScreen() {
     setTexRun(true);
     const lx = rows.map((_, i) => latexOf(i));
     await compileBatch(lx, texSol, {
-      signal: sig,
+      signal: sig, preambles: rows.map((r) => r.preamble),
       onEach: (i, r) => { if (!sig.stop) setTex((cur) => ({ ...cur, [i]: r.ok ? { ok: true, ms: r.ms, cached: r.cached, src: lx[i] } : { ok: false, fail: r.fail, src: lx[i] } })); },
     });
     if (stopRef.current === sig) setTexRun(false);
@@ -441,7 +441,7 @@ export function ImportScreen() {
   /** Dựng bản ghi sẽ lưu theo cây HIỆN TẠI (logic ở importplan.ts, có test). Không ghi được nhất quán ⇒ lỗi, không ghi gì. */
   const buildDrafts = (verOf: (i: number) => IdVerification | undefined) => planDrafts({
     latexes: rows.map((_, i) => latexOf(i)), importing: (i) => decOf(i) === 'import', ids: idInfo, ver: verOf, decision: (i) => idDecs[i],
-    noId: (i) => draftLocOf(i), commonLoc: loc, commonLevel: level, tags: (i) => tagsFor(rows[i], info), tax: taxNow,
+    noId: (i) => draftLocOf(i), commonLoc: loc, commonLevel: level, tags: (i) => tagsFor(rows[i], info), tax: taxNow, preambles: (i) => rows[i].preamble,
   });
   /** Câu sẽ nhập mà AI từ chối chọn Dạng và giáo viên chưa chọn ⇒ sẽ vào vị trí chung: phải xác nhận rõ */
   const idSum = summarizeImportIds(rows.map((_r, i) => idStateOf(latexOf(i))), (i) => decOf(i) === 'import', (i) => draftLocOf(i).suggested);
@@ -885,7 +885,7 @@ export function ImportScreen() {
                   {openRow === i && isTikzReady() && (
                     <div className="chk-tex">
                       {exactRow === i
-                        ? <CompiledView latex={r.latex} solution={texSol} onBack={() => setExactRow(null)} />
+                        ? <CompiledView latex={r.latex} preamble={r.preamble} solution={texSol} onBack={() => setExactRow(null)} />
                         : <>
                             {texOf(i) && !texOf(i)!.ok && <FailureBox fail={(texOf(i) as { fail: Failure }).fail} />}
                             <button type="button" className="btn btn-sm" onClick={() => setExactRow(i)}>Xem chuẩn câu này</button>

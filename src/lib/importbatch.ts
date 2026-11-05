@@ -1,5 +1,6 @@
 // Lô nhập nhiều nguồn (PR N2; phương án: claude/thiet-ke-nhap-nhieu-tep.md). Phần THUẦN: gộp câu từ nhiều tệp, thống kê theo tệp, dựng nhãn nguồn.
 // Mỗi câu nhớ tệp + số dòng TRONG tệp đó; các chỗ khác của màn Nhập liệu vẫn đánh theo thứ tự câu toàn lô.
+import { headOf, neededFor, parseDefs } from './qpreamble';
 import { normalizeEx, splitExBlocksAt, parseExTest, type ExIssue, type ParsedQuestion } from './extest';
 import { idFromLatex, idStateOf } from './importid';
 
@@ -19,15 +20,18 @@ export interface BatchRow {
   p: ParsedQuestion;
   /** vị trí + mức độ theo ID trong LaTeX (chỉ khi đúng một ID hợp lệ đủ Dạng) */
   fromId: ReturnType<typeof idFromLatex>;
+  /** định nghĩa lấy từ đầu tệp mà câu này dùng ('' nếu không có) */
+  preamble: string;
 }
 
 /** Gộp câu của các nguồn theo thứ tự nguồn rồi thứ tự trong tệp. */
 export function buildRows(sources: readonly ImportSource[]): BatchRow[] {
   const out: BatchRow[] = [];
   sources.forEach((s, srcIdx) => {
+    const defs = parseDefs(headOf(s.text));
     for (const { text: latex, line } of splitExBlocksAt(s.text)) {
       const p = parseExTest(latex);
-      out.push({ latex, line, file: s.name, rel: s.rel, srcIdx, p, fromId: idFromLatex(latex) });
+      out.push({ latex, line, file: s.name, rel: s.rel, srcIdx, p, fromId: idFromLatex(latex), preamble: defs.length ? neededFor(defs, latex) : '' });
     }
   });
   return out;

@@ -3,6 +3,7 @@
 //  2) trộn phương án KHÔNG viết lại câu: chỉ hoán vị nguyên văn các nhóm {…} của \choice, mọi chữ khác giữ nguyên byte;
 //  3) bảng đáp án suy ra từ chính phép hoán vị; câu không nhận diện chắc thì không trộn và nói rõ lý do;
 //  4) dựng .tex bằng khai báo của giáo viên (môi trường name, \caulc/\cauds/\caukq/\cautl trong khaibaochung).
+import { mergePreambles } from './qpreamble';
 import { readGroup, parseExTest } from './extest';
 import type { Level, QType, Question } from './types';
 
@@ -596,12 +597,16 @@ export function keyTex(v: Variant): string {
 }
 
 /** Một mã đề: tiêu đề bằng môi trường `name` của khaibaochung, từng phần bằng \caulc/\cauds/\caukq/\cautl, câu chép nguyên văn. */
+/** Định nghĩa riêng của các câu trong mã đề (macro từ đầu tệp nguồn), gộp và bỏ trùng; rỗng nếu không câu nào có. */
+const ownDefs = (v: Variant): string[] => { const m = mergePreambles(PARTS.flatMap((p) => v.parts[p].map((s) => s.q.preamble))); return m ? [m] : []; };
+
 export function variantTex(info: ExamInfo, v: Variant): string {
   const n = (p: PartKey) => v.parts[p].length;
   const L: string[] = [
     `% Mã đề ${v.code} — do HEdu dựng từ Ngân hàng câu hỏi. Câu hỏi chép nguyên văn.`,
     `\\def\\made{${v.code}}`,
     cmd('socaulc', n('p1')), cmd('socauds', n('p2')), cmd('socaukq', n('p3')),
+    ...ownDefs(v),
     `\\begin{name}{${arg(info.dept)}}{${arg(info.school)}}{${arg(info.group)}}{\\mbox{}}{${arg(info.title)}}{${arg(info.subject)}}{Thời gian làm bài: ${info.minutes} phút}{${arg(info.note)}}`,
     '\\end{name}',
   ];
