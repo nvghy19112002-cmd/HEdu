@@ -265,7 +265,7 @@ local function header_table(div)
   if head ~= '' then io.stderr:write('HEDU-DAU-TRANG ' .. head .. '\n') end
   L:insert(styled('HeduBox', pandoc.Para({ pandoc.Str('ĐỀ KIỂM TRA') })))
   local aligns = { pandoc.AlignCenter, pandoc.AlignCenter }
-  local t = pandoc.SimpleTable(pandoc.List(), aligns, { 0.5, 0.5 }, { {}, {} }, { { L, R } })
+  local t = pandoc.SimpleTable(pandoc.List(), aligns, { 0.58, 0.42 }, { {}, {} }, { { L, R } })
   local tb = pandoc.utils.from_simple_table(t)
   tb.attr = pandoc.Attr('', {}, { ['custom-style'] = 'HeduPlain' })
   tb.head = pandoc.TableHead({})
