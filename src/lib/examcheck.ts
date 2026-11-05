@@ -1,5 +1,7 @@
 // Kiểm tra một đề trước khi chốt (hàm thuần, có kiểm thử): trả danh sách kiểm tra đạt / cảnh báo / chưa đạt.
 // Chỉ đọc. "Chưa đạt" không cấm chốt (giáo viên có thể cố ý) nhưng phải tự xác nhận đã hiểu; "cảnh báo" chỉ nhắc.
+import { checkQuestion } from './check';
+import { parseExTest, splitExBlocksAt } from './extest';
 import { PARTS, type PartKey } from './examgen';
 import type { MatrixSpec } from './exammatrix';
 import type { QType } from './types';
@@ -19,11 +21,46 @@ export interface CheckInput {
   goods: readonly { mode: string; pages: number | null }[];
   /** null = đề soạn tay (không tạo từ ngân hàng) */
   spec: MatrixSpec | null;
+  /** nội dung tệp .tex chính (có thì kiểm thêm chính các câu trong tệp); null/vắng = bỏ qua */
+  tex?: string | null;
   /** tra câu trong ngân hàng (undefined = không còn trong ngân hàng) */
   question(uid: string): QuestionInfo | undefined;
 }
 
 const fmt = (n: number) => (Math.round(n * 100) / 100).toString().replace('.', ',');
+
+const SPACE = /\s+/g;
+const stemKey = (s: string): string => s.replace(/%[^\n]*/g, '').replace(SPACE, ' ').trim().toLowerCase();
+
+/** Kiểm các câu NẰM TRONG tệp .tex (không dựa vào ngân hàng): cấu trúc, đáp án, lời giải, câu lặp, hình TikZ. Tệp không có khối ex thì không báo gì. */
+export function checkTexContent(tex: string): ExamCheck[] {
+  const blocks = splitExBlocksAt(tex);
+  if (!blocks.length) return [];
+  const out: ExamCheck[] = [];
+  const bad: string[] = [], review: string[] = [], noKey: string[] = [], noSol: string[] = [];
+  const seen = new Map<string, number>();
+  const dup: string[] = [];
+  blocks.forEach((b, i) => {
+    const label = `câu ${i + 1} (dòng ${b.line})`;
+    const p = parseExTest(b.text);
+    const issues = checkQuestion(p, b.text);
+    if (issues.some((x) => x.level === 'loi')) bad.push(label); else if (issues.some((x) => x.level === 'canh')) review.push(label);
+    if (p.type === 'tn' && p.options.filter((o) => o.correct).length !== 1) noKey.push(label);
+    if ((p.type === 'tn' || p.type === 'ds' || p.type === 'tln') && !(p.solution ?? '').trim()) noSol.push(label);
+    const k = stemKey(p.stem);
+    if (k.length > 20) { const at = seen.get(k); if (at !== undefined) dup.push(`câu ${at + 1} và câu ${i + 1}`); else seen.set(k, i); }
+  });
+  const first = (a: string[]) => a.slice(0, 4).join(', ') + (a.length > 4 ? `, … (${a.length} chỗ)` : '');
+  out.push(bad.length ? { key: 'tex-loi', level: 'fail', title: `${bad.length}/${blocks.length} câu trong tệp có lỗi cấu trúc`, detail: first(bad) + '. Mở câu và xem mục Kiểm tra lỗi.' } : { key: 'tex-loi', level: 'ok', title: `${blocks.length} câu trong tệp không có lỗi cấu trúc` });
+  if (review.length) out.push({ key: 'tex-xem', level: 'warn', title: `${review.length} câu cần xem lại`, detail: first(review) });
+  if (noKey.length) out.push({ key: 'tex-dapan', level: 'fail', title: `${noKey.length} câu trắc nghiệm không có đúng một đáp án (\\True)`, detail: first(noKey) });
+  if (noSol.length) out.push({ key: 'tex-loigiai', level: 'info', title: `${noSol.length}/${blocks.length} câu chưa có lời giải`, detail: first(noSol) });
+  if (dup.length) out.push({ key: 'tex-lap', level: 'warn', title: `${dup.length} cặp câu có đề bài giống nhau`, detail: first(dup) });
+  const open = (tex.match(/\\begin\{tikzpicture\}/g) ?? []).length, close = (tex.match(/\\end\{tikzpicture\}/g) ?? []).length;
+  if (open !== close) out.push({ key: 'tex-tikz', level: 'fail', title: `Hình TikZ mở ${open} lần nhưng đóng ${close} lần`, detail: 'Thiếu hoặc thừa \\end{tikzpicture}; biên dịch sẽ lỗi.' });
+  else if (open) out.push({ key: 'tex-tikz', level: 'info', title: `${open} hình TikZ, mở và đóng khớp nhau` });
+  return out;
+}
 
 export function checkExam(x: CheckInput): ExamCheck[] {
   const out: ExamCheck[] = [];
@@ -37,6 +74,7 @@ export function checkExam(x: CheckInput): ExamCheck[] {
   if (x.warningCount > 0 || x.skippedCount > 0) {
     out.push({ key: 'import', level: 'warn', title: `Có ${x.warningCount} cảnh báo và ${x.skippedCount} mục không chép khi nhập`, detail: 'Xem hộp Thông tin hoặc bước Kiểm tra tệp để chắc không thiếu hình, gói riêng.' });
   }
+  if (x.tex) out.push(...checkTexContent(x.tex));
   const s = x.spec;
   if (!s) {
     out.push({ key: 'spec', level: 'info', title: 'Đề soạn tay (không tạo từ ngân hàng)', detail: 'Không kiểm được ma trận, thang điểm và đáp án từng mã; chỉ kiểm tệp chính và PDF.' });

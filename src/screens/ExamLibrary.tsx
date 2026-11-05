@@ -39,6 +39,7 @@ import { ExamBatchImportDialog } from '../components/ExamBatchImportDialog';
 import { batchCandidates, type BatchCandidate } from '../lib/examimportbatch';
 import { chooseFolder as chooseSourceFolder, scanSources } from '../lib/importfiles';
 import { checkExam, type ExamCheck } from '../lib/examcheck';
+import { fileRead } from '../lib/examfiles';
 import { UndoStack, undoMessage, type UndoEntry } from '../lib/examundo';
 import { hasControlChars } from '../lib/examgen';
 import { parseMatrixSpec } from '../lib/exammatrix';
@@ -212,11 +213,12 @@ export function ExamLibraryScreen() {
     setChecks(null);
     if (!desktop || !activeId || !detail || detail.projectId !== activeId) return;
     let dead = false;
-    const run = (spec: ReturnType<typeof parseMatrixSpec>) => { if (!dead) setChecks(checkExam({
-      mainFile: detail.mainFile, warningCount: detail.warnings.length, skippedCount: detail.skipped.length, goods, spec,
+    const run = (spec: ReturnType<typeof parseMatrixSpec>, tex: string | null) => { if (!dead) setChecks(checkExam({
+      mainFile: detail.mainFile, warningCount: detail.warnings.length, skippedCount: detail.skipped.length, goods, spec, tex,
       question: (uid) => { const q = qmap.get(uid); return q ? { review: q.review, ctrl: hasControlChars(q) } : undefined; },
     })); };
-    invoke<string | null>('exam_spec_text', { id: activeId }).then((t) => run(t ? parseMatrixSpec(t) : null)).catch(() => run(null));
+    const texP = detail.mainFile ? fileRead(activeId, detail.mainFile).then((f) => f.text).catch(() => null) : Promise.resolve<string | null>(null);
+    void texP.then((tex) => invoke<string | null>('exam_spec_text', { id: activeId }).then((t) => run(t ? parseMatrixSpec(t) : null, tex)).catch(() => run(null, tex)));
     return () => { dead = true; };
   }, [desktop, activeId, detail, goods, qmap]);
   const loadDetail = useCallback((id: string) => {

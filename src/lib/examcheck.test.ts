@@ -53,3 +53,32 @@ t('không có mã đề nào ⇒ chưa đạt', () => {
   const c = checkExam(base({ spec: spec([row('tn', 'NB', 40)], []) }));
   assert.equal(by(c, 'codes')?.level, 'fail');
 });
+
+import { checkTexContent } from './examcheck';
+const ex = (stem: string, opts: string, sol = '') => String.raw`\begin{ex}
+  ${stem}
+  \choice
+  ${opts}
+` + (sol ? String.raw`  \loigiai{${sol}}
+` : '') + String.raw`\end{ex}
+`;
+const GOOD = String.raw`{\True $1$}
+  {$2$}
+  {$3$}
+  {$4$}`;
+const key = (c: ReturnType<typeof checkTexContent>, k: string) => c.find((x) => x.key === k);
+
+t('tệp .tex: câu tốt ⇒ không lỗi; thiếu lời giải chỉ là ghi chú', () => {
+  const c = checkTexContent(ex('Tính $1+1$ bằng bao nhiêu trong hệ thập phân?', GOOD) + ex('Tính $2+2$ bằng bao nhiêu trong hệ thập phân?', GOOD, 'Vì $2+2=4$.'));
+  assert.equal(key(c, 'tex-loi')?.level, 'ok');
+  assert.equal(key(c, 'tex-loigiai')?.level, 'info');
+  assert.match(key(c, 'tex-loigiai')!.title, /1\/2 câu chưa có lời giải/);
+});
+t('tệp .tex: thiếu đáp án đúng, câu lặp, hình TikZ lệch', () => {
+  const dupStem = 'Cho hàm số $y=x^2$ khi đó giá trị nhỏ nhất của hàm số là gì?';
+  const c = checkTexContent(ex(dupStem, '{$1$}\n  {$2$}\n  {$3$}\n  {$4$}') + ex(dupStem, GOOD) + String.raw`\begin{tikzpicture}` + '\n');
+  assert.equal(key(c, 'tex-dapan')?.level, 'fail');
+  assert.equal(key(c, 'tex-lap')?.level, 'warn');
+  assert.equal(key(c, 'tex-tikz')?.level, 'fail');
+});
+t('tệp không có khối ex ⇒ không báo gì thêm', () => { assert.deepEqual(checkTexContent(String.raw`\documentclass{article}`), []); });
