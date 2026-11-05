@@ -329,7 +329,8 @@ pub fn has_severe(log: &str) -> bool {
 }
 
 pub fn needs_rerun(log: &str) -> bool {
-    log.contains("Rerun to get") || log.contains("Label(s) may have changed")
+    // nhãn mới (vd. \pageref{LastPage} cho chân trang "Trang 3/12") chỉ có ở lượt sau: "undefined references" cũng cần dịch lại
+    log.contains("Rerun to get") || log.contains("Label(s) may have changed") || log.contains("There were undefined references") || log.contains("Please (re)run")
 }
 
 /// "Output written on hedu-out.pdf (12 pages, 3456 bytes)." (có thể bị ngắt dòng).
@@ -1201,6 +1202,8 @@ mod tests {
         assert!(!has_severe("LaTeX Warning: Label(s) may have changed. Rerun\nOverfull \\hbox\nOutput written on x.pdf (1 page, 1 bytes)."));
         assert!(needs_rerun("LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right."));
         assert!(!needs_rerun("all good"));
+        assert!(needs_rerun("LaTeX Warning: There were undefined references."));
+        assert!(needs_rerun("Package rerunfilecheck Warning: File foo.out has changed. Please (re)run LaTeX."));
     }
 
     #[test]

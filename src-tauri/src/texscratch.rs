@@ -163,7 +163,7 @@ pub const RUN_ID: &str = "xu-li-tex";
 pub const ALLOWED: &[&str] = &["main.tex", "content.tex", "khaibaochung.tex", "hedu.sty", "hedu-khaibao.tex", "hedu-goithem.tex"];
 const MAX_TOTAL: usize = 25 * 1024 * 1024;
 const TIMEOUT_SECS: u64 = 120;
-const RUNS: u32 = 2;
+const RUNS: u32 = 3;
 
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct FileIn {
