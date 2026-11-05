@@ -13,7 +13,7 @@ import { stockIndex } from '../lib/examgrid';
 import { useEffectiveOf } from '../components/IdReviewControl';
 import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
 import { chapters as chaptersOf, useTaxonomy } from '../lib/curriculum';
-import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, partOf, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, keyStats, verifyAgainstOriginal, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, partOf, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
 import { confirmRow, effectiveRows, lastGrade, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, scopeParts, template2025, type Draft } from '../lib/examdraft';
 import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usageSig, usedAtLabel } from '../lib/examusage';
 import { parseExTest } from '../lib/extest';
@@ -44,11 +44,12 @@ function PartHead({ text }: { text: string }) {
 
 interface SlotProps {
   slot: Slot; number: number; locked: boolean; verifiedDa: boolean; exception: boolean;
+  pinned: boolean; fixedOpt: boolean; isChoice: boolean; onPin(): void; onFixOpt(): void;
   onLock(): void; onSwap(): void; onReroll(): void; swapping: boolean;
 }
 
 /** Một câu trong trang xem trước, có thao tác khi rê chuột hoặc focus. */
-const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exception, onLock, onSwap, onReroll, swapping }: SlotProps) {
+const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exception, pinned, fixedOpt, isChoice, onPin, onFixOpt, onLock, onSwap, onReroll, swapping }: SlotProps) {
   const parsed = useMemo(() => parseExTest(slot.latex), [slot.latex]);
   const order = useMemo(() => parsed.options.map((_, i) => i), [parsed]);
   return (
@@ -59,6 +60,8 @@ const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exce
         {!verifiedDa && <span className="te-flag" title="Dạng hoặc mức độ chưa được giáo viên xác minh">Chưa xác minh Dạng</span>}
         {slot.note && <span className="te-flag" title={slot.note}>Giữ nguyên phương án</span>}
         <button type="button" className="te-tool" aria-pressed={locked} title={locked ? 'Bỏ khóa câu này' : 'Khóa câu này: giữ nguyên khi sinh lại'} onClick={onLock}>{locked ? <IcLock /> : <IcUnlock />}<span>{locked ? 'Đã khóa' : 'Khóa'}</span></button>
+        <button type="button" className="te-tool" aria-pressed={pinned} title={pinned ? 'Bỏ ghim vị trí' : 'Ghim vị trí: câu này luôn đứng đúng số thứ tự này ở mọi mã đề'} onClick={onPin}><span>{pinned ? 'Đã ghim vị trí' : 'Ghim vị trí'}</span></button>
+        {isChoice && <button type="button" className="te-tool" aria-pressed={fixedOpt} title={fixedOpt ? 'Cho trộn phương án lại' : 'Giữ nguyên thứ tự phương án A–D của câu này ở mọi mã đề'} onClick={onFixOpt}><span>{fixedOpt ? 'Đã giữ phương án' : 'Giữ phương án'}</span></button>}
         <button type="button" className="te-tool" title="Chọn một câu khác thay cho câu này" aria-expanded={swapping} onClick={onSwap}><IcSwap /><span>Đổi câu</span></button>
         <button type="button" className="te-tool" title="Loại câu này và lấy ngẫu nhiên một câu khác" onClick={onReroll}><IcDice /><span>Ngẫu nhiên</span></button>
       </div>
@@ -137,13 +140,16 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const slotLevels = useMemo(() => levelStats(rows.map((r) => { const u = alloc.picks[r.id]?.[0]; return (u && byUid.get(u)?.level) || r.level; })), [rows, alloc, byUid]);
   const counts = countsOf(picked);
   const total = counts.p1 + counts.p2 + counts.p3 + counts.p4;
-  const variants = useMemo(() => makeVariants(picked, { count: d.count, firstCode: d.firstCode, shuffleQuestions: d.shuffleQuestions, shuffleOptions: d.shuffleOptions, seed: d.seed, keepFirstOriginal: true }), [picked, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.seed]);
+  const pinSet = useMemo(() => new Set(d.pins), [d.pins]);
+  const fixedSet = useMemo(() => new Set(d.fixedOpts), [d.fixedOpts]);
+  const variants = useMemo(() => makeVariants(picked, { count: d.count, firstCode: d.firstCode, shuffleQuestions: d.shuffleQuestions, shuffleOptions: d.shuffleOptions, seed: d.seed, keepFirstOriginal: true, pinned: pinSet, fixedOptions: fixedSet, balanceKeys: d.balanceKeys }), [picked, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.seed, pinSet, fixedSet, d.balanceKeys]);
+  const stats = useMemo(() => keyStats(variants), [variants]);
   const variant = variants[Math.min(shown, variants.length - 1)];
   const rowOf = useMemo(() => { const m = new Map<string, string>(); for (const [rid, us] of Object.entries(alloc.picks)) for (const u of us) m.set(u, rid); return m; }, [alloc]);
   const lockedSet = useMemo(() => new Set(Object.values(d.locked).flat()), [d.locked]);
   const missing = allocRows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
   const flaggedN = rows.filter((r) => r.flag).length;
-  const issues = useMemo(() => [...checkVariants(variants), ...reconcile(allocRows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, allocRows, alloc, picked, d.scoring]);
+  const issues = useMemo(() => [...checkVariants(variants), ...verifyAgainstOriginal(variants, picked, pinSet), ...reconcile(allocRows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, allocRows, alloc, picked, d.scoring, pinSet]);
   const lostLocks = alloc.lost;
   /** dòng thiếu câu mà có ứng viên bị loại vì đã dùng: báo rõ số lượng, giáo viên tự quyết dùng lại */
   const shortUsed = useMemo(() => rows.flatMap((r) => {
@@ -224,7 +230,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const refSheet = useRef<HTMLElement>(null);
   const refExport = useRef<HTMLDivElement>(null);
   const desktop = isDesktop();
-  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys, d.usage, d.reuse]), [d]);
+  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys, d.usage, d.reuse, d.pins, d.fixedOpts, d.balanceKeys]), [d]);
   const canExport = !usageBlocked && unchosen === 0 && total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -398,7 +404,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                   <PartHead text={p === 'p4' ? PART_HEAD[p] : `${PART_HEAD[p]} Thí sinh trả lời từ câu 1 đến câu ${variant.parts[p].length}.`} />
                   {variant.parts[p].map((s, k) => (
                     <div key={s.q.uid}>
-                      <SlotView slot={s} number={k + 1} locked={lockedSet.has(s.q.uid)} verifiedDa={verified(effOf(s.q))} exception={!!d.exceptions[s.q.uid]}
+                      <SlotView slot={s} number={k + 1} pinned={pinSet.has(s.q.uid)} fixedOpt={fixedSet.has(s.q.uid)} isChoice={s.q.type === 'tn'} onPin={() => upd({ pins: pinSet.has(s.q.uid) ? d.pins.filter((u) => u !== s.q.uid) : [...d.pins, s.q.uid] })} onFixOpt={() => upd({ fixedOpts: fixedSet.has(s.q.uid) ? d.fixedOpts.filter((u) => u !== s.q.uid) : [...d.fixedOpts, s.q.uid] })} locked={lockedSet.has(s.q.uid)} verifiedDa={verified(effOf(s.q))} exception={!!d.exceptions[s.q.uid]}
                         swapping={swap === s.q.uid} onLock={() => toggleLock(s.q.uid)} onSwap={() => setSwap(swap === s.q.uid ? null : s.q.uid)} onReroll={() => reroll(s.q.uid)} />
                       {swap === s.q.uid && (
                         <div className="te-swap" role="region" aria-label="Chọn câu thay thế">
@@ -495,6 +501,14 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             <div className="divider" />
             <label className="sw">Trộn thứ tự câu trong từng phần<input type="checkbox" checked={d.shuffleQuestions} onChange={(e) => upd({ shuffleQuestions: e.target.checked })} /></label>
             <label className="sw">Trộn phương án A, B, C, D<input type="checkbox" checked={d.shuffleOptions} onChange={(e) => upd({ shuffleOptions: e.target.checked })} /></label>
+            <label className="sw" title="Mỗi mã có số đáp án A, B, C, D gần đều nhau và hạn chế một câu có cùng đáp án ở mọi mã">Cân bằng đáp án A–D giữa các mã<input type="checkbox" checked={d.balanceKeys} disabled={!d.shuffleOptions} onChange={(e) => upd({ balanceKeys: e.target.checked })} /></label>
+            <p className="te-note">Ghim vị trí hoặc giữ phương án cho từng câu ở nút trên mỗi câu (bước xem kết quả). Đang ghim {d.pins.length} câu, giữ phương án {d.fixedOpts.length} câu.</p>
+            {stats.perCode.length > 0 && stats.perCode.some((c) => c.counts.some(Boolean)) && (
+              <div className="te-note" role="status"><b>Kiểm tra đáp án sau trộn:</b> {issues.length === 0 ? 'mọi mã khớp câu gốc.' : `${issues.length} chỗ chưa khớp (xem cảnh báo).`}
+                <ul>{stats.perCode.map((c) => <li key={c.code}>Mã {c.code}: A {c.counts[0]} · B {c.counts[1]} · C {c.counts[2]} · D {c.counts[3]}</li>)}</ul>
+                {stats.sameEverywhere.length > 0 && <span>{stats.sameEverywhere.length} câu có cùng một đáp án ở mọi mã.</span>}
+              </div>
+            )}
             <label className="sw">Tạo tệp đáp án cho giáo viên (không nằm trong PDF đề)<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
             <p className="te-note">Mã đầu giữ nguyên thứ tự và phương án gốc; các mã sau được trộn. Câu được chép nguyên văn.</p>
           </div>}
