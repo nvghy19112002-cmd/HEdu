@@ -4,6 +4,7 @@ import { examDuplicate, chooseProjectFolder } from '../lib/examlib';
 import { answersXlsx, codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
 import { listen } from '../lib/platform';
 import { exportWordCode, type WordOut } from '../lib/examword';
+import { DEFAULT_WORD_MODES, WORD_MODES, wordModeById } from '../lib/wordmodes';
 
 export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; name: string; onClose(): void; onToast(m: string): void }) {
   const [info, setInfo] = useState<CodesInfo | null>(null);
@@ -16,9 +17,8 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
   const [prog, setProg] = useState<ExportProgress | null>(null);
   const [out, setOut] = useState<ExportOut | null>(null);
   const first = useRef<HTMLButtonElement>(null);
-  const [wSol, setWSol] = useState(false);
-  const [wMark, setWMark] = useState(false);
-  const [wRes, setWRes] = useState<{ code: string; out?: WordOut; err?: string }[]>([]);
+  const [wModes, setWModes] = useState<string[]>(DEFAULT_WORD_MODES);
+  const [wRes, setWRes] = useState<{ code: string; mode: string; out?: WordOut; err?: string }[]>([]);
   const [wProg, setWProg] = useState('');
 
   const load = useCallback(async () => {
@@ -77,20 +77,26 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
   };
 
   const wordRun = async () => {
-    if (!dest || !chosen.length) return;
+    const modes = WORD_MODES.filter((m) => wModes.includes(m.id));
+    if (!dest || !chosen.length || !modes.length) return;
     setBusy(true); setErr(null); setWRes([]);
-    const res: { code: string; out?: WordOut; err?: string }[] = [];
+    const res: { code: string; mode: string; out?: WordOut; err?: string }[] = [];
+    const total = chosen.length * modes.length;
     try {
       for (const code of chosen) {
-        setWProg(`Đang xuất Word · mã ${code} (${res.length + 1}/${chosen.length})`);
-        try { res.push({ code, out: await exportWordCode(id, code, { solution: wSol || wMark, mark: wMark }, dest, (i, n) => setWProg(`Mã ${code}: dịch hình ${i}/${n}`)) }); }
-        catch (e) { res.push({ code, err: e instanceof Error ? e.message : String(e) }); }
-        setWRes([...res]);
+        for (const m of modes) {
+          setWProg(`Đang xuất Word · mã ${code} · ${m.label} (${res.length + 1}/${total})`);
+          try { res.push({ code, mode: m.id, out: await exportWordCode(id, code, { solution: m.solution, mark: m.mark, print: m.print, suffix: m.suffix }, dest, (i, n) => setWProg(`Mã ${code}: dịch hình ${i}/${n}`)) }); }
+          catch (e) { res.push({ code, mode: m.id, err: e instanceof Error ? e.message : String(e) }); }
+          setWRes([...res]);
+        }
       }
       const ok = res.filter((r) => r.out).length;
-      onToast(`Đã xuất Word ${ok}/${chosen.length} mã đề vào ${dest}.`);
+      onToast(`Đã xuất Word ${ok}/${total} tệp vào ${dest}.`);
     } finally { setBusy(false); setWProg(''); }
   };
+
+  const toggleMode = (m: string) => setWModes((x) => (x.includes(m) ? x.filter((y) => y !== m) : [...x, m]));
 
   const toggle = (c: string) => setChosen((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]));
 
@@ -150,13 +156,14 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
               <div className="fb-rowbox" style={{ marginTop: 12 }}>
                 <b>Word (.docx)</b>
                 <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Mỗi mã đề một tệp. Công thức là Equation của Word; dùng MathType thì chọn “Convert Equations” để đổi sang MathType.</span>
-                <label className="sw">Kèm lời giải<input type="checkbox" checked={wSol || wMark} disabled={busy || wMark} onChange={(e) => setWSol(e.target.checked)} /></label>
-                <label className="sw">Bản giáo viên (tô đáp án đúng, kèm lời giải)<input type="checkbox" checked={wMark} disabled={busy} onChange={(e) => setWMark(e.target.checked)} /></label>
-                <div><button type="button" className="btn btn-sm btn-dark" disabled={busy || !dest || !chosen.length} title={dest ? undefined : 'Chọn thư mục lưu trước'} onClick={() => { void wordRun(); }}>Xuất Word {chosen.length} mã…</button></div>
+                {WORD_MODES.map((m) => (
+                  <label key={m.id} className="sw" title={m.hint}>{m.label} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>· {m.hint}</span><input type="checkbox" checked={wModes.includes(m.id)} disabled={busy} onChange={() => toggleMode(m.id)} /></label>
+                ))}
+                <div><button type="button" className="btn btn-sm btn-dark" disabled={busy || !dest || !chosen.length || !wModes.length} title={dest ? undefined : 'Chọn thư mục lưu trước'} onClick={() => { void wordRun(); }}>Xuất Word {chosen.length} mã × {wModes.length} chế độ…</button></div>
                 {wProg && <span role="status" aria-live="polite">{wProg}</span>}
                 {wRes.map((r) => (
-                  <div key={r.code} style={{ fontSize: 13 }}>
-                    {r.out ? <span className="okmark">✓ Mã {r.code}: {r.out.path}{r.out.warnings.length ? ` · Word không hiểu: ${r.out.warnings.join(', ')}` : ''}</span> : <span className="te-bad">Mã {r.code}: {r.err}</span>}
+                  <div key={r.code + r.mode} style={{ fontSize: 13 }}>
+                    {r.out ? <span className="okmark">✓ Mã {r.code} · {wordModeById(r.mode)?.label}: {r.out.path}{r.out.warnings.length ? ` · Word không hiểu: ${r.out.warnings.join(', ')}` : ''}</span> : <span className="te-bad">Mã {r.code} · {wordModeById(r.mode)?.label}: {r.err}</span>}
                   </div>
                 ))}
               </div>

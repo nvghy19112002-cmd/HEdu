@@ -4,6 +4,8 @@ local S = pandoc.utils.stringify
 local solution = false
 local mark = false
 local made = ''
+local printmode = false
+local function nm(n) if printmode then return n .. 'In' end return n end
 local warned = {}
 
 local function has_class(b, c)
@@ -36,7 +38,7 @@ local function take_true(inlines)
 end
 
 local function styled(style, para)
-  return pandoc.Div({ para }, pandoc.Attr('', {}, { ['custom-style'] = style }))
+  return pandoc.Div({ para }, pandoc.Attr('', {}, { ['custom-style'] = nm(style) }))
 end
 
 local function first_inlines(blocks)
@@ -50,7 +52,7 @@ local function plain_len(blocks)
 end
 
 local function sty(name, text)
-  return pandoc.Span({ pandoc.Str(text) }, pandoc.Attr('', {}, { ['custom-style'] = name }))
+  return pandoc.Span({ pandoc.Str(text) }, pandoc.Attr('', {}, { ['custom-style'] = nm(name) }))
 end
 
 local function label_inline(text, correct)
@@ -265,7 +267,7 @@ local function header_table(div)
   if head ~= '' then io.stderr:write('HEDU-DAU-TRANG ' .. head .. '\n') end
   L:insert(styled('HeduBox', pandoc.Para({ pandoc.Str('ĐỀ KIỂM TRA') })))
   local aligns = { pandoc.AlignCenter, pandoc.AlignCenter }
-  local t = pandoc.SimpleTable(pandoc.List(), aligns, { 0.58, 0.42 }, { {}, {} }, { { L, R } })
+  local t = pandoc.SimpleTable(pandoc.List(), aligns, { 0.52, 0.48 }, { {}, {} }, { { L, R } })
   local tb = pandoc.utils.from_simple_table(t)
   tb.attr = pandoc.Attr('', {}, { ['custom-style'] = 'HeduPlain' })
   tb.head = pandoc.TableHead({})
@@ -284,6 +286,7 @@ function Pandoc(doc)
   solution = m.solution ~= nil and S(m.solution) == '1'
   mark = m.mark ~= nil and S(m.mark) == '1'
   made = m.made and S(m.made) or ''
+  printmode = m.print ~= nil and S(m.print) == '1'
   -- đếm số câu của từng phần
   local counts, cur, order = {}, 0, {}
   for _, b in ipairs(doc.blocks) do
