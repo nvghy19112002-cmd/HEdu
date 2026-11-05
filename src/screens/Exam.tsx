@@ -45,11 +45,12 @@ function PartHead({ text }: { text: string }) {
 interface SlotProps {
   slot: Slot; number: number; locked: boolean; verifiedDa: boolean; exception: boolean;
   pinned: boolean; fixedOpt: boolean; isChoice: boolean; onPin(): void; onFixOpt(): void;
+  grouped: boolean; canJoin: boolean; onGroup(): void;
   onLock(): void; onSwap(): void; onReroll(): void; swapping: boolean;
 }
 
 /** Một câu trong trang xem trước, có thao tác khi rê chuột hoặc focus. */
-const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exception, pinned, fixedOpt, isChoice, onPin, onFixOpt, onLock, onSwap, onReroll, swapping }: SlotProps) {
+const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exception, pinned, fixedOpt, isChoice, onPin, onFixOpt, grouped, canJoin, onGroup, onLock, onSwap, onReroll, swapping }: SlotProps) {
   const parsed = useMemo(() => parseExTest(slot.latex), [slot.latex]);
   const order = useMemo(() => parsed.options.map((_, i) => i), [parsed]);
   return (
@@ -61,6 +62,7 @@ const SlotView = memo(function SlotView({ slot, number, locked, verifiedDa, exce
         {slot.note && <span className="te-flag" title={slot.note}>Giữ nguyên phương án</span>}
         <button type="button" className="te-tool" aria-pressed={locked} title={locked ? 'Bỏ khóa câu này' : 'Khóa câu này: giữ nguyên khi sinh lại'} onClick={onLock}>{locked ? <IcLock /> : <IcUnlock />}<span>{locked ? 'Đã khóa' : 'Khóa'}</span></button>
         <button type="button" className="te-tool" aria-pressed={pinned} title={pinned ? 'Bỏ ghim vị trí' : 'Ghim vị trí: câu này luôn đứng đúng số thứ tự này ở mọi mã đề'} onClick={onPin}><span>{pinned ? 'Đã ghim vị trí' : 'Ghim vị trí'}</span></button>
+        {(grouped || canJoin) && <button type="button" className="te-tool" aria-pressed={grouped} title={grouped ? 'Tách câu này khỏi chùm' : 'Nối với câu đứng trước thành chùm: luôn đứng liền nhau khi trộn (dùng chung đề dẫn hoặc hình)'} onClick={onGroup}><span>{grouped ? 'Đã nối chùm' : 'Nối chùm'}</span></button>}
         {isChoice && <button type="button" className="te-tool" aria-pressed={fixedOpt} title={fixedOpt ? 'Cho trộn phương án lại' : 'Giữ nguyên thứ tự phương án A–D của câu này ở mọi mã đề'} onClick={onFixOpt}><span>{fixedOpt ? 'Đã giữ phương án' : 'Giữ phương án'}</span></button>}
         <button type="button" className="te-tool" title="Chọn một câu khác thay cho câu này" aria-expanded={swapping} onClick={onSwap}><IcSwap /><span>Đổi câu</span></button>
         <button type="button" className="te-tool" title="Loại câu này và lấy ngẫu nhiên một câu khác" onClick={onReroll}><IcDice /><span>Ngẫu nhiên</span></button>
@@ -142,14 +144,25 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const total = counts.p1 + counts.p2 + counts.p3 + counts.p4;
   const pinSet = useMemo(() => new Set(d.pins), [d.pins]);
   const fixedSet = useMemo(() => new Set(d.fixedOpts), [d.fixedOpts]);
-  const variants = useMemo(() => makeVariants(picked, { count: d.count, firstCode: d.firstCode, shuffleQuestions: d.shuffleQuestions, shuffleOptions: d.shuffleOptions, seed: d.seed, keepFirstOriginal: true, pinned: pinSet, fixedOptions: fixedSet, balanceKeys: d.balanceKeys }), [picked, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.seed, pinSet, fixedSet, d.balanceKeys]);
+  const variants = useMemo(() => makeVariants(picked, { count: d.count, firstCode: d.firstCode, shuffleQuestions: d.shuffleQuestions, shuffleOptions: d.shuffleOptions, seed: d.seed, keepFirstOriginal: true, groups: d.groups, pinned: pinSet, fixedOptions: fixedSet, balanceKeys: d.balanceKeys }), [picked, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.seed, pinSet, fixedSet, d.balanceKeys, d.groups]);
   const stats = useMemo(() => keyStats(variants), [variants]);
+  const toggleGroup = (p: PartKey, uid: string) => {
+    const list = picked[p];
+    const i = list.findIndex((q) => q.uid === uid);
+    const g = { ...d.groups };
+    if (g[uid]) delete g[uid];
+    else if (i > 0) { const prev = list[i - 1].uid; const id = g[prev] ?? `g${Date.now().toString(36)}`; g[prev] = id; g[uid] = id; }
+    const size = new Map<string, number>();
+    for (const id of Object.values(g)) size.set(id, (size.get(id) ?? 0) + 1);
+    for (const [k, id] of Object.entries(g)) if ((size.get(id) ?? 0) < 2) delete g[k];
+    upd({ groups: g });
+  };
   const variant = variants[Math.min(shown, variants.length - 1)];
   const rowOf = useMemo(() => { const m = new Map<string, string>(); for (const [rid, us] of Object.entries(alloc.picks)) for (const u of us) m.set(u, rid); return m; }, [alloc]);
   const lockedSet = useMemo(() => new Set(Object.values(d.locked).flat()), [d.locked]);
   const missing = allocRows.reduce((a, r) => a + (alloc.deficit[r.id] ?? 0), 0);
   const flaggedN = rows.filter((r) => r.flag).length;
-  const issues = useMemo(() => [...checkVariants(variants), ...verifyAgainstOriginal(variants, picked, pinSet), ...reconcile(allocRows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, allocRows, alloc, picked, d.scoring, pinSet]);
+  const issues = useMemo(() => [...checkVariants(variants), ...verifyAgainstOriginal(variants, picked, pinSet, d.groups), ...reconcile(allocRows, alloc, picked, variants, d.scoring).filter((i) => i.kind !== 'thieu-cau')], [variants, allocRows, alloc, picked, d.scoring, pinSet, d.groups]);
   const lostLocks = alloc.lost;
   /** dòng thiếu câu mà có ứng viên bị loại vì đã dùng: báo rõ số lượng, giáo viên tự quyết dùng lại */
   const shortUsed = useMemo(() => rows.flatMap((r) => {
@@ -230,7 +243,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const refSheet = useRef<HTMLElement>(null);
   const refExport = useRef<HTMLDivElement>(null);
   const desktop = isDesktop();
-  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys, d.usage, d.reuse, d.pins, d.fixedOpts, d.balanceKeys]), [d]);
+  const draftSig = useMemo(() => JSON.stringify([d.rows, d.seed, d.policy, d.count, d.firstCode, d.shuffleQuestions, d.shuffleOptions, d.info, d.locked, d.rejected, d.exceptions, d.scoring, d.withKeys, d.usage, d.reuse, d.pins, d.fixedOpts, d.balanceKeys, d.groups]), [d]);
   const canExport = !usageBlocked && unchosen === 0 && total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -404,7 +417,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                   <PartHead text={p === 'p4' ? PART_HEAD[p] : `${PART_HEAD[p]} Thí sinh trả lời từ câu 1 đến câu ${variant.parts[p].length}.`} />
                   {variant.parts[p].map((s, k) => (
                     <div key={s.q.uid}>
-                      <SlotView slot={s} number={k + 1} pinned={pinSet.has(s.q.uid)} fixedOpt={fixedSet.has(s.q.uid)} isChoice={s.q.type === 'tn'} onPin={() => upd({ pins: pinSet.has(s.q.uid) ? d.pins.filter((u) => u !== s.q.uid) : [...d.pins, s.q.uid] })} onFixOpt={() => upd({ fixedOpts: fixedSet.has(s.q.uid) ? d.fixedOpts.filter((u) => u !== s.q.uid) : [...d.fixedOpts, s.q.uid] })} locked={lockedSet.has(s.q.uid)} verifiedDa={verified(effOf(s.q))} exception={!!d.exceptions[s.q.uid]}
+                      <SlotView slot={s} number={k + 1} pinned={pinSet.has(s.q.uid)} fixedOpt={fixedSet.has(s.q.uid)} isChoice={s.q.type === 'tn'} grouped={!!d.groups[s.q.uid]} canJoin={picked[p].findIndex((q) => q.uid === s.q.uid) > 0} onGroup={() => toggleGroup(p, s.q.uid)} onPin={() => upd({ pins: pinSet.has(s.q.uid) ? d.pins.filter((u) => u !== s.q.uid) : [...d.pins, s.q.uid] })} onFixOpt={() => upd({ fixedOpts: fixedSet.has(s.q.uid) ? d.fixedOpts.filter((u) => u !== s.q.uid) : [...d.fixedOpts, s.q.uid] })} locked={lockedSet.has(s.q.uid)} verifiedDa={verified(effOf(s.q))} exception={!!d.exceptions[s.q.uid]}
                         swapping={swap === s.q.uid} onLock={() => toggleLock(s.q.uid)} onSwap={() => setSwap(swap === s.q.uid ? null : s.q.uid)} onReroll={() => reroll(s.q.uid)} />
                       {swap === s.q.uid && (
                         <div className="te-swap" role="region" aria-label="Chọn câu thay thế">
