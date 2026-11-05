@@ -1,7 +1,8 @@
 ## Có gì mới trong beta.59 (kênh beta): xuất Word và nhập Word (công thức MathType), thống kê sau thi, lịch sử phiên bản, vẽ bảng biến thiên/đồ thị, SyncTeX
-Gồm PR #234, #235, #236, #237, #238, #239, #241, #242 (so với beta.58). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, chạy thử từng tính năng trên app Tauri với kho thử, và mở thử tệp .docx xuất ra bằng Word thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+Gồm PR #234, #235, #236, #237, #238, #239, #241, #242, #244 (so với beta.58). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, chạy thử từng tính năng trên app Tauri với kho thử, và mở thử tệp .docx xuất ra bằng Word thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
 **Word**
+- **Giao diện đề Word** (navy + đỏ): khung tên trường, ô ĐỀ KIỂM TRA, MÃ ĐỀ có viền, PHẦN/Câu có màu, khung Lời giải + Chọn đáp án, đầu trang (tên đề – môn, nhãn HEdu) và chân trang (Mã đề, Trang x/y). **6 chế độ xuất chọn nhiều cùng lúc**: đề học sinh, bản in học sinh (đen trắng), kèm lời giải, tô đáp án, đầy đủ (giáo viên), đầy đủ in đen trắng.
 - **Xuất Word (.docx)** từng mã đề (Thư viện đề › Xuất Word…, hoặc màn Đề): công thức là **Equation của Word** (sửa được), hình TikZ thành ảnh 300 dpi, bảng, câu đúng/sai, trả lời ngắn; tuỳ chọn kèm lời giải, **bản giáo viên** (tô đáp án đúng). Cần Pandoc (đặt ở `HEdu-tools\pandoc` cạnh app); cài cho máy khác sẽ cần đóng gói kèm.
 - **Nhập đề Word** (Nhập liệu › Mở file Word): đọc .docx (và .doc nếu máy có Word), **đổi công thức MathType sang LaTeX**, tách câu trắc nghiệm / đúng sai / trả lời ngắn, phương án gạch chân là đáp án đúng, tách lời giải. **Gắn đáp án từ tệp Word** (bảng đáp án theo mã đề). Hình trong Word chưa nhập: chỗ cần hình có dòng ghi chú "HÌNH TRONG WORD". Điều không chắc chắn thì để trống và ghi vào báo cáo.
 
