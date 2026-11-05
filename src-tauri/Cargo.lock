@@ -1507,6 +1507,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 name = "hedu"
 version = "0.1.0"
 dependencies = [
+ "cfb",
  "keyring",
  "reqwest",
  "rusqlite",
@@ -5458,6 +5459,7 @@ checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
 dependencies = [
  "arbitrary",
  "crc32fast",
+ "flate2",
  "indexmap 2.14.2",
  "memchr",
 ]

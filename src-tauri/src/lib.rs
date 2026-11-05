@@ -12,6 +12,8 @@ mod examfiles;
 mod examlib;
 mod exampack;
 mod khohinh;
+mod mtef;
+mod wordimport;
 mod examprofile;
 mod examsources;
 mod examusage;
@@ -514,6 +516,9 @@ pub fn run() {
             examfiles::exam_file_read,
             examword::exam_word_info,
             examword::exam_word_export,
+            wordimport::word_import,
+            wordimport::word_import_json,
+            wordimport::word_import_cleanup,
             examfiles::exam_file_write,
             examfiles::exam_file_versions,
             examfiles::exam_file_version_read,
