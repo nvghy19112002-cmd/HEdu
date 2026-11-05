@@ -507,7 +507,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
             <div className="grid2" style={{ gap: 10 }}>
               <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
-              <button type="button" className="btn btn-ghost" style={{ height: 44 }} disabled title="Xuất Word sẽ làm sau">Xuất Word · sắp có</button>
+              <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'Xuất từng mã đề ra Word (.docx)' : 'Lưu vào Thư viện đề trước'} onClick={() => setExportDlg(true)}>Xuất Word…</button>
             </div>
             </>}
             {blockers.length > 0

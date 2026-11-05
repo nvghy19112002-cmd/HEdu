@@ -15,6 +15,7 @@ mod khohinh;
 mod examprofile;
 mod examsources;
 mod examusage;
+mod examword;
 mod examxlsx;
 mod idexchange;
 mod importfs;
@@ -511,6 +512,8 @@ pub fn run() {
             examcompile::exam_pdf_open_external,
             examfiles::exam_file_list,
             examfiles::exam_file_read,
+            examword::exam_word_info,
+            examword::exam_word_export,
             examfiles::exam_file_write,
             examfiles::exam_file_versions,
             examfiles::exam_file_version_read,

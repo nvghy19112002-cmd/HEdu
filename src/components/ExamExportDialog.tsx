@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { examDuplicate, chooseProjectFolder } from '../lib/examlib';
 import { answersXlsx, codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
 import { listen } from '../lib/platform';
+import { exportWordCode, type WordOut } from '../lib/examword';
 
 export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; name: string; onClose(): void; onToast(m: string): void }) {
   const [info, setInfo] = useState<CodesInfo | null>(null);
@@ -15,6 +16,10 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
   const [prog, setProg] = useState<ExportProgress | null>(null);
   const [out, setOut] = useState<ExportOut | null>(null);
   const first = useRef<HTMLButtonElement>(null);
+  const [wSol, setWSol] = useState(false);
+  const [wMark, setWMark] = useState(false);
+  const [wRes, setWRes] = useState<{ code: string; out?: WordOut; err?: string }[]>([]);
+  const [wProg, setWProg] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -71,13 +76,29 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
     try { const p = await answersXlsx(id, dest); onToast(`Đã xuất Excel đáp án: ${p}`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
 
+  const wordRun = async () => {
+    if (!dest || !chosen.length) return;
+    setBusy(true); setErr(null); setWRes([]);
+    const res: { code: string; out?: WordOut; err?: string }[] = [];
+    try {
+      for (const code of chosen) {
+        setWProg(`Đang xuất Word · mã ${code} (${res.length + 1}/${chosen.length})`);
+        try { res.push({ code, out: await exportWordCode(id, code, { solution: wSol || wMark, mark: wMark }, dest, (i, n) => setWProg(`Mã ${code}: dịch hình ${i}/${n}`)) }); }
+        catch (e) { res.push({ code, err: e instanceof Error ? e.message : String(e) }); }
+        setWRes([...res]);
+      }
+      const ok = res.filter((r) => r.out).length;
+      onToast(`Đã xuất Word ${ok}/${chosen.length} mã đề vào ${dest}.`);
+    } finally { setBusy(false); setWProg(''); }
+  };
+
   const toggle = (c: string) => setChosen((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]));
 
   return (
     <>
       <div className="cfm-scrim" onClick={() => { if (!busy) onClose(); }} />
-      <div className="cfm" role="dialog" aria-modal="true" aria-label="Xuất PDF từng mã đề" style={{ maxWidth: 640 }}>
-        <h3>Xuất PDF từng mã đề · {name}</h3>
+      <div className="cfm" role="dialog" aria-modal="true" aria-label="Xuất từng mã đề" style={{ maxWidth: 640 }}>
+        <h3>Xuất từng mã đề (PDF, Word) · {name}</h3>
         <div className="cfm-body">
           {err && <p className="te-bad" role="alert">{err}</p>}
           {!info && !err && <p>Đang đọc dữ liệu mã đề…</p>}
@@ -125,6 +146,19 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { void pick(); }}>Chọn thư mục lưu…</button>
                 <span style={{ fontSize: 13, color: 'var(--ink-2)', overflowWrap: 'anywhere' }}>{dest ?? 'Chưa chọn'}</span>
                 <button type="button" className="btn btn-sm btn-outline" style={{ marginLeft: 'auto' }} disabled={busy || !dest} title={dest ? 'Một tệp .xlsx: trang "Theo mã đề" và "Theo câu", mọi mã đề. Không cần biên dịch PDF.' : 'Chọn thư mục lưu trước'} onClick={() => { void xlsx(); }}>Chỉ xuất Excel đáp án</button>
+              </div>
+              <div className="fb-rowbox" style={{ marginTop: 12 }}>
+                <b>Word (.docx)</b>
+                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Mỗi mã đề một tệp. Công thức là Equation của Word; dùng MathType thì chọn “Convert Equations” để đổi sang MathType.</span>
+                <label className="sw">Kèm lời giải<input type="checkbox" checked={wSol || wMark} disabled={busy || wMark} onChange={(e) => setWSol(e.target.checked)} /></label>
+                <label className="sw">Bản giáo viên (tô đáp án đúng, kèm lời giải)<input type="checkbox" checked={wMark} disabled={busy} onChange={(e) => setWMark(e.target.checked)} /></label>
+                <div><button type="button" className="btn btn-sm btn-dark" disabled={busy || !dest || !chosen.length} title={dest ? undefined : 'Chọn thư mục lưu trước'} onClick={() => { void wordRun(); }}>Xuất Word {chosen.length} mã…</button></div>
+                {wProg && <span role="status" aria-live="polite">{wProg}</span>}
+                {wRes.map((r) => (
+                  <div key={r.code} style={{ fontSize: 13 }}>
+                    {r.out ? <span className="okmark">✓ Mã {r.code}: {r.out.path}{r.out.warnings.length ? ` · Word không hiểu: ${r.out.warnings.join(', ')}` : ''}</span> : <span className="te-bad">Mã {r.code}: {r.err}</span>}
+                  </div>
+                ))}
               </div>
               {!gate.ok && <p className="te-note" style={{ marginTop: 8 }}>{gate.why}</p>}
               {busy && prog && <p role="status" aria-live="polite" style={{ marginTop: 8 }}>{phaseText(prog)}</p>}
