@@ -4,7 +4,7 @@ import { fileRead } from './examfiles';
 import { renderTikz } from './tikz';
 import { fillWidths, prepareBody, strangeCommands } from './wordfig';
 
-export interface WordOpts { solution: boolean; mark: boolean }
+export interface WordOpts { solution: boolean; mark: boolean; print?: boolean; suffix?: string }
 export interface WordOut { path: string; bytes: number; warnings: string[] }
 export interface PandocInfo { found: boolean; path: string; version: string }
 
@@ -47,6 +47,6 @@ export async function exportWordCode(id: string, code: string, opts: WordOpts, d
     pics.push({ name: figs[i].name, b64: p.b64 });
     widths.push(p.wcm);
   }
-  const out = await invoke<WordOut>('exam_word_export', { id, input: { code, destDir, solution: opts.solution, mark: opts.mark, body: fillWidths(body, widths), figures: pics } });
+  const out = await invoke<WordOut>('exam_word_export', { id, input: { code, destDir, solution: opts.solution, mark: opts.mark, print: !!opts.print, suffix: opts.suffix ?? '', body: fillWidths(body, widths), figures: pics } });
   return { ...out, warnings: [...new Set([...out.warnings, ...strangeCommands(body).map((c) => `\\${c}`)])] };
 }

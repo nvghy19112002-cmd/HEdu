@@ -28,6 +28,12 @@ pub struct WordIn {
     pub dest_dir: String,
     pub solution: bool,
     pub mark: bool,
+    /// bản in đen trắng (không màu, không nền)
+    #[serde(default)]
+    pub print: bool,
+    /// hậu tố tên tệp (vd. "-day-du"); rỗng thì suy từ solution/mark
+    #[serde(default)]
+    pub suffix: String,
     /// nội dung de-<mã>.tex đã thay hình TikZ bằng \includegraphics
     pub body: String,
     pub figures: Vec<Fig>,
@@ -160,6 +166,7 @@ pub fn export_word(root: &Path, lib: &Path, id: &str, inp: &WordIn) -> Result<Wo
             .arg("-M").arg(format!("made={}", safe_name(&inp.code)))
             .arg("-M").arg(format!("solution={}", if inp.solution { 1 } else { 0 }))
             .arg("-M").arg(format!("mark={}", if inp.mark { 1 } else { 0 }))
+            .arg("-M").arg(format!("print={}", if inp.print { 1 } else { 0 }))
             .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
         crate::tikz::hide_console(&mut c);
         let mut child = c.spawn().map_err(|e| format!("Không chạy được Pandoc: {e}"))?;
@@ -185,7 +192,10 @@ pub fn export_word(root: &Path, lib: &Path, id: &str, inp: &WordIn) -> Result<Wo
             let msg: String = stderr.lines().filter(|l| !l.starts_with("HEDU-CANH-BAO")).take(4).collect::<Vec<_>>().join(" ");
             return Err(format!("Pandoc không tạo được tệp Word. {msg}"));
         }
-        let stem = format!("de-{}{}", safe_name(&inp.code), if inp.mark { "-dap-an" } else if inp.solution { "-loi-giai" } else { "" });
+        let head = stderr.lines().find_map(|l| l.strip_prefix("HEDU-DAU-TRANG ")).unwrap_or("").trim().to_string();
+        fill_header(&out, &head, &safe_name(&inp.code)).map_err(|e| format!("Không ghi được đầu/chân trang: {e}"))?;
+        let suffix = if inp.suffix.is_empty() { (if inp.mark { "-dap-an" } else if inp.solution { "-loi-giai" } else { "" }).to_string() } else { safe_name(&inp.suffix.replace('-', "_")).replace('_', "-") };
+        let stem = format!("de-{}{}", safe_name(&inp.code), suffix);
         let target = unique_path(&dest, &stem, "docx");
         fs::copy(&out, &target).map_err(|e| format!("Không ghi được tệp Word: {e}"))?;
         let bytes = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
@@ -193,6 +203,30 @@ pub fn export_word(root: &Path, lib: &Path, id: &str, inp: &WordIn) -> Result<Wo
     })();
     let _ = fs::remove_dir_all(&work);
     r
+}
+
+/// Điền chữ vào đầu trang / chân trang của tệp Word vừa dựng (mẫu có chỗ giữ @@DAUTRANG@@ và @@MA@@).
+fn fill_header(docx: &Path, head: &str, code: &str) -> Result<(), String> {
+    use std::io::{Read, Write};
+    let esc = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let mut zin = zip::ZipArchive::new(fs::File::open(docx).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let tmp = docx.with_extension("tmp");
+    let mut zout = zip::ZipWriter::new(fs::File::create(&tmp).map_err(|e| e.to_string())?);
+    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for i in 0..zin.len() {
+        let mut f = zin.by_index(i).map_err(|e| e.to_string())?;
+        let name = f.name().to_string();
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+        if name.starts_with("word/header") || name.starts_with("word/footer") {
+            let t = String::from_utf8_lossy(&buf).replace("@@DAUTRANG@@", &esc(head)).replace("@@MA@@", &esc(&if code.is_empty() { String::new() } else { format!("Mã đề {code}") }));
+            buf = t.into_bytes();
+        }
+        zout.start_file(name, opts).map_err(|e| e.to_string())?;
+        zout.write_all(&buf).map_err(|e| e.to_string())?;
+    }
+    zout.finish().map_err(|e| e.to_string())?;
+    fs::rename(&tmp, docx).map_err(|e| e.to_string())
 }
 
 fn root_of(app: &AppHandle) -> Result<PathBuf, String> {
