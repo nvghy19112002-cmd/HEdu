@@ -336,9 +336,19 @@ export interface Slot {
   note?: string;
 }
 export interface Variant { code: string; parts: Record<PartKey, Slot[]> }
-export interface VariantOpts { count: number; firstCode: number; shuffleQuestions: boolean; shuffleOptions: boolean; seed: number; /** mã đầu giữ nguyên thứ tự và phương án gốc */ keepFirstOriginal: boolean }
+export interface VariantOpts {
+  count: number; firstCode: number; shuffleQuestions: boolean; shuffleOptions: boolean; seed: number;
+  /** mã đầu giữ nguyên thứ tự và phương án gốc */
+  keepFirstOriginal: boolean;
+  /** câu giữ NGUYÊN VỊ TRÍ trong phần của nó ở mọi mã (các câu còn lại trộn vào những vị trí trống) */
+  pinned?: ReadonlySet<string>;
+  /** câu không trộn phương án A–D (vẫn trộn vị trí câu, trừ khi cũng được ghim) */
+  fixedOptions?: ReadonlySet<string>;
+  /** cân bằng đáp án A–D trong từng mã và tránh cùng một đáp án ở nhiều mã */
+  balanceKeys?: boolean;
+}
 
-function slotOf(q: Question, part: PartKey, rand: (() => number) | null): Slot {
+function slotOf(q: Question, part: PartKey, rand: (() => number) | null, choose?: (correct: number, rand: () => number) => number[]): Slot {
   const parsed = parseExTest(q.latex);
   if (part === 'p1') {
     const loc = locateChoice(q.latex);
@@ -346,7 +356,7 @@ function slotOf(q: Question, part: PartKey, rand: (() => number) | null): Slot {
       const k = parsed.options.findIndex((x) => x.correct);
       return { q, latex: q.latex, key: k >= 0 && parsed.options.length === 4 ? LETTERS[k] : '?', shuffled: false, note: rand ? `không trộn phương án: ${loc.why}` : undefined };
     }
-    const order = rand ? shuffle([0, 1, 2, 3], rand) : [0, 1, 2, 3];
+    const order = rand ? (choose ? choose(loc.loc.correct, rand) : shuffle([0, 1, 2, 3], rand)) : [0, 1, 2, 3];
     const moved = order.some((x, i) => x !== i);
     return { q, latex: moved ? permuteChoice(q.latex, loc.loc, order) : q.latex, key: LETTERS[order.indexOf(loc.loc.correct)], shuffled: moved };
   }
@@ -355,15 +365,45 @@ function slotOf(q: Question, part: PartKey, rand: (() => number) | null): Slot {
   return { q, latex: q.latex, key: '—', shuffled: false };
 }
 
+/** Trộn thứ tự nhưng các câu ghim giữ đúng chỉ số cũ; câu còn lại xáo vào các chỉ số trống. */
+export function shuffleWithPins(list: readonly Question[], pinned: ReadonlySet<string> | undefined, rand: () => number): Question[] {
+  if (!pinned || !pinned.size || !list.some((q) => pinned.has(q.uid))) return shuffle(list, rand);
+  const free = shuffle(list.filter((q) => !pinned.has(q.uid)), rand);
+  let k = 0;
+  return list.map((q) => (pinned.has(q.uid) ? q : free[k++]));
+}
+
 export function makeVariants(picked: Picked, o: VariantOpts): Variant[] {
   const out: Variant[] = [];
+  const history = new Map<string, Set<string>>(); // uid → các đáp án đã dùng ở mã trước (để tránh trùng giữa các mã)
   for (let v = 0; v < o.count; v++) {
     const original = v === 0 && o.keepFirstOriginal;
     const rand = rng(o.seed + 7919 * (v + 1));
     const parts = { p1: [], p2: [], p3: [], p4: [] } as Record<PartKey, Slot[]>;
+    const counts = [0, 0, 0, 0]; // số câu đã đặt đáp án A–D trong mã này (chỉ dùng khi cân bằng)
     for (const p of PARTS) {
-      const list = !original && o.shuffleQuestions ? shuffle(picked[p], rand) : picked[p];
-      parts[p] = list.map((q) => slotOf(q, p, !original && o.shuffleOptions ? rand : null));
+      const list = !original && o.shuffleQuestions ? shuffleWithPins(picked[p], o.pinned, rand) : picked[p];
+      parts[p] = list.map((q) => {
+        const fixed = o.fixedOptions?.has(q.uid);
+        const shuf = !original && o.shuffleOptions && !fixed;
+        const choose = shuf && o.balanceKeys ? (correct: number, r: () => number): number[] => {
+          const prev = history.get(q.uid);
+          let best: number[] = [0, 1, 2, 3], bestCost = Infinity;
+          for (let t = 0; t < 12; t++) {
+            const ord = shuffle([0, 1, 2, 3], r);
+            const letter = ord.indexOf(correct);
+            const cost = counts[letter] * 10 + (prev?.has(LETTERS[letter]) ? 6 : 0) + r();
+            if (cost < bestCost) { bestCost = cost; best = ord; }
+          }
+          return best;
+        } : undefined;
+        const slot = slotOf(q, p, shuf ? rand : null, choose);
+        if (p === 'p1' && /^[A-D]$/.test(slot.key)) {
+          counts[LETTERS.indexOf(slot.key)]++;
+          (history.get(q.uid) ?? history.set(q.uid, new Set()).get(q.uid)!).add(slot.key);
+        }
+        return fixed && !original && o.shuffleOptions ? { ...slot, note: slot.note ?? 'giữ nguyên phương án theo yêu cầu' } : slot;
+      });
     }
     out.push({ code: String(o.firstCode + v), parts });
   }
@@ -373,7 +413,7 @@ export function makeVariants(picked: Picked, o: VariantOpts): Variant[] {
 export const countsOf = (p: Picked): Record<PartKey, number> => ({ p1: p.p1.length, p2: p.p2.length, p3: p.p3.length, p4: p.p4.length });
 
 // ---------- Kiểm tra trước khi lưu/xuất ----------
-export type IssueKind = 'thieu-dap-an' | 'dap-an-mau-thuan' | 'tong-lech' | 'thieu-cau' | 'dong-chua-xu-ly';
+export type IssueKind = 'thieu-dap-an' | 'dap-an-mau-thuan' | 'tong-lech' | 'thieu-cau' | 'dong-chua-xu-ly' | 'sai-lech-goc';
 export interface Issue { kind: IssueKind; code?: string; part?: PartKey; index?: number; uid?: string; msg: string }
 
 const KEY_OK: Record<PartKey, (k: string) => boolean> = {
@@ -406,6 +446,57 @@ export function checkVariants(vs: readonly Variant[]): Issue[] {
     }
   });
   return out;
+}
+
+const norm = (t: string): string => t.replace(/\s+/g, ' ').trim();
+const withoutSpans = (latex: string, spans: readonly [number, number][]): string => { let out = '', at = 0; for (const [a, b] of spans) { out += latex.slice(at, a); at = b; } return out + latex.slice(at); };
+
+/**
+ * Đối chiếu từng câu trong MỖI mã đề với câu GỐC trong ngân hàng (không dựa vào đáp án máy tự ghi):
+ * phần ngoài 4 phương án phải y nguyên; 4 phương án phải là một hoán vị của phương án gốc; chữ đáp án phải trỏ đúng phương án đúng của câu gốc;
+ * mỗi phần có đủ và không lặp các câu đã chọn; câu ghim đứng đúng vị trí cũ.
+ */
+export function verifyAgainstOriginal(vs: readonly Variant[], picked: Picked, pinned?: ReadonlySet<string>): Issue[] {
+  const out: Issue[] = [];
+  for (const v of vs) for (const p of PARTS) {
+    const want = picked[p].map((q) => q.uid).sort();
+    const got = v.parts[p].map((s) => s.q.uid).sort();
+    if (want.length !== got.length || want.some((u, i) => u !== got[i])) out.push({ kind: 'sai-lech-goc', code: v.code, part: p, msg: `mã ${v.code}, ${PART_NAME[p].split(' · ')[0]}: tập câu khác với các câu đã chọn (thiếu, thừa hoặc lặp)` });
+    if (pinned?.size) picked[p].forEach((q, i) => { if (pinned.has(q.uid) && v.parts[p][i]?.q.uid !== q.uid) out.push({ kind: 'sai-lech-goc', code: v.code, part: p, index: i + 1, uid: q.uid, msg: `mã ${v.code}: câu ghim không đứng đúng vị trí ${i + 1}` }); });
+    if (p !== 'p1') continue;
+    v.parts[p].forEach((s, i) => {
+      const at = { code: v.code, part: p, index: i + 1, uid: s.q.uid };
+      const where = `mã ${v.code}, câu ${i + 1}`;
+      const o = locateChoice(s.q.latex);
+      const n = locateChoice(s.latex);
+      if (!o.ok || !n.ok) { if (s.latex !== s.q.latex) out.push({ kind: 'sai-lech-goc', ...at, msg: `${where}: câu bị đổi nhưng không đọc được 4 phương án để đối chiếu` }); return; }
+      if (norm(withoutSpans(s.latex, n.loc.spans)) !== norm(withoutSpans(s.q.latex, o.loc.spans))) { out.push({ kind: 'sai-lech-goc', ...at, msg: `${where}: nội dung ngoài các phương án khác câu gốc` }); return; }
+      const ro = o.loc.spans.map(([a, b]) => norm(s.q.latex.slice(a, b)));
+      const rn = n.loc.spans.map(([a, b]) => norm(s.latex.slice(a, b)));
+      if ([...ro].sort().join('\u0000') !== [...rn].sort().join('\u0000')) { out.push({ kind: 'sai-lech-goc', ...at, msg: `${where}: bốn phương án không phải hoán vị của câu gốc` }); return; }
+      const k = LETTERS.indexOf(s.key);
+      if (k < 0 || rn[k] !== ro[o.loc.correct]) out.push({ kind: 'sai-lech-goc', ...at, msg: `${where}: đáp án ${s.key} không trỏ đúng phương án đúng của câu gốc` });
+    });
+  }
+  return out;
+}
+
+export interface KeyStats {
+  /** mỗi mã: số đáp án A, B, C, D ở Phần I */
+  perCode: { code: string; counts: [number, number, number, number] }[];
+  /** câu Phần I có cùng một đáp án ở mọi mã (khi có từ 2 mã trở lên) */
+  sameEverywhere: string[];
+}
+export function keyStats(vs: readonly Variant[]): KeyStats {
+  const perCode = vs.map((v) => {
+    const c: [number, number, number, number] = [0, 0, 0, 0];
+    for (const s of v.parts.p1) { const k = LETTERS.indexOf(s.key); if (k >= 0) c[k]++; }
+    return { code: v.code, counts: c };
+  });
+  const byUid = new Map<string, Set<string>>();
+  for (const v of vs) for (const s of v.parts.p1) { if (!/^[A-D]$/.test(s.key)) continue; (byUid.get(s.q.uid) ?? byUid.set(s.q.uid, new Set()).get(s.q.uid)!).add(s.key); }
+  const sameEverywhere = vs.length >= 2 ? [...byUid].filter(([, k]) => k.size === 1).map(([u]) => u) : [];
+  return { perCode, sameEverywhere };
 }
 
 /** Đối chiếu độc lập từ nội dung các mã đề: số câu, loại câu, mức độ từng dòng và điểm phải khớp ma trận và câu đã chọn. */
