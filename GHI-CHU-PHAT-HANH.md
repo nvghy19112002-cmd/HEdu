@@ -1,3 +1,22 @@
+## Có gì mới trong beta.60 (kênh beta): trộn đề có điều kiện, câu chùm, định nghĩa riêng theo câu, duyệt hàng loạt câu có ID, kiểm tra đề sâu hơn
+Gồm PR #246, #247, #248, #249, #250, #251 (so với beta.59). Không tự đổi ngân hàng câu hỏi hay tệp đề của bạn: nút duyệt hàng loạt chỉ ghi khi bạn bấm và xác nhận. Đã thử bằng bộ kiểm thử (255 test Rust, test giao diện), chạy thử từng tính năng trên app Tauri với kho thử và dịch thử bằng TeX Live thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+
+**Trộn đề (Tạo đề)**
+- **Ghim vị trí** (câu luôn đứng đúng số thứ tự ở mọi mã) và **Giữ phương án** (không đổi A–D) trên từng câu.
+- **Nối chùm**: các câu liền nhau dùng chung đề dẫn hoặc hình được trộn như một khối, luôn đứng liền nhau và đúng thứ tự.
+- **Cân bằng đáp án A–D giữa các mã**, hạn chế một câu có cùng đáp án ở mọi mã.
+- **Kiểm tra đáp án sau trộn**: mỗi mã được đối chiếu với câu gốc trong ngân hàng (phần ngoài phương án y nguyên, 4 phương án là hoán vị, chữ đáp án trỏ đúng phương án đúng; chùm và ghim đúng chỗ) kèm bảng đếm A/B/C/D từng mã. Sai thì chặn xuất và nêu câu nào. Mặc định không đổi hành vi cũ.
+
+**Ngân hàng**
+- **Định nghĩa riêng theo từng câu** (macro `\newcommand`, `\def`, `\DeclareMathOperator`, `\newenvironment`, `\tikzset`, thư viện TikZ lấy từ đầu tệp .tex lúc nhập): mỗi câu chỉ giữ phần nó dùng. Xem chuẩn, xuất .tex và dựng mã đề tự kèm; trình sửa câu có khung xem/sửa. Câu cũ không đổi; nhập lại từ tệp gốc hoặc dán định nghĩa vào khung để có.
+- **Sức khoẻ ngân hàng › Duyệt và xác minh các câu đã có ID**: đặt “Đã duyệt” và xác minh Dạng + mức độ cho mọi câu đã có ID. Xem trước số câu, tạo điểm khôi phục trước khi ghi; bỏ qua câu chưa có ID, Dạng “cần xem lại” và câu bạn đã đánh “Cần sửa” (có ô tick để gồm cả).
+
+**Thư viện đề và biên dịch**
+- **Kiểm tra trước khi chốt** soi thêm chính các câu trong tệp .tex: lỗi cấu trúc, trắc nghiệm không đúng một `\True`, câu chưa có lời giải (ghi chú), cặp câu giống đề bài, TikZ mở/đóng lệch.
+- **Chân trang “Trang 3/??”**: biên dịch dịch lại khi còn tham chiếu chưa định nghĩa; Xử lí TeX tối đa 3 lượt.
+
+**Còn mở:** PDF “bị mờ” ở Xử lí TeX (cần ví dụ cụ thể); lưu ảnh của câu hỏi (cần thiết kế lại vì đường xem chuẩn dùng DVI không chèn được PNG); biên dịch song song nhiều mã (cần tách thư mục làm việc từng mã).
+
 ## Có gì mới trong beta.59 (kênh beta): xuất Word và nhập Word (công thức MathType), thống kê sau thi, lịch sử phiên bản, vẽ bảng biến thiên/đồ thị, SyncTeX
 Gồm PR #234, #235, #236, #237, #238, #239, #241, #242, #244 (so với beta.58). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, chạy thử từng tính năng trên app Tauri với kho thử, và mở thử tệp .docx xuất ra bằng Word thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
