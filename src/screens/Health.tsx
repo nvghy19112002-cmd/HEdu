@@ -6,6 +6,8 @@ import { addToReport, emptyReport, HEALTH, healthFlags, type HealthKey, type Hea
 import { useTaxonomy } from '../lib/curriculum';
 import { parseExTest } from '../lib/extest';
 import { seqLabel } from '../lib/id';
+import { approveRun } from '../lib/approverun';
+import { planApprove } from '../lib/approveids';
 import { effectiveOf, getRec, useIdReview } from '../lib/idreview';
 import { useBank } from '../lib/store';
 import { indexOf } from '../lib/taxonomy';
@@ -27,6 +29,17 @@ export function HealthScreen() {
   const [running, setRunning] = useState(false);
   const [again, setAgain] = useState(0);
   const [open, setOpen] = useState<HealthKey | null>(null);
+  const [inclFix, setInclFix] = useState(false);
+  const [apBusy, setApBusy] = useState(false);
+  const [apMsg, setApMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const plan = useMemo(() => planApprove(questions, (q) => effectiveOf(q, getRec(q.uid), { ix, taxRev: rev }), { includeNeedsFix: inclFix }), [questions, ix, rev, reviewVer, inclFix]);
+  const doApprove = async () => {
+    const n = new Set([...plan.review, ...plan.verify]).size;
+    if (!n) return;
+    if (!window.confirm(`Sẽ đặt “Đã duyệt” cho ${plan.review.length} câu và xác minh Dạng/mức độ cho ${plan.verify.length} câu (tổng ${n} câu đã có ID). HEdu tạo điểm khôi phục trước khi ghi. Tiếp tục?`)) return;
+    setApBusy(true); setApMsg(null);
+    try { setApMsg(await approveRun(plan, rev, (q) => effectiveOf(q, getRec(q.uid), { ix, taxRev: rev }))); } finally { setApBusy(false); }
+  };
   const byUid = useMemo(() => new Map(questions.map((q) => [q.uid, q] as const)), [questions]);
 
   // quét theo đợt 60 câu, nhường chỗ cho giao diện giữa các đợt; đổi ngân hàng/cây/xác minh ⇒ quét lại
@@ -57,7 +70,7 @@ export function HealthScreen() {
       <header className="page-head">
         <div>
           <h1>Sức khoẻ ngân hàng</h1>
-          <span className="sys-hint">Quét mọi câu và đếm những chỗ nên xem lại. Chỉ đọc: không câu nào bị sửa. Nghi trùng kiểm ở màn Kiểm tra trùng trong Ngân hàng.</span>
+          <span className="sys-hint">Quét mọi câu và đếm những chỗ nên xem lại. Bảng quét chỉ đọc; phần “Duyệt hàng loạt” bên dưới là nơi duy nhất ghi (sau khi bạn xác nhận). Nghi trùng kiểm ở màn Kiểm tra trùng trong Ngân hàng.</span>
         </div>
         <div className="head-actions">
           <button type="button" className="btn btn-sm" disabled={running} onClick={() => setAgain((n) => n + 1)}>Quét lại</button>
@@ -71,6 +84,14 @@ export function HealthScreen() {
             : rep.total === 0
               ? <span>Ngân hàng chưa có câu nào.</span>
               : <span><b>{nf.format(rep.clean)}</b> / {nf.format(rep.total)} câu không có vấn đề nặng ({Math.round((rep.clean / rep.total) * 100)}%). {heavy === 0 ? 'Không có lỗi hay cảnh báo nào.' : `Còn ${nf.format(heavy)} chỗ lỗi hoặc cảnh báo cần xem.`}</span>}
+        </div>
+        <div className="panel is-compact" style={{ display: 'grid', gap: 8 }}>
+          <b>Duyệt hàng loạt các câu đã có ID</b>
+          <span className="xl-meta">Đặt “Đã duyệt” và xác minh Dạng + mức độ cho mọi câu đã có ID. Bỏ qua: câu chưa có ID ({nf.format(plan.skippedNoId)}), câu có Dạng “cần xem lại” ({nf.format(plan.skippedXemLai)}){inclFix ? '' : `, câu bạn đã đánh “Cần sửa” (${nf.format(plan.skippedNeedsFix)})`}.</span>
+          <span>Cần đặt “Đã duyệt”: <b>{nf.format(plan.review.length)}</b> câu · cần xác minh Dạng/mức độ: <b>{nf.format(plan.verify.length)}</b> câu · đã đủ: {nf.format(plan.already)} câu.</span>
+          <label className="sw">Gồm cả câu đang “Cần sửa”<input type="checkbox" checked={inclFix} disabled={apBusy} onChange={(e) => setInclFix(e.target.checked)} /></label>
+          <div><button type="button" className="btn btn-sm btn-dark" disabled={apBusy || running || !(plan.review.length + plan.verify.length)} onClick={() => { void doApprove(); }}>{apBusy ? 'Đang ghi…' : 'Duyệt và xác minh các câu đã có ID…'}</button></div>
+          {apMsg && <span role="status" className={apMsg.ok ? 'okmark' : 'te-bad'}>{apMsg.text}</span>}
         </div>
         <ul className="hl-list" aria-label="Các nhóm vấn đề">
           {HEALTH.map((h) => {
