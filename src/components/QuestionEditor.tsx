@@ -93,6 +93,8 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
   const [conflict, setConflict] = useState(boot.conflict);
 
   const [latex, setLatex] = useState(init.latex);
+  /** định nghĩa riêng của câu (macro lấy từ đầu tệp lúc nhập) */
+  const [own, setOwn] = useState(editing?.preamble ?? '');
   const [khoDlg, setKhoDlg] = useState<null | 'chen' | 'luu'>(null);
   const [lintOpen, setLintOpen] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
@@ -174,7 +176,7 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
     if (placed && idConflict) { setAttrs(true); toast('ID trong LaTeX khác vị trí đang chọn — hãy chọn bên đúng (ngay dưới thanh vị trí) rồi lưu.'); return false; }
     const hadReview = editing?.review;
     const idWarn = !placed ? '' : ids.state === 'id-loi' ? ' — lưu ý: ID trong LaTeX đang lỗi, cần sửa' : ids.state === 'vi-tri-loi' ? ' — lưu ý: vị trí chưa ra được ID hợp lệ' : '';
-    const q = saveQuestion({ latex: latexToSave(), level, tags, ...loc }, editing?.uid);
+    const q = saveQuestion({ latex: latexToSave(), level, tags, ...loc, ...(editing ? { preamble: own.trim() || undefined } : own.trim() ? { preamble: own.trim() } : {}) }, editing?.uid);
     if (!editing) saveDraft(null);
     if (editing && wasNoId && noIdEff) {
       // Vẫn chưa chọn vị trí ⇒ giữ câu trong mục "Chưa có ID" dù nội dung đổi. Đã chọn vị trí ⇒ rời mục: giáo viên chọn, chưa xác minh.
@@ -432,6 +434,10 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
             <SymbolPalette onPick={(snippet, raw) => ed.current?.insert(snippet, { wrapMath: !raw })} />
           </div>
           <LatexEditor ref={ed} value={latex} onChange={setLatex} onCursor={(line, col) => setPos({ line, col })} />
+          <details className="q-own" open={!!own}>
+            <summary title="Các định nghĩa (\newcommand, \def, môi trường, thư viện TikZ) mà câu này cần, lấy từ đầu tệp lúc nhập. Xem chuẩn, xuất .tex và dựng đề đều tự kèm.">Định nghĩa riêng của câu{own ? ' (có)' : ''}</summary>
+            <textarea className="inp mono" rows={4} value={own} placeholder="Chưa có. Dán các dòng \newcommand… mà câu này cần." onChange={(e) => setOwn(e.target.value)} spellCheck={false} />
+          </details>
           {histOpen && editing && <HistoryDialog title={`Lịch sử phiên bản của câu ${seqLabel(editing.seq)}`} current={latex} versions={versionsOf(editing.uid).map((v) => ({ key: String(v.at), label: new Date(v.at).toLocaleString('vi-VN'), load: async () => v.latex }))} onRestore={(t) => { setLatex(t); toast('Đã đưa bản cũ vào khung soạn. Xem lại rồi bấm Lưu để giữ.'); }} onClose={() => setHistOpen(false)} />}
           {figOpen && <FigureBuilder onClose={() => setFigOpen(false)} onInsert={(c) => { setFigOpen(false); ed.current?.insertRaw(chenText({ code: c, extra_preamble: '' })); toast('Đã chèn hình vào chỗ con trỏ.'); }} onSaved={(m) => toast(m)} />}
           {lintOpen && <LintDialog text={latex} texBin={getSettings().texBin || undefined} onJump={(l) => ed.current?.selectLine(l)} onClose={() => setLintOpen(false)} />}
@@ -456,7 +462,7 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
                     Mã đã đổi sau lần biên dịch này. <button type="button" className="linkbtn" onClick={startExact}>Dịch lại</button>
                   </div>
                 )}
-                <CompiledView key={snap} latex={snap} solution={showSol} onBack={() => setMode('quick')} onState={setTex} />
+                <CompiledView key={snap} latex={snap} preamble={editing?.preamble} solution={showSol} onBack={() => setMode('quick')} onState={setTex} />
               </>
             ) : (
               <QuestionView p={parsed} number={1} raw={slow} showSolution={showSol} />

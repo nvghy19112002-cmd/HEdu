@@ -68,18 +68,18 @@ async function opts(solution: boolean) {
  * Biên dịch nguyên một câu (\begin{ex}…\end{ex}). Không bao giờ ném lỗi: lỗi trả về dạng `Result`
  * để một câu hỏng không làm hỏng cả đợt. `keep=false` thì không nhớ SVG trong bộ nhớ (dùng khi chạy hàng trăm câu).
  */
-export function compileQuestion(latex: string, solution: boolean, keep = true): Promise<Result> {
+export function compileQuestion(latex: string, solution: boolean, keep = true, preamble = ''): Promise<Result> {
   if (!isTikzReady()) {
     return Promise.resolve({ ok: false, fail: { category: 'thieu-texlive', label: 'Chỉ có ở bản cài Windows', detail: 'Biên dịch bằng TeX Live chỉ chạy trong bản cài trên máy.', message: '', log: '' } });
   }
-  const k = `${settingsSignature()}${solution ? 1 : 0}|${latex}`;
+  const k = `${settingsSignature()}${solution ? 1 : 0}|${preamble}|${latex}`;
   if (keep) {
     const hit = memo.get(k);
     if (hit) return hit;
   }
   const p: Promise<Result> = (async (): Promise<Result> => {
     try {
-      const o = await invoke<TikzOut>('tikz_render', { code: latex, defs: '', opts: await opts(solution) });
+      const o = await invoke<TikzOut>('tikz_render', { code: latex, defs: preamble, opts: await opts(solution) });
       return { ok: true, svg: keep ? o.svg : '', cached: o.cached, ms: o.ms };
     } catch (e) {
       return { ok: false, fail: categorize(asTikzErr(e)) };
@@ -101,7 +101,7 @@ export interface BatchProgress { done: number; total: number; ok: number; failed
 export async function compileBatch(
   items: string[],
   solution: boolean,
-  hooks: { onEach: (i: number, r: Result) => void; signal: { stop: boolean }; parallel?: number },
+  hooks: { onEach: (i: number, r: Result) => void; signal: { stop: boolean }; parallel?: number; /** định nghĩa riêng của từng câu (cùng chỉ số với items) */ preambles?: readonly string[] },
 ): Promise<void> {
   let next = 0;
   const worker = async () => {
@@ -109,7 +109,7 @@ export async function compileBatch(
       if (hooks.signal.stop) return;
       const i = next++;
       if (i >= items.length) return;
-      const r = await compileQuestion(items[i], solution, false);
+      const r = await compileQuestion(items[i], solution, false, hooks.preambles?.[i] ?? '');
       hooks.onEach(i, r);
     }
   };

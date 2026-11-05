@@ -2,6 +2,7 @@
 //  1) "Chỉ file câu hỏi": mã LaTeX NGUYÊN VĂN của từng câu, không thêm khai báo (câu cũ chưa có ID được thêm ID theo vị trí).
 //  2) "Thư mục biên dịch được": main.tex + khaibaochung.tex + cauhoi.tex (nguyên văn) + gói .sty đi kèm + CAN-CO-GI.md.
 // File này chỉ SINH NỘI DUNG (hàm thuần, có test). Việc ghi ra đĩa do app Windows (Rust) làm.
+import { mergePreambles } from './qpreamble';
 import { getTaxonomy } from './curriculum';
 import { latexForExport } from './idsync';
 import type { Question, Taxonomy } from './types';
@@ -16,7 +17,8 @@ export interface ProjectFile { path: string; text: string }
 
 /** Kiểu 1: nguyên văn từng câu, cách nhau đúng một dòng trống. Không tiêu đề; chỉ câu cũ chưa có ID được thêm `%[ID]` theo vị trí (idsync.latexForExport). */
 export function verbatimTex(qs: readonly Question[], tax: Taxonomy = getTaxonomy()): string {
-  return qs.map((q) => latexForExport(q, tax)).join('\n\n') + '\n';
+  const pre = mergePreambles(qs.map((q) => q.preamble));
+  return (pre ? pre + '\n\n' : '') + qs.map((q) => latexForExport(q, tax)).join('\n\n') + '\n';
 }
 
 export const MAIN_TEX = `\\documentclass[12pt,a4paper,twoside]{book}

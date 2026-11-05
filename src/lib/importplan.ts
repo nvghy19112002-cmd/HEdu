@@ -34,6 +34,8 @@ export interface PlanInput {
   commonLevel: Level;
   tags: (i: number) => string[];
   tax: Taxonomy;
+  /** định nghĩa riêng của từng câu (qpreamble.ts); vắng = không có */
+  preambles?: (i: number) => string | undefined;
 }
 
 /**
@@ -46,6 +48,7 @@ export function planDrafts(p: PlanInput): { drafts: Draft[]; meta: PlacedMeta[] 
   const meta: PlacedMeta[] = [];
   // ID nguyên bản trong tệp (dựng lại từ vị trí + mức độ đọc được; trùng với mã trong tệp, đã chuẩn hoá chữ hoa)
   const origOf = (id: IdRead): { orig?: string } => { const sc = strictCode(id.loc, id.level, p.tax); return sc.ok ? { orig: sc.code } : {}; };
+  const pre = (i: number): { preamble?: string } => { const x = p.preambles?.(i); return x ? { preamble: x } : {}; };
   for (let i = 0; i < p.latexes.length; i++) {
     if (!p.importing(i)) continue;
     const text = p.latexes[i].trim();
@@ -54,12 +57,12 @@ export function planDrafts(p: PlanInput): { drafts: Draft[]; meta: PlacedMeta[] 
     if (id && ver?.verdict === 'bat-dong') {
       const pl = placeDisputed({ text, id, ver, decision: p.decision(i), commonLoc: p.commonLoc, commonLevel: p.commonLevel, tax: p.tax });
       if (!pl.ok) return { error: `Câu ${i + 1}: ${pl.reason}` };
-      out.push({ latex: pl.latex, level: pl.level, tags: p.tags(i), ...pl.loc });
+      out.push({ latex: pl.latex, level: pl.level, tags: p.tags(i), ...pl.loc, ...pre(i) });
       meta.push({ form: pl.form, src: pl.src, unclassified: pl.unclassified, ...(pl.why ? { why: pl.why } : {}), ...(pl.prop ? { prop: pl.prop } : {}), ...origOf(id) });
       continue;
     }
     if (id) {
-      out.push({ latex: text, level: id.level, tags: p.tags(i), ...id.loc });
+      out.push({ latex: text, level: id.level, tags: p.tags(i), ...id.loc, ...pre(i) });
       // ID từ tệp: khớp ngân hàng ⇒ máy phân loại; chưa kiểm chứng ⇒ chưa xác minh. Không bao giờ tự thành giáo viên xác minh.
       meta.push({ form: ver?.verdict === 'khop' ? 'may' : 'chua', src: 'tep', unclassified: false, ...origOf(id) });
       continue;
@@ -70,10 +73,10 @@ export function planDrafts(p: PlanInput): { drafts: Draft[]; meta: PlacedMeta[] 
     if (suggested) {
       const w = placeWithId(text, at, p.commonLevel, p.tax, false);
       const wrote = 'latex' in w;
-      out.push({ latex: wrote ? w.latex : text, level: p.commonLevel, tags: p.tags(i), ...at });
+      out.push({ latex: wrote ? w.latex : text, level: p.commonLevel, tags: p.tags(i), ...at, ...pre(i) });
       meta.push({ form: wrote ? 'may' : 'chua', src: 'goi-y', unclassified: !wrote });
     } else {
-      out.push({ latex: text, level: p.commonLevel, tags: p.tags(i), ...at });
+      out.push({ latex: text, level: p.commonLevel, tags: p.tags(i), ...at, ...pre(i) });
       meta.push({ form: 'chua', src: 'tay', unclassified: true });
     }
   }

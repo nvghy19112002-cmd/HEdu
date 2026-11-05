@@ -23,7 +23,7 @@ export function FailureBox({ fail, onRetry }: { fail: Failure; onRetry?: () => v
   );
 }
 
-export function CompiledView({ latex, solution, onBack, onState }: { latex: string; solution: boolean; onBack?: () => void; onState?: (s: 'dang' | 'xong' | 'loi') => void }) {
+export function CompiledView({ latex, preamble = '', solution, onBack, onState }: { latex: string; preamble?: string; solution: boolean; onBack?: () => void; onState?: (s: 'dang' | 'xong' | 'loi') => void }) {
   const [st, setSt] = useState<State>({ s: 'dang' });
   const alive = useRef(true);
   const prefix = useRef(nextSvgPrefix());
@@ -34,12 +34,12 @@ export function CompiledView({ latex, solution, onBack, onState }: { latex: stri
   useEffect(() => {
     alive.current = true;
     setSt({ s: 'dang' });
-    compileQuestion(latex, solution).then((r) => {
+    compileQuestion(latex, solution, true, preamble).then((r) => {
       if (!alive.current) return;
       setSt(r.ok ? { s: 'xong', svg: r.svg, cached: r.cached, ms: r.ms } : { s: 'loi', fail: r.fail });
     });
     return () => { alive.current = false; };
-  }, [latex, solution, again]);
+  }, [latex, preamble, solution, again]);
 
   return (
     <div className="cv">
