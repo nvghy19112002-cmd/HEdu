@@ -63,3 +63,25 @@ t('shuffleWithPins giữ chỉ số ghim và là hoán vị', () => {
   const out = shuffleWithPins(qs, new Set([qs[1].uid]), rand);
   assert.equal(out[1].uid, qs[1].uid); assert.deepEqual(out.map((q) => q.uid).sort(), qs.map((q) => q.uid).sort());
 });
+
+t('câu chùm: các câu liền nhau cùng nhóm luôn đứng liền nhau, đúng thứ tự, ở mọi mã', () => {
+  const qs = Array.from({ length: 10 }, (_, i) => mk(i % 4));
+  const groups = { [qs[2].uid]: 'g1', [qs[3].uid]: 'g1', [qs[4].uid]: 'g1', [qs[7].uid]: 'g2', [qs[8].uid]: 'g2' };
+  const vs = makeVariants(picked(qs), { ...base, count: 6, groups });
+  for (const v of vs) {
+    const ids = v.parts.p1.map((s) => s.q.uid);
+    const at = (u: string) => ids.indexOf(u);
+    assert.equal(at(qs[3].uid), at(qs[2].uid) + 1); assert.equal(at(qs[4].uid), at(qs[3].uid) + 1); assert.equal(at(qs[8].uid), at(qs[7].uid) + 1);
+  }
+  assert.ok(vs.slice(1).some((v) => v.parts.p1.some((s, i) => s.q.uid !== qs[i].uid)));
+  assert.deepEqual(verifyAgainstOriginal(vs, picked(qs), undefined, groups), []);
+});
+
+t('câu chùm có câu ghim: cả chùm đứng yên; kiểm tra bắt chùm bị tách', () => {
+  const qs = Array.from({ length: 8 }, (_, i) => mk(i % 4));
+  const groups = { [qs[1].uid]: 'g', [qs[2].uid]: 'g' };
+  const vs = makeVariants(picked(qs), { ...base, groups, pinned: new Set([qs[2].uid]) });
+  for (const v of vs) { assert.equal(v.parts.p1[1].q.uid, qs[1].uid); assert.equal(v.parts.p1[2].q.uid, qs[2].uid); }
+  const broken = vs.map((v) => (v.code === '102' ? { ...v, parts: { ...v.parts, p1: [v.parts.p1[2], v.parts.p1[0], v.parts.p1[1], ...v.parts.p1.slice(3)] } } : v));
+  assert.ok(verifyAgainstOriginal(broken, picked(qs), undefined, groups).some((x) => /chùm/.test(x.msg)));
+});

@@ -346,6 +346,8 @@ export interface VariantOpts {
   fixedOptions?: ReadonlySet<string>;
   /** cân bằng đáp án A–D trong từng mã và tránh cùng một đáp án ở nhiều mã */
   balanceKeys?: boolean;
+  /** câu chùm: uid → mã nhóm. Các câu liền nhau cùng mã nhóm trong một phần là MỘT khối: trộn cả khối, luôn đứng liền nhau, giữ thứ tự bên trong */
+  groups?: Readonly<Record<string, string>>;
 }
 
 function slotOf(q: Question, part: PartKey, rand: (() => number) | null, choose?: (correct: number, rand: () => number) => number[]): Slot {
@@ -365,12 +367,25 @@ function slotOf(q: Question, part: PartKey, rand: (() => number) | null, choose?
   return { q, latex: q.latex, key: '—', shuffled: false };
 }
 
-/** Trộn thứ tự nhưng các câu ghim giữ đúng chỉ số cũ; câu còn lại xáo vào các chỉ số trống. */
-export function shuffleWithPins(list: readonly Question[], pinned: ReadonlySet<string> | undefined, rand: () => number): Question[] {
-  if (!pinned || !pinned.size || !list.some((q) => pinned.has(q.uid))) return shuffle(list, rand);
-  const free = shuffle(list.filter((q) => !pinned.has(q.uid)), rand);
+/** Chia danh sách thành các khối: các câu LIỀN NHAU cùng mã nhóm thành một khối; câu không thuộc nhóm tự là một khối. */
+export function unitsOf(list: readonly Question[], groups?: Readonly<Record<string, string>>): Question[][] {
+  const out: Question[][] = [];
+  for (const q of list) {
+    const g = groups?.[q.uid];
+    const last = out[out.length - 1];
+    if (g && last && groups![last[0].uid] === g) last.push(q); else out.push([q]);
+  }
+  return out;
+}
+
+/** Trộn thứ tự theo khối nhưng khối có câu ghim giữ đúng chỉ số khối cũ; các khối còn lại xáo vào chỗ trống. */
+export function shuffleWithPins(list: readonly Question[], pinned: ReadonlySet<string> | undefined, rand: () => number, groups?: Readonly<Record<string, string>>): Question[] {
+  const units = unitsOf(list, groups);
+  const isPinned = (u: Question[]) => !!pinned && u.some((q) => pinned.has(q.uid));
+  if (!units.some(isPinned)) return shuffle(units, rand).flat();
+  const free = shuffle(units.filter((u) => !isPinned(u)), rand);
   let k = 0;
-  return list.map((q) => (pinned.has(q.uid) ? q : free[k++]));
+  return units.map((u) => (isPinned(u) ? u : free[k++])).flat();
 }
 
 export function makeVariants(picked: Picked, o: VariantOpts): Variant[] {
@@ -382,7 +397,7 @@ export function makeVariants(picked: Picked, o: VariantOpts): Variant[] {
     const parts = { p1: [], p2: [], p3: [], p4: [] } as Record<PartKey, Slot[]>;
     const counts = [0, 0, 0, 0]; // số câu đã đặt đáp án A–D trong mã này (chỉ dùng khi cân bằng)
     for (const p of PARTS) {
-      const list = !original && o.shuffleQuestions ? shuffleWithPins(picked[p], o.pinned, rand) : picked[p];
+      const list = !original && o.shuffleQuestions ? shuffleWithPins(picked[p], o.pinned, rand, o.groups) : picked[p];
       parts[p] = list.map((q) => {
         const fixed = o.fixedOptions?.has(q.uid);
         const shuf = !original && o.shuffleOptions && !fixed;
@@ -456,13 +471,18 @@ const withoutSpans = (latex: string, spans: readonly [number, number][]): string
  * phần ngoài 4 phương án phải y nguyên; 4 phương án phải là một hoán vị của phương án gốc; chữ đáp án phải trỏ đúng phương án đúng của câu gốc;
  * mỗi phần có đủ và không lặp các câu đã chọn; câu ghim đứng đúng vị trí cũ.
  */
-export function verifyAgainstOriginal(vs: readonly Variant[], picked: Picked, pinned?: ReadonlySet<string>): Issue[] {
+export function verifyAgainstOriginal(vs: readonly Variant[], picked: Picked, pinned?: ReadonlySet<string>, groups?: Readonly<Record<string, string>>): Issue[] {
   const out: Issue[] = [];
   for (const v of vs) for (const p of PARTS) {
     const want = picked[p].map((q) => q.uid).sort();
     const got = v.parts[p].map((s) => s.q.uid).sort();
     if (want.length !== got.length || want.some((u, i) => u !== got[i])) out.push({ kind: 'sai-lech-goc', code: v.code, part: p, msg: `mã ${v.code}, ${PART_NAME[p].split(' · ')[0]}: tập câu khác với các câu đã chọn (thiếu, thừa hoặc lặp)` });
     if (pinned?.size) picked[p].forEach((q, i) => { if (pinned.has(q.uid) && v.parts[p][i]?.q.uid !== q.uid) out.push({ kind: 'sai-lech-goc', code: v.code, part: p, index: i + 1, uid: q.uid, msg: `mã ${v.code}: câu ghim không đứng đúng vị trí ${i + 1}` }); });
+    if (groups) for (const u of unitsOf(picked[p], groups)) {
+      if (u.length < 2) continue;
+      const pos = u.map((q) => v.parts[p].findIndex((s) => s.q.uid === q.uid));
+      if (pos.some((x, i) => x < 0 || (i > 0 && x !== pos[i - 1] + 1))) out.push({ kind: 'sai-lech-goc', code: v.code, part: p, uid: u[0].uid, msg: `mã ${v.code}: các câu chùm không đứng liền nhau và đúng thứ tự` });
+    }
     if (p !== 'p1') continue;
     v.parts[p].forEach((s, i) => {
       const at = { code: v.code, part: p, index: i + 1, uid: s.q.uid };
