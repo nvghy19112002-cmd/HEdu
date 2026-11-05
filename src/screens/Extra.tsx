@@ -10,6 +10,9 @@ import { indexOf, shortName } from '../lib/taxonomy';
 import { idFromLatex, idStateOf, summarizeImportIds } from '../lib/importid';
 import { LATEX_ID_LABEL, placeWithId, readLatexId } from '../lib/idsync';
 import { applyEditsToSource, BATCH_MAX, buildRows, defaultBatchName, perFile, planLots, sourceIssues, tagsFor, type BatchInfo, type ImportSource } from '../lib/importbatch';
+import { applyKey, chooseWordFile, importWord, loadAnswerKey, toExTest } from '../lib/wordflow';
+import type { AnswerKey } from '../lib/wordkey';
+import type { WordQ } from '../lib/wordimport';
 import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
 import { isDesktop } from '../lib/platform';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
@@ -56,6 +59,10 @@ export function ImportScreen() {
   // Nội dung chuyển từ bàn nháp Xử lí TeX (nếu có): vào ô dán như dán tay, rồi đi đủ các bước nhập như mọi lần.
   const [fromTex] = useState(() => peekImportHandoff());
   const [src, setSrc] = useState(fromTex ?? '');
+  const [wordRep, setWordRep] = useState<{ name: string; summary: string; notes: string[] } | null>(null);
+  const [wordBusy, setWordBusy] = useState(false);
+  const [wordQs, setWordQs] = useState<WordQ[]>([]);
+  const [wordKey, setWordKey] = useState<{ key: AnswerKey; code: string } | null>(null);
   useEffect(() => { clearImportHandoff(); }, []);
   // Câu không có ID vào mục "Chưa có ID" (không vào Dạng nào). Giáo viên chỉ chọn Lớp nếu biết; vị trí lưu kèm câu chỉ là chỗ giữ, không hiện, không thành ID.
   const [noIdGrade, setNoIdGrade] = useState<number | null>(null);
@@ -104,7 +111,38 @@ export function ImportScreen() {
     setLots({ list, idx: k });
   };
   const lotPlan = useMemo(() => planLots(fileStats.filter((f) => !encAsk.has(f.srcIdx))), [fileStats, encAsk]);
-  const clearAll = () => { setLots(null); setSrc(''); setSrcs([]); setSkip(new Set()); setEncAsk(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
+  const openWord = async () => {
+    setLoadErr(null);
+    try {
+      const path = await chooseWordFile();
+      if (!path) return;
+      setWordBusy(true);
+      const r = await importWord(path);
+      if (!r.conv.questions.length) { setWordRep(null); setLoadErr('Không tìm thấy câu nào dạng “Câu 1.” trong tệp Word này.'); return; }
+      setSrcs([]); setSrc(r.tex); setWordQs(r.conv.questions); setWordKey(null);
+      setWordRep({ name: path.split(/[\\/]/).pop() ?? path, summary: r.summary, notes: r.notes });
+    } catch (e) { setLoadErr(e instanceof Error ? e.message : String(e)); } finally { setWordBusy(false); }
+  };
+  const openKey = async () => {
+    setLoadErr(null);
+    try {
+      const path = await chooseWordFile();
+      if (!path) return;
+      setWordBusy(true);
+      const key = await loadAnswerKey(path);
+      const guess = key.codes.find((c) => (wordRep?.name ?? '').includes(c)) ?? key.codes.find((c) => c !== 'gốc') ?? key.codes[0];
+      setWordKey({ key, code: guess });
+    } catch (e) { setLoadErr(e instanceof Error ? e.message : String(e)); } finally { setWordBusy(false); }
+  };
+  const applyWordKey = () => {
+    if (!wordKey) return;
+    const qs = wordQs.map((q) => ({ ...q }));
+    const n = applyKey(qs, wordKey.key, wordKey.code);
+    setWordQs(qs); setSrc(qs.map(toExTest).join('\n'));
+    setWordRep((r) => (r ? { ...r, notes: [`Đã gắn đáp án mã ${wordKey.code} cho ${n} câu.`, ...r.notes.filter((x) => !x.includes('chưa có đáp án') && !x.includes('shortans'))] } : r));
+    setWordKey(null);
+  };
+  const clearAll = () => { setWordRep(null); setWordQs([]); setWordKey(null); setLots(null); setSrc(''); setSrcs([]); setSkip(new Set()); setEncAsk(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
 
   const loadPaths = async (paths: string[]) => {
     if (!paths.length || loadProg) return;
@@ -545,9 +583,25 @@ export function ImportScreen() {
             {isDesktop() && <button type="button" className="btn btn-sm btn-accent" disabled={!!loadProg} onClick={() => { void chooseFolder().then((d) => (d ? loadPaths([d]) : undefined)); }}>Chọn thư mục…</button>}
             {multi && <button type="button" className="btn btn-sm btn-danger-soft" disabled={!!loadProg} onClick={clearAll}>Bỏ các tệp, quay lại dán trực tiếp</button>}
             <button type="button" className="btn btn-sm" disabled={!!loadProg} onClick={() => { if (isDesktop()) void chooseFiles().then(loadPaths); else file.current?.click(); }}>Mở file .tex</button>
-            <button type="button" className="btn btn-sm" onClick={() => toast('Nhập từ Word (.docx có Equation) sẽ có ở bản cài trên Windows.')}>Mở file Word</button>
+            <button type="button" className="btn btn-sm" disabled={wordBusy || !!loadProg || !isDesktop()} title={isDesktop() ? 'Đọc đề Word (.docx, .doc) kể cả công thức MathType, đổi sang ex_test' : 'Chỉ có trong bản cài trên Windows'} onClick={() => { void openWord(); }}>{wordBusy ? 'Đang đọc Word…' : 'Mở file Word'}</button>
             <input ref={file} type="file" accept=".tex,.txt" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) setSrc(await readFile(f)); e.target.value = ''; }} />
           </div>
+          {wordRep && (
+            <div className="note" role="status" style={{ marginTop: 8 }}>
+              <div className="note-body">
+                <b>Đã đọc “{wordRep.name}”.</b> {wordRep.summary}
+                {wordRep.notes.length > 0 && <ul style={{ margin: '6px 0 0 18px' }}>{wordRep.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+                <span>Xem lại bên dưới trước khi nhập vào ngân hàng.</span>
+                <div className="head-actions" style={{ marginTop: 6 }}>
+                  <button type="button" className="btn btn-sm" disabled={wordBusy} onClick={() => { void openKey(); }}>Gắn đáp án từ tệp Word…</button>
+                  {wordKey && <>
+                    <label>Mã đề <select className="xl-in" value={wordKey.code} onChange={(e) => setWordKey({ ...wordKey, code: e.target.value })}>{wordKey.key.codes.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+                    <button type="button" className="btn btn-sm btn-accent" onClick={applyWordKey}>Gắn đáp án mã {wordKey.code}</button>
+                  </>}
+                </div>
+              </div>
+            </div>
+          )}
           {loadProg && (
             <div className="chk-sum">
               <span className="chk-pill" role="status">{loadProg.phase}{loadProg.total ? ` ${loadProg.done}/${loadProg.total}` : ''}…</span>
