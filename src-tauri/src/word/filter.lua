@@ -49,10 +49,13 @@ local function plain_len(blocks)
   return #S(pandoc.Div(blocks))
 end
 
+local function sty(name, text)
+  return pandoc.Span({ pandoc.Str(text) }, pandoc.Attr('', {}, { ['custom-style'] = name }))
+end
+
 local function label_inline(text, correct)
-  local lab = pandoc.Strong({ pandoc.Str(text) })
-  if mark and correct then return pandoc.Strong({ pandoc.Underline({ pandoc.Str(text) }) }) end
-  return lab
+  if mark and correct then return sty('HeduDung', text) end
+  return sty('HeduNhan', text)
 end
 
 -- Dựng nội dung một ô: "A." + nội dung
@@ -174,7 +177,7 @@ local function convert_ex(div, num)
   collect(alpha_lists(div.content, 0), acc)
   local stem, opts, tfs, sans, lg = acc.stem, acc.opts, acc.tfs, acc.sans, acc.lg
   local main = pandoc.List()
-  local head = pandoc.List({ pandoc.Strong({ pandoc.Str('Câu ' .. num .. '.') }), pandoc.Space() })
+  local head = pandoc.List({ sty('HeduCauSo', 'Câu ' .. num .. '.'), pandoc.Space() })
   if #stem > 0 and (stem[1].t == 'Para' or stem[1].t == 'Plain') then
     head:extend(stem[1].content)
     main:insert(styled('HeduCau', pandoc.Para(head)))
@@ -206,14 +209,22 @@ local function convert_ex(div, num)
     out:insert(styled('HeduDapAn', pandoc.Para({ pandoc.Emph({ pandoc.Str('Đáp án: ' .. sans) }) })))
   end
   if solution and lg then
-    local c = pandoc.List({ pandoc.Strong({ pandoc.Str('Lời giải.') }), pandoc.Space() })
+    local c = pandoc.List({ sty('HeduLG', 'Lời giải.'), pandoc.Space() })
     if #lg > 0 and (lg[1].t == 'Para' or lg[1].t == 'Plain') then
       c:extend(lg[1].content)
       out:insert(styled('HeduLoiGiai', pandoc.Para(c)))
-      for i = 2, #lg do out:insert(lg[i]) end
+      for i = 2, #lg do
+        if lg[i].t == 'Para' or lg[i].t == 'Plain' then out:insert(styled('HeduLoiGiai', pandoc.Para(lg[i].content))) else out:insert(lg[i]) end
+      end
     else
       out:insert(styled('HeduLoiGiai', pandoc.Para(c)))
       out:extend(lg)
+    end
+    for i, o in ipairs(opts) do
+      if o.correct then
+        out:insert(styled('HeduLoiGiai', pandoc.Para({ pandoc.Str('Chọn đáp án '), sty('HeduDo', string.char(64 + i)), pandoc.Str('.') })))
+        break
+      end
     end
   end
   return out
@@ -228,25 +239,44 @@ local PHAN = {
 }
 
 local function header_table(div)
-  local L, R = {}, {}
+  local L, R = pandoc.List(), pandoc.List()
+  local title, subject = '', ''
   for _, b in ipairs(div.content) do
     local k = div_class(b)
-    local target = (k == 'hdL') and L or ((k == 'hdR') and R or nil)
-    if target then
+    if k == 'hdL' or k == 'hdR' then
       for _, p in ipairs(b.content) do
         if (p.t == 'Para' or p.t == 'Plain') and S(p) ~= '' then
-          target[#target + 1] = pandoc.Para({ pandoc.Strong(p.content) })
+          local t = S(p)
+          if k == 'hdL' then
+            L:insert(styled('HeduTruong', pandoc.Para(p.content)))
+          else
+            local st = 'HeduNam'
+            if title == '' then st = 'HeduTieuDe'; title = t
+            elseif t:match('^Môn') or t:match('^MÔN') then st = 'HeduMon'; subject = t:gsub('^[^:]*:%s*', '')
+            elseif t:match('^Thời gian') then st = 'HeduTG' end
+            R:insert(styled(st, pandoc.Para(p.content)))
+          end
         end
       end
     end
   end
-  if made ~= '' then R[#R + 1] = pandoc.Para({ pandoc.Str('Mã đề thi: ' .. made) }) end
+  local head = pandoc.text.upper(pandoc.text.sub(title, 1, 1)) .. pandoc.text.lower(pandoc.text.sub(title, 2))
+  if subject ~= '' then head = head .. ' – ' .. subject end
+  if head ~= '' then io.stderr:write('HEDU-DAU-TRANG ' .. head .. '\n') end
+  L:insert(styled('HeduBox', pandoc.Para({ pandoc.Str('ĐỀ KIỂM TRA') })))
   local aligns = { pandoc.AlignCenter, pandoc.AlignCenter }
   local t = pandoc.SimpleTable(pandoc.List(), aligns, { 0.5, 0.5 }, { {}, {} }, { { L, R } })
   local tb = pandoc.utils.from_simple_table(t)
   tb.attr = pandoc.Attr('', {}, { ['custom-style'] = 'HeduPlain' })
   tb.head = pandoc.TableHead({})
-  return tb
+  local dots = string.rep('…', 10)
+  local who = pandoc.List({ pandoc.Str('Họ và tên thí sinh: ' .. dots .. '  Số báo danh: ' .. dots .. '  ') })
+  if made ~= '' then who:insert(sty('HeduMa', ' MÃ ĐỀ ' .. made .. ' ')) end
+  return pandoc.List({
+    tb,
+    styled('HeduHoTen', pandoc.Para(who)),
+    styled('HeduKe', pandoc.Para({ pandoc.Str('') })),
+  })
 end
 
 function Pandoc(doc)
@@ -267,13 +297,13 @@ function Pandoc(doc)
   local phan, num = 0, 0
   for _, b in ipairs(doc.blocks) do
     if has_class(b, 'hd') then
-      out:insert(header_table(b))
+      out:extend(header_table(b))
     elseif has_class(b, 'phan') then
       phan = phan + 1; num = 0
       local kind = S(b)
       local f = PHAN[kind] or PHAN.lc
       local title, rest = f(counts[phan] or 0)
-      out:insert(styled('HeduPhan', pandoc.Para({ pandoc.Strong({ pandoc.Str('PHẦN ' .. (ROMAN[phan] or tostring(phan)) .. '. ' .. title) }), pandoc.Str(rest) })))
+      out:insert(styled('HeduPhan', pandoc.Para({ sty('HeduPhanT', 'PHẦN ' .. (ROMAN[phan] or tostring(phan)) .. '. ' .. title), sty('HeduPhanI', rest) })))
     elseif has_class(b, 'ex') then
       num = num + 1
       out:extend(convert_ex(b, num))
