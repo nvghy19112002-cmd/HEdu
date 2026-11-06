@@ -1,5 +1,5 @@
-## Có gì mới trong beta.60 (kênh beta): trộn đề có điều kiện, câu chùm, định nghĩa riêng theo câu, duyệt hàng loạt câu có ID, kiểm tra đề sâu hơn
-Gồm PR #246, #247, #248, #249, #250, #251, #253, #254, #255, #256, #257 (so với beta.59). Không tự đổi ngân hàng câu hỏi hay tệp đề của bạn: nút duyệt hàng loạt chỉ ghi khi bạn bấm và xác nhận. Đã thử bằng bộ kiểm thử (255 test Rust, test giao diện), chạy thử từng tính năng trên app Tauri với kho thử và dịch thử bằng TeX Live thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+## Có gì mới trong beta.60 (kênh beta): trình chiếu câu hỏi, Hình TikZ ở Xử lí TeX, mã QR đáp án, trộn đề có điều kiện, câu chùm, định nghĩa riêng theo câu
+Gồm PR #246, #247, #248, #249, #250, #251, #253, #254, #255, #256, #257, #260, #261, #262 (so với beta.59). Không tự đổi ngân hàng câu hỏi hay tệp đề của bạn: nút duyệt hàng loạt chỉ ghi khi bạn bấm và xác nhận. Đã thử bằng bộ kiểm thử (255 test Rust, test giao diện), chạy thử từng tính năng trên app Tauri với kho thử và dịch thử bằng TeX Live thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
 **Trộn đề (Tạo đề)**
 - **Ghim vị trí** (câu luôn đứng đúng số thứ tự ở mọi mã) và **Giữ phương án** (không đổi A–D) trên từng câu.
@@ -22,7 +22,12 @@ Gồm PR #246, #247, #248, #249, #250, #251, #253, #254, #255, #256, #257 (so v�
 - **Phiếu trả lời trắc nghiệm trống (PDF A4)**: Số báo danh, Mã đề, Phần I/II/III đúng số câu của đề; nút Tạo phiếu tô trong hộp Xuất từng mã đề.
 - Xử lí TeX bỏ dòng “Biên dịch thành công” khi không có cảnh báo, lỗi hay gợi ý.
 
-**Còn mở:** PDF “bị mờ” ở Xử lí TeX (đã kiểm: thực tế không mờ); mã QR đáp án và các mẫu MathHub còn lại (giai đoạn 2).
+**Thêm sau (PR #260–#262)**
+- **Trình chiếu câu hỏi**: chiếu từng câu lên màn hình lớp (toàn màn hình nền tối): ←/→ chuyển câu, Space hiện đáp án, G lời giải, T đồng hồ, F toàn màn hình, A−/A+ cỡ chữ. Mở từ Ngân hàng (câu đã chọn › Trình chiếu…), Thư viện đề (chuột phải vào đề) hoặc Xử lí TeX (Công cụ). Lưu được thành **bộ trình chiếu** có tên để mở lại, thêm câu, đổi tên, xoá (xoá bộ không xoá câu nào).
+- **Xử lí TeX › tab Hình TikZ**: tự liệt kê mọi khối tikzpicture trong bàn nháp, mỗi khối có mã cạnh hình đã dịch. Sửa mã ngay trong thẻ thì hình mới tự dịch và hiện cạnh hình cũ; **Áp dụng vào mã** ghi vào bàn nháp (Ctrl+Z hoặc nút Hoàn tác để quay lại); sao chép, lưu vào Kho hình, bấm nhãn để tới dòng.
+- **Mã QR đáp án** (ảnh PNG, gồm mọi mã đề) cho TNMaker, SmartTest, YoungMix trong hộp Xuất từng mã đề. Nên quét thử một lần trên nền tảng.
+
+**Còn mở:** Bản đặc tả kĩ thuật trong ma trận đề và đề mẫu (để sau theo chủ dự án); làm lại giao diện kiểu Finder (giai đoạn 3).
 
 ## Có gì mới trong beta.59 (kênh beta): xuất Word và nhập Word (công thức MathType), thống kê sau thi, lịch sử phiên bản, vẽ bảng biến thiên/đồ thị, SyncTeX
 Gồm PR #234, #235, #236, #237, #238, #239, #241, #242, #244 (so với beta.58). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, chạy thử từng tính năng trên app Tauri với kho thử, và mở thử tệp .docx xuất ra bằng Word thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
