@@ -91,7 +91,7 @@ export function TrashViewer({ row, list, busy, readOnly, extra, onNav, onRestore
                   <button type="button" className="btn btn-sm btn-accent" onClick={() => { setExactState('dang'); setCompileFor(uid); }}>Biên dịch bằng TeX Live</button>
                 </div>
               )
-              : <CompiledView key={`${uid}|${sol ? 1 : 0}`} latex={row.q.latex} preamble={row.q.preamble} solution={sol} onBack={() => pick('quick')} onState={setExactState} />
+              : <CompiledView key={`${uid}|${sol ? 1 : 0}`} latex={row.q.latex} preamble={row.q.preamble} images={row.q.images} solution={sol} onBack={() => pick('quick')} onState={setExactState} />
         )}
 
         {mode === 'raw' && (

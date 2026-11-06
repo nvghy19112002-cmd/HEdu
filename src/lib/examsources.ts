@@ -12,8 +12,8 @@ export interface SourceStatus { item: SourceItem; state: SourceState }
 export const sourcesAdd = (id: string, rel: string, items: SourceIn[]) => invoke<number>('exam_sources_add', { id, rel, items });
 export const sourcesStatus = (id: string) => invoke<SourceStatus[]>('exam_sources_status', { id });
 export const sourcesForget = (id: string, uid: string, rel: string, sha256: string) => invoke<number>('exam_sources_forget', { id, uid, rel, sha256 });
-export const createFromFiles = (name: string, files: { path: string; text: string }[], main: string, sourcesRel: string, sources: SourceIn[]) =>
-  invoke<import('./examlib').ExamSummary>('exam_lib_create_files', { name, files, main, sourcesRel, sources });
+export const createFromFiles = (name: string, files: { path: string; text: string }[], main: string, sourcesRel: string, sources: SourceIn[], images: { name: string; file: string }[] = []) =>
+  invoke<import('./examlib').ExamSummary>('exam_lib_create_files', { name, files, main, sourcesRel, sources, images });
 
 export const STATE_LABEL: Record<SourceState, string> = {
   verbatim: 'Còn nguyên văn',

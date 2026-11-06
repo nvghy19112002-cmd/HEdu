@@ -18,6 +18,7 @@ mod examprofile;
 mod examsources;
 mod examusage;
 mod examword;
+mod qimg;
 mod examxlsx;
 mod idexchange;
 mod importfs;
@@ -277,7 +278,8 @@ async fn tikz_render(
     let root = paths(&app).map_err(err)?;
     let dir = tikz::cache_dir_of(root.root());
     std::fs::create_dir_all(&dir).map_err(|e| err(e.to_string()))?;
-    let o = opts.unwrap_or_default();
+    let mut o = opts.unwrap_or_default();
+    o.images_root = Some(qimg::dir_of(root.root()));
     let sup = support::prepare(root.root());
     let epoch = tikz::current_epoch();
     tauri::async_runtime::spawn_blocking(move || {
@@ -286,6 +288,17 @@ async fn tikz_render(
     })
         .await
         .map_err(|e| err(e.to_string()))?
+}
+
+/// Tìm ảnh \includegraphics của câu trong thư mục nguồn và chép vào kho ảnh câu hỏi (không bao giờ xoá/ghi đè).
+#[tauri::command]
+async fn qimg_collect(app: AppHandle, folder: String, names: Vec<String>) -> Result<Vec<qimg::Found>, String> {
+    let root = paths(&app)?;
+    let root = root.root().to_path_buf();
+    if names.len() > 500 {
+        return Err("Quá nhiều ảnh trong một lần.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || qimg::collect(&root, std::path::Path::new(&folder), &names)).await.map_err(|e| e.to_string())
 }
 
 /// Kiểm tra máy đã có TeX Live chưa; trả về dòng phiên bản của pdflatex.
@@ -354,8 +367,9 @@ fn save_text_file(path: String, text: String) -> Result<(), String> {
 
 /// Xuất thư mục biên dịch được vào `parent`/`name` (thư mục mới, không ghi đè). Trả về đường dẫn thư mục.
 #[tauri::command]
-fn export_tex_folder(parent: String, name: String, files: Vec<texfolder::OutFile>) -> Result<String, String> {
-    texfolder::write_project(&parent, &name, &files)
+fn export_tex_folder(app: AppHandle, parent: String, name: String, files: Vec<texfolder::OutFile>, images: Option<Vec<qimg::ImgRef>>) -> Result<String, String> {
+    let store = paths(&app).ok().map(|r| qimg::dir_of(r.root()));
+    texfolder::write_project_imgs(&parent, &name, &files, store.as_deref(), &images.unwrap_or_default())
 }
 
 // ---------- AI dùng chung (ai.rs) ----------
@@ -439,6 +453,7 @@ pub fn run() {
             backup_info,
             restore_backup,
             tikz_render,
+            qimg_collect,
             tikz_cancel,
             tikz_probe,
             tikz_clear_cache,

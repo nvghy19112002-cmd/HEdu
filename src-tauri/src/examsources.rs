@@ -196,6 +196,12 @@ pub struct FileIn {
 /// Tạo một đề MỚI trong thư viện từ các tệp cho trước (vd. main.tex + khaibaochung.tex + cauhoi.tex do HEdu dựng từ các câu đã chọn)
 /// và ghi sổ nguồn cho `sources_rel`. Câu hỏi được chép NGUYÊN VĂN do phía gọi cung cấp; ở đây không phân tích lại LaTeX.
 pub fn create_project(lib: &Path, name: &str, files: &[FileIn], main: &str, sources_rel: &str, sources: &[SourceIn]) -> Result<Summary, String> {
+    create_project_imgs(lib, None, &[], name, files, main, sources_rel, sources)
+}
+
+/// Như `create_project` và chép thêm các ảnh của câu (từ kho ảnh câu hỏi `store`) vào dự án, đúng tên mà câu viết trong \includegraphics.
+#[allow(clippy::too_many_arguments)]
+pub fn create_project_imgs(lib: &Path, store: Option<&Path>, images: &[crate::qimg::ImgRef], name: &str, files: &[FileIn], main: &str, sources_rel: &str, sources: &[SourceIn]) -> Result<Summary, String> {
     if files.is_empty() || files.iter().map(|f| f.text.len()).sum::<usize>() > MAX_TOTAL || files.iter().any(|f| f.text.len() > MAX_FILE) {
         return Err("Danh sách tệp rỗng hoặc quá lớn.".into());
     }
@@ -232,6 +238,21 @@ pub fn create_project(lib: &Path, name: &str, files: &[FileIn], main: &str, sour
             }
             fs::write(&dest, f.text.as_bytes()).map_err(|e| format!("Không ghi được {}: {e}", f.path))?;
             recs.push(FileRec { rel: f.path.clone(), bytes: f.text.len() as u64, sha256: sha_hex(f.text.as_bytes()) });
+        }
+        if let Some(store) = store {
+            for im in images {
+                let Some(rel) = crate::qimg::project_name(&im.name, &im.file) else { continue };
+                if bad_rel(&rel).is_some() || rel.split('/').next() == Some(".hedu") || recs.iter().any(|r| r.rel.eq_ignore_ascii_case(&rel)) {
+                    continue;
+                }
+                let bytes = fs::read(store.join(&im.file)).map_err(|e| format!("Thiếu ảnh «{}» trong kho ảnh: {e}", im.name))?;
+                let dest = staging.join(&rel);
+                if let Some(p) = dest.parent() {
+                    fs::create_dir_all(p).map_err(|e| e.to_string())?;
+                }
+                fs::write(&dest, &bytes).map_err(|e| format!("Không ghi được {rel}: {e}"))?;
+                recs.push(FileRec { rel, bytes: bytes.len() as u64, sha256: sha_hex(&bytes) });
+            }
         }
         if !sources.is_empty() {
             let mut doc = Doc { version: 1, items: vec![] };
@@ -305,9 +326,10 @@ pub async fn exam_sources_forget(app: AppHandle, id: String, uid: String, rel: S
     blocking(move || sources_forget(&lib, &id, &uid, &rel, &sha256)).await
 }
 #[tauri::command]
-pub async fn exam_lib_create_files(app: AppHandle, name: String, files: Vec<FileIn>, main: String, sources_rel: String, sources: Vec<SourceIn>) -> Result<Summary, String> {
+pub async fn exam_lib_create_files(app: AppHandle, name: String, files: Vec<FileIn>, main: String, sources_rel: String, sources: Vec<SourceIn>, images: Option<Vec<crate::qimg::ImgRef>>) -> Result<Summary, String> {
     let lib = lib_of(&app)?;
-    blocking(move || create_project(&lib, &name, &files, &main, &sources_rel, &sources)).await
+    let store = lib.parent().map(crate::qimg::dir_of);
+    blocking(move || create_project_imgs(&lib, store.as_deref(), &images.unwrap_or_default(), &name, &files, &main, &sources_rel, &sources)).await
 }
 
 #[cfg(test)]
@@ -329,6 +351,24 @@ mod tests {
     }
     const Q1: &str = "\\begin{ex}\nCho $x^2$.\n\\choice{1}{\\True 2}{3}{4}\n\\loigiai{x}\n\\end{ex}";
     const Q2: &str = "\\begin{ex}\nCâu hai.\n\\end{ex}";
+
+    #[test]
+    fn tao_de_kem_anh_cua_cau_tu_kho_anh() {
+        let d = tmp("create-img");
+        let lib = d.join("lib");
+        let store = d.join("kho");
+        fs::create_dir_all(&store).unwrap();
+        let file = format!("{}.png", "ab".repeat(16));
+        fs::write(store.join(&file), [0x89, b'P', b'N', b'G', 1, 2]).unwrap();
+        let imgs = [crate::qimg::ImgRef { name: "h1".into(), file: file.clone() }, crate::qimg::ImgRef { name: "../thoat.png".into(), file: file.clone() }];
+        let s = create_project_imgs(&lib, Some(&store), &imgs, "Đề có ảnh", &[fi("main.tex", "\\input{cauhoi}\n"), fi("cauhoi.tex", Q1)], "main.tex", "cauhoi.tex", &[si("u1", Q1)]).unwrap();
+        let proj = projects_dir(&lib).join(&s.id);
+        assert_eq!(fs::read(proj.join("h1.png")).unwrap(), vec![0x89, b'P', b'N', b'G', 1, 2], "ảnh được chép đúng tên câu viết (thêm đuôi)");
+        assert!(!proj.join("../thoat.png").exists() && !d.join("thoat.png").exists(), "tên không an toàn bị bỏ qua");
+        assert_eq!(s.file_count, 3);
+        assert!(examlib::verify(&lib, &s.id).unwrap().ok, "bảng tệp khớp với đĩa");
+        let _ = fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn tao_de_tu_cac_cau_nguyen_van_va_ghi_so_nguon() {

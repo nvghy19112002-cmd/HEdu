@@ -1,4 +1,5 @@
 // Màn Nhập liệu: dán hoặc mở file LaTeX, xem trước rồi nhập hàng loạt vào ngân hàng.
+import { collectImages, dirOf } from '../lib/qimages';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CompiledView, FailureBox } from '../components/CompiledView';
 import { compileBatch, CATEGORY_ORDER, type Category, type Failure } from '../lib/xemchuan';
@@ -159,7 +160,7 @@ export function ImportScreen() {
       setScanInfo(lines);
       setReadFailed(r.failed.map((x) => ({ name: x.file.name, rel: x.file.rel, message: x.message })));
       if (r.read.length) {
-        setSrcs(r.read.map((x) => ({ name: x.file.name, rel: x.file.rel, text: x.text, bytes: x.file.bytes })));
+        setSrcs(r.read.map((x) => ({ path: x.file.path, name: x.file.name, rel: x.file.rel, text: x.text, bytes: x.file.bytes })));
         const guess = new Set(r.read.flatMap((x, k) => (x.encoding === 'windows-1258' ? [k] : [])));
         const u16 = r.read.filter((x) => x.encoding === 'utf-16').length;
         if (u16) lines.push(`${u16} tệp lưu dạng UTF-16: đã đọc chính xác (không cần làm gì).`);
@@ -500,6 +501,11 @@ export function ImportScreen() {
     }
     const built = buildDrafts((i) => freshVer.get(i));
     if ('error' in built) { toast(`Chưa ghi gì. ${built.error}`); return; }
+    // Ảnh tệp (PNG/JPG) cạnh tệp .tex: chép vào kho ảnh và gắn vào từng câu; không tìm thấy thì vẫn nhập câu và báo
+    const impIdx = rows.map((_, i) => i).filter((i) => decOf(i) === 'import');
+    const imgRes = await collectImages(impIdx.map((i) => ({ latex: latexOf(i), dir: dirOf(allSources[rows[i].srcIdx]?.path) }))).catch(() => null);
+    if (imgRes) built.drafts.forEach((d, k) => { const im = imgRes.images[k]; if (im) built.drafts[k] = { ...d, images: im }; });
+    if (imgRes?.missing.length) toast(`Có ${imgRes.missing.length} ảnh câu nhắc tới mà không thấy cạnh tệp .tex (${imgRes.missing.slice(0, 3).map((m) => m.name).join(', ')}${imgRes.missing.length > 3 ? '…' : ''}). Câu vẫn được nhập; chép ảnh vào cạnh tệp rồi nhập lại nếu cần.`);
     // Duyệt theo lô: thứ tự bản ghi = thứ tự các câu được nhập; kiểm lại điều kiện ngay lúc ghi
     let approvedN = 0;
     if (trust) {
@@ -885,7 +891,7 @@ export function ImportScreen() {
                   {openRow === i && isTikzReady() && (
                     <div className="chk-tex">
                       {exactRow === i
-                        ? <CompiledView latex={r.latex} preamble={r.preamble} solution={texSol} onBack={() => setExactRow(null)} />
+                        ? <CompiledView latex={r.latex} preamble={r.preamble} images={undefined} solution={texSol} onBack={() => setExactRow(null)} />
                         : <>
                             {texOf(i) && !texOf(i)!.ok && <FailureBox fail={(texOf(i) as { fail: Failure }).fail} />}
                             <button type="button" className="btn btn-sm" onClick={() => setExactRow(i)}>Xem chuẩn câu này</button>

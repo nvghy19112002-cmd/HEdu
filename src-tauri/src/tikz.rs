@@ -58,6 +58,12 @@ pub struct TikzOpts {
     /// Thư mục bin của TeX Live, dùng khi PATH không có (vd. D:\\texlive\\2025\\bin\\windows)
     #[serde(default)]
     pub tex_bin: Option<String>,
+    /// ảnh của câu (PNG/JPG trong kho ảnh câu hỏi) cần có trong thư mục dịch
+    #[serde(default)]
+    pub images: Vec<crate::qimg::ImgRef>,
+    /// thư mục kho ảnh (do lệnh đặt, không nhận từ giao diện)
+    #[serde(skip)]
+    pub images_root: Option<std::path::PathBuf>,
 }
 
 /// Đường dẫn tới một chương trình: ưu tiên thư mục người dùng chỉ, không có thì tìm trong PATH.
@@ -239,7 +245,8 @@ pub fn render_at(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, de
     let via_dvi = engine == "pdflatex";
     let tex_prog = if via_dvi { "latex" } else { engine };
     let route = if via_dvi { "dvi" } else { "pdf" };
-    let key = hash64(&[&preamble, defs, code, engine, route, &support::rev()]);
+    let imgsig = crate::qimg::sig(&opts.images);
+    let key = hash64(&[&preamble, defs, code, engine, route, &support::rev(), &imgsig]);
 
     let svg_path = cache_dir.join(format!("{key}.svg"));
     if let Ok(s) = fs::read_to_string(&svg_path) {
@@ -261,8 +268,47 @@ pub fn render_at(cache_dir: &Path, support_dir: &Option<PathBuf>, code: &str, de
         stage: String::from("latex"),
     })?;
 
-    let head = if via_dvi { format!("\\def\\pgfsysdriver{{pgfsys-dvisvgm.def}}\n{preamble}") } else { preamble.clone() };
-    let tex = format!("{head}\n\\begin{{document}}\n{defs}\n{code}\n\\end{{document}}\n");
+    // có ảnh: dvisvgm nhúng PNG/JPG thẳng vào SVG (không cần Ghostscript) khi graphics/graphicx dùng bộ điều khiển dvisvgm
+    let with_imgs = via_dvi && !opts.images.is_empty();
+    let img_head = if with_imgs { "\\PassOptionsToPackage{dvisvgm}{graphics}\n\\PassOptionsToPackage{dvisvgm}{graphicx}\n" } else { "" };
+    let head = if via_dvi { format!("{img_head}\\def\\pgfsysdriver{{pgfsys-dvisvgm.def}}\n{preamble}") } else { preamble.clone() };
+    // bộ điều khiển dvisvgm chỉ tìm .eps/.ps khi \includegraphics không ghi đuôi: thêm .png/.jpg vào danh sách đuôi
+    let img_ext = if with_imgs { "\\makeatletter\\@ifundefined{Gin@extensions}{}{\\DeclareGraphicsExtensions{.png,.jpg,.jpeg}}\\makeatother\n" } else { "" };
+    let tex = format!("{head}\n\\begin{{document}}\n{img_ext}{defs}\n{code}\n\\end{{document}}\n");
+    if !opts.images.is_empty() {
+        let root = opts.images_root.clone().ok_or_else(|| TikzErr { message: String::from("Chưa có kho ảnh câu hỏi."), log: String::new(), stage: String::from("latex") });
+        let root = match root {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = fs::remove_dir_all(&work);
+                return Err(e);
+            }
+        };
+        if let Err(e) = crate::qimg::materialize(&root, &work, &opts.images) {
+            let _ = fs::remove_dir_all(&work);
+            return Err(TikzErr { message: e, log: String::new(), stage: String::from("latex") });
+        }
+        // dvisvgm đọc kích thước ảnh qua tệp .xbb; không có thì gọi extractbb bằng ống dẫn (bị chặn vì -no-shell-escape).
+        // Tự tạo .xbb bằng extractbb (đi kèm TeX Live) ở đây, trước khi dịch.
+        for im in &opts.images {
+            let Some(rel) = crate::qimg::project_name(&im.name, &im.file) else { continue };
+            let mut x = Command::new(prog(&opts.tex_bin, "extractbb"));
+            x.current_dir(&work).arg(&rel);
+            support::apply(&mut x, support_dir);
+            hide_console(&mut x);
+            match run_c(&mut x, Duration::from_secs(20), epoch) {
+                Ok(o) if o.cancelled => {
+                    let _ = fs::remove_dir_all(&work);
+                    return Err(cancelled_err());
+                }
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    let _ = fs::remove_dir_all(&work);
+                    return Err(missing_tool("extractbb"));
+                }
+                _ => {}
+            }
+        }
+    }
     let tex_path = work.join("hinh.tex");
     fs::write(&tex_path, tex).map_err(|e| TikzErr {
         message: format!("Không ghi được file tạm: {e}"),
@@ -507,7 +553,7 @@ pub fn prune_cache(cache_dir: &Path, max_bytes: u64, max_files: usize) -> io::Re
 
 /// Thử dịch một hình bé xíu để biết máy đã có TeX Live chưa.
 pub fn probe(cache_dir: &Path, support_dir: &Option<PathBuf>, tex_bin: Option<String>) -> Result<String, TikzErr> {
-    let opts = TikzOpts { preamble: None, engine: None, timeout_secs: Some(90), tex_bin: tex_bin.clone() };
+    let opts = TikzOpts { preamble: None, engine: None, timeout_secs: Some(90), tex_bin: tex_bin.clone(), ..Default::default() };
     render(cache_dir, support_dir, r"\begin{tikzpicture}\draw(0,0)--(1,1);\end{tikzpicture}", "", &opts)?;
     let mut c = Command::new(prog(&tex_bin, "pdflatex"));
     c.arg("--version");
