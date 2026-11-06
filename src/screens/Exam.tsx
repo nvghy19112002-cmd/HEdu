@@ -1,5 +1,6 @@
 // Tạo đề từ Ngân hàng: ma trận → xem trước (đúng như bản in) → lưu vào Thư viện đề để biên dịch PDF.
 // Lõi chọn câu/trộn/đáp án/dựng .tex nằm ở lib/examgen.ts (có kiểm thử); bản nháp ở lib/examdraft.ts.
+import { mergeImages } from '../lib/qimages';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
@@ -182,6 +183,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   };
   const centi = totalCenti(counts, d.scoring);
   const picks = useMemo(() => PARTS.flatMap((p) => picked[p]), [picked]);
+  const pimg = useMemo(() => mergeImages(picks), [picks]);
   const unverifiedN = useMemo(() => picks.filter((q) => !verified(effOf(q))).length, [picks, effOf]);
   const unreviewedN = picks.filter((q) => q.review !== 'approved').length;
   const keptN = variant ? PARTS.reduce((a, p) => a + variant.parts[p].filter((s) => s.note).length, 0) : 0;
@@ -215,6 +217,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
     lostLocks.length > 0 ? `${lostLocks.length} câu khóa không vào được đề` : '',
     issues.length > 0 ? 'đáp án hoặc tổng số chưa khớp' : '',
     usageBlocked ? 'đang kiểm câu đã dùng' : '',
+    pimg.conflicts.length > 0 ? `ảnh trùng tên nhưng khác nội dung (${pimg.conflicts.slice(0, 3).join(', ')})` : '',
   ].filter(Boolean);
   const refWarn = useRef<HTMLElement>(null);
   const setRow = (id: string, p: Partial<Row>) => upd({ rows: d.rows.map((r) => (r.id === id ? { ...r, ...p } : r)) });
@@ -272,7 +275,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
     setBusy(true);
     try {
       const name = `${d.info.title.trim() || 'Đề'} · ${new Date().toLocaleDateString('vi-VN')}`;
-      const s = await createFromFiles(name, await projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource));
+      const s = await createFromFiles(name, await projectFiles(name), 'main.tex', variantFile(variants[0].code), picks.map(toSource), pimg.images);
       setSaved({ id: s.id, name: s.name, sig: draftSig });
       toast(`Đã lưu “${s.name}” vào Thư viện đề. Bấm “Xuất PDF từng mã / ZIP” hoặc mở mục Đề thi để biên dịch.`, { label: 'Mở Đề thi', run: () => go({ screen: 'examlib' }) });
     } catch (e) {
@@ -289,7 +292,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
       const folder = safeFolderName(d.info.title, 'de-hedu');
       const parent = await open({ directory: true, multiple: false, title: 'Chọn nơi tạo thư mục đề' });
       if (!parent || Array.isArray(parent)) return;
-      const out = await invoke<string>('export_tex_folder', { parent, name: folder, files: await projectFiles(folder) });
+      const out = await invoke<string>('export_tex_folder', { parent, name: folder, files: await projectFiles(folder), images: pimg.images });
       toast(`Đã tạo thư mục: ${out}`);
     } catch (e) {
       toast(`Không tạo được thư mục (${e instanceof Error ? e.message : String(e)}).`);

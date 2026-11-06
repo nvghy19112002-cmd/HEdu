@@ -8,7 +8,7 @@ import { idFromLatex, idStateOf } from './importid';
 export const BATCH_MAX = 5000;
 export const PASTE_SOURCE_NAME = 'dán trực tiếp';
 
-export interface ImportSource { name: string; /** thư mục con tính từ thư mục đã chọn ('' nếu chọn lẻ / dán) */ rel: string; text: string }
+export interface ImportSource { /** đường dẫn đầy đủ của tệp (để tìm ảnh cạnh nó); vắng với câu dán trực tiếp */ path?: string; name: string; /** thư mục con tính từ thư mục đã chọn ('' nếu chọn lẻ / dán) */ rel: string; text: string }
 
 export interface BatchRow {
   latex: string;

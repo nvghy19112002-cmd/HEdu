@@ -44,6 +44,8 @@ export interface Question extends Location {
   review?: ReviewStatus;
   /** Định nghĩa riêng của câu (macro, môi trường, thư viện TikZ lấy từ đầu tệp .tex lúc nhập); VẮNG = không có. Chỉ cộng thêm, không đổi schema. */
   preamble?: string;
+  /** Ảnh tệp (PNG/JPG) mà câu dùng, lưu trong kho ảnh câu hỏi: tên viết trong \includegraphics → tên trong kho. VẮNG = không có. */
+  images?: { name: string; file: string }[];
 }
 
 /** Kiểm duyệt là hành động của người, KHÔNG phải kết quả máy (biên dịch được ≠ đã duyệt). */

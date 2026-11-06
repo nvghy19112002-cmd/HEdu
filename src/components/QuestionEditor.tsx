@@ -462,7 +462,7 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
                     Mã đã đổi sau lần biên dịch này. <button type="button" className="linkbtn" onClick={startExact}>Dịch lại</button>
                   </div>
                 )}
-                <CompiledView key={snap} latex={snap} preamble={editing?.preamble} solution={showSol} onBack={() => setMode('quick')} onState={setTex} />
+                <CompiledView key={snap} latex={snap} preamble={editing?.preamble} images={editing?.images} solution={showSol} onBack={() => setMode('quick')} onState={setTex} />
               </>
             ) : (
               <QuestionView p={parsed} number={1} raw={slow} showSolution={showSol} />

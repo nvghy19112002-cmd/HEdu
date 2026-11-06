@@ -44,6 +44,11 @@ fn unique_dir(parent: &Path, name: &str) -> PathBuf {
 
 /// Ghi toàn bộ thư mục. Trả về đường dẫn thư mục đã tạo. Lỗi giữa chừng thì xoá thư mục dở dang.
 pub fn write_project(parent: &str, name: &str, files: &[OutFile]) -> Result<String, String> {
+    write_project_imgs(parent, name, files, None, &[])
+}
+
+/// Như `write_project` và chép thêm ảnh của câu (từ kho ảnh câu hỏi) vào đúng tên mà câu viết trong \includegraphics.
+pub fn write_project_imgs(parent: &str, name: &str, files: &[OutFile], store: Option<&Path>, images: &[crate::qimg::ImgRef]) -> Result<String, String> {
     let parent = Path::new(parent);
     if !parent.is_dir() {
         return Err("Thư mục đã chọn không tồn tại.".into());
@@ -67,6 +72,19 @@ pub fn write_project(parent: &str, name: &str, files: &[OutFile]) -> Result<Stri
         }
         for (n, b) in support::FILES {
             fs::write(dir.join(n), b)?;
+        }
+        if let Some(store) = store {
+            for im in images {
+                let Some(rel) = crate::qimg::project_name(&im.name, &im.file) else { continue };
+                let dest = dir.join(&rel);
+                if dest.exists() {
+                    continue;
+                }
+                if let Some(p) = dest.parent() {
+                    fs::create_dir_all(p)?;
+                }
+                fs::copy(store.join(&im.file), &dest)?;
+            }
         }
         Ok(())
     };

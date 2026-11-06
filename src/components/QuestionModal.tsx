@@ -82,7 +82,7 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
           <button type="button" className="ico qm-x" aria-label="Đóng (Esc)" title="Đóng (Esc)" onClick={onClose}>✕</button>
         </header>
         <div className="qm-body">
-          {tex ? <CompiledView latex={q.latex} preamble={q.preamble} solution={sol} onBack={() => setTex(false)} /> : <QuestionView p={p} showSolution={sol} raw={q.latex} />}
+          {tex ? <CompiledView latex={q.latex} preamble={q.preamble} images={q.images} solution={sol} onBack={() => setTex(false)} /> : <QuestionView p={p} showSolution={sol} raw={q.latex} />}
           {q.tags.length > 0 && <p className="qm-tags">{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</p>}
           <div className="qm-ctl">
             <ReviewControl key={q.uid} q={q} onChange={onReview} />
