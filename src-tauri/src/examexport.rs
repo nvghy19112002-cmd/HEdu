@@ -1307,6 +1307,23 @@ pub fn export_platform_xlsx(lib: &Path, id: &str, platform: &str, dest_dir: &Pat
     Err("Thư mục đích đã có quá nhiều tệp đáp án cùng tên.".into())
 }
 
+/// Số câu Phần I, II, III của đề (mã đầu tiên) — để dựng phiếu tô trắc nghiệm đúng cỡ.
+#[tauri::command]
+pub async fn exam_codes_shape(app: AppHandle, id: String) -> Result<[usize; 3], String> {
+    let lib = root_of(&app)?.join("exam-library");
+    tauri::async_runtime::spawn_blocking(move || -> Result<[usize; 3], String> {
+        let info = codes_info(&lib, &id)?;
+        if !info.has_spec {
+            return Err(info.problems.first().cloned().unwrap_or_else(|| "Đề chưa có dữ liệu mã đề.".into()));
+        }
+        let spec = parse_spec(&read_project_text(&lib, &id, SPEC, 8 * 1024 * 1024)?)?;
+        let c = spec.codes.first().ok_or("Đề chưa có mã đề nào.")?;
+        Ok([c.parts[0].len(), c.parts[1].len(), c.parts[2].len()])
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn exam_platform_xlsx(app: AppHandle, id: String, platform: String, dest_dir: String) -> Result<String, String> {
     let lib = root_of(&app)?.join("exam-library");

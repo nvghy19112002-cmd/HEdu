@@ -25,6 +25,10 @@ export const PLATFORM_XLSX = [
 export type PlatformId = (typeof PLATFORM_XLSX)[number]['id'];
 /** Xuất Excel đáp án theo bố cục của một nền tảng thi vào thư mục đã chọn (không ghi đè); trả đường dẫn tệp. */
 export const platformXlsx = (id: string, platform: PlatformId, destDir: string) => invoke<string>('exam_platform_xlsx', { id, platform, destDir });
+/** Số câu Phần I, II, III của đề (mã đầu tiên). */
+export const codesShape = (id: string) => invoke<[number, number, number]>('exam_codes_shape', { id });
+/** Dịch mã LaTeX của phiếu tô thành PDF trong thư mục đích (không ghi đè); trả đường dẫn PDF. */
+export const sheetPdf = (tex: string, destDir: string, base: string, texBin: string | null) => invoke<string>('sheet_pdf', { tex, destDir, base, texBin });
 export const codesExportCancel = (id: string) => invoke<boolean>('exam_codes_export_cancel', { id });
 export const codesBackfill = (id: string, apply: boolean) => invoke<BackfillOut>('exam_codes_backfill', { id, apply });
 

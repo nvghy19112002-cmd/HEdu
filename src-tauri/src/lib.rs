@@ -20,6 +20,7 @@ mod examusage;
 mod examword;
 mod qimg;
 mod platxlsx;
+mod sheetpdf;
 mod examxlsx;
 mod idexchange;
 mod importfs;
@@ -572,6 +573,8 @@ pub fn run() {
             examexport::exam_codes_info,
             examexport::exam_answers_xlsx,
             examexport::exam_platform_xlsx,
+            examexport::exam_codes_shape,
+            sheetpdf::sheet_pdf,
             examexport::exam_codes_export,
             examexport::exam_codes_export_cancel,
             examexport::exam_codes_backfill
