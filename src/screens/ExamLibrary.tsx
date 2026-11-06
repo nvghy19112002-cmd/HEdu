@@ -8,6 +8,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { examSlideItems } from '../lib/examslides';
+import { openSlides } from '../lib/slideshow';
 import { ExamBackupPanel, ExamTrashPanel } from '../components/ExamAdminPanels';
 import { ExamInfoForm } from '../components/ExamInfoForm';
 import { ExamTree } from '../components/ExamTree';
@@ -44,7 +46,7 @@ import { UndoStack, undoMessage, type UndoEntry } from '../lib/examundo';
 import { hasControlChars } from '../lib/examgen';
 import { parseMatrixSpec } from '../lib/exammatrix';
 import { exportMatrixXlsx } from '../lib/exampack';
-import { useBank } from '../lib/store';
+import { getState, useBank } from '../lib/store';
 
 const nf = new Intl.NumberFormat('vi-VN');
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -1075,6 +1077,7 @@ export function ExamLibraryScreen() {
           </>) : (<>
           <button type="button" role="menuitem" autoFocus onClick={() => { setCtx(null); openDoc(ctx.e); }}><b>Mở đề</b><small>{tabs.ids.includes(ctx.e.id) ? 'Đang mở: chuyển sang tab của đề' : 'Biên tập, biên dịch trong một tab'}</small></button>
           <button type="button" role="menuitem" onClick={() => { setCtx(null); quickLook(ctx.e); }}><b>Xem nhanh PDF</b><small>Phím Space</small></button>
+          <button type="button" role="menuitem" disabled={!desktop} onClick={() => { const e = ctx.e; setCtx(null); examSlideItems(e.id, getState().questions).then((items) => { if (items.length) openSlides(e.name, items); else toast('Không tìm thấy câu \\begin{ex}…\\end{ex} nào trong đề này để trình chiếu.'); }, (err) => toast(`Không đọc được đề: ${err instanceof Error ? err.message : String(err)}`)); }}><b>Trình chiếu…</b><small>Chiếu từng câu lên màn hình lớp</small></button>
           {ctx.e.id === sel && selGoods.map((g) => <button key={g.mode} type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void exportOne(ctx.e, g.mode as ExamMode); }}><b>Xuất PDF: {modeLabel(g.mode)}…</b><small>{g.pages ?? '?'} trang</small></button>)}
           {(ctx.e.id !== sel || selGoods.length === 0) && <button type="button" role="menuitem" disabled><b>Xuất PDF…</b><small>Chưa có bản đã biên dịch</small></button>}
           <button type="button" role="menuitem" disabled={busy} onClick={() => { setCtx(null); void toggleStar(ctx.e); }}><b>{isStar(ctx.e) ? 'Bỏ gắn sao' : 'Gắn sao'}</b></button>

@@ -1,4 +1,5 @@
 // Màn hình Ngân hàng câu hỏi.
+import { openSlides } from '../lib/slideshow';
 // Bố cục: thanh trái "Mục lục & bộ lọc" (Lớp → Phân môn → Chương → Bài → Dạng; Mức độ, Loại, Hình, Kiểm duyệt); cột phải tìm kiếm và xem câu.
 // Mọi lựa chọn đều hiện sẵn số câu (đếm theo chiều) để biết chỗ nào đang thiếu.
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -510,6 +511,7 @@ export function BankScreen() {
                 <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
                 <button type="button" className="btn btn-sm" onClick={() => { if (sel.size > AUTO_ID_MAX) toast(`Gán ID tự động: mỗi lượt tối đa ${nf.format(AUTO_ID_MAX)} câu (đang chọn ${nf.format(sel.size)}). Hãy bỏ bớt rồi làm từng lượt.`); else if (!placedSel.length) toast('Các câu đang chọn đều Chưa có ID: Gán ID tự động không áp dụng — dùng Gán ID nhờ Claude hoặc chọn Dạng trong Sửa câu.'); else setBatch('autoid'); }} title={`Gợi ý vị trí (ID) theo các câu đã có trong ngân hàng, xem trước rồi mới áp dụng — tối đa ${AUTO_ID_MAX} câu/lượt`}>Gán ID tự động</button>
                 <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô gồm đúng các câu đang chọn cho Claude (gán hoặc kiểm tra lại Dạng, mức độ)">Gán ID nhờ Claude…</button>
+                <button type="button" className="btn btn-sm" onClick={() => openSlides('Ngân hàng', selectedQs.map((q) => ({ latex: q.latex, uid: q.uid })))} title="Chiếu các câu đã chọn lên màn hình lớp (từng câu, hiện đáp án/lời giải khi bấm), hoặc lưu thành bộ trình chiếu">Trình chiếu…</button>
                 {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
                 <span className="selbar-more">
                   <button ref={moreBtnRef} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
