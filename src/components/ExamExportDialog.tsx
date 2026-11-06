@@ -1,7 +1,9 @@
 // Xuất PDF từng mã đề và gói ZIP (giáo viên / học sinh) cho một đề đã lưu trong Thư viện đề.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { examDuplicate, chooseProjectFolder } from '../lib/examlib';
-import { answersXlsx, platformXlsx, PLATFORM_XLSX, codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
+import { answerSheetTex } from '../lib/answersheet';
+import { getSettings } from '../lib/tikz';
+import { answersXlsx, codesShape, sheetPdf, platformXlsx, PLATFORM_XLSX, codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
 import { listen } from '../lib/platform';
 import { exportWordCode, type WordOut } from '../lib/examword';
 import { DEFAULT_WORD_MODES, WORD_MODES, wordModeById } from '../lib/wordmodes';
@@ -80,6 +82,17 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
     if (!dest) return;
     setBusy(true); setErr(null);
     try { const f = await platformXlsx(id, p.id, dest); onToast(`Đã xuất Excel đáp án cho ${p.label}: ${f}`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+
+  const sheetRun = async () => {
+    if (!dest) return;
+    setBusy(true); setErr(null);
+    try {
+      const [p1, p2, p3] = await codesShape(id);
+      const tex = answerSheetTex({ subtitle: name, subject: '', p1, p2, p3 });
+      const f = await sheetPdf(tex, dest, `phieu-to-${p1}-${p2}-${p3}`, getSettings().texBin.trim() || null);
+      onToast(`Đã tạo phiếu tô trắc nghiệm (${p1} câu Phần I, ${p2} câu Phần II, ${p3} câu Phần III): ${f}`);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
 
   const wordRun = async () => {
@@ -165,6 +178,11 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {PLATFORM_XLSX.map((p) => <button key={p.id} type="button" className="btn btn-sm btn-outline" disabled={busy || !dest} title={dest ? p.hint : 'Chọn thư mục lưu trước'} onClick={() => { void platRun(p); }}>{p.label}</button>)}
                 </div>
+              </div>
+              <div className="fb-rowbox" style={{ marginTop: 12 }}>
+                <b>Phiếu trả lời trắc nghiệm (PDF, A4)</b>
+                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Phiếu trống đúng số câu của đề: Số báo danh, Mã đề, Phần I (A–D), Phần II (Đúng/Sai), Phần III (đáp số). In cho học sinh tô bút chì.</span>
+                <div><button type="button" className="btn btn-sm btn-outline" disabled={busy || !dest} title={dest ? undefined : 'Chọn thư mục lưu trước'} onClick={() => { void sheetRun(); }}>Tạo phiếu tô…</button></div>
               </div>
               <div className="fb-rowbox" style={{ marginTop: 12 }}>
                 <b>Word (.docx)</b>
