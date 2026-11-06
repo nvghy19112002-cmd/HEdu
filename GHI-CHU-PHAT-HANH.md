@@ -1,5 +1,5 @@
 ## Có gì mới trong beta.60 (kênh beta): trộn đề có điều kiện, câu chùm, định nghĩa riêng theo câu, duyệt hàng loạt câu có ID, kiểm tra đề sâu hơn
-Gồm PR #246, #247, #248, #249, #250, #251 (so với beta.59). Không tự đổi ngân hàng câu hỏi hay tệp đề của bạn: nút duyệt hàng loạt chỉ ghi khi bạn bấm và xác nhận. Đã thử bằng bộ kiểm thử (255 test Rust, test giao diện), chạy thử từng tính năng trên app Tauri với kho thử và dịch thử bằng TeX Live thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+Gồm PR #246, #247, #248, #249, #250, #251, #253, #254, #255, #256, #257 (so với beta.59). Không tự đổi ngân hàng câu hỏi hay tệp đề của bạn: nút duyệt hàng loạt chỉ ghi khi bạn bấm và xác nhận. Đã thử bằng bộ kiểm thử (255 test Rust, test giao diện), chạy thử từng tính năng trên app Tauri với kho thử và dịch thử bằng TeX Live thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
 **Trộn đề (Tạo đề)**
 - **Ghim vị trí** (câu luôn đứng đúng số thứ tự ở mọi mã) và **Giữ phương án** (không đổi A–D) trên từng câu.
@@ -15,7 +15,14 @@ Gồm PR #246, #247, #248, #249, #250, #251 (so với beta.59). Không tự đ�
 - **Kiểm tra trước khi chốt** soi thêm chính các câu trong tệp .tex: lỗi cấu trúc, trắc nghiệm không đúng một `\True`, câu chưa có lời giải (ghi chú), cặp câu giống đề bài, TikZ mở/đóng lệch.
 - **Chân trang “Trang 3/??”**: biên dịch dịch lại khi còn tham chiếu chưa định nghĩa; Xử lí TeX tối đa 3 lượt.
 
-**Còn mở:** PDF “bị mờ” ở Xử lí TeX (cần ví dụ cụ thể); lưu ảnh của câu hỏi (cần thiết kế lại vì đường xem chuẩn dùng DVI không chèn được PNG); biên dịch song song nhiều mã (cần tách thư mục làm việc từng mã).
+**Thêm sau (PR #253–#257)**
+- **Ảnh của câu hỏi**: nhập thư mục có ảnh PNG/JPG cạnh tệp .tex thì ảnh được chép vào kho ảnh và gắn vào câu; Xem chuẩn, lưu đề vào Thư viện đề và xuất thư mục .tex đều mang ảnh theo (không cần Ghostscript).
+- **Xuất gói nhiều mã nhanh hơn**: dịch trước song song, tối đa 3 làn, mỗi làn một thư mục làm việc riêng; Huỷ dừng cả các làn.
+- **Excel đáp án theo nền tảng thi**: TNMaker, SmartTest, AZOTA, OLM, YoungMix (bố cục khớp tệp mẫu), nút trong hộp Xuất từng mã đề.
+- **Phiếu trả lời trắc nghiệm trống (PDF A4)**: Số báo danh, Mã đề, Phần I/II/III đúng số câu của đề; nút Tạo phiếu tô trong hộp Xuất từng mã đề.
+- Xử lí TeX bỏ dòng “Biên dịch thành công” khi không có cảnh báo, lỗi hay gợi ý.
+
+**Còn mở:** PDF “bị mờ” ở Xử lí TeX (đã kiểm: thực tế không mờ); mã QR đáp án và các mẫu MathHub còn lại (giai đoạn 2).
 
 ## Có gì mới trong beta.59 (kênh beta): xuất Word và nhập Word (công thức MathType), thống kê sau thi, lịch sử phiên bản, vẽ bảng biến thiên/đồ thị, SyncTeX
 Gồm PR #234, #235, #236, #237, #238, #239, #241, #242, #244 (so với beta.58). Không đổi ngân hàng câu hỏi hay tệp đề của bạn. Đã thử bằng bộ kiểm thử, chạy thử từng tính năng trên app Tauri với kho thử, và mở thử tệp .docx xuất ra bằng Word thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
