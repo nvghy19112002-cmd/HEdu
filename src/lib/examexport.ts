@@ -14,6 +14,17 @@ export const codesInfo = (id: string) => invoke<CodesInfo>('exam_codes_info', { 
 export const codesExport = (id: string, opts: ExportOpts) => invoke<ExportOut>('exam_codes_export', { id, opts });
 /** Chỉ xuất Excel đáp án (mọi mã) vào thư mục đã chọn; trả đường dẫn tệp đã ghi (không ghi đè). */
 export const answersXlsx = (id: string, destDir: string) => invoke<string>('exam_answers_xlsx', { id, destDir });
+/** Nền tảng thi có bố cục Excel đáp án riêng (khớp platxlsx.rs). */
+export const PLATFORM_XLSX = [
+  { id: 'tnmaker', label: 'TNMaker', hint: 'Câu\\Mã đề; Đúng/Sai viết liền (ĐSĐS); đáp số giữ dấu phẩy' },
+  { id: 'smarttest', label: 'SmartTest', hint: 'Cùng bố cục TNMaker' },
+  { id: 'azota', label: 'AZOTA', hint: 'Câu hỏi / Mã đề thi, mã đề nằm ở hàng 2' },
+  { id: 'olm', label: 'OLM', hint: 'Lưới cố định, mỗi ý Đúng/Sai một ô, có hàng Điểm (tối đa 40 · 8 · 6 câu)' },
+  { id: 'youngmix', label: 'YoungMix', hint: 'Lưới như OLM, không có hàng Điểm (tối đa 40 · 8 · 6 câu)' },
+] as const;
+export type PlatformId = (typeof PLATFORM_XLSX)[number]['id'];
+/** Xuất Excel đáp án theo bố cục của một nền tảng thi vào thư mục đã chọn (không ghi đè); trả đường dẫn tệp. */
+export const platformXlsx = (id: string, platform: PlatformId, destDir: string) => invoke<string>('exam_platform_xlsx', { id, platform, destDir });
 export const codesExportCancel = (id: string) => invoke<boolean>('exam_codes_export_cancel', { id });
 export const codesBackfill = (id: string, apply: boolean) => invoke<BackfillOut>('exam_codes_backfill', { id, apply });
 
