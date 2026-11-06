@@ -1,7 +1,7 @@
 // Xuất PDF từng mã đề và gói ZIP (giáo viên / học sinh) cho một đề đã lưu trong Thư viện đề.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { examDuplicate, chooseProjectFolder } from '../lib/examlib';
-import { answersXlsx, codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
+import { answersXlsx, platformXlsx, PLATFORM_XLSX, codesBackfill, codesExport, codesExportCancel, codesInfo, exportGate, PACK_LABEL, PACK_NOTE, phaseText, readyCodes, summarize, type CodesInfo, type ExportOut, type ExportProgress, type PackKind } from '../lib/examexport';
 import { listen } from '../lib/platform';
 import { exportWordCode, type WordOut } from '../lib/examword';
 import { DEFAULT_WORD_MODES, WORD_MODES, wordModeById } from '../lib/wordmodes';
@@ -74,6 +74,12 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
     if (!dest) return;
     setBusy(true); setErr(null);
     try { const p = await answersXlsx(id, dest); onToast(`Đã xuất Excel đáp án: ${p}`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+
+  const platRun = async (p: (typeof PLATFORM_XLSX)[number]) => {
+    if (!dest) return;
+    setBusy(true); setErr(null);
+    try { const f = await platformXlsx(id, p.id, dest); onToast(`Đã xuất Excel đáp án cho ${p.label}: ${f}`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
 
   const wordRun = async () => {
@@ -152,6 +158,13 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { void pick(); }}>Chọn thư mục lưu…</button>
                 <span style={{ fontSize: 13, color: 'var(--ink-2)', overflowWrap: 'anywhere' }}>{dest ?? 'Chưa chọn'}</span>
                 <button type="button" className="btn btn-sm btn-outline" style={{ marginLeft: 'auto' }} disabled={busy || !dest} title={dest ? 'Một tệp .xlsx: trang "Theo mã đề" và "Theo câu", mọi mã đề. Không cần biên dịch PDF.' : 'Chọn thư mục lưu trước'} onClick={() => { void xlsx(); }}>Chỉ xuất Excel đáp án</button>
+              </div>
+              <div className="fb-rowbox" style={{ marginTop: 12 }}>
+                <b>Excel đáp án cho nền tảng thi</b>
+                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Một tệp .xlsx đúng bố cục nhập đáp án của từng nền tảng, gồm mọi mã đề. Bố cục lấy từ tệp mẫu của các nền tảng; nên mở thử nhập vào nền tảng một lần.</span>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {PLATFORM_XLSX.map((p) => <button key={p.id} type="button" className="btn btn-sm btn-outline" disabled={busy || !dest} title={dest ? p.hint : 'Chọn thư mục lưu trước'} onClick={() => { void platRun(p); }}>{p.label}</button>)}
+                </div>
               </div>
               <div className="fb-rowbox" style={{ marginTop: 12 }}>
                 <b>Word (.docx)</b>
