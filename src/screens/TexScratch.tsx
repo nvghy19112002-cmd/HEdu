@@ -22,6 +22,7 @@ import { invoke, isDesktop } from '../lib/platform';
 import { chenText } from '../lib/khochen';
 import { KhoPicker, KhoSaveDialog } from '../components/KhoDialogs';
 import { TikzSheet } from '../components/TikzSheet';
+import { openSlides } from '../lib/slideshow';
 import { khoLatex, scratchFigures, type ScratchFig } from '../lib/scratchtikz';
 import { FigureBuilder } from '../components/FigureBuilder';
 import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
@@ -450,6 +451,7 @@ export function TexScratchScreen() {
                 <button type="button" role="menuitem" disabled={!!blocked || !isDesktop()} onClick={() => { setToolsOpen(false); setKhoOpen(true); }} title="Chọn một hình trong Kho hình và chèn vào chỗ con trỏ">Chèn hình từ Kho hình…</button>
                 <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
                 <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!scan.blocks.some((b) => b.closed)} onClick={() => { setToolsOpen(false); openSlides(`Xử lí TeX · ${nameOf(ix, ix.active)}`, scan.blocks.filter((b) => b.closed && (!scope || scope.has(b.n))).map((b) => ({ latex: b.text }))); }} title="Chiếu từng câu lên màn hình lớp, hoặc lưu thành bộ trình chiếu">Trình chiếu…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <hr className="tsx-hr" />
                 <button type="button" role="menuitem" disabled={!nDone || !!chkBusy} onClick={() => { setToolsOpen(false); void runCheck(); }} title="Kiểm công thức, ngoặc, đáp án đúng, lời giải… như khi nhập vào Ngân hàng; chỉ báo, không sửa">Soát nội dung…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!dupBusy} onClick={() => { setToolsOpen(false); void runDup(); }} title="So với ngân hàng và giữa các câu trong bàn nháp; chỉ đọc, không sửa gì">Kiểm tra trùng với ngân hàng…{nScope ? ' (câu đã chọn)' : ''}</button>

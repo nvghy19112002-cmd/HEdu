@@ -15,6 +15,7 @@ import { ExamLibraryScreen } from './screens/ExamLibrary';
 import { KhoHinhScreen } from './screens/KhoHinh';
 import { ImportScreen } from './screens/Extra';
 import { TexScratchScreen } from './screens/TexScratch';
+import { SlideHost } from './components/SlideShow';
 import { CurriculumScreen } from './screens/Curriculum';
 import { SystemScreen } from './screens/System';
 import { TrashScreen } from './screens/Trash';
@@ -115,6 +116,7 @@ function Shell({ recovered }: { recovered: boolean }) {
       <UpdateProvider onFound={onFound}>
         <Frame screen={nav.screen} nav={nav} />
         {palette && <CommandPalette onClose={() => setPalette(false)} />}
+        <SlideHost />
         {file && <FileDialog file={file} onClose={() => setFile(null)} onToast={toast} />}
         {msg && <div className="toast" role="status">{msg.text}{msg.action && <button type="button" className="toast-act" onClick={() => { const a = msg.action; setMsg(null); a?.run(); }}>{msg.action.label}</button>}</div>}
         <ZoomIndicator />
