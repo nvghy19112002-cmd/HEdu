@@ -24,6 +24,8 @@ export interface CodeEditorHandle {
   insertAtCursor(key: string, text: string): boolean;
   /** Thay MỘT lần xuất hiện nguyên văn của `from` bằng `to`. false nếu không thấy đúng nguyên văn (không đoán). */
   replaceText(key: string, from: string, to: string): boolean;
+  /** Thay đoạn `from` bắt đầu ĐÚNG ở vị trí `pos` bằng `to` (một bước, Ctrl+Z hoàn tác được). false nếu ở đó không còn nguyên văn `from`. */
+  replaceAt(key: string, pos: number, from: string, to: string): boolean;
   text(key: string): string | null;
   drop(key: string): void;
   jump(key: string, line: number): void;
@@ -158,6 +160,13 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
       const i = doc.indexOf(from);
       if (i < 0) return false;
       v.dispatch({ changes: { from: i, to: i + from.length, insert: to }, scrollIntoView: true });
+      return true;
+    },
+    replaceAt(key, pos, from, to) {
+      const v = view.current;
+      if (!v || current.current !== key || v.state.readOnly) return false;
+      if (pos < 0 || pos + from.length > v.state.doc.length || v.state.doc.sliceString(pos, pos + from.length) !== from) return false;
+      v.dispatch({ changes: { from: pos, to: pos + from.length, insert: to }, selection: { anchor: pos }, scrollIntoView: true });
       return true;
     },
     text(key) {

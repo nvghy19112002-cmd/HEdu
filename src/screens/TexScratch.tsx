@@ -20,7 +20,9 @@ import type { Diag } from '../lib/examcompile';
 import { missingPackages } from '../lib/missingpkg';
 import { invoke, isDesktop } from '../lib/platform';
 import { chenText } from '../lib/khochen';
-import { KhoPicker } from '../components/KhoDialogs';
+import { KhoPicker, KhoSaveDialog } from '../components/KhoDialogs';
+import { TikzSheet } from '../components/TikzSheet';
+import { khoLatex, scratchFigures, type ScratchFig } from '../lib/scratchtikz';
 import { FigureBuilder } from '../components/FigureBuilder';
 import { errorReport, scratchFiles, whereLabel, whereOf } from '../lib/scratchbuild';
 import { FIX_RULES, planFix, planSort } from '../lib/texfix';
@@ -97,7 +99,8 @@ export function TexScratchScreen() {
   }, [toolsOpen]);
   const [fixFor, setFixFor] = useState<'fix' | 'sort' | null>(null);
   // biên dịch PDF
-  const [tab, setTab] = useState<'cau' | 'pdf'>('cau');
+  const [tab, setTab] = useState<'cau' | 'pdf' | 'hinh'>('cau');
+  const [khoSave, setKhoSave] = useState<{ latex: string; n: number | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<ScratchOut | null>(null);
   /** nội dung lúc biên dịch THÀNH CÔNG gần nhất (PDF đang có là của nội dung này) */
@@ -185,6 +188,8 @@ export function TexScratchScreen() {
   /** câu đang tick còn tồn tại (văn bản có thể đã đổi từ lúc tick) */
   const scope = useMemo<ReadonlySet<number> | null>(() => { const s2 = new Set([...picked].filter((n) => n <= scan.blocks.length)); return s2.size ? s2 : null; }, [picked, scan]);
   const nScope = scope?.size ?? 0;
+  const figsAll = useMemo(() => (tab === 'hinh' ? scratchFigures(slow, scan) : []), [tab, slow, scan]);
+  const figs = useMemo(() => (scope ? figsAll.filter((x) => x.n !== null && scope.has(x.n)) : figsAll), [figsAll, scope]);
 
   const compile = useCallback(async () => {
     if (busy) return;
@@ -501,10 +506,20 @@ export function TexScratchScreen() {
             <div className="seg sm" role="group" aria-label="Khung bên phải">
               <button type="button" aria-pressed={tab === 'cau'} onClick={() => setTab('cau')}>Câu hỏi</button>
               <button type="button" aria-pressed={tab === 'pdf'} onClick={() => setTab('pdf')}>PDF TeX Live{busy ? ' …' : ''}</button>
+              <button type="button" aria-pressed={tab === 'hinh'} onClick={() => setTab('hinh')} title="Liệt kê mọi khối tikzpicture: mã cạnh hình đã dịch, sửa và áp dụng">Hình TikZ</button>
             </div>
             {tab === 'cau' && <span className="tsx-tag" title="Dựng nhanh trong app, không qua TeX Live">Xem nhanh (có thể khác PDF)</span>}
             {tab === 'cau' && <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Lời giải</label>}
           </div>
+          {tab === 'hinh' && (
+            <TikzSheet
+              figs={figs} total={figsAll.length} onlyPicked={!!scope} toast={toast}
+              onJump={(f: ScratchFig) => { ed.current?.jump(KEY, f.line); if (f.n !== null) setSel(f.n); setPane('code'); if (vmode === 'view') setVmode('both'); }}
+              onCopy={(code) => { void navigator.clipboard?.writeText(code).then(() => toast('Đã sao chép mã hình.'), () => toast('Không sao chép được.')); }}
+              onSave={(f, code) => setKhoSave({ latex: khoLatex({ code, defs: f.defs }), n: f.n })}
+              onApply={(pos, from, to) => ed.current?.replaceAt(KEY, pos, from, to) ?? false}
+            />
+          )}
           {tab === 'pdf' && (
             <div className="tsx-pdf">
               {busy && <p className="sys-hint" role="status">Đang biên dịch bằng TeX Live… (Dừng ở nút trên cùng)</p>}
@@ -599,6 +614,7 @@ export function TexScratchScreen() {
       </footer>
 
       {figOpen && <FigureBuilder onClose={() => setFigOpen(false)} onInsert={(c) => { setFigOpen(false); if (ed.current?.insertAtCursor(KEY, chenText({ code: c, extra_preamble: '' }))) toast('Đã chèn hình vào chỗ con trỏ.'); else toast('Không chèn được: bàn nháp đang chỉ đọc.'); }} onSaved={(m) => toast(m)} />}
+      {khoSave && <KhoSaveDialog latex={khoSave.latex} stem={khoSave.n !== null ? (scan.blocks[khoSave.n - 1]?.text ?? '') : ''} seq={khoSave.n ?? undefined} onClose={() => setKhoSave(null)} onDone={(m) => { setKhoSave(null); toast(m); }} />}
       {khoOpen && <KhoPicker onClose={() => setKhoOpen(false)} onPick={(h) => { setKhoOpen(false); if (ed.current?.insertAtCursor(KEY, chenText(h))) toast(`Đã chèn hình “${h.title}” vào chỗ con trỏ.`); else toast('Không chèn được: bàn nháp đang chỉ đọc.'); }} />}
       {nameDlg && <NameDialog title={nameDlg.kind === 'new' ? 'Bàn nháp mới' : nameDlg.kind === 'rename' ? 'Đổi tên bàn nháp' : 'Lưu thành đề trong Thư viện'} initial={nameDlg.initial} confirmLabel={nameDlg.kind === 'new' ? 'Tạo' : nameDlg.kind === 'rename' ? 'Đổi tên' : 'Lưu thành đề'} hint={nameDlg.kind === 'exam' ? 'Tạo một đề mới trong mục Đề thi, câu chép nguyên văn. Bàn nháp không bị xoá hay đổi.' : undefined} onOk={(n) => void (nameDlg.kind === 'new' ? createDraft(n) : nameDlg.kind === 'rename' ? renameCurrent(n) : saveAsExam(n))} onCancel={() => setNameDlg(null)} />}
       {askDelete && (
