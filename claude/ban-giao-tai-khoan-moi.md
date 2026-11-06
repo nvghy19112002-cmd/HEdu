@@ -1,61 +1,59 @@
-# Bàn giao toàn bộ HEdu cho tài khoản Claude khác (30/10/2026)
+# Bàn giao HEdu cho tài khoản Claude khác (06/11/2026)
 
-Đọc tệp này đầu tiên, rồi `AGENTS.md` (quy tắc dự án, mục 7 Trạng thái), `claude/ban-giao-desktop.md`, `GHI-CHU-PHAT-HANH.md`.
-Chủ dự án là giáo viên Toán, không viết code: trả lời tiếng Việt đời thường, ngắn; tự làm trọn nhánh → commit → PR → CI, không bảo họ tự bấm.
+Đọc tệp này đầu tiên, rồi `AGENTS.md` (quy tắc dự án, mục 7 Trạng thái), `GHI-CHU-PHAT-HANH.md` (đầu tệp), `claude/ban-giao-desktop.md`.
+Chủ dự án là giáo viên Toán, không viết code: trả lời tiếng Việt đời thường, NGẮN; tự làm trọn nhánh → commit → PR → CI → gộp (khi họ đã duyệt), không bảo họ tự bấm. Họ rất coi trọng tiết kiệm token.
 
-## 1. Bắt đầu phiên mới thế nào
-- Mở Claude Code ở thư mục `D:\HEdu` (bản clone làm việc). `C:\Users\admin\AppData\Local\HEdu` chỉ là nơi cài app thật, KHÔNG phải repo.
-- Cùng máy Windows ⇒ bộ nhớ Claude (`C:\Users\admin\.claude\projects\…\memory\`) vẫn đọc được ở tài khoản mới nếu mở đúng thư mục cũ. Khác máy ⇒ chỉ còn tệp này và các tệp trong `claude/`.
-- Hội thoại cũ KHÔNG chuyển sang được. Không chạy hai tài khoản cùng lúc trên cùng thư mục (một việc một người).
-- Việc đầu tiên: `git fetch origin --prune`, xem `main`, PR đang mở, bản phát hành (mục 6).
+## 1. Việc đầu tiên khi mở phiên
+1. `cd D:\HEdu-tv` (bản làm việc của phiên này; mỗi việc một nhánh `claude/<tên>` từ `origin/main`). `C:\Users\admin\AppData\Local\HEdu` chỉ là nơi cài app thật, KHÔNG phải repo.
+2. `git fetch origin --prune`; xem `main`, PR đang mở (`gh pr list`), bản phát hành mới nhất (`gh release list`). **Máy này có `gh`** (đăng nhập sẵn).
+3. Báo chủ dự án 5–8 dòng: trạng thái, việc dở, đề xuất. Chưa làm gì lớn khi họ chưa gật.
+4. Cùng máy ⇒ bộ nhớ Claude (`C:\Users\admin\.claude\projects\C--Users-admin-AppData-Local-HEdu\memory\`) vẫn đọc được; hội thoại cũ KHÔNG chuyển sang.
 
-## 2. Trạng thái tại lúc bàn giao
-- `main` = `ec1c051` (PR #166). Bản phát hành mới nhất: **`v0.1.0-beta.44`**, kênh beta trỏ beta.44. Releases còn giữ beta.42, .43, .44 và beta.34 (ghim ở `scripts/giu-lai-phat-hanh.json`); kênh stable/previous trống.
-- Trong ngày 30/10: beta.41 (#162 đọc ID cuối dòng `\begin{ex}`) → beta.42 (#164 chuẩn hoá khi nạp .tex) → beta.43 (#165 mục "Chưa có ID") → beta.44 (#166 xem trước hiểu `label=\alph*)`, mẫu khaibaochung nạp `enumitem`).
-- Nhánh `claude/ghi-chep-beta44` (commit `b8fd20d`, chỉ tài liệu: cập nhật AGENTS.md mục 7 + `ban-giao-desktop.md`) và tệp này: nằm chung một PR, chờ chủ dự án đồng ý gộp.
-- PR mở khác: **#123** (quy tắc phối hợp 3 phiên, chỉ AGENTS.md, từ 26/10) — chờ chủ dự án quyết gộp hay đóng. Không tự gộp.
-- Issue mở: #1 (lưu đầu file theo từng câu — đổi schema, cần duyệt; huỷ hẳn tiến trình con TeX trên Windows; nghiệm thu máy thật).
-- Dữ liệu thật của chủ dự án (30/10): khoảng 1.673 câu, gần hết lớp 10, cộng 47 câu Chương 1 Mệnh đề nhập "Dán trực tiếp" không ID (nay nằm ở mục "Chưa có ID", nhóm "Chưa rõ lớp"). 251 câu lớp 12 xoá 28/10: chủ dự án KHÔNG cần khôi phục.
+## 2. Trạng thái lúc bàn giao
+- `main` = `bb4b6b9` (PR #256). **Bản đã phát hành mới nhất: `v0.1.0-beta.59`** (05/11).
+- **beta.60 CHƯA phát hành.** Ghi chú beta.60 đã gộp (#252) nhưng chỉ liệt kê #246–#251; từ đó main có thêm #253 (bỏ dòng "Biên dịch thành công" ở Xử lí TeX), #254 (ảnh câu hỏi), #255 (biên dịch song song), #256 (Excel đáp án 5 nền tảng) và sắp có #257. Để phát hành: (a) bổ sung các PR đó vào mục beta.60 của `GHI-CHU-PHAT-HANH.md` + dòng ở `AGENTS.md` mục 7 (qua PR tài liệu), (b) sửa `TAG`/`MAIN_SHA` trong `D:\HEdu-rac\scratch\release60.mjs` (đang trỏ `3a4f693`, đã cũ), (c) chờ CI main xanh, (d) `node release60.mjs dispatch` rồi `node release60.mjs runs`. **Bộ phân loại quyền của Claude đã CHẶN lệnh dispatch này** ("Production Deploy"): cần chủ dự án nói rõ "cho phép phát hành" ngay trong phiên (hoặc họ tự chạy lệnh). Chủ dự án dặn: "làm tốt giai đoạn 1 rồi hẳn phát hành" (giai đoạn 1 đã xong, xem mục 3).
+- **PR đang mở của phiên này: #257** (Phiếu trả lời trắc nghiệm trống, PDF A4). Chủ dự án ĐÃ duyệt mẫu và bảo mở PR; lúc bàn giao CI `windows` đang chạy. Chưa gộp (họ nhắn "dừng lại 1 xíu" ngay sau đó): hỏi họ rồi gộp khi CI xanh.
+- PR cũ còn mở, chờ chủ dự án quyết, KHÔNG tự gộp/đóng: #240 (chia sẻ ngân hàng; họ nói "chưa cần"), #208, #198, #180, #176, #175, #123.
+- Dữ liệu thật của chủ dự án: **chưa bị đụng**. Nút "Duyệt và xác minh các câu đã có ID" (Sức khoẻ ngân hàng, #246) mới có từ beta.60; họ chưa bấm.
 
-## 3. Việc đang dở / việc tiếp theo
-1. **Nghiệm thu trên máy Windows thật** (chưa làm cho beta.39–44): theo `claude/tong-nghiem-thu-beta.md`, `claude/nghiem-thu-de-thi.md`. Riêng beta.43: nhập câu không ID → hiện ở "Chưa có ID", không hiện/ghi `2D1H1-1`; Sửa câu → Lưu không thêm `%[…]`; chọn mục → Gán ID nhờ Claude → nhập đề xuất → câu sang đúng Dạng sau khi xác minh.
-2. **Gán ID nhờ Claude** (mục 5): lô `L20261030-121152` (47 câu mệnh đề) ĐÃ có `de-xuat-…json`, chờ chủ dự án bấm "Nhập đề xuất mới nhất". Lô `L20261030-110000` (300 câu) xuất TRƯỚC bản sửa beta.43, có 47 câu mang `"lop": 12` giả ⇒ đừng làm lô này; bảo chủ dự án xuất lô mới.
-3. **OCR Toán → ex_test** (dự án riêng, thư mục `D:\OCR_Claude\HEdu-OCR`, bàn giao riêng ở `D:\OCR_Claude\HEdu-OCR\BAN_GIAO.md`): còn trang 46 trở đi (Bài 2 Tập hợp) của PDF Toán 10.
-4. Chờ chủ dự án quyết: đề án cây KNTT + Gán ID V4 (đã duyệt bộ chữ A/G/S/T, trả lời Q3–Q9, CHƯA viết mã; phải qua Cổng A → B → C); xác nhận AI một lần cho một công việc; ví dụ gửi AI có lấy câu "Đã duyệt" không; bật lại màn Tạo đề cũ (`FEATURES.exam=false`, không tự bật).
-5. Trước nhập hàng loạt: nhập lớn chạy nền (giới hạn 5.000 câu/lô, 2.000 tệp, 20 MB/tệp, gán ID tự động 200 câu/lượt).
-6. Backlog: hot fix `\allowdisplaybreaks` câu #2086 (xem trước báo "Chưa hiểu"); Word/Excel theo mẫu TNMaker/AZOTA/OLM/SmartTest (cần tệp mẫu), QR, phiếu tô; xuất ma trận Excel; đồng bộ sửa tay .tex; hedu.sty giai đoạn 2–4; đổi tên/xoá/di chuyển tệp trong cây tệp đề thi; BibTeX/Biber.
-7. Worktree `D:\HEdu-kntt` (nhánh `claude/kntt-khung-1a`, 4b6728e, sạch) và nhiều nhánh cục bộ cũ đã gộp: hỏi chủ dự án trước khi xoá.
+## 3. Lộ trình chủ dự án đã chốt (05–06/11)
+Định hướng: **app mạnh về LaTeX là chính; Word chỉ phụ, làm sau.**
+- **Giai đoạn 1 (LaTeX) — XONG.** #247 trộn có điều kiện (ghim vị trí, giữ phương án, cân bằng A–D, đối chiếu mọi mã với câu gốc `verifyAgainstOriginal`), #248 kiểm tra .tex trước khi chốt (`examcheck.checkTexContent`), #249 câu chùm, #250 chân trang "Trang x/??" (dịch lại khi còn undefined references), #251 định nghĩa riêng theo câu (`qpreamble.ts`, `Question.preamble`), #254 ảnh câu hỏi (kho `question-images`, `src-tauri/src/qimg.rs`, `qimages.ts`; xem chuẩn dùng driver dvisvgm + `extractbb`, không cần Ghostscript), #255 biên dịch song song khi xuất gói (làn `lane`, tối đa 3). "PDF bị mờ": chủ dự án gửi ảnh, thực tế không mờ.
+- **Giai đoạn 2 (mẫu MathHub, "sao chép rồi làm lại thành của mình") — đang làm.** MathHub thực ra cài ở **`C:\Users\admin\AppData\Local\Programs\EduHub`** (Electron; dữ liệu `AppData\Roaming\mathhub`). Cách làm đã chọn: CHỈ quan sát đầu ra (không mở/giải nén mã chương trình, không chép tài nguyên của họ): các tệp Excel nó đã xuất nằm ở `C:\Users\admin\Desktop\làm việc\de-kiem-tra-chat-luong-lan-2\*-dapan-*.xlsx` và `Downloads\file-mau-dap-an-tnmaker-*.xlsx`. **KHÔNG đọc `Roaming\mathhub\settings.json`** (chứa khoá API Gemini và mã giáo viên ở dạng chữ thường; khuyên chủ dự án đổi khoá). Đã làm: Excel đáp án TNMaker/SmartTest/AZOTA/OLM/YoungMix (#256, `platxlsx.rs`), phiếu tô trống (#257, `answersheet.ts` + `sheetpdf.rs`). **Còn lại**: mã QR đáp án; đề mẫu (MathHub kèm `resources/de-mau`: nhập đề, OCR, tiếng Anh, trộn có/không lời giải); "yêu cầu cần đạt" (`resources/yccd/toan.json`); đặc tả kỹ thuật; trình chiếu (thư mục `decks`); thi online (`online-results`); chấm thi (`grading.db`). Xem tên thư mục để đoán tính năng rồi quan sát đầu ra thật.
+- **Giai đoạn 3 — CHƯA bắt đầu:** "đập đi xây lại toàn bộ giao diện Finder, tiến hành thật đẹp, cân chỉnh lại mọi thứ". Kiểu Finder hiện nằm ở `screens/ExamLibrary.tsx` (1.163 dòng, 3 chế độ xem), `KhoHinh.tsx`, `Bank.tsx`, `Trash.tsx`, `Curriculum.tsx`; mỗi màn tự viết riêng. Quy trình đã hứa: khảo sát → **dựng mẫu thiết kế cho chủ dự án duyệt TRƯỚC khi viết code** → bộ thành phần dùng chung → chuyển từng màn (Thư viện đề → Kho hình → Ngân hàng) mỗi màn một PR → dọn bản cũ. Dữ liệu không đổi.
+- Giai đoạn 4 (đóng gói Pandoc kèm bản cài, cài đặt/cập nhật, giấy phép) và 5 (Word phụ: nhập hình, đọc .doc, thêm kiểu bảng đáp án) để sau.
+- Word đã có từ trước: xuất (#241, #244: 6 chế độ, giao diện navy+đỏ), nhập (#242, đọc MathType). Cần Pandoc ở `D:\HEdu-tools\pandoc`. `.doc` cũ CHƯA kiểm trong app (có tiến trình Word ẩn bị kẹt do phiên trước; xem Task Manager).
 
-## 4. Môi trường máy (Windows, chủ dự án)
-- **Ổ C gần đầy: KHÔNG ghi gì ra ổ C.** Luôn `export TMP=D:/hedu-tmp TEMP=D:/hedu-tmp` trước `npm test`/script; script tạm, ảnh chụp để `D:\HEdu-rac\scratch`; build Rust `CARGO_TARGET_DIR=D:/hedu-build-target`.
-- Công cụ: Node 24, Rust ở `D:\DevTools\rustup` + `D:\DevTools\cargo` (phiên cũ có thể cần `export RUSTUP_HOME='D:\DevTools\rustup' CARGO_HOME='D:\DevTools\cargo' PATH="/d/DevTools/cargo/bin:$PATH"`), npm cache `D:\DevTools\npm-cache`, TeX Live 2026 ở `D:\texlive\texlive\2026\bin\windows` (test TeX thật: `HEDU_TEX_BIN=<thư mục đó>`). **Không có `gh`.**
-- Lệnh: `npm test` (đủ, ~2 phút), `npm run build`, `npm run typecheck` (CI chỉ cảnh báo), `cargo test --lib --locked`; `npm run dev` → http://localhost:1420 (dữ liệu mẫu, lưu ở localStorage trình duyệt).
-- **App Tauri thử luôn dùng identifier riêng**, không chạm ngân hàng thật `%APPDATA%\vn.hedu.app`: `npx tauri dev --config '{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu)"}'`. Tắt đúng PID `target\debug\hedu.exe` + node `scripts/dev.mjs`; KHÔNG tắt `C:\Users\admin\AppData\Local\HEdu\hedu.exe` (app thật). Không chụp màn hình bằng cách đưa cửa sổ lên trước.
-- Bash heredoc làm hỏng `\` của LaTeX: dùng công cụ Write/Edit. Python sửa tệp phải `newline=''` (repo dùng LF, `.gitattributes eol=lf`).
+## 4. Quy tắc chủ dự án đã nói rõ
+- **Mọi sản phẩm xuất ra (Excel/PDF/.docx/.tex): dựng mẫu thật, gửi chủ dự án duyệt, rồi mới mở PR/gộp.**
+- Mỗi tính năng một PR; thử thật trên app Tauri (CDP) trước khi báo xong; gộp sau CI xanh. Chỉ phát hành khi họ nói rõ.
+- Không đụng dữ liệu thật `%APPDATA%\vn.hedu.app`; không tắt `C:\Users\admin\AppData\Local\HEdu\hedu.exe` (app thật đang mở).
+- Báo ngắn; không lặp ảnh/test thừa.
 
-## 5. Quy trình hay dùng
-**GitHub không có `gh`** — token lấy từ `git credential fill`. Các script sẵn ở `D:\HEdu-rac\scratch`:
-- `openpr3.mjs "<tiêu đề>" <nhánh> <tệp-mô-tả.md> [base]` — mở PR.
-- `ci.mjs status <PR>` / `ci.mjs merge <PR>` — xem check-runs; squash-merge có khoá đúng HEAD.
-- `waitci.mjs <PR>` — chờ CI (windows + giao-dien) xong.
-- `release41.mjs` (mẫu; bản gần nhất `release43.mjs`): sửa `TAG` và `MAIN_SHA` rồi `node … dispatch` (kiểm main chưa đổi, tag chưa có, không lượt nào đang chạy) → `node … runs`; `waitrun.mjs <run-id>` chờ xong và liệt kê Releases.
-- Kiểm kênh: `curl -sL https://github.com/nvghy19112002-cmd/HEdu/releases/download/channel-beta/latest.json`.
+## 5. Môi trường máy (Windows)
+- **Ổ C gần đầy: không ghi gì ra ổ C.** Luôn `export TMP=D:/hedu-tmp TEMP=D:/hedu-tmp CARGO_TARGET_DIR=D:/hedu-build-target`. Tệp tạm/script/ảnh để `D:\HEdu-rac` (`scratch\`).
+- Lệnh: `npx tsc --noEmit -p .`, `node scripts/test.mjs` (mọi test TS, tên test đăng ký ở `scripts/test.mjs`), `cargo test --locked --lib` (khoảng 260 test, ~1 phút) trong `src-tauri`.
+- **App Tauri thử** (identifier riêng, không chạm dữ liệu thật; ngân hàng thử có ~8.900 câu): PowerShell, `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9223'` rồi `npx tauri dev --config D:/HEdu-rac/thu.conf.json` (tệp cấu hình `{"identifier":"vn.hedu.app.thu","productName":"HEdu (thu)"}`; truyền JSON trực tiếp bị PowerShell làm hỏng). Điều khiển bằng CDP: `D:\HEdu-rac\scratch\cdp2.mjs` + các `smoke-*.mjs` mẫu (gọi `window.__TAURI__.core.invoke`, đổi hộp thoại bằng `window.__TAURI__.dialog.open = async()=>…`). Không dùng `import('/src/...')` trong trang (không chạy). Có thể phải khởi động lại app thử sau khi đổi nhánh.
+- TeX Live 2026 ở `D:\texlive`; Pandoc ở `D:\HEdu-tools\pandoc`; Excel và Word cài sẵn (mở thử tệp bằng COM; Word COM từng treo).
+- **Bẫy lớn: dấu `\` bị nuốt/đổi nghĩa** khi chạy `python3`/`node -e`/heredoc trong Bash (`\\` → `\`, `\n` thành xuống dòng). Mọi nội dung có `\` (LaTeX, regex, chuỗi Rust/TS): dùng công cụ **Write/Edit**, hoặc tệp `.mjs` dùng `String.fromCharCode(92)`. Tệp .mjs phải dùng đường dẫn `D:/...` (không `/d/...`). Công cụ Edit/Write đòi đã Read tệp trước.
+- Một số tệp có ký tự điều khiển `\x02` trong chuỗi (ví dụ khoá bộ nhớ trong `xemchuan.ts`): đừng gõ lại, chỉ sửa phần cần.
 
-**Phát hành** chỉ bằng `release.yml` (workflow_dispatch, ref main, input `tag` dạng `v0.1.0-beta.N`); ghi chú lấy nguyên `GHI-CHU-PHAT-HANH.md` ⇒ thêm mục "Có gì mới trong beta.N" lên đầu tệp TRƯỚC khi gộp/phát hành. Chỉ phát hành khi chủ dự án nói rõ; chỉ gộp PR khi chủ dự án đồng ý đúng PR đó (câu "fix lỗi và phát hành nhanh" / "cứ phát hành" là đồng ý cho việc đang nói).
+## 6. Quy trình hay dùng
+- PR: `gh pr create`; commit tiếng Việt, cuối commit `Co-Authored-By: Claude <noreply@anthropic.com>`; cuối mô tả PR `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. Chờ CI: `gh pr checks <số> --watch`; gộp: `gh pr merge <số> --squash --delete-branch`.
+- PR tài liệu-chỉ (ghi chú phát hành) có thể không có check nào; `main` vẫn chạy CI sau khi gộp — chờ xanh trước khi phát hành.
+- Phát hành: xem mục 2; script mẫu `D:\HEdu-rac\scratch\release59.mjs`/`release60.mjs` (kiểm main đúng SHA đã xanh, tag chưa có, không lượt phát hành nào đang chạy). Kiểm kênh: `curl -sL https://github.com/nvghy19112002-cmd/HEdu/releases/download/channel-beta/latest.json`.
+- Gán ID nhờ Claude ("làm lô mới nhất"): xem bộ nhớ `gan-id-nho-claude` và `claude/quy-tac-gan-id-chuan.md`.
 
-**Commit/PR**: nhánh `claude/<tên>` từ `origin/main`, viết tiếng Việt, cuối commit `Co-Authored-By: Claude …`, cuối mô tả PR `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. Mô tả PR nói rõ đã kiểm gì, CHƯA kiểm gì.
+## 7. Kiến trúc nhanh (chỗ hay đụng)
+- Giao diện `src/` (React/TS), lõi `src-tauri/src/` (Rust/Tauri). SQLite + tệp phụ (`id-review`); không đổi schema 3, ID6, UID, LaTeX gốc. Trường mới trên câu chỉ CỘNG THÊM (`preamble`, `images`).
+- Tạo đề: `screens/Exam.tsx`, `lib/examgen.ts` (`makeVariants`, `verifyAgainstOriginal`, `variantTex`), `lib/examdraft.ts`. Thư viện đề: `screens/ExamLibrary.tsx`, `lib/examcheck.ts`; hộp xuất `components/ExamExportDialog.tsx` (PDF/ZIP, Word 6 chế độ, Excel nền tảng, phiếu tô).
+- Biên dịch: `examcompile.rs` (`compile`, làn `lane`, `needs_rerun`), `examexport.rs` (`export_codes`, `prewarm`), `tikz.rs` (xem chuẩn, ảnh), `texscratch.rs` (Xử lí TeX).
+- Word: `examword.rs` + `src-tauri/src/word/` (Pandoc), `wordimport.rs`, `mtef.rs`. Excel: `examxlsx.rs`, `platxlsx.rs`. Phiếu tô: `lib/answersheet.ts`, `sheetpdf.rs`.
+- Nhập: `screens/Extra.tsx`, `lib/importbatch.ts`, `lib/qpreamble.ts`, `lib/qimages.ts`. Sức khoẻ ngân hàng: `screens/Health.tsx`, `lib/approveids.ts`.
+- Quy tắc ID: `claude/quy-tac-gan-id-chuan.md` ("máy" không tự thành "giáo viên xác minh"; duyệt nội dung tách khỏi xác minh Dạng; không ghi ID giả).
 
-**"làm lô mới nhất"** (Gán ID nhờ Claude): trong `D:\HEdu-gan-id` lấy `hedu-gan-id-*.json` mới nhất CHƯA có `de-xuat-<lô>.json`; đọc `huongDan`, `dang`, `cau`; phân loại thật từng câu (Dạng cùng lớp — `"lop": null` thì chọn lớp hợp nhất; mức NB/TH/VD/VDC; `chac` cao/vua/thap; `lyDo` một câu); ghi `de-xuat-<lô>.json` = `{"format":"hedu-gan-id-de-xuat","v":1,"lo","boi":"Claude","cau":[{k,fp,dang,muc,chac,lyDo}]}`, chép nguyên `k`, `fp`, đủ mọi câu; kiểm id Dạng có trong `dang`. Báo số câu, phân bố độ chắc; nhắc bấm "Nhập đề xuất mới nhất". Câu đối chứng trộn ngầm — không đoán câu nào.
-
-## 6. Kiến trúc nhanh (chỗ hay đụng)
-- Giao diện React/TS `src/`, lõi Rust/Tauri `src-tauri/src/`. Lưu SQLite, tệp phụ `id-review` (trạng thái xác minh Dạng, `src/lib/idreview.ts`) — không đổi schema 3, ID6, UID, LaTeX gốc.
-- Ngân hàng: `screens/Bank.tsx`, lọc/đếm `lib/bankfilter.ts` (`BankFilters.noId` = mục "Chưa có ID": `null` / `'all'` / số lớp, 0 = chưa rõ lớp), cây `components/BankTree.tsx`, `lib/banktree.ts`.
-- Câu "Chưa có ID" = bản ghi id-review có `unclassified: true` (+ `lop` nếu biết); vị trí lưu kèm câu chỉ là chỗ giữ, không hiện, không thành ID. Rời mục khi giáo viên chọn Dạng (Sửa câu / hàng đợi Xác minh). Hàm: `gradeOfEff`, `keepNoId` trong `idreview.ts`.
-- Nhập: `screens/Extra.tsx`, `lib/importplan.ts`, `lib/importbatch.ts`, `lib/extest.ts`. Sửa câu: `components/QuestionEditor.tsx`. Gán ID nhờ Claude: `lib/claudeid.ts`, `components/ClaudeIdDialog.tsx`, Rust `idexchange.rs`. Hàng đợi xác minh: `lib/verifyqueue.ts`, `components/VerifyQueue.tsx`.
-- Quy tắc ID chuẩn: `claude/quy-tac-gan-id-chuan.md` ("máy" không bao giờ tự thành "giáo viên xác minh"; duyệt nội dung tách khỏi xác minh Dạng; không ghi ID giả).
-
-## 7. Quy tắc không đổi
+## 8. Quy tắc không đổi
 - Repo công khai: không commit dữ liệu thật, khoá API, thông tin cá nhân.
 - Không tự xoá/duyệt câu của chủ dự án; không tái cấu trúc ngoài phạm vi; thay đổi cỡ L (schema, kiến trúc) phải được duyệt trước.
-- Tính năng lạ: xem dự án mã nguồn mở tương tự trên GitHub trước khi viết.
-- Báo cáo: (1) Đã làm (2) Kiểm thử (3) Git (4) Còn tồn (5) Cần quyết định — ngắn, tiếng Việt.
+- Tính năng lạ: xem dự án mã nguồn mở tương tự trước khi viết.
+- Báo cáo: (1) Đã làm (2) Kiểm thử (3) Git (4) Còn tồn (5) Cần quyết định.
