@@ -41,7 +41,7 @@ t('bảng ma trận: số câu, điểm theo thang của đề, tỉ lệ, dòng
   const spc = parseMatrixSpec(spec)!;
   const q = (uid: string): Question | undefined => (uid === 'u1' ? { uid, seq: 12, type: 'tn', level: 'NB', formId: f1.id, chapterId: ch.id, lessonId: l1.id, grade: 12, latex: '', tags: [], createdAt: 0, updatedAt: 0 } : undefined);
   const b = matrixBook(spc, { name: 'Đề thử', grade: 12, schoolYear: '2026–2027', examType: 'Giữa kỳ 1' }, tax, q);
-  assert.equal(b.sheets.length, 2);
+  assert.equal(b.sheets.length, 3);
   const m = b.sheets[0];
   assert.equal(text(m.rows[0][0]), 'MA TRẬN ĐỀ KIỂM TRA');
   assert.equal(text(m.rows[4][2]), '6 câu · 2,5 điểm'); // 4 tn × 0,25 + 1 ds × 1 + 1 tln × 0,5
@@ -60,7 +60,7 @@ t('bảng ma trận: số câu, điểm theo thang của đề, tỉ lệ, dòng
 t('trang câu trong đề dùng thông tin từ ngân hàng khi có', () => {
   const spc = parseMatrixSpec(spec)!;
   const q = (uid: string): Question | undefined => (uid === 'u1' ? { uid, seq: 12, type: 'tn', level: 'NB', formId: f1.id, chapterId: ch.id, lessonId: l1.id, grade: 12, latex: '', tags: [], createdAt: 0, updatedAt: 0 } : undefined);
-  const s2 = matrixBook(spc, { name: 'x' }, tax, q).sheets[1];
+  const s2 = matrixBook(spc, { name: 'x' }, tax, q).sheets[2];
   assert.equal(text(s2.rows[0][7]), 'Đáp án (mã 101)');
   assert.deepEqual(s2.rows[1].map(text).slice(0, 4), ['I.1', 'I', 'Trắc nghiệm', 'NB']);
   assert.equal(text(s2.rows[1][6]), '#0012 · u1');

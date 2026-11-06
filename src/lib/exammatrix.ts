@@ -2,6 +2,7 @@
 // Điểm lấy đúng từ `diemToiDaMoiCau` của đề (đơn vị 1/100 điểm); không tự đoán thang điểm.
 import { POLICY_LABEL, PARTS, PART_NAME, type PartKey, type Policy } from './examgen';
 import { LEVELS, TYPE_LABEL, type Level, type Question, type QType, type Taxonomy } from './types';
+import { specSheet } from './examspec';
 import { cellNum, cellText, S_BODY, S_BOLD, S_HEAD, S_LEFT, S_SUM, S_SUML, S_TITLE, type XBook, type XCell, type XSheet } from './xlsxbook';
 
 export interface MatrixRow { scope: { kind: string; id: string }; type: QType; level: Level | 'any'; count: number; label?: string; flag?: string }
@@ -170,7 +171,8 @@ export function matrixBook(spec: MatrixSpec, meta: MatrixMeta, tax: Taxonomy, qu
     }));
   }
   const m2: XSheet = { name: 'Câu trong đề', rows: qrows, widths: [7, 7, 16, 9, 32, 40, 24, 16], freeze: [1, 0] };
-  return { sheets: [m1, m2] };
+  const sp = specSheet(spec, meta, tax, question);
+  return { sheets: sp ? [m1, sp, m2] : [m1, m2] };
 }
 
 
