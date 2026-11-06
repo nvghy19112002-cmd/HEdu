@@ -52,6 +52,9 @@ pub struct CompileOpts {
     pub wrap: Option<Vec<WrapFile>>,
     /// true = tệp bọc tự đặt chế độ Đề / Đề in / Lời giải (mẫu HyMath: \\CheDo) ⇒ không dò \\usepackage{ex_test} để đổi tuỳ chọn.
     pub wrap_modes: Option<bool>,
+    /// làn dịch riêng (0, 1, 2…): thư mục làm việc riêng `build/lane-N/work` để nhiều mã đề dịch SONG SONG không giẫm lên nhau. Không đặt = làn chính như cũ.
+    #[serde(default)]
+    pub lane: Option<u32>,
 }
 
 #[derive(Deserialize, Clone, Default, Debug)]
@@ -588,13 +591,17 @@ pub(crate) fn is_running(id: &str) -> bool {
 
 /// Yêu cầu dừng lần biên dịch đang chạy của dự án. true nếu có lần đang chạy.
 pub fn cancel(id: &str) -> bool {
-    match RUNNING.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|m| m.get(id)) {
-        Some(f) => {
+    let g = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(m) = g.as_ref() else { return false };
+    let lane_prefix = format!("{id}#lane");
+    let mut any = false;
+    for (k, f) in m.iter() {
+        if k == id || k.starts_with(&lane_prefix) {
             f.store(true, Ordering::SeqCst);
-            true
+            any = true;
         }
-        None => false,
     }
+    any
 }
 
 pub(crate) fn read_capped(p: &Path) -> String {
@@ -641,10 +648,14 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     let limit = Duration::from_secs(opts.timeout_secs.unwrap_or(m.compile.timeout_secs as u64).clamp(1, 900));
     let runs = opts.runs.unwrap_or(m.compile.runs).clamp(1, 3);
     let mode = mode_of(&opts.mode)?;
-    let (_guard, cancel_flag) = register(id)?;
+    let reg_key = match opts.lane { Some(n) => format!("{id}#lane{n}"), None => id.to_string() };
+    let (_guard, cancel_flag) = register(&reg_key)?;
     let started = Instant::now();
 
-    let build = build_dir(root, id);
+    let build = match opts.lane {
+        Some(n) => build_dir(root, id).join(format!("lane-{n}")),
+        None => build_dir(root, id),
+    };
     let work = build.join("work");
     let sync = sync_workspace(&projects_dir(&lib).join(id), &work, &build.join("synced.json"))?;
     if !sync.files.iter().any(|(r, _)| *r == main) {
@@ -1194,6 +1205,18 @@ mod tests {
     }
 
     #[test]
+    fn huy_dung_ca_cac_lan_dich_song_song() {
+        let (_g0, f0) = register("huy-lan-x").unwrap();
+        let (_g1, f1) = register("huy-lan-x#lane0").unwrap();
+        let (_g2, f2) = register("huy-lan-x#lane2").unwrap();
+        let (_g3, f3) = register("huy-lan-xx").unwrap();
+        assert!(cancel("huy-lan-x"));
+        assert!(f0.load(Ordering::SeqCst) && f1.load(Ordering::SeqCst) && f2.load(Ordering::SeqCst), "huỷ dự án thì huỷ cả các làn");
+        assert!(!f3.load(Ordering::SeqCst), "dự án khác (tên bắt đầu giống) không bị huỷ");
+        assert!(register("huy-lan-x#lane0").is_err(), "một làn không chạy hai lượt cùng lúc");
+    }
+
+    #[test]
     fn nhan_dien_loi_nghiem_trong_va_chay_lai() {
         assert!(has_severe(SAMPLE));
         assert!(has_severe("! Emergency stop."));
@@ -1581,7 +1604,7 @@ B
         let sup = support::prepare(&root);
         assert!(sup.is_some());
         for eng in ["pdflatex", "xelatex", "lualatex"] {
-            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None, wrap_modes: None };
+            let o = CompileOpts { engine: Some(eng.into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None, wrap_modes: None, lane: None };
             let r = compile(&root, &s.id, &o, &sup).unwrap();
             eprintln!("{eng}: {} · {} · {:?} trang · {} ms · {}", r.status, r.message, r.pages, r.ms, r.tex_version);
             assert_eq!(r.status, "ok", "{eng}: {:?} {}", r.diagnostics, r.raw_log);
@@ -1613,7 +1636,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "TikZ nặng", None).unwrap();
         let sup = support::prepare(&root);
-        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None, wrap_modes: None };
+        let o = CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: None, main: None , wrap: None, wrap_modes: None, lane: None };
         let r = compile(&root, &s.id, &o, &sup).unwrap();
         eprintln!("TikZ nặng: {} · {:?} trang · {} ms · {} lượt", r.status, r.pages, r.ms, r.runs);
         assert_eq!(r.status, "ok", "{:?} {}", r.diagnostics, r.raw_log);
@@ -1633,7 +1656,7 @@ B
         put(&d, "src/main.tex", main.as_bytes());
         let s = examlib::import(&root.join("exam-library"), &d.join("src"), "Thật", None).unwrap();
         let sup = support::prepare(&root);
-        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()), main: None , wrap: None, wrap_modes: None };
+        let o = |m: &str| CompileOpts { engine: Some("pdflatex".into()), tex_bin: Some(bin.clone()), timeout_secs: Some(180), runs: Some(2), force: Some(true), mode: Some(m.into()), main: None , wrap: None, wrap_modes: None, lane: None };
         let de = compile(&root, &s.id, &o("de"), &sup).unwrap();
         let lg = compile(&root, &s.id, &o("loigiai"), &sup).unwrap();
         eprintln!("de: {} {:?} | loigiai: {} {:?}", de.status, de.pages, lg.status, lg.pages);

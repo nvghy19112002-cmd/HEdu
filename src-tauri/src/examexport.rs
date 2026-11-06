@@ -1028,12 +1028,29 @@ pub fn export_codes(root: &Path, id: &str, o: &ExportOpts, support_dir: &Option<
     let (engine, tex_bin, timeout) = (o.engine.clone(), o.tex_bin.clone(), o.timeout_secs);
     let idc = id.to_string();
     let flag2 = flag.clone();
+    // Dịch trước các cặp (mã, chế độ) SONG SONG (mỗi làn một thư mục làm việc riêng) để làm nóng bộ đệm; lượt tuần tự bên dưới
+    // (và mọi kiểm tra, báo lỗi, đóng gói) chạy y như cũ và gặp PDF đã dịch xong. Lỗi/huỷ ở bước này bị bỏ qua: lượt tuần tự báo thay.
+    {
+        let student = kind == Kind::Student;
+        let mut pairs: Vec<(String, &'static str)> = Vec::new();
+        for c in &plan.codes {
+            pairs.push((c.clone(), "de"));
+            if plan.with_solution && !student {
+                pairs.push((c.clone(), "loigiai"));
+            }
+        }
+        let lanes = std::thread::available_parallelism().map(|n| n.get() / 2).unwrap_or(1).clamp(1, 3).min(pairs.len());
+        if lanes >= 2 {
+            progress(Progress { id: id.to_string(), phase: "dich-de".into(), index: 1, total: plan.codes.len(), code: plan.codes.first().cloned().unwrap_or_default() });
+            prewarm(root, id, &pairs, &o.engine, &o.tex_bin, o.timeout_secs, support_dir, &flag, lanes);
+        }
+    }
     let mut provider = move |code: &str, mode: &str| -> Result<PdfOut, Fail> {
         if flag2.load(Ordering::SeqCst) {
             return Err(Fail::Cancelled);
         }
         let main = format!("main-{code}.tex");
-        let co = CompileOpts { engine: engine.clone(), timeout_secs: timeout, runs: Some(2), tex_bin: tex_bin.clone(), force: None, mode: Some(mode.to_string()), main: Some(main.clone()), wrap: None, wrap_modes: None };
+        let co = CompileOpts { engine: engine.clone(), timeout_secs: timeout, runs: Some(2), tex_bin: tex_bin.clone(), force: None, mode: Some(mode.to_string()), main: Some(main.clone()), wrap: None, wrap_modes: None, lane: None };
         let r = compile(&root2, &idc, &co, &sup).map_err(Fail::Msg)?;
         match r.status.as_str() {
             "ok" => {
@@ -1048,6 +1065,32 @@ pub fn export_codes(root: &Path, id: &str, o: &ExportOpts, support_dir: &Option<
         }
     };
     build_package(&plan, &dest, &mut provider, progress, &flag)
+}
+
+/// Dịch trước các cặp (mã, chế độ) bằng `lanes` làn song song. Mỗi làn có thư mục làm việc riêng (`build/lane-N`), PDF tốt của từng
+/// (chế độ, mã) có tên riêng nên các làn không ghi trùng tệp. Xong thì xoá thư mục làn. Kết quả bỏ qua (chỉ làm nóng bộ đệm).
+#[allow(clippy::too_many_arguments)]
+fn prewarm(root: &Path, id: &str, pairs: &[(String, &'static str)], engine: &Option<String>, tex_bin: &Option<String>, timeout: Option<u64>, sup: &Option<PathBuf>, cancel: &AtomicBool, lanes: usize) {
+    use std::sync::atomic::AtomicUsize;
+    let next = AtomicUsize::new(0);
+    std::thread::scope(|sc| {
+        for lane in 0..lanes {
+            let next = &next;
+            sc.spawn(move || loop {
+                if cancel.load(Ordering::SeqCst) {
+                    break;
+                }
+                let i = next.fetch_add(1, Ordering::SeqCst);
+                let Some((code, mode)) = pairs.get(i) else { break };
+                let main = format!("main-{code}.tex");
+                let co = CompileOpts { engine: engine.clone(), timeout_secs: timeout, runs: Some(2), tex_bin: tex_bin.clone(), force: None, mode: Some((*mode).to_string()), main: Some(main), wrap: None, wrap_modes: None, lane: Some(lane as u32) };
+                let _ = compile(root, id, &co, sup);
+            });
+        }
+    });
+    for lane in 0..lanes {
+        let _ = fs::remove_dir_all(examcompile::build_dir(root, id).join(format!("lane-{lane}")));
+    }
 }
 
 // ---------- bổ sung tệp chính từng mã cho đề đã lưu (D4) ----------
