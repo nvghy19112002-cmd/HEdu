@@ -13,7 +13,7 @@ export function chenText(h: Pick<KhoChen, 'code' | 'extra_preamble'>): string {
   return `${extra ? extra + '\n' : ''}${code}\n`;
 }
 
-export interface TikzBlock { code: string; /** dòng bắt đầu (từ 1) */ line: number }
+export interface TikzBlock { code: string; /** dòng bắt đầu (từ 1) */ line: number; /** vị trí ký tự bắt đầu trong mã */ start: number }
 
 /** Các khối \begin{tikzpicture}…\end{tikzpicture} trong mã (bỏ khối nằm trong chú thích %). */
 export function tikzBlocks(latex: string): TikzBlock[] {
@@ -23,7 +23,7 @@ export function tikzBlocks(latex: string): TikzBlock[] {
     const lineStart = latex.lastIndexOf('\n', m.index - 1) + 1;
     const before = latex.slice(lineStart, m.index);
     if (/(^|[^\\])%/.test(before)) continue; // cùng dòng, đứng sau dấu % ⇒ đã bị comment
-    out.push({ code: m[0], line: latex.slice(0, m.index).split('\n').length });
+    out.push({ code: m[0], line: latex.slice(0, m.index).split('\n').length, start: m.index });
   }
   return out;
 }

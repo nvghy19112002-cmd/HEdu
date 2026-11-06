@@ -2271,3 +2271,25 @@ details textarea.kh-code { height: 110px; }
 .fb-rowbox { border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .fb-prev { min-height: 200px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 8px; overflow: auto; }
 .fb-code { width: 100%; min-height: 150px; font-family: var(--f-code, monospace); font-size: 12px; }
+
+/* Xử lí TeX › Hình TikZ (TikzSheet.tsx): mỗi khối tikzpicture một thẻ, mã cạnh hình */
+.tzs { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 8px 12px 16px; }
+.tzs-bar { display: flex; align-items: center; gap: 8px; justify-content: space-between; font-size: 13px; color: var(--ink-2); position: sticky; top: -8px; background: var(--paper); padding: 6px 0; z-index: 1; }
+.tzs-empty { padding: 16px 12px; }
+.tzs-card { border: 1px solid var(--line); border-radius: 8px; background: var(--paper); display: flex; flex-direction: column; }
+.tzs-card.dirty { border-color: var(--pri-line); box-shadow: 0 0 0 1px var(--pri-line); }
+.tzs-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.tzs-sub { color: var(--ink-3); font-size: 12px; }
+.tzs-acts { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+.tzs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; min-height: 160px; }
+.tzs-code { margin: 0; border: 0; border-right: 1px solid var(--line); border-radius: 0 0 0 8px; padding: 8px 10px; font-family: var(--f-code, Consolas, monospace); font-size: 12px; line-height: 1.5; resize: vertical; background: var(--paper-2); color: var(--ink); white-space: pre; overflow: auto; min-height: 160px; }
+.tzs-code:focus { outline: 2px solid var(--pri-line); outline-offset: -2px; }
+.tzs-figs { display: flex; flex-direction: column; gap: 8px; padding: 8px; min-width: 0; }
+.tzs-fig { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-height: 120px; }
+.tzs-cap { font-size: 12px; color: var(--ink-3); }
+.tzs-svg { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; background: #fff; border-radius: 4px; overflow: auto; padding: 6px; }
+.tzs-svg svg { max-width: 100%; height: auto; max-height: 360px; }
+.tzs-stale { opacity: .45; }
+.tzs-ph { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 13px; border: 1px dashed var(--line-2); border-radius: 4px; }
+.tzs-err { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--danger-ink); background: var(--danger-soft); border: 1px solid var(--danger-line); border-radius: 4px; padding: 8px; overflow: auto; }
+@media (max-width: 900px) { .tzs-body { grid-template-columns: 1fr; } .tzs-code { border-right: 0; border-bottom: 1px solid var(--line); border-radius: 0; } }
