@@ -12,7 +12,7 @@ Chủ dự án là giáo viên Toán, không viết code: trả lời tiếng Vi
 ## 2. Trạng thái lúc bàn giao
 - `main` = `bb4b6b9` (PR #256). **Bản đã phát hành mới nhất: `v0.1.0-beta.59`** (05/11).
 - **beta.60 CHƯA phát hành.** Ghi chú beta.60 đã gộp (#252) nhưng chỉ liệt kê #246–#251; từ đó main có thêm #253 (bỏ dòng "Biên dịch thành công" ở Xử lí TeX), #254 (ảnh câu hỏi), #255 (biên dịch song song), #256 (Excel đáp án 5 nền tảng) và sắp có #257. Để phát hành: (a) bổ sung các PR đó vào mục beta.60 của `GHI-CHU-PHAT-HANH.md` + dòng ở `AGENTS.md` mục 7 (qua PR tài liệu), (b) sửa `TAG`/`MAIN_SHA` trong `D:\HEdu-rac\scratch\release60.mjs` (đang trỏ `3a4f693`, đã cũ), (c) chờ CI main xanh, (d) `node release60.mjs dispatch` rồi `node release60.mjs runs`. **Bộ phân loại quyền của Claude đã CHẶN lệnh dispatch này** ("Production Deploy"): cần chủ dự án nói rõ "cho phép phát hành" ngay trong phiên (hoặc họ tự chạy lệnh). Chủ dự án dặn: "làm tốt giai đoạn 1 rồi hẳn phát hành" (giai đoạn 1 đã xong, xem mục 3).
-- **PR đang mở của phiên này: #257** (Phiếu trả lời trắc nghiệm trống, PDF A4). Chủ dự án ĐÃ duyệt mẫu và bảo mở PR; lúc bàn giao CI `windows` đang chạy. Chưa gộp (họ nhắn "dừng lại 1 xíu" ngay sau đó): hỏi họ rồi gộp khi CI xanh.
+- **PR đang mở của phiên này: #257** (Phiếu trả lời trắc nghiệm trống, PDF A4). Chủ dự án ĐÃ duyệt mẫu và bảo mở PR; CI đã XANH lúc bàn giao. Chưa gộp (họ nhắn "dừng lại 1 xíu" ngay sau đó): hỏi họ rồi gộp.
 - PR cũ còn mở, chờ chủ dự án quyết, KHÔNG tự gộp/đóng: #240 (chia sẻ ngân hàng; họ nói "chưa cần"), #208, #198, #180, #176, #175, #123.
 - Dữ liệu thật của chủ dự án: **chưa bị đụng**. Nút "Duyệt và xác minh các câu đã có ID" (Sức khoẻ ngân hàng, #246) mới có từ beta.60; họ chưa bấm.
 
