@@ -1307,6 +1307,49 @@ pub fn export_platform_xlsx(lib: &Path, id: &str, platform: &str, dest_dir: &Pat
     Err("Thư mục đích đã có quá nhiều tệp đáp án cùng tên.".into())
 }
 
+/// Ảnh mã QR đáp án (PNG) cho TNMaker / SmartTest / YoungMix, gồm mọi mã đề. Không ghi đè tệp có sẵn.
+pub fn export_qr_png(lib: &Path, id: &str, platform: &str, dest_dir: &Path) -> Result<String, String> {
+    let info = codes_info(lib, id)?;
+    if !info.has_spec {
+        return Err(info.problems.first().cloned().unwrap_or_else(|| "Đề chưa có dữ liệu mã đề.".into()));
+    }
+    if let Some(p) = info.problems.first() {
+        return Err(p.clone());
+    }
+    let spec = parse_spec(&read_project_text(lib, id, SPEC, 8 * 1024 * 1024)?)?;
+    let refs: Vec<&CodeSpec> = spec.codes.iter().collect();
+    let bytes = crate::qrans::png_of(&crate::qrans::payload(platform, &refs)?)?;
+    let md = fs::symlink_metadata(dest_dir).map_err(|e| format!("Thư mục đích không dùng được: {e}"))?;
+    if !md.is_dir() || is_link(&md) {
+        return Err("Thư mục đích không phải thư mục thường.".into());
+    }
+    let base = format!("{}-qr-{platform}", slug(&spec.title));
+    for n in 1..1000 {
+        let name = if n == 1 { format!("{base}.png") } else { format!("{base}-{n}.png") };
+        let p = dest_dir.join(&name);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&p) {
+            Ok(mut f) => {
+                use std::io::Write as _;
+                if let Err(e) = f.write_all(&bytes).and_then(|_| f.sync_all()) {
+                    drop(f);
+                    let _ = fs::remove_file(&p);
+                    return Err(format!("Không ghi được ảnh QR: {e}"));
+                }
+                return Ok(p.to_string_lossy().into_owned());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("Không tạo được ảnh QR: {e}")),
+        }
+    }
+    Err("Thư mục đích đã có quá nhiều ảnh QR cùng tên.".into())
+}
+
+#[tauri::command]
+pub async fn exam_qr_png(app: AppHandle, id: String, platform: String, dest_dir: String) -> Result<String, String> {
+    let lib = root_of(&app)?.join("exam-library");
+    tauri::async_runtime::spawn_blocking(move || export_qr_png(&lib, &id, &platform, Path::new(&dest_dir))).await.map_err(|e| e.to_string())?
+}
+
 /// Số câu Phần I, II, III của đề (mã đầu tiên) — để dựng phiếu tô trắc nghiệm đúng cỡ.
 #[tauri::command]
 pub async fn exam_codes_shape(app: AppHandle, id: String) -> Result<[usize; 3], String> {
