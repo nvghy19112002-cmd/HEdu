@@ -10,6 +10,7 @@ export const IcImport = ({ size = 22 }: P) => <svg {...base(size)}><path d="M12 
 export const IcTex = ({ size = 22 }: P) => <svg {...base(size)}><path d="M8 5c-2 0-3 1-3 3v2.5c0 1-.6 1.5-1.5 1.5.9 0 1.5.5 1.5 1.5V16c0 2 1 3 3 3M16 5c2 0 3 1 3 3v2.5c0 1 .6 1.5 1.5 1.5-.9 0-1.5.5-1.5 1.5V16c0 2-1 3-3 3" /><path d="M10 9.5l4 5M14 9.5l-4 5" /></svg>;
 export const IcTree = ({ size = 22 }: P) => <svg {...base(size)}><path d="M6 4v16M6 8h7M6 15h7" /><path d="M13 6h6v4h-6zM13 13h6v4h-6z" /></svg>;
 export const IcShapes = ({ size = 22 }: P) => <svg {...base(size)}><circle cx="8" cy="8" r="4" /><path d="M14 14h6v6h-6zM4 20l4.5-7 4.5 7z" /></svg>;
+export const IcPlay = ({ size = 22 }: P) => <svg {...base(size)}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="m10 8 5 2.5-5 2.5zM8 21h8" /></svg>;
 export const IcBackup = ({ size = 22 }: P) => <svg {...base(size)}><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z" /><path d="M4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></svg>;
 export const IcSearch = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>;
 export const IcCopy = ({ size = 18 }: P) => <svg {...base(size)}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>;
