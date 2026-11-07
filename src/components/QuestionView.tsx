@@ -61,7 +61,7 @@ function Choices({ items, defs, rightIdx, ring }: { items: { text: string; lette
     if (hasFig) { setCols(1); return; }
     const el = box.current, m = meas.current;
     if (!el || !m) return;
-    const GAP = 10, PAD = 44; // giao diện mới: ô đáp án có viền + đệm + chỗ dấu ✓ (khớp .opt ở cuối styles.css)
+    const GAP = 10, PAD = 36; // ô đáp án có viền + đệm + chỗ dấu ✓ (khớp .opt ở cuối styles.css)
     const calc = () => {
       const avail = el.clientWidth;
       if (!avail) return;
