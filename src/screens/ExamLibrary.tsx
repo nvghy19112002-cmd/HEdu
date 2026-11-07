@@ -55,7 +55,7 @@ const PER_PAGE = 60;
 const PER_PAGE_LIST = 200;
 const COLSORT_KEY = 'hedu.examcolsort';
 const SIDEW_KEY = 'hedu.examside';
-const SIDEW_DEFAULT = 250;
+const SIDEW_DEFAULT = 290; // giao diện mới: cây đủ rộng để tên bài/chương hiện đủ
 const VIEW_KEY = 'hedu.examview';
 type View = 'card' | 'list' | 'cols';
 const loadView = (): View => { try { const v = localStorage.getItem(VIEW_KEY); return v === 'card' || v === 'cols' ? v : 'list'; } catch { return 'list'; } };
@@ -178,6 +178,8 @@ export function ExamLibraryScreen() {
   /** hộp Thông tin mở từ một tab đề: đóng hộp thì quay lại tab đó */
   const infoFrom = useRef<string | null>(null);
   const [exportingCodes, setExportingCodes] = useState(false);
+  /** hộp "Xuất từng mã đề" mở thẳng từ ngăn Thông tin bên phải (không cần mở cửa sổ Thông tin) */
+  const [exportFor, setExportFor] = useState<ExamSummary | null>(null);
   const [panel, setPanel] = useState<null | 'trash' | 'backup'>(null);
   /** đề đang chờ xác nhận chuyển vào Thùng rác */
   const [askTrash, setAskTrash] = useState<ExamSummary | null>(null);
@@ -937,6 +939,15 @@ export function ExamLibraryScreen() {
                 ))}
                 {selGoods.length > 1 && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void exportEvery(selE)}>Xuất tất cả các bản…</button>}
               </div>
+              <div className="fx-out" role="group" aria-label="Xuất đề ra">
+                <b>Xuất ra</b>
+                <div className="fx-out-grid">
+                  <button type="button" className="fx-out-t" disabled={!desktop || busy || selGoods.length === 0} title={selGoods.length ? 'PDF đã biên dịch của đề' : 'Chưa có PDF: mở đề rồi biên dịch'} onClick={() => { const g = selGoods.find((x) => x.mode === 'de' || x.mode === 'de-in') ?? selGoods[0]; if (g) void exportOne(selE, g.mode as ExamMode); }}><i className="o-pdf">PDF</i><span>Bản đề</span></button>
+                  <button type="button" className="fx-out-t" disabled={!desktop || busy} title="PDF từng mã đề, gói giáo viên/học sinh, Word, Excel đáp án theo nền tảng thi, mã QR, phiếu tô (đề tạo từ ngân hàng)" onClick={() => setExportFor(selE)}><i className="o-zip">ZIP</i><span>Gói mã đề</span></button>
+                  <button type="button" className="fx-out-t" disabled={!desktop || busy} title="Ma trận đề ra Excel (đề tạo từ ngân hàng)" onClick={() => void exportMatrix(selE)}><i className="o-xls">XLSX</i><span>Ma trận</span></button>
+                  <button type="button" className="fx-out-t" disabled={!desktop || busy} title="Xuất trọn gói: PDF, ma trận, đáp án, danh mục" onClick={() => setPacking([selE])}><i className="o-pack">GÓI</i><span>Trọn gói</span></button>
+                </div>
+              </div>
               <div className="fx-acts">
                 <button type="button" className="btn btn-sm btn-accent" onClick={() => openDoc(selE)}>Mở đề</button>
                 <button type="button" className="btn btn-sm" onClick={() => { infoFrom.current = null; setActiveId(selE.id); }}>Thông tin…</button>
@@ -1053,6 +1064,7 @@ export function ExamLibraryScreen() {
       )}
 
       {viewing && activeId && detail && <PdfViewer id={activeId} title={detail.name} stale={false} mode={viewing} note={MODE_NOTE[viewing]} onClose={() => setViewing(null)} />}
+      {exportFor && <ExamExportDialog id={exportFor.id} name={exportFor.name} onToast={toast} onClose={() => setExportFor(null)} />}
       {exportingCodes && activeId && detail && <ExamExportDialog id={activeId} name={detail.name} onToast={toast} onClose={() => setExportingCodes(false)} />}
       {docTabs.map((e) => (
         <ExamWorkspace key={e.id} ref={(h) => { if (h) wsRefs.current.set(e.id, h); else wsRefs.current.delete(e.id); }} id={e.id} name={e.name} mainFile={e.mainFile} schoolYear={e.metadata.schoolYear}
