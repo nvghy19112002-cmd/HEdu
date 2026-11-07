@@ -1,3 +1,12 @@
+## Có gì mới trong beta.61 (kênh beta): giao diện mới đợt 1 — màu mới, dải điều hướng mới, màn Câu hỏi mới
+Gồm PR #264 (so với beta.60). Chỉ đổi cách trình bày: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử và chạy thử trên app với kho thử ở 9 cỡ cửa sổ (Full HD đến cửa sổ 800×560, gồm laptop 1366×768 phóng 100/125/150%); chưa thử trên máy Windows thật của bạn. Đây là bản beta: các màn khác (Đề thi, Soạn TeX, Tạo đề, Nhập liệu…) mới đổi màu, giao diện riêng sẽ làm ở các đợt sau.
+
+- **Màu mới cho cả app**, chữ nào cũng đủ đậm để dễ đọc; mức độ N/H/V/C có màu cố định (Vận dụng cao màu tím), màu đỏ chỉ dùng cho lỗi và xoá.
+- **Dải điều hướng bên trái chia nhóm**: Thư viện (Câu hỏi, Đề thi, Hình, Chiếu) · Soạn thảo (Soạn TeX, Tạo đề, Nhập) · dưới đáy Sức khoẻ, Chương trình, Thùng rác, Cài đặt. Mục **Chiếu** mở danh sách bộ trình chiếu. Cửa sổ thấp thì dải tự thu gọn, rất thấp chỉ còn biểu tượng (rê chuột để xem tên).
+- **Câu hỏi**: cột Mục lục hiện đủ tên bài, tên dạng (không còn bị cắt "…"); **Ctrl+B** ẩn/hiện Mục lục. Thẻ câu cao theo nội dung, có vạch màu mức độ, tự xếp 2 cột khi đủ rộng; câu Đúng/Sai và câu có hình chiếm trọn hàng.
+- **Ô đáp án A–D mới**: mỗi phương án một ô, chữ cái trong vòng tròn, đáp án đúng tô xanh có dấu ✓; ý "Sai" màu xám.
+- **Bấm một câu** (màn hình đủ rộng) mở **ngăn Thông tin** bên phải: nút Sửa câu, Xem đầy đủ, Thêm vào đề, Trình chiếu, Chép LaTeX; vị trí, mức độ, kiểm duyệt, nhãn; tab Lời giải / LaTeX. **Bấm đúp** (hoặc Enter) mở cửa sổ xem câu như trước. Màn hình hẹp: bấm câu vẫn mở cửa sổ xem.
+
 ## Có gì mới trong beta.60 (kênh beta): trình chiếu câu hỏi, Hình TikZ ở Xử lí TeX, mã QR đáp án, trộn đề có điều kiện, câu chùm, định nghĩa riêng theo câu
 Gồm PR #246, #247, #248, #249, #250, #251, #253, #254, #255, #256, #257, #260, #261, #262 (so với beta.59). Không tự đổi ngân hàng câu hỏi hay tệp đề của bạn: nút duyệt hàng loạt chỉ ghi khi bạn bấm và xác nhận. Đã thử bằng bộ kiểm thử (255 test Rust, test giao diện), chạy thử từng tính năng trên app Tauri với kho thử và dịch thử bằng TeX Live thật; chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
