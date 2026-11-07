@@ -1,3 +1,16 @@
+## Có gì mới trong beta.62 (kênh beta): sửa màn Câu hỏi theo góp ý + giao diện mới cho Thư viện đề
+Gồm PR #266, #267 (so với beta.61). Chỉ đổi cách trình bày: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử và chạy thử trên app với kho thử ở 9 cỡ cửa sổ (Full HD đến cửa sổ 800×560); chưa thử trên máy Windows thật của bạn. Đây là bản beta.
+
+**Câu hỏi (sửa theo góp ý beta.61)**
+- Thẻ câu **cao đều, xếp hàng ngay ngắn** như bản cũ; câu Đúng/Sai không còn kéo dài hết bề ngang; ô đáp án A–D gọn hơn.
+- Trang **không còn cuộn ngang** (trước đây một công thức quá rộng đẩy cả trang làm mất dải điều hướng bên trái).
+- Giữ: màu mới, vạch màu mức độ, Mục lục hiện đủ tên, ngăn Thông tin khi bấm một câu.
+
+**Thư viện đề (giao diện mới, bước 3)**
+- **Cây đề hiện đủ tên** (không còn bị cắt "…"), rộng hơn, vẫn kéo chỉnh được.
+- **Ngăn Thông tin bên phải có nhóm "Xuất ra"**: PDF, Gói mã đề, Ma trận, Trọn gói. "Gói mã đề" mở thẳng hộp xuất từng mã (PDF từng mã, ZIP, Word, Excel nền tảng, QR, phiếu tô); trước đây phải mở cửa sổ Thông tin mới thấy.
+- Kiểu **Biểu tượng**: thẻ đề có vạch màu theo loại đề, hình tờ giấy, trạng thái màu mới.
+
 ## Có gì mới trong beta.61 (kênh beta): giao diện mới đợt 1 — màu mới, dải điều hướng mới, màn Câu hỏi mới
 Gồm PR #264 (so với beta.60). Chỉ đổi cách trình bày: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử và chạy thử trên app với kho thử ở 9 cỡ cửa sổ (Full HD đến cửa sổ 800×560, gồm laptop 1366×768 phóng 100/125/150%); chưa thử trên máy Windows thật của bạn. Đây là bản beta: các màn khác (Đề thi, Soạn TeX, Tạo đề, Nhập liệu…) mới đổi màu, giao diện riêng sẽ làm ở các đợt sau.
 
