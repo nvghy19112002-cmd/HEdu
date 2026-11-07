@@ -2376,13 +2376,12 @@ details textarea.kh-code { height: 110px; }
 .bank-head ~ .body-row { flex-wrap: nowrap; align-items: flex-start; gap: 16px; padding-left: 20px; padding-right: 20px; }
 .body-row .fside:not(.is-drawer) { flex: 0 0 340px; width: 340px; background: var(--bg-ctx); border-color: var(--border); border-radius: var(--radius-lg); }
 .qlist { flex: 1 1 auto; }
-.cards-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); grid-auto-rows: auto; gap: 12px; align-items: start; }
-.cards-grid .card { height: auto; overflow: visible; border-radius: var(--radius-lg); box-shadow: var(--shadow-1); position: relative; transition: box-shadow .15s, border-color .15s; }
+/* lưới thẻ giữ đúng kiểu cũ: thẻ cao đều, số cột như cũ (chủ dự án chọn sau beta.61) */
+.cards-grid .card { border-radius: var(--radius-lg); box-shadow: var(--shadow-1); position: relative; transition: box-shadow .15s, border-color .15s; }
 .cards-grid .card::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 4px 4px 0; background: var(--lvc, transparent); }
 .cards-grid .card.lv-NB { --lvc: var(--level-n); } .cards-grid .card.lv-TH { --lvc: var(--level-h); }
 .cards-grid .card.lv-VD { --lvc: var(--level-v); } .cards-grid .card.lv-VDC { --lvc: var(--level-c); }
 .cards-grid .card:hover { box-shadow: var(--shadow-2); }
-.cards-grid .card.is-wide { grid-column: 1 / -1; }
 .cards-grid .card.is-active { border-color: var(--pri); box-shadow: 0 0 0 2px var(--pri), var(--shadow-2); }
 .cards-grid .card-body { min-height: 0; }
 /* mức độ, loại câu: chữ đậm trên nền nhạt (đủ tương phản) */
@@ -2390,12 +2389,12 @@ details textarea.kh-code { height: 110px; }
 .pill.l-VD { background: var(--c-vd-bg); color: var(--c-vd-fg); } .pill.l-VDC { background: var(--c-vdc-bg); color: var(--c-vdc-fg); }
 /* ô đáp án A–D: mỗi phương án một ô, chữ cái trong vòng tròn, đúng = xanh + ✓ */
 .opts { gap: 8px 10px; }
-.opt { justify-self: stretch; padding: 5px 30px 5px 6px; border: 1px solid #E1E5EC; border-radius: var(--radius-md); background: linear-gradient(180deg, #FFFFFF, #FAFBFD); min-height: 38px; }
-.opt > b { width: 24px; height: 24px; border: 1px solid var(--pri-line); background: var(--pri-soft); color: #2F4BE6; font-weight: 800; }
+.opt { justify-self: stretch; padding: 2px 26px 2px 4px; border: 1px solid #E1E5EC; border-radius: 8px; background: linear-gradient(180deg, #FFFFFF, #FAFBFD); min-height: 30px; }
+.opt > b { width: 22px; height: 22px; border: 1px solid var(--pri-line); background: var(--pri-soft); color: #2F4BE6; font-weight: 800; }
 .opt-m b { width: 26px; }
 .opt.right { background: linear-gradient(180deg, #F2FCF6, #E6F8EE); border-color: var(--ok-line); }
 .opt.right > b { background: var(--ok); border-color: var(--ok); color: #FFFFFF; box-shadow: 0 2px 6px #0F7A3D40; }
-.opt.right::after { content: "✓"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-family: var(--f-ui); font-weight: 800; color: var(--ok); }
+.opt.right::after { content: "✓"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--f-ui); font-weight: 800; color: var(--ok); }
 /* Đúng/Sai: ý Sai dùng xám đậm (đỏ chỉ dành cho lỗi) */
 .tf .mark.s { color: #FFFFFF; background: var(--neutral); border-color: var(--neutral); }
 .tf .mark.d { color: #FFFFFF; background: var(--ok); border-color: var(--ok); }
@@ -2441,7 +2440,6 @@ details textarea.kh-code { height: 110px; }
   .rail .rb[aria-current="page"]::before { top: 8px; bottom: 8px; }
 }
 /* thẻ câu: 2 cột khi vùng danh sách ≥ ~760px, nhỏ hơn thì 1 cột */
-.cards-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 372px), 1fr)); }
 /* =========== hết co giãn GIAI ĐOẠN 3 =========== */
 
 /* ============ GIAI ĐOẠN 3 · co giãn (đợt 2): vùng giữa hẹp ở 1366 khi mở ngăn Thông tin ============ */
@@ -2477,3 +2475,7 @@ details textarea.kh-code { height: 110px; }
 /* =========== hết co giãn đợt 3 =========== */
 /* GIAI ĐOẠN 3: tên mục ở cột Mục lục luôn hiện đủ (xuống dòng, không cắt "…"); cây Thư viện đề (.fx-side) giữ một dòng như cũ */
 .fside .bt-label { display: block; -webkit-line-clamp: unset; overflow: visible; line-height: 1.35; }
+/* GIAI ĐOẠN 3: trang không bao giờ cuộn ngang (một công thức/bảng quá rộng trong thẻ từng đẩy cả trang, mất dải điều hướng ở beta.61) */
+.app { overflow-x: clip; }
+.main { overflow-x: clip; }
+.cards-grid .card-content { overflow: hidden; }
