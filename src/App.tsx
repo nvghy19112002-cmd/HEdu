@@ -5,7 +5,9 @@ import { CommandPalette } from './components/CommandPalette';
 import { ZoomIndicator } from './components/ZoomControl';
 import { startZoom } from './lib/zoom';
 import { FileDialog } from './components/FileDialog';
-import { IcBackup, IcBank, IcEdit, IcExam, IcHealth, IcImport, IcLibrary, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
+import { IcBackup, IcBank, IcEdit, IcExam, IcHealth, IcImport, IcLibrary, IcPlay, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
+import { isCtxKey, toggleCtx } from './lib/ctxcol';
+import { openSlides } from './lib/slideshow';
 import { featureOn, type FeatureKey } from './lib/features';
 import type { BootResult } from './lib/store';
 import { BankScreen } from './screens/Bank';
@@ -32,15 +34,24 @@ import { getState } from './lib/store';
 import { isDesktop } from './lib/platform';
 
 // "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
-const NAV: { s: Screen; label: string; Icon: typeof IcEdit; feature?: FeatureKey }[] = [
-  { s: 'bank', label: 'Ngân hàng', Icon: IcBank },
-  { s: 'examlib', label: 'Đề thi', Icon: IcLibrary },
-  { s: 'exam', label: 'Tạo đề', Icon: IcExam, feature: 'exam' },
-  { s: 'import', label: 'Nhập liệu', Icon: IcImport },
-  { s: 'tex', label: 'Xử lí TeX', Icon: IcTex },
-  { s: 'curriculum', label: 'Chương trình', Icon: IcTree },
-  { s: 'khohinh', label: 'Kho hình', Icon: IcShapes },
-  { s: 'health', label: 'Sức khoẻ', Icon: IcHealth },
+// Giao diện mới (giai đoạn 3): dải điều hướng chia 2 nhóm Thư viện · Soạn thảo, đáy là Hệ thống; mỗi mục một màu biểu tượng (tone).
+type NavItem = { s: Screen | 'slides'; label: string; title: string; Icon: typeof IcEdit; tone: string; feature?: FeatureKey };
+const NAV_GROUPS: NavItem[][] = [
+  [
+    { s: 'bank', label: 'Câu hỏi', title: 'Ngân hàng câu hỏi', Icon: IcBank, tone: 'q' },
+    { s: 'examlib', label: 'Đề thi', title: 'Thư viện đề thi', Icon: IcLibrary, tone: 'de' },
+    { s: 'khohinh', label: 'Hình', title: 'Kho hình TikZ', Icon: IcShapes, tone: 'hinh' },
+    { s: 'slides', label: 'Chiếu', title: 'Bộ trình chiếu', Icon: IcPlay, tone: 'chieu' },
+  ],
+  [
+    { s: 'tex', label: 'Soạn TeX', title: 'Soạn TeX (Xử lí TeX)', Icon: IcTex, tone: 'tex' },
+    { s: 'exam', label: 'Tạo đề', title: 'Tạo đề', Icon: IcExam, tone: 'taode', feature: 'exam' },
+    { s: 'import', label: 'Nhập', title: 'Nhập liệu', Icon: IcImport, tone: 'nhap' },
+  ],
+];
+const NAV_SYS: NavItem[] = [
+  { s: 'health', label: 'Sức khoẻ', title: 'Sức khoẻ ngân hàng', Icon: IcHealth, tone: 'sys' },
+  { s: 'curriculum', label: 'Chương trình', title: 'Khung chương trình', Icon: IcTree, tone: 'sys' },
 ];
 
 export function App({ boot }: { boot: BootResult }) {
@@ -81,6 +92,8 @@ function Shell({ recovered }: { recovered: boolean }) {
     const onKey = (e: KeyboardEvent) => {
       // trình soạn LaTeX dùng Ctrl+K để xoá dòng (như TeXstudio) và đã chặn sự kiện thì không mở bảng lệnh
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !e.defaultPrevented) { e.preventDefault(); setPalette((p) => !p); }
+      // Ctrl+B: ẩn/hiện cột ngữ cảnh (Mục lục…); không bắt khi đang gõ trong ô nhập/trình soạn
+      if (!e.defaultPrevented && isCtxKey(e, e.target as HTMLElement | null)) { e.preventDefault(); toggleCtx(); }
     };
     const onSaveErr = () => toast('Không ghi được dữ liệu xuống đĩa. Hãy tạo file sao lưu và kiểm tra ổ đĩa.');
     window.addEventListener('keydown', onKey);
@@ -134,13 +147,23 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
     <div className="app">
       <nav className="rail" aria-label="Điều hướng chính">
         <div className="logo" aria-label="HEdu">√</div>
-        {NAV.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, Icon }) => (
-          <button key={s} type="button" className="rb" aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
+        {NAV_GROUPS.map((grp, gi) => (
+          <div key={gi} className="rail-grp" role="group" aria-label={gi === 0 ? 'Thư viện' : 'Soạn thảo'}>
+            {grp.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, title, Icon, tone }) => (
+              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => (s === 'slides' ? openSlides('Trình chiếu', []) : go({ screen: s }))}>
+                <span className="rb-ico"><Icon /></span>
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+        <div className="rail-spacer" />
+        {NAV_SYS.map(({ s, label, title, Icon, tone }) => (
+          <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s as Screen })}>
             <span className="rb-ico"><Icon /></span>
             <span>{label}</span>
           </button>
         ))}
-        <div className="rail-spacer" />
         <button type="button" className="rb" aria-current={screen === 'trash' ? 'page' : undefined} onClick={() => go({ screen: 'trash' })} aria-label={trashN > 0 ? `Thùng rác, ${trashN} câu` : undefined}>
           <span className="rb-ico"><IcTrash />{trashN > 0 && <span className="rb-count" aria-hidden="true">{trashN > 999 ? '999+' : trashN}</span>}</span>
           <span>Thùng rác</span>

@@ -36,6 +36,8 @@ import { getRec } from '../lib/idreview';
 import { fold, parseBankQuery, queryOk } from '../lib/banksearch';
 import { DupCheck } from '../components/DupCheck';
 import { QuestionModal } from '../components/QuestionModal';
+import { BankInspector } from '../components/BankInspector';
+import { INSPECTOR_MIN_WIDTH, useCtxHidden } from '../lib/ctxcol';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
 import { ReviewBadge } from '../components/ReviewControl';
 import { IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
@@ -226,8 +228,12 @@ export function BankScreen() {
 
   // Thanh trái: gắn cố định khi đủ rộng và đang mở; ngược lại là ngăn trượt (cùng một thành phần, cùng trạng thái).
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
-  useEffect(() => { const h = () => setNarrow(window.innerWidth < 1000); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
-  const docked = !narrow;
+  // giao diện mới: ngăn Thông tin chỉ mở cạnh danh sách khi đủ rộng; Ctrl+B ẩn/hiện cột Mục lục
+  const [roomy, setRoomy] = useState(() => typeof window !== 'undefined' && window.innerWidth >= INSPECTOR_MIN_WIDTH);
+  useEffect(() => { const h = () => { setNarrow(window.innerWidth < 1000); setRoomy(window.innerWidth >= INSPECTOR_MIN_WIDTH); }; window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  const ctxHid = useCtxHidden();
+  const docked = !narrow && !ctxHid;
+  const [activeUid, setActiveUid] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (docked && drawerOpen) setDrawerOpen(false); }, [docked, drawerOpen]);
@@ -379,6 +385,8 @@ export function BankScreen() {
 
   const viewIdx = viewUid ? list.findIndex((q) => q.uid === viewUid) : -1;
   const viewQ = viewIdx >= 0 ? list[viewIdx] : null;
+  // câu đang xem ở ngăn Thông tin: chỉ khi còn trong danh sách đang lọc
+  const activeQ = activeUid ? list.find((q) => q.uid === activeUid) ?? null : null;
   /** Câu trước/sau trong cửa sổ xem, theo cả danh sách đang lọc; trang nền đi theo để đóng cửa sổ là thấy đúng chỗ. */
   const stepView = (d: number) => {
     const i = viewIdx + d;
@@ -407,7 +415,7 @@ export function BankScreen() {
     const ni = noIdOf(q);
     const at = ni !== null ? undefined : place(q.lessonId) ?? place(q.chapterId);
     return (
-      <article key={q.uid} data-uid={q.uid} className={`card${on ? ' is-selected' : ''}${flashUid === q.uid ? ' is-flash' : ''}`}>
+      <article key={q.uid} data-uid={q.uid} className={`card${on ? ' is-selected' : ''}${flashUid === q.uid ? ' is-flash' : ''}${activeUid === q.uid ? ' is-active' : ''}${q.type === 'ds' || p.figure ? ' is-wide' : ''} lv-${q.level}`}>
         <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
         <div className="card-body">
           <div className="card-meta">
@@ -434,7 +442,8 @@ export function BankScreen() {
           </div>
           <div className="card-where" title={at ? `${at.chapter?.name ?? ''} › ${at.lesson?.name ?? ''}` : undefined}><span className="cw-path">{ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span><ReviewBadge q={q} />{ni === null && <IdStateBadge eff={effOf(q)} />}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
           <div className="card-content" role="button" tabIndex={0} aria-label={`Xem đầy đủ câu ${seqLabel(q.seq)}`} title="Bấm để xem đầy đủ"
-            onClick={() => setViewUid(q.uid)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewUid(q.uid); } }}>
+            onClick={() => (roomy ? setActiveUid(q.uid) : setViewUid(q.uid))} onDoubleClick={() => setViewUid(q.uid)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setViewUid(q.uid); } else if (e.key === ' ') { e.preventDefault(); if (roomy && activeUid !== q.uid) setActiveUid(q.uid); else setViewUid(q.uid); } }}>
             <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />
           </div>
         </div>
@@ -492,7 +501,7 @@ export function BankScreen() {
             </label>
             <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); }} onResetAll={() => { resetEverything(); setIdF('all'); }} canReset={canReset || idF !== 'all'} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
             <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
-            {narrow && (
+            {!docked && (
               <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
                 Mục lục
               </button>
@@ -621,6 +630,12 @@ export function BankScreen() {
               onNew={newHere} onImport={() => go({ screen: 'import' })} />
           )}
         </section>
+        {roomy && activeQ && (
+          <BankInspector q={activeQ} noId={noIdOf(activeQ) !== null} onClose={() => setActiveUid(null)} onToast={toast}
+            onView={() => setViewUid(activeQ.uid)} onEdit={() => { setViewUid(activeQ.uid); setViewEdit(true); }}
+            onAddToExam={featureOn('exam') ? () => go({ screen: 'exam', examPick: [activeQ.uid] }) : undefined}
+            onSlides={() => openSlides('Ngân hàng', [{ latex: activeQ.latex, uid: activeQ.uid }])} />
+        )}
       </div>
       {drawerOpen && !docked && (
         <>
