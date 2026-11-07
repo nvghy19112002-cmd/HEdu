@@ -488,7 +488,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           ? <span className="ew-chip ok" title={`Tệp chính chỉ có nội dung đề: khi biên dịch, HEdu tự ghép phần đầu (khai báo + mẫu in “${themeName}”) trong thư mục tạm. Tệp của thầy/cô không bị sửa. Đổi mẫu ở Cài đặt › Đề thi.`}>Tự ghép mẫu: {themeName}</span>
           : profile && !profile.available && <span className="ew-chip" title={`${profile.reason ?? ''} Bạn vẫn biên dịch được bản “nguyên văn” (chưa xác định đề hay lời giải, có thể chứa lời giải).`}>Chỉ bản nguyên văn</span>}
         <span className="ew-sp" />
-        {!narrow && <span className="ew-grp"><button type="button" className={`btn btn-sm btn-ghost${tree0 ? ' on' : ''}`} aria-pressed={tree0} onClick={toggleTree} title="Hiện/ẩn cây tệp của đề">Tệp</button></span>}
+        {!narrow && list.files.length > 1 && <span className="ew-grp"><button type="button" className={`btn btn-sm btn-ghost${tree0 ? ' on' : ''}`} aria-pressed={tree0} onClick={toggleTree} title="Hiện/ẩn cây tệp của đề">Tệp</button></span>}
         <span className="ew-grp">
           <button type="button" className="btn btn-sm btn-ghost" disabled={!tab || !tab.dirty || !!tab.readOnly || saving} onClick={() => active && void saveOne(active)} title="Lưu tệp đang mở (Ctrl+S)">Lưu</button>
           {tabs.filter((t) => t.dirty).length > 1 && <button type="button" className="btn btn-sm btn-ghost" disabled={saving} onClick={() => void saveAll()} title="Lưu mọi tệp (Ctrl+Shift+S)">Lưu tất cả</button>}
@@ -570,7 +570,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
               <CodeEditor ref={ed} label={tab ? `Soạn ${tab.rel}` : 'Soạn thảo'} onSave={() => { if (active) void saveOne(active); }}
                 onDirty={(k, d) => patch(k, { dirty: d })} onChangeText={scheduleDraft} />
             </div>
-            {!tab && <p className="xl-meta ew-empty">{tree0 || narrow ? 'Chọn một tệp ở cây bên trái để mở.' : 'Bấm “Tệp” trên thanh công cụ để chọn tệp cần mở.'}</p>}
+            {!tab && <p className="xl-meta ew-empty">{tree0 || narrow ? 'Chọn một tệp ở cây bên trái để mở.' : list.files.length > 1 ? 'Bấm “Tệp” trên thanh công cụ để chọn tệp cần mở.' : 'Đang mở tệp của đề…'}</p>}
             {tab && !tab.readOnly && <div className="xl-meta ew-status" title={`${TEX_KEYS_HINT} · Ctrl+S lưu · Ctrl+F tìm · Ctrl+H thay`}><span>{tab.eol === 'crlf' ? 'CRLF' : tab.eol === 'lf' ? 'LF' : '—'} · UTF-8{tab.bom ? ' có BOM' : ''}</span><span className="ew-keys">{TEX_KEYS_HINT}</span></div>}
           </section>
         )}

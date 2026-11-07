@@ -27,6 +27,9 @@ interface Props {
   onToggleSel(): void;
   onPrev(): void;
   onNext(): void;
+  /** đưa câu này vào màn Tạo đề (vắng = tính năng đang ẩn) */
+  onAddToExam?(): void;
+  onSlides?(): void;
   /** đang sửa câu ngay trong cửa sổ */
   editing: boolean;
   onEditing(on: boolean): void;
@@ -34,7 +37,7 @@ interface Props {
   onClose(): void;
 }
 
-export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onPrev, onNext, editing, onEditing, onReview, onClose }: Props) {
+export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onPrev, onNext, onAddToExam, onSlides, editing, onEditing, onReview, onClose }: Props) {
   const leaveRef = useRef<((proceed: () => void) => boolean) | null>(null);
   /** mọi lối rời (đóng, Trước/Sau, thoát sửa) đi qua câu hỏi "bỏ thay đổi chưa lưu?" của trình sửa */
   const guard = (proceed: () => void) => { const l = editing ? leaveRef.current : null; if (l) l(proceed); else proceed(); };
@@ -55,8 +58,8 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
       if (t.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       if (e.key === 'Escape') { e.preventDefault(); if (editing) guard(() => onEditing(false)); else onClose(); }
       else if (editing) return;
-      else if (e.key === 'ArrowLeft' && index > 0) { e.preventDefault(); onPrev(); }
-      else if (e.key === 'ArrowRight' && index < total - 1) { e.preventDefault(); onNext(); }
+      else if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && index > 0) { e.preventDefault(); onPrev(); }
+      else if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && index < total - 1) { e.preventDefault(); onNext(); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -94,9 +97,11 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
           <label className="sw"><input type="checkbox" checked={sol} onChange={(e) => setSol(e.target.checked)} />Lời giải</label>
           {isTikzReady() && <button type="button" className="btn btn-sm" aria-pressed={tex} onClick={() => setTex(!tex)} title="Biên dịch nguyên câu bằng TeX Live">Xem chuẩn TeX</button>}
           <span className="qm-nav">
-            <button type="button" className="btn btn-sm" disabled={index <= 0} onClick={onPrev} title="Câu trước (←)">‹ Trước</button>
-            <button type="button" className="btn btn-sm" disabled={index >= total - 1} onClick={onNext} title="Câu sau (→)">Sau ›</button>
+            <button type="button" className="btn btn-sm" disabled={index <= 0} onClick={onPrev} title="Câu trước (← hoặc ↑)">‹ Trước</button>
+            <button type="button" className="btn btn-sm" disabled={index >= total - 1} onClick={onNext} title="Câu sau (→ hoặc ↓)">Sau ›</button>
           </span>
+          {onAddToExam && <button type="button" className="btn btn-sm" onClick={onAddToExam}>Thêm vào đề</button>}
+          {onSlides && <button type="button" className="btn btn-sm" onClick={onSlides}>Trình chiếu</button>}
           <button type="button" className="btn btn-sm btn-dark" onClick={() => onEditing(true)}><IcEdit size={15} /> Sửa câu</button>
         </footer>
       </div>

@@ -25,6 +25,3 @@ export function isCtxKey(e: { key: string; ctrlKey: boolean; metaKey: boolean; s
   if (target?.closest && target.closest('.cm-editor')) return false;
   return true;
 }
-
-/** Ngưỡng bề ngang: dưới mức này ngăn Thông tin không mở cạnh danh sách (tránh ép thẻ câu quá hẹp). */
-export const INSPECTOR_MIN_WIDTH = 1280;

@@ -108,7 +108,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
     const isSel = sel === x.key;
     return (
       <li key={x.key} role="treeitem" aria-level={depth + 1} aria-selected={isSel} aria-expanded={has ? isOpen : undefined}>
-        <div className={`bt-row k-${x.kind}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 4 + depth * 14 }}>
+        <div className={`bt-row k-${x.kind}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 2 + depth * 9 }}>
           {has
             ? <button type="button" className="bt-caret" aria-label={isOpen ? `Thu gọn ${x.label}` : `Mở ${x.label}`} tabIndex={-1} onClick={() => toggle(x.key)}><svg className={isOpen ? 'is-open' : undefined} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
             : <span className="bt-caret" aria-hidden="true" />}
@@ -118,7 +118,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
             <span className="bt-n">{nf.format(x.count)}</span>
           </button>
         </div>
-        {isOpen && <ul role="group" style={{ ["--guide" as string]: `${15 + depth * 14}px` }}>{x.children.map((c) => row(c, depth + 1))}</ul>}
+        {isOpen && <ul role="group" style={{ ["--guide" as string]: `${12 + depth * 9}px` }}>{x.children.map((c) => row(c, depth + 1))}</ul>}
       </li>
     );
   };

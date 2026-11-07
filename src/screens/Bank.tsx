@@ -7,7 +7,7 @@ import { useApp } from '../app-context';
 import { featureOn } from '../lib/features';
 import { QuestionView } from '../components/QuestionView';
 import { QuestionDrawer } from '../components/QuestionDrawer';
-import { loadPerPage, loadSort, PER_PAGE_CHOICES, savePerPage, saveSort, type PerPage } from '../lib/bankview';
+import { loadPerPage, loadSort, loadViewMode, PER_PAGE_CHOICES, savePerPage, saveSort, saveViewMode, type PerPage, type ViewMode } from '../lib/bankview';
 import { loadSession, saveSession } from '../lib/banksession';
 import { IcCopy, IcEdit, IcMore, IcSearch, IcTrash } from '../components/Icons';
 import { parseExTest } from '../lib/extest';
@@ -36,8 +36,8 @@ import { getRec } from '../lib/idreview';
 import { fold, parseBankQuery, queryOk } from '../lib/banksearch';
 import { DupCheck } from '../components/DupCheck';
 import { QuestionModal } from '../components/QuestionModal';
-import { BankInspector } from '../components/BankInspector';
-import { INSPECTOR_MIN_WIDTH, useCtxHidden } from '../lib/ctxcol';
+import { BankTable } from '../components/BankTable';
+import { useCtxHidden } from '../lib/ctxcol';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
 import { ReviewBadge } from '../components/ReviewControl';
 import { IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
@@ -228,12 +228,13 @@ export function BankScreen() {
 
   // Thanh trái: gắn cố định khi đủ rộng và đang mở; ngược lại là ngăn trượt (cùng một thành phần, cùng trạng thái).
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
-  // giao diện mới: ngăn Thông tin chỉ mở cạnh danh sách khi đủ rộng; Ctrl+B ẩn/hiện cột Mục lục
-  const [roomy, setRoomy] = useState(() => typeof window !== 'undefined' && window.innerWidth >= INSPECTOR_MIN_WIDTH);
-  useEffect(() => { const h = () => { setNarrow(window.innerWidth < 1000); setRoomy(window.innerWidth >= INSPECTOR_MIN_WIDTH); }; window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  useEffect(() => { const h = () => setNarrow(window.innerWidth < 1000); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  // Bảng gọn (mặc định) hoặc thẻ; Ctrl+B ẩn/hiện cột Mục lục
+  const [mode, setMode] = useState<ViewMode>(() => loadViewMode());
+  const pickMode = (m: ViewMode) => { setMode(m); saveViewMode(m); };
   const ctxHid = useCtxHidden();
   const docked = !narrow && !ctxHid;
-  const [activeUid, setActiveUid] = useState<string | null>(null);
+  const [activeUid, setActiveUid] = useState<string | null>(null); // dòng/thẻ câu xem gần nhất — còn tô sáng sau khi đóng cửa sổ
   const [drawerOpen, setDrawerOpen] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (docked && drawerOpen) setDrawerOpen(false); }, [docked, drawerOpen]);
@@ -385,13 +386,13 @@ export function BankScreen() {
 
   const viewIdx = viewUid ? list.findIndex((q) => q.uid === viewUid) : -1;
   const viewQ = viewIdx >= 0 ? list[viewIdx] : null;
-  // câu đang xem ở ngăn Thông tin: chỉ khi còn trong danh sách đang lọc
-  const activeQ = activeUid ? list.find((q) => q.uid === activeUid) ?? null : null;
+  /** mở cửa sổ xem một câu; dòng/thẻ đó được tô sáng cho tới khi chọn câu khác */
+  const openView = (uid: string) => { setViewUid(uid); setActiveUid(uid); };
   /** Câu trước/sau trong cửa sổ xem, theo cả danh sách đang lọc; trang nền đi theo để đóng cửa sổ là thấy đúng chỗ. */
   const stepView = (d: number) => {
     const i = viewIdx + d;
     if (i < 0 || i >= list.length) return;
-    setViewUid(list[i].uid);
+    openView(list[i].uid);
     setPage(Math.floor(i / PER_PAGE));
   };
 
@@ -426,7 +427,7 @@ export function BankScreen() {
               ? <span className="code-tag is-noid" title="Chưa được đặt vào Dạng nào — không có ID">Chưa có ID</span>
               : <span className="code-tag" title={questionCode(q, q.level)}>{questionCode(q, q.level)}</span>}
             <div className="card-acts">
-              <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => { setViewUid(q.uid); setViewEdit(true); }}><IcEdit size={17} /></button>
+              <button type="button" className="ico" aria-label="Sửa câu" title="Sửa" onClick={() => { openView(q.uid); setViewEdit(true); }}><IcEdit size={17} /></button>
               <div className="more">
                 <button type="button" className="ico" aria-label="Thêm thao tác" aria-haspopup="menu" aria-expanded={menuUid === q.uid} title="Nhân bản, xoá…" onClick={() => { setConfirmDel(null); setMenuUid(menuUid === q.uid ? null : q.uid); }}><IcMore size={17} /></button>
                 {menuUid === q.uid && (
@@ -442,8 +443,8 @@ export function BankScreen() {
           </div>
           <div className="card-where" title={at ? `${at.chapter?.name ?? ''} › ${at.lesson?.name ?? ''}` : undefined}><span className="cw-path">{ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? `${shortName(at.chapter?.name ?? '')} › ${shortName(at.lesson?.name ?? '')}` : 'Chưa gán vị trí'}</span><ReviewBadge q={q} />{ni === null && <IdStateBadge eff={effOf(q)} />}{q.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
           <div className="card-content" role="button" tabIndex={0} aria-label={`Xem đầy đủ câu ${seqLabel(q.seq)}`} title="Bấm để xem đầy đủ"
-            onClick={() => (roomy ? setActiveUid(q.uid) : setViewUid(q.uid))} onDoubleClick={() => setViewUid(q.uid)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setViewUid(q.uid); } else if (e.key === ' ') { e.preventDefault(); if (roomy && activeUid !== q.uid) setActiveUid(q.uid); else setViewUid(q.uid); } }}>
+            onClick={() => openView(q.uid)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openView(q.uid); } }}>
             <QuestionView p={p} variant="compact" showSolution={showSol} raw={q.latex} />
           </div>
         </div>
@@ -582,12 +583,16 @@ export function BankScreen() {
                   <input ref={masterRef} type="checkbox" checked={pState === 'all'} onChange={() => (pState === 'all' ? deselectPage() : selectPage())} />
                   Chọn trang
                 </label>
-                <label className="sw lh-sol"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>
+                {mode === 'cards' && <label className="sw lh-sol"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Hiện lời giải</label>}
                 {list.length > shown.length && counts.total - counts.outScope < list.length && (
                   <button type="button" className="linkbtn" onClick={selectAllResults} title={`Chọn cả ${nf.format(list.length)} câu của ${resultsName}, ở mọi trang`}>Chọn cả {nf.format(list.length)} câu</button>
                 )}
               </span>
               <span className="qtools-r">
+                <span className="seg bank-mode" role="group" aria-label="Kiểu xem">
+                  <button type="button" aria-pressed={mode === 'table'} onClick={() => pickMode('table')}>Bảng</button>
+                  <button type="button" aria-pressed={mode === 'cards'} onClick={() => pickMode('cards')}>Thẻ</button>
+                </span>
                 <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
                 <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
                 <label className="qsel" title="Sắp xếp">
@@ -613,7 +618,11 @@ export function BankScreen() {
             </div>
           )}
 
-          {shown.length > 0 && <div className="cards-grid">{shown.map((q) => renderCard(q))}</div>}
+          {shown.length > 0 && mode === 'cards' && <div className="cards-grid">{shown.map((q) => renderCard(q))}</div>}
+          {shown.length > 0 && mode === 'table' && (
+            <BankTable rows={shown} sel={sel} activeUid={activeUid} codeOf={(q) => (noIdOf(q) !== null ? null : questionCode(q, q.level))}
+              onToggle={(uid) => setSel(toggleOne(sel, uid))} onOpen={openView} />
+          )}
 
 
           {pages > 1 && (
@@ -630,12 +639,6 @@ export function BankScreen() {
               onNew={newHere} onImport={() => go({ screen: 'import' })} />
           )}
         </section>
-        {roomy && activeQ && (
-          <BankInspector q={activeQ} noId={noIdOf(activeQ) !== null} onClose={() => setActiveUid(null)} onToast={toast}
-            onView={() => setViewUid(activeQ.uid)} onEdit={() => { setViewUid(activeQ.uid); setViewEdit(true); }}
-            onAddToExam={featureOn('exam') ? () => go({ screen: 'exam', examPick: [activeQ.uid] }) : undefined}
-            onSlides={() => openSlides('Ngân hàng', [{ latex: activeQ.latex, uid: activeQ.uid }])} />
-        )}
       </div>
       {drawerOpen && !docked && (
         <>
@@ -669,6 +672,8 @@ export function BankScreen() {
       {ask && <ConfirmDialog title={ask.title} confirmLabel={ask.label} onConfirm={() => { const r = ask.run; setAsk(null); r(); }} onCancel={() => setAsk(null)}><p>{ask.body}</p></ConfirmDialog>}
       {viewQ && (
         <QuestionModal q={viewQ} index={viewIdx} total={list.length} eff={effOf(viewQ)} selected={sel.has(viewQ.uid)} onToggleSel={() => setSel(toggleOne(sel, viewQ.uid))}
+          onAddToExam={featureOn('exam') ? () => go({ screen: 'exam', examPick: [viewQ.uid] }) : undefined}
+          onSlides={() => openSlides('Ngân hàng', [{ latex: viewQ.latex, uid: viewQ.uid }])}
           onPrev={() => stepView(-1)} onNext={() => stepView(1)} editing={viewEdit} onEditing={setViewEdit} onReview={(s) => changeReview(viewQ, s)} onClose={() => { setViewUid(null); setViewEdit(false); }} />
       )}
       {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
