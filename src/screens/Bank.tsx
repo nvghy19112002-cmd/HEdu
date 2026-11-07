@@ -415,7 +415,7 @@ export function BankScreen() {
     const ni = noIdOf(q);
     const at = ni !== null ? undefined : place(q.lessonId) ?? place(q.chapterId);
     return (
-      <article key={q.uid} data-uid={q.uid} className={`card${on ? ' is-selected' : ''}${flashUid === q.uid ? ' is-flash' : ''}${activeUid === q.uid ? ' is-active' : ''}${q.type === 'ds' || p.figure ? ' is-wide' : ''} lv-${q.level}`}>
+      <article key={q.uid} data-uid={q.uid} className={`card${on ? ' is-selected' : ''}${flashUid === q.uid ? ' is-flash' : ''}${activeUid === q.uid ? ' is-active' : ''} lv-${q.level}`}>
         <input type="checkbox" checked={on} aria-label={`Chọn câu ${seqLabel(q.seq)}`} onChange={() => setSel(toggleOne(sel, q.uid))} />
         <div className="card-body">
           <div className="card-meta">
