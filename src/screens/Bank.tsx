@@ -98,6 +98,16 @@ export function BankScreen() {
   const setSort = (m: SortMode) => { setSortState(m); saveSort(m); setPage(0); };
   const setPerPage = (n: PerPage) => { setPerPageState(n); savePerPage(n); setPage(0); };
   const qlistRef = useRef<HTMLElement>(null);
+  // đo chiều cao đầu trang để khung Bảng (Mục lục | bảng | xem trước) vừa khít phần còn lại của cửa sổ
+  const headRef = useRef<HTMLElement>(null);
+  const [headH, setHeadH] = useState(64);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeadH(Math.ceil(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   /** Chuyển trang; từ pager cuối danh sách thì cuộn về đầu danh sách để thấy câu đầu trang mới. */
   const goPage = (n: number, scroll = false) => { setPage(n); if (scroll) requestAnimationFrame(() => { const el = qlistRef.current; if (el) window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - 8) }); }); };
   /** câu vừa được nhảy tới (từ Kiểm tra trùng): cuộn tới thẻ và nháy sáng một lần */
@@ -491,8 +501,27 @@ export function BankScreen() {
 
   return (
     <>
-      <header className="page-head bank-head">
+      <header ref={headRef} className="page-head bank-head">
         <h1>Ngân hàng câu hỏi</h1>
+        <div className="qbar bk-hbar">
+          <label className="search sm">
+            <IcSearch size={16} />
+            <span className="sr-only">Tìm câu hỏi</span>
+            <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu, mã (vd 2D1H1) hoặc số #2086 — phím /" />
+            <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
+              <option value="here">mục này</option>
+              <option value="all">toàn kho</option>
+            </select>
+            <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
+          </label>
+          <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); }} onResetAll={() => { resetEverything(); setIdF('all'); }} canReset={canReset || idF !== 'all'} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
+          <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
+          {!docked && (
+            <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
+              Mục lục
+            </button>
+          )}
+        </div>
         <div className="head-actions">
           <button type="button" className="btn btn-outline" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
           <button type="button" className="btn btn-outline" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
@@ -501,31 +530,12 @@ export function BankScreen() {
         </div>
       </header>
 
-      <div className={`body-row${!docked ? ' tree-hidden' : ''}`}>
+      <div className={`body-row${!docked ? ' tree-hidden' : ''}${mode === 'table' ? ' bk-fit' : ''}`} style={{ ['--bk-head' as string]: `${headH}px` } as React.CSSProperties}>
         {docked && (
           <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onHide={() => undefined} />
         )}
 
         <section ref={qlistRef} className={`qlist${prevOn ? ' has-prev' : ''}`} aria-label="Danh sách câu hỏi">
-          <div className="qbar">
-            <label className="search sm">
-              <IcSearch size={16} />
-              <span className="sr-only">Tìm câu hỏi</span>
-              <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu, mã (vd 2D1H1) hoặc số #2086 — phím /" />
-              <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
-                <option value="here">mục này</option>
-                <option value="all">toàn kho</option>
-              </select>
-              <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
-            </label>
-            <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); }} onResetAll={() => { resetEverything(); setIdF('all'); }} canReset={canReset || idF !== 'all'} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
-            <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
-            {!docked && (
-              <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
-                Mục lục
-              </button>
-            )}
-          </div>
 
 
           {sel.size > 0 && (

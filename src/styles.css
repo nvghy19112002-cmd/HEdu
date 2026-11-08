@@ -2869,3 +2869,26 @@ button.bt-caret:hover svg { background: var(--pri-soft); color: var(--pri); }
 /* đầu khung xem trước: một dòng gọn */
 .bkp-head { flex-wrap: nowrap; overflow: hidden; }
 .bkp-head .code-tag, .bkp-head .pill { flex: none; }
+
+/* ===== NGÂN HÀNG · KHUNG VỪA CỬA SỔ (dạng Bảng): tìm kiếm trên dòng tiêu đề; Mục lục | bảng | xem trước cao bằng nhau, mỗi phần tự cuộn ===== */
+.page-head.bank-head { flex-wrap: wrap; gap: 8px 12px; }
+.bank-head .bk-hbar { flex: 1 1 520px; min-width: 0; flex-wrap: nowrap; }
+.bank-head .bk-hbar .search { flex: 1 1 auto; min-width: 180px; }
+.bank-head .bk-hbar .btn { height: 34px; font-size: 13.5px; }
+.bank-head .head-actions { flex: none; }
+.body-row.bk-fit { height: calc(100vh - var(--bk-head, 64px)); box-sizing: border-box; padding-bottom: 12px; overflow: hidden; align-items: stretch; flex-wrap: nowrap; }
+.body-row.bk-fit > .fside:not(.is-drawer) { position: static; height: 100%; max-height: none; align-self: stretch; }
+.body-row.bk-fit > .qlist { height: 100%; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.body-row.bk-fit > .qlist > * { flex: none; }
+.body-row.bk-fit > .qlist > .qt-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.body-row.bk-fit > .qlist > .cards-grid { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.body-row.bk-fit > .qlist > .pager { margin: 0; padding-top: 4px; }
+.body-row.bk-fit > .bk-prev { position: static; align-self: stretch; height: 100%; max-height: none; min-height: 0; }
+.bk-fit .qt th { background: var(--bg-card); }
+/* thống kê: một hàng gọn (mức độ | loại câu | tổng), chỉ xuống dòng khi bảng thật hẹp */
+.bk-fit .qstats { flex-wrap: nowrap; padding: 5px 8px; gap: 4px; overflow: hidden; }
+.bk-fit .qs-grp { flex-wrap: nowrap; padding-left: 6px; gap: 4px; }
+.bk-fit .qs-col { height: 26px; padding: 0 8px; gap: 5px; }
+.bk-fit .qs-col > span { font-size: 12px; }
+.bk-fit .qs-col > span:last-child { font-size: 12.5px; }
+@container (max-width: 640px) { .bk-fit .qstats, .bk-fit .qs-grp { flex-wrap: wrap; } }
