@@ -1,3 +1,17 @@
+## Có gì mới trong beta.63 (kênh beta): màn Câu hỏi dạng bảng gọn, Mục lục gọn, Đúng/Sai thẳng hàng
+Gồm PR #269 (so với beta.62). Chỉ đổi cách trình bày: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử và xem trên trình duyệt với dữ liệu mẫu ở các cỡ 768–1920 px; chưa thử trên app Tauri thật và máy Windows thật của bạn. Đây là bản beta.
+
+**Câu hỏi**
+- Mặc định là **bảng gọn**: ô chọn, số câu, mã ID, mức độ, loại câu, nội dung một dòng, đáp án, biểu tượng hình. Nút **Bảng | Thẻ** để đổi kiểu xem (app nhớ lựa chọn).
+- **Bấm một dòng mở hộp thoại xem câu**; phím ←/→ (hoặc ↑/↓) chuyển câu theo đúng danh sách đang lọc, dòng trong bảng tô sáng và tự cuộn theo. Hộp thoại có thêm nút Thêm vào đề, Trình chiếu.
+- **Bỏ ngăn Thông tin bên phải** (theo góp ý beta.62), màn hình rộng rãi hơn.
+- **Cây Mục lục gọn**: thụt lề nhỏ, vạch mờ, tên Dạng hiện đủ hơn.
+
+**Khác**
+- Câu Đúng/Sai: **huy hiệu Đ/S thẳng hàng** với nhãn a), b), c), d) (cả Ngân hàng và Xử lí TeX).
+- Tạo đề: **bỏ "Form THPT 2025"**; ô số câu luôn hiện, ma trận mới mặc định 12/4/6/0.
+- Biên tập đề: đề chỉ có một tệp thì **ẩn cột và nút Tệp**.
+
 ## Có gì mới trong beta.62 (kênh beta): sửa màn Câu hỏi theo góp ý + giao diện mới cho Thư viện đề
 Gồm PR #266, #267 (so với beta.61). Chỉ đổi cách trình bày: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử và chạy thử trên app với kho thử ở 9 cỡ cửa sổ (Full HD đến cửa sổ 800×560); chưa thử trên máy Windows thật của bạn. Đây là bản beta.
 
