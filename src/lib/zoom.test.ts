@@ -18,10 +18,10 @@ ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '-' }) === -1, '
 ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '0' }) === 'reset', 'Ctrl 0 đặt lại');
 ok(zoomKey({ ctrlKey: false, metaKey: false, altKey: false, key: '=' }) === null, 'không Ctrl thì bỏ qua');
 
-ok(fitFactor(1600) === 1, 'cửa sổ 1600 px: giữ nguyên');
-ok(fitFactor(1366) < 1 && fitFactor(1366) >= 0.85, 'laptop 1366: thu nhẹ');
-ok(fitFactor(1920) > 1 && fitFactor(1920) <= 1.15, 'Full HD: to ra');
-ok(fitFactor(800) === 0.85 && fitFactor(4000) === 1.15, 'giới hạn 85–115%');
+ok(fitFactor(1720) === 1, 'bố cục chuẩn 1720 px: giữ nguyên');
+ok(fitFactor(1360) === 0.79, 'cửa sổ 1360: thu theo đúng tỉ lệ (bố cục y như toàn màn)');
+ok(fitFactor(1920) === 1.12, 'Full HD: 112%');
+ok(fitFactor(800) === 0.65 && fitFactor(4000) === 1.3, 'giới hạn 65–130%');
 ok(effectiveZoom(1.2, false, 1366) === 1.2, 'tắt co giãn: đúng mức người dùng');
 ok(effectiveZoom(1, true, 1366) === fitFactor(1366), 'bật co giãn: nhân hệ số');
 if (fail) { console.log(`${fail} lỗi`); process.exit(1); }

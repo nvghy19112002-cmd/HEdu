@@ -39,7 +39,7 @@ export function ZoomPanel() {
         <button type="button" className="btn btn-sm" aria-label="Phóng to" disabled={z >= ZOOM_MAX} onClick={() => setZoom(stepZoom(z, 1))}>+</button>
         <button type="button" className="btn btn-sm" disabled={z === ZOOM_DEFAULT} onClick={resetZoom}>Đặt lại 100%</button>
       </div>
-      <label className="sw"><input type="checkbox" checked={fit} onChange={(e) => setFit(e.target.checked)} />Tự co giãn theo cửa sổ: cửa sổ hẹp thì chữ nhỏ lại để không bị rớt dòng, cửa sổ rộng thì chữ to ra (85–115%)</label>
+      <label className="sw"><input type="checkbox" checked={fit} onChange={(e) => setFit(e.target.checked)} />Tự co giãn theo cửa sổ: thu nhỏ cửa sổ thì cả giao diện nhỏ lại theo đúng tỉ lệ, bố cục giữ y như khi mở toàn màn</label>
     </section>
   );
 }

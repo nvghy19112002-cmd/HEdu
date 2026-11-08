@@ -32,18 +32,19 @@ function saveZoom(z: number): void {
 }
 
 // ——— Tự co giãn theo cửa sổ ———
-// Cửa sổ hẹp (laptop 1366, kéo nhỏ) thì cả giao diện thu nhẹ để chữ không bị rớt dòng/cắt; cửa sổ rộng (Full HD trở lên) thì to ra cho dễ đọc.
-// Hệ số nhân với mức zoom người dùng chọn. Mốc 1600 px (bề rộng cửa sổ khi zoom 100%); đường cong dịu (mũ 0,6), giới hạn 85–115%.
-export const FIT_REF = 1600, FIT_MIN = 0.85, FIT_MAX = 1.15;
+// Giữ NGUYÊN bố cục như khi mở toàn màn: cả giao diện thu/phóng theo đúng tỉ lệ bề rộng cửa sổ, để cửa sổ nhỏ trông y như
+// toàn màn nhưng nhỏ hơn (Mục lục, bảng, khung xem trước vẫn đủ). Mốc: bố cục rộng 1720 px (≈ màn Full HD 1920 ở mức 112%).
+// Giới hạn 65–130%: cửa sổ quá hẹp (dưới ~1120 px) thì không thu thêm nữa mà để giao diện tự dàn lại cho đọc được.
+export const FIT_REF = 1720, FIT_MIN = 0.65, FIT_MAX = 1.3;
 /** hệ số tự co giãn theo bề rộng cửa sổ thật (px CSS khi zoom 100%) */
 export function fitFactor(baseWidth: number): number {
   if (!Number.isFinite(baseWidth) || baseWidth <= 0) return 1;
-  const f = Math.pow(baseWidth / FIT_REF, 0.6);
+  const f = baseWidth / FIT_REF;
   return Math.round(Math.min(FIT_MAX, Math.max(FIT_MIN, f)) * 100) / 100;
 }
 /** mức zoom thực áp vào cửa sổ = mức người dùng × hệ số co giãn (nếu bật) */
 export const effectiveZoom = (user: number, fit: boolean, baseWidth: number): number =>
-  Math.round(Math.min(1.75, Math.max(0.65, user * (fit ? fitFactor(baseWidth) : 1))) * 100) / 100;
+  Math.round(Math.min(1.9, Math.max(0.55, user * (fit ? fitFactor(baseWidth) : 1))) * 100) / 100;
 const FIT_KEY = 'hedu.zoomfit';
 let fitOn = (() => { try { return localStorage.getItem(FIT_KEY) !== '0'; } catch { return true; } })();
 export const getFit = (): boolean => fitOn;
