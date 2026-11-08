@@ -3,15 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { parseExTest } from '../lib/extest';
 import { addToDeck, createDeck, deleteDeck, loadDecks, renameDeck, useDecks, type DeckItem } from '../lib/slidedeck';
-import { clampZoom, clock, closeSlides, useSlideRequest, ZOOM_DEFAULT, ZOOM_STEP } from '../lib/slideshow';
+import { clampZoom, clock, closeSlides, DEFAULT_PLAY, loadPlayOpts, shuffled, useSlideRequest, ZOOM_DEFAULT, ZOOM_STEP, type PlayOpts } from '../lib/slideshow';
 import { QuestionView } from './QuestionView';
 
 const ZKEY = 'hedu.slides.zoom';
 const readZoom = () => { try { const v = Number(localStorage.getItem(ZKEY)); return v ? clampZoom(v) : ZOOM_DEFAULT; } catch { return ZOOM_DEFAULT; } };
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export function SlideShow({ title, items, onClose }: { title: string; items: DeckItem[]; onClose(): void }) {
+export function SlideShow({ title, items: items0, onClose, opts }: { title: string; items: DeckItem[]; onClose(): void; /** cách chiếu (đếm ngược, trộn, cho xem lời giải) */ opts?: PlayOpts }) {
+  const o = opts ?? DEFAULT_PLAY;
+  // trộn một lần lúc bắt đầu chiếu; bộ đã lưu không đổi
+  const items = useMemo(() => (o.shuffle ? shuffled(items0) : items0), [items0]); // eslint-disable-line react-hooks/exhaustive-deps
   const [i, setI] = useState(0);
+  const [slideAt, setSlideAt] = useState(() => Date.now());
   const [ans, setAns] = useState(false);
   const [sol, setSol] = useState(false);
   const [zoom, setZoom] = useState(readZoom);
@@ -21,13 +25,17 @@ export function SlideShow({ title, items, onClose }: { title: string; items: Dec
   const n = items.length;
   const p = useMemo(() => (items[i] ? parseExTest(items[i].latex) : null), [items, i]);
 
-  const go = (k: number) => { const j = Math.min(n - 1, Math.max(0, k)); if (j !== i) { setI(j); setAns(false); setSol(false); } };
+  const go = (k: number) => { const j = Math.min(n - 1, Math.max(0, k)); if (j !== i) { setI(j); setAns(false); setSol(false); setSlideAt(Date.now()); setNow(Date.now()); } };
+  const limit = o.countdown && p ? o.secs[p.type] : null;
+  const left = limit === null ? null : Math.max(0, Math.ceil(limit - (now - slideAt) / 1000));
   const setZ = (z: number) => { const v = clampZoom(z); setZoom(v); try { localStorage.setItem(ZKEY, String(v)); } catch { /* tiện lợi */ } };
   const full = () => { const el = root.current; if (!document.fullscreenElement) void el?.requestFullscreen?.().catch(() => undefined); else void document.exitFullscreen().catch(() => undefined); };
   const close = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); };
 
   useEffect(() => { root.current?.focus(); }, []);
-  useEffect(() => { if (timer === null) return; const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, [timer]);
+  useEffect(() => { if (timer === null && !o.countdown) return; const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, [timer, o.countdown]);
+  // hết giờ: tự hiện đáp án (nếu bật)
+  useEffect(() => { if (left === 0 && o.autoAnswer && !ans) setAns(true); }, [left]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       const key = e.key;
@@ -36,7 +44,7 @@ export function SlideShow({ title, items, onClose }: { title: string; items: Dec
         ArrowLeft: () => go(i - 1), PageUp: () => go(i - 1), ArrowUp: () => go(i - 1),
         Home: () => go(0), End: () => go(n - 1),
         ' ': () => setAns((a) => !a), Enter: () => setAns((a) => !a),
-        g: () => setSol((s) => !s), G: () => setSol((s) => !s),
+        g: () => { if (o.allowSolution) setSol((s) => !s); }, G: () => { if (o.allowSolution) setSol((s) => !s); },
         t: () => { setTimer((x) => (x === null ? Date.now() : null)); setNow(Date.now()); }, T: () => { setTimer((x) => (x === null ? Date.now() : null)); setNow(Date.now()); },
         f: full, F: full,
         '+': () => setZ(zoom + ZOOM_STEP), '=': () => setZ(zoom + ZOOM_STEP), '-': () => setZ(zoom - ZOOM_STEP),
@@ -56,6 +64,7 @@ export function SlideShow({ title, items, onClose }: { title: string; items: Dec
         <span><b>{title}</b> · câu {n ? i + 1 : 0} / {n}</span>
         <span className="sld-pills">
           {ans && <span className="sld-pill ok">Đang hiện đáp án</span>}
+          {left !== null && <span className={`sld-pill${left <= 10 ? ' warn' : ''}`} title="Thời gian còn lại của câu này">⏳ {clock(left)}</span>}
           {timer !== null && <span className="sld-pill">⏱ {clock((now - timer) / 1000)}</span>}
           <button type="button" className="sld-x" onClick={close} aria-label="Thoát trình chiếu (Esc)">✕</button>
         </span>
@@ -71,7 +80,7 @@ export function SlideShow({ title, items, onClose }: { title: string; items: Dec
         <span className="sld-acts">
           <button type="button" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Câu trước">‹</button>
           <button type="button" onClick={() => setAns((a) => !a)}>{ans ? 'Ẩn đáp án' : 'Đáp án'}</button>
-          <button type="button" onClick={() => setSol((s) => !s)}>{sol ? 'Ẩn lời giải' : 'Lời giải'}</button>
+          {o.allowSolution && <button type="button" onClick={() => setSol((s) => !s)}>{sol ? 'Ẩn lời giải' : 'Lời giải'}</button>}
           <button type="button" onClick={() => go(i + 1)} disabled={i >= n - 1} aria-label="Câu sau">›</button>
           <button type="button" onClick={() => setZ(zoom - ZOOM_STEP)} aria-label="Chữ nhỏ hơn">A−</button>
           <button type="button" onClick={() => setZ(zoom + ZOOM_STEP)} aria-label="Chữ to hơn">A+</button>
@@ -163,6 +172,6 @@ export function SlideHost() {
   const [play, setPlay] = useState<{ title: string; items: DeckItem[] } | null>(null);
   useEffect(() => { if (!req) setPlay(null); }, [req]);
   if (!req) return null;
-  if (play) return <SlideShow title={play.title} items={play.items} onClose={() => setPlay(null)} />;
+  if (play) return <SlideShow title={play.title} items={play.items} opts={loadPlayOpts()} onClose={() => setPlay(null)} />;
   return <SlideDialog source={req.source} items={req.items} onPlay={(title, items) => setPlay({ title, items })} />;
 }

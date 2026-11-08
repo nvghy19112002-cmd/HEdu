@@ -67,17 +67,28 @@ export function HealthScreen() {
 
   return (
     <>
-      <header className="page-head">
-        <div>
+      <header className="page-head g3-head">
+        <div className="g3-crumb">
           <h1>Sức khoẻ ngân hàng</h1>
           <span className="sys-hint">Quét mọi câu và đếm những chỗ nên xem lại. Bảng quét chỉ đọc; phần “Duyệt hàng loạt” bên dưới là nơi duy nhất ghi (sau khi bạn xác nhận). Nghi trùng kiểm ở màn Kiểm tra trùng trong Ngân hàng.</span>
         </div>
         <div className="head-actions">
-          <button type="button" className="btn btn-sm" disabled={running} onClick={() => setAgain((n) => n + 1)}>Quét lại</button>
+          <button type="button" className="btn btn-sm btn-accent" disabled={running} onClick={() => setAgain((n) => n + 1)}>Kiểm tra lại toàn kho</button>
           <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'bank' })}>Về Ngân hàng</button>
         </div>
       </header>
       <div className="simple">
+        {!running && rep.total > 0 && (() => {
+          const score = Math.round((rep.clean / rep.total) * 100);
+          const word = score >= 90 ? 'Ngân hàng rất khoẻ' : score >= 75 ? 'Ngân hàng khá khoẻ' : score >= 50 ? 'Ngân hàng cần chăm sóc' : 'Ngân hàng còn nhiều việc';
+          const jobs = HEALTH.filter((h) => h.tone !== 'tin' && rep.counts[h.key] > 0).length;
+          return (
+            <div className="hl-hero">
+              <div className="hl-ring" style={{ ['--p' as string]: `${score}` } as React.CSSProperties} role="img" aria-label={`Điểm sức khoẻ ${score} trên 100`}><b>{score}</b></div>
+              <div className="hl-hero-t"><b>{word}</b><span>{nf.format(rep.total)} câu · {jobs ? `${jobs} việc nên xử lí` : 'không có việc nào cần xử lí'}</span></div>
+            </div>
+          );
+        })()}
         <div className="panel is-compact" role="status" aria-live="polite">
           {running
             ? <span>Đang quét {nf.format(rep.scanned)}/{nf.format(rep.total)} câu ({pct}%)…</span>
@@ -125,6 +136,7 @@ export function HealthScreen() {
             );
           })}
         </ul>
+        <p className="hl-foot">Không có việc nào tự sửa dữ liệu khi bạn chưa bấm. Bảng quét chỉ đọc.</p>
       </div>
     </>
   );

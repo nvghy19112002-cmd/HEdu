@@ -39,3 +39,21 @@ await t('tạo, thêm, đổi tên, bỏ câu, xoá; lỗi ghi thì giữ nguyê
   assert.equal(listDecks().length, 0);
   await assert.rejects(createDeck('   ', []));
 });
+
+await t('đổi chỗ câu trong bộ; cách chiếu đọc an toàn; trộn giữ đủ câu', async () => {
+  const { moveIn } = await import('./slidedeck');
+  const { parsePlayOpts, DEFAULT_PLAY, shuffled, estimateSecs } = await import('./slideshow');
+  const it = [{ latex: 'a' }, { latex: 'b' }, { latex: 'c' }];
+  assert.deepEqual(moveIn(it, 0, 2).map((x) => x.latex), ['b', 'c', 'a']);
+  assert.deepEqual(moveIn(it, 2, 0).map((x) => x.latex), ['c', 'a', 'b']);
+  assert.deepEqual(moveIn(it, 1, 9).map((x) => x.latex), ['a', 'c', 'b']);
+  assert.deepEqual(parsePlayOpts('rác'), DEFAULT_PLAY);
+  const o = parsePlayOpts(JSON.stringify({ countdown: true, secs: { tn: 2, ds: 90 } }));
+  assert.equal(o.countdown, true);
+  assert.equal(o.secs.tn, 60);
+  assert.equal(o.secs.ds, 90);
+  let k = 0;
+  const sh = shuffled([1, 2, 3, 4], () => [0.1, 0.9, 0.5][k++ % 3]);
+  assert.deepEqual([...sh].sort(), [1, 2, 3, 4]);
+  assert.equal(estimateSecs(['tn', 'ds', 'tln'], DEFAULT_PLAY), 360);
+});

@@ -115,3 +115,13 @@ export const renameDeck = (id: string, name: string) => { const n = cleanName(na
 export const deleteDeck = (id: string) => commit((ds) => ds.filter((d) => d.id !== id));
 /** Bỏ một câu khỏi bộ (vị trí `i`). */
 export const removeItem = (id: string, i: number) => commit((ds) => ds.map((d) => (d.id === id ? { ...d, items: d.items.filter((_, k) => k !== i), updatedAt: Date.now() } : d)));
+/** Đổi chỗ một câu trong bộ: từ vị trí `from` sang `to` (kéo/lên/xuống). */
+export function moveIn(items: readonly DeckItem[], from: number, to: number): DeckItem[] {
+  if (from === to || from < 0 || from >= items.length) return [...items];
+  const t = Math.max(0, Math.min(items.length - 1, to));
+  const out = [...items];
+  const [x] = out.splice(from, 1);
+  out.splice(t, 0, x);
+  return out;
+}
+export const moveItem = (id: string, from: number, to: number) => commit((ds) => ds.map((d) => (d.id === id ? { ...d, items: moveIn(d.items, from, to), updatedAt: Date.now() } : d)));

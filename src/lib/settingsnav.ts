@@ -46,3 +46,8 @@ export function searchSettings(query: string): SettingEntry[] {
 }
 
 export const paneLabel = (id: PaneId): string => PANES.find((p) => p.id === id)?.label ?? id;
+
+/** Mở Cài đặt ở đúng một ngăn (vd Nhật ký nhập từ màn Nhập liệu): màn khác đặt, màn Cài đặt lấy một lần khi mở. */
+let nextPane: PaneId | null = null;
+export const requestPane = (id: PaneId) => { nextPane = id; };
+export const takePane = (): PaneId | null => { const p = nextPane; nextPane = null; return p; };

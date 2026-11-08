@@ -28,7 +28,7 @@ import { ensureRestorePoint, isSqlite } from '../lib/dbbackup';
 import { aiKeyStatus } from '../lib/ai/client';
 import { initProfiles } from '../lib/ai/profiles';
 import { loadAiPrefs } from '../lib/ai/prefs';
-import { PANES, paneLabel, searchSettings, type PaneId } from '../lib/settingsnav';
+import { PANES, paneLabel, searchSettings, takePane, type PaneId } from '../lib/settingsnav';
 import { useUpdates } from '../update-context';
 
 function readFile(file: File): Promise<string> {
@@ -131,7 +131,7 @@ export function SystemScreen() {
   const busy = phase !== 'idle';
 
   // ---- khung danh mục (PR-5): chỉ đổi cách SẮP XẾP; mọi trạng thái/giá trị cài đặt ở trên giữ nguyên khi chuyển mục
-  const [pane, setPane] = useState<PaneId>('overview');
+  const [pane, setPane] = useState<PaneId>(() => takePane() ?? 'overview');
   const [q, setQ] = useState('');
   /** số cấu hình AI đã có khoá / đang dùng (null = chưa rõ) */
   const [aiInfo, setAiInfo] = useState<{ saved: number; total: number; active: string | null } | null>(null);
@@ -172,10 +172,11 @@ export function SystemScreen() {
 
   return (
     <>
-      <header className="page-head">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <header className="page-head g3-head">
+        <div className="g3-crumb">
           <h1>Cài đặt</h1>
-          <span className="crumbs">{paneLabel(pane)} — mọi lựa chọn được giữ khi bạn chuyển mục</span>
+          <span className="tsx-sep">/</span>
+          <span className="g3-sub">{paneLabel(pane)}</span>
         </div>
       </header>
 
