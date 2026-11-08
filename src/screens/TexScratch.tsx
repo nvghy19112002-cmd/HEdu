@@ -243,6 +243,22 @@ export function TexScratchScreen() {
   const chkLook = useMemo(() => new Set([...chkOf].filter(([, l]) => needsLook(l)).map(([n]) => n)), [chkOf]);
   const fctx = useMemo(() => ({ buildErr: new Set(buildErr.keys()), picked: scope ?? new Set<number>(), dup: new Set(dupOf.keys()), check: chkLook }), [buildErr, scope, dupOf, chkLook]);
   const counts = useMemo(() => filterCounts(infos, fctx), [infos, fctx]);
+  // tô cả khối \begin{ex}…\end{ex} của câu đang chọn và đỏ các dòng lỗi ngay trong khung mã
+  const errLines = useMemo(() => {
+    const s = new Set<number>();
+    for (const b of infos) { const m = /^dòng (\d+)/.exec(b.firstProblem ?? ''); if (m) s.add(+m[1]); else if (!b.block.closed) s.add(b.block.line0); }
+    for (const d of errs) { const w = whereOf(d, scan); if (w.kind === 'noi-dung' && w.line) s.add(w.line); }
+    return [...s];
+  }, [infos, errs, scan]);
+  useEffect(() => {
+    if (!ready) return;
+    ed.current?.mark(KEY, { block: cur && infos.length > 0 ? [cur.block.line0, cur.block.line1] : null, errs: errLines });
+  }, [ready, cur?.block.line0, cur?.block.line1, errLines, infos.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** con trỏ trong khung mã nằm trong câu nào thì chọn câu đó (danh sách + xem nhanh đi theo) */
+  const onCursorLine = (_k: string, line: number) => {
+    const b = scan.blocks.find((x) => line >= x.line0 && line <= x.line1);
+    if (b && b.n !== sel) setSel(b.n);
+  };
   /** tab Vấn đề: gom mọi lỗi/cảnh báo của bàn nháp; bấm để tới dòng */
   const issues = useMemo(() => {
     const out: { where: string; text: string; bad: boolean; go?: () => void }[] = [];
@@ -532,7 +548,7 @@ export function TexScratchScreen() {
             </span>
           </div>
           <div className="tsx-editor">
-            <CodeEditor ref={ed} label="Soạn nội dung LaTeX" onDirty={() => undefined} onSave={() => void flush()} onChangeText={onChangeText} />
+            <CodeEditor ref={ed} label="Soạn nội dung LaTeX" onDirty={() => undefined} onSave={() => void flush()} onChangeText={onChangeText} onCursor={onCursorLine} />
             {ready && !text && !blocked && (
               <div className="tsx-empty" role="note">
                 <b>Bàn nháp đang trống</b>

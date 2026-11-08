@@ -5,8 +5,8 @@ import { defaultKeymap, history, historyKeymap, moveLineDown, moveLineUp } from 
 import { bracketMatching, HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from '@codemirror/search';
-import { EditorState, type Extension, Text } from '@codemirror/state';
-import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
+import { EditorState, type Extension, RangeSetBuilder, StateEffect, StateField, Text } from '@codemirror/state';
+import { Decoration, type DecorationSet, drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { TEX_KEYS, texExtras } from '../lib/texextras';
@@ -31,6 +31,8 @@ export interface CodeEditorHandle {
   jump(key: string, line: number): void;
   /** Dòng (từ 1) và cột (từ 0) của con trỏ trong tệp `key` (null nếu tệp không đang mở). */
   cursor(key: string): { line: number; col: number } | null;
+  /** Tô nền một khối dòng (vd khối \\begin{ex}…\\end{ex} của câu đang chọn) và tô đỏ các dòng lỗi. Dòng đếm từ 1. */
+  mark(key: string, m: { block: [number, number] | null; errs: number[] }): void;
   focus(): void;
   find(): void;
 }
@@ -39,8 +41,40 @@ interface Props {
   onDirty(key: string, dirty: boolean): void;
   onSave(): void;
   onChangeText(key: string, text: string): void;
+  /** con trỏ đổi dòng (dòng từ 1) */
+  onCursor?(key: string, line: number): void;
   label: string;
 }
+
+// ——— tô khối câu đang chọn + dòng lỗi ———
+const setMarks = StateEffect.define<{ block: [number, number] | null; errs: number[] }>();
+const blkLine = Decoration.line({ class: 'cm-blk' });
+const blkFirst = Decoration.line({ class: 'cm-blk cm-blk-first' });
+const blkLast = Decoration.line({ class: 'cm-blk cm-blk-last' });
+const blkOne = Decoration.line({ class: 'cm-blk cm-blk-first cm-blk-last' });
+const errLine = Decoration.line({ class: 'cm-errline' });
+function buildMarks(doc: Text, m: { block: [number, number] | null; errs: number[] }): DecorationSet {
+  const n = doc.lines;
+  const errs = new Set(m.errs.filter((x) => x >= 1 && x <= n));
+  const [a, b] = m.block ? [Math.max(1, m.block[0]), Math.min(n, m.block[1])] : [0, -1];
+  const b2 = new RangeSetBuilder<Decoration>();
+  const lines = [...new Set([...errs, ...(a <= b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [])])].sort((x, y) => x - y);
+  for (const ln of lines) {
+    const from = doc.line(ln).from;
+    if (ln >= a && ln <= b) b2.add(from, from, a === b ? blkOne : ln === a ? blkFirst : ln === b ? blkLast : blkLine);
+    if (errs.has(ln)) b2.add(from, from, errLine);
+  }
+  return b2.finish();
+}
+const marksField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(v, tr) {
+    let out = v.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setMarks)) out = buildMarks(tr.state.doc, e.value);
+    return out;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 const hl = HighlightStyle.define([
   { tag: tags.keyword, class: 'cm-hl-k' },
@@ -75,19 +109,19 @@ const theme = EditorView.theme({
   '.cm-searchMatch-selected': { backgroundColor: 'var(--pri-soft)' },
 });
 
-export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEditor({ onDirty, onSave, onChangeText, label }, ref) {
+export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEditor({ onDirty, onSave, onChangeText, onCursor, label }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const states = useRef(new Map<string, EditorState>());
   const origin = useRef(new Map<string, Text>());
   const current = useRef<string | null>(null);
-  const cb = useRef({ onDirty, onSave, onChangeText });
-  cb.current = { onDirty, onSave, onChangeText };
+  const cb = useRef({ onDirty, onSave, onChangeText, onCursor });
+  cb.current = { onDirty, onSave, onChangeText, onCursor };
 
   const extensions = (key: string, readOnly: boolean): Extension[] => [
     ...(readOnly ? [] : texExtras()), // soạn kiểu TeXstudio: gợi ý lệnh, tự đóng, thu gọn khối, phím tắt (đặt trước để phím tắt riêng được ưu tiên)
     lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), history(), drawSelection(), bracketMatching(), highlightSelectionMatches(), search({ top: true }),
-    StreamLanguage.define(stex), syntaxHighlighting(hl), EditorView.lineWrapping, theme,
+    StreamLanguage.define(stex), syntaxHighlighting(hl), EditorView.lineWrapping, theme, marksField,
     EditorView.contentAttributes.of({ 'aria-label': label, spellcheck: 'false' }),
     keymap.of([
       { key: 'Mod-s', run: () => { cb.current.onSave(); return true; }, preventDefault: true },
@@ -97,6 +131,11 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
     ]),
     EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly),
     EditorView.updateListener.of((u) => {
+      if (u.selectionSet && cb.current.onCursor) {
+        const ln = u.state.doc.lineAt(u.state.selection.main.head).number;
+        const old = u.startState.doc.lineAt(Math.min(u.startState.selection.main.head, u.startState.doc.length)).number;
+        if (ln !== old || u.docChanged) cb.current.onCursor(key, ln);
+      }
       if (!u.docChanged) return;
       const o = origin.current.get(key);
       cb.current.onDirty(key, o ? !u.state.doc.eq(o) : true);
@@ -192,6 +231,11 @@ export const CodeEditor = forwardRef<CodeEditorHandle, Props>(function CodeEdito
       const head = v.state.selection.main.head;
       const ln = v.state.doc.lineAt(head);
       return { line: ln.number, col: head - ln.from };
+    },
+    mark(key, m) {
+      const v = view.current;
+      if (!v || current.current !== key) return;
+      v.dispatch({ effects: setMarks.of(m) });
     },
     focus() { view.current?.focus(); },
     find() { if (view.current) openSearchPanel(view.current); },

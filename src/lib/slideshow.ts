@@ -38,8 +38,10 @@ export interface PlayOpts {
   allowSolution: boolean;
   /** số giây mặc định theo loại câu */
   secs: { tn: number; ds: number; tln: number; tl: number };
+  /** nền khi chiếu: tối (phòng tối) hoặc sáng (máy chiếu phòng sáng) */
+  theme: 'dark' | 'light';
 }
-export const DEFAULT_PLAY: PlayOpts = { countdown: false, autoAnswer: true, shuffle: false, allowSolution: true, secs: { tn: 60, ds: 120, tln: 180, tl: 300 } };
+export const DEFAULT_PLAY: PlayOpts = { countdown: false, autoAnswer: true, shuffle: false, allowSolution: true, secs: { tn: 60, ds: 120, tln: 180, tl: 300 }, theme: 'dark' };
 const PLAY_KEY = 'hedu.slides.opts';
 const clampSec = (n: unknown, d: number) => { const v = Math.round(Number(n)); return Number.isFinite(v) && v >= 5 && v <= 3600 ? v : d; };
 export function parsePlayOpts(raw: string | null): PlayOpts {
@@ -51,6 +53,7 @@ export function parsePlayOpts(raw: string | null): PlayOpts {
     return {
       countdown: b(o.countdown, DEFAULT_PLAY.countdown), autoAnswer: b(o.autoAnswer, DEFAULT_PLAY.autoAnswer), shuffle: b(o.shuffle, DEFAULT_PLAY.shuffle), allowSolution: b(o.allowSolution, DEFAULT_PLAY.allowSolution),
       secs: { tn: clampSec(s.tn, 60), ds: clampSec(s.ds, 120), tln: clampSec(s.tln, 180), tl: clampSec(s.tl, 300) },
+      theme: o.theme === 'light' ? 'light' : 'dark',
     };
   } catch { return DEFAULT_PLAY; }
 }

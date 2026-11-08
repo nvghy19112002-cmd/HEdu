@@ -22,6 +22,11 @@ export function SlideShow({ title, items: items0, onClose, opts }: { title: stri
   const [timer, setTimer] = useState<number | null>(null); // mốc bắt đầu (ms) hoặc tắt
   const [now, setNow] = useState(Date.now());
   const root = useRef<HTMLDivElement>(null);
+  // thanh điều khiển tự ẩn khi không rê chuột 2,5 giây
+  const [idle, setIdle] = useState(false);
+  const idleT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wake = () => { setIdle(false); if (idleT.current) clearTimeout(idleT.current); idleT.current = setTimeout(() => setIdle(true), 2500); };
+  useEffect(() => { wake(); return () => { if (idleT.current) clearTimeout(idleT.current); }; }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const n = items.length;
   const p = useMemo(() => (items[i] ? parseExTest(items[i].latex) : null), [items, i]);
 
@@ -59,9 +64,10 @@ export function SlideShow({ title, items: items0, onClose, opts }: { title: stri
   });
 
   return (
-    <div className="sld" ref={root} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Trình chiếu: ${title}`}>
+    <div className={`sld theme-${o.theme}${ans ? ' show-ans' : ''}${idle ? ' idle' : ''}`} ref={root} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Trình chiếu: ${title}`} onMouseMove={wake}>
       <div className="sld-top">
-        <span><b>{title}</b> · câu {n ? i + 1 : 0} / {n}</span>
+        <span className="sld-title"><b>{title}</b></span>
+        <span className="sld-count" aria-live="polite"><b>{n ? i + 1 : 0}</b> / {n}</span>
         <span className="sld-pills">
           {ans && <span className="sld-pill ok">Đang hiện đáp án</span>}
           {left !== null && <span className={`sld-pill${left <= 10 ? ' warn' : ''}`} title="Thời gian còn lại của câu này">⏳ {clock(left)}</span>}
@@ -75,6 +81,7 @@ export function SlideShow({ title, items: items0, onClose, opts }: { title: stri
         </div>
       </div>
       <div className="sld-bar" aria-hidden="true"><i style={{ width: n ? `${((i + 1) / n) * 100}%` : 0 }} /></div>
+      {limit !== null && left !== null && <div className="sld-tbar" aria-hidden="true"><i className={left <= 10 ? 'warn' : undefined} style={{ width: `${(left / limit) * 100}%` }} /></div>}
       <div className="sld-bot">
         <span className="sld-keys"><kbd>←</kbd><kbd>→</kbd> chuyển câu · <kbd>Space</kbd> đáp án · <kbd>G</kbd> lời giải · <kbd>T</kbd> đồng hồ · <kbd>F</kbd> toàn màn hình · <kbd>Esc</kbd> thoát</span>
         <span className="sld-acts">

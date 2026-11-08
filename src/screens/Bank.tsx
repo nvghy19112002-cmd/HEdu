@@ -37,6 +37,7 @@ import { fold, parseBankQuery, queryOk } from '../lib/banksearch';
 import { DupCheck } from '../components/DupCheck';
 import { QuestionModal } from '../components/QuestionModal';
 import { BankTable } from '../components/BankTable';
+import { BankPreview } from '../components/BankPreview';
 import { useCtxHidden } from '../lib/ctxcol';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
 import { ReviewBadge } from '../components/ReviewControl';
@@ -384,6 +385,19 @@ export function BankScreen() {
     runExport();
   };
 
+  // Khung xem trước cạnh bảng (kiểu MathHub): chỉ khi xem dạng Bảng và cửa sổ đủ rộng; hẹp thì bấm dòng mở cửa sổ như cũ.
+  const [vw, setVw] = useState(() => window.innerWidth);
+  useEffect(() => { const r = () => setVw(window.innerWidth); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
+  const prevOn = mode === 'table' && vw >= 1180 && shown.length > 0;
+  const prevQ = prevOn ? (shown.find((q) => q.uid === activeUid) ?? shown[0]) : null;
+  const prevIdx = prevQ ? list.findIndex((q) => q.uid === prevQ.uid) : -1;
+  /** ↑/↓ ở bảng: chuyển câu đang xem theo cả danh sách đang lọc, sang trang khi cần */
+  const stepPrev = (d: number) => {
+    const i = prevIdx + d;
+    if (prevIdx < 0 || i < 0 || i >= list.length) return;
+    setActiveUid(list[i].uid);
+    setPage(Math.floor(i / PER_PAGE));
+  };
   const viewIdx = viewUid ? list.findIndex((q) => q.uid === viewUid) : -1;
   const viewQ = viewIdx >= 0 ? list[viewIdx] : null;
   /** mở cửa sổ xem một câu; dòng/thẻ đó được tô sáng cho tới khi chọn câu khác */
@@ -403,6 +417,8 @@ export function BankScreen() {
       const t = e.target as HTMLElement;
       if (t.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]') || document.querySelector('[aria-modal="true"]')) return;
       if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
+      else if (prevQ && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !t.closest?.('.fside, [role="tree"], [role="menu"], [role="listbox"]')) { e.preventDefault(); stepPrev(e.key === 'ArrowDown' ? 1 : -1); }
+      else if (prevQ && e.key === 'Enter' && !t.closest?.('button, a, [role="button"]')) { e.preventDefault(); openView(prevQ.uid); }
       else if (e.key === 'PageDown' && cur < pages - 1) { e.preventDefault(); goPage(cur + 1, true); }
       else if (e.key === 'PageUp' && cur > 0) { e.preventDefault(); goPage(cur - 1, true); }
     };
@@ -488,7 +504,7 @@ export function BankScreen() {
           <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onHide={() => undefined} />
         )}
 
-        <section ref={qlistRef} className="qlist" aria-label="Danh sách câu hỏi">
+        <section ref={qlistRef} className={`qlist${prevOn ? ' has-prev' : ''}`} aria-label="Danh sách câu hỏi">
           <div className="qbar">
             <label className="search sm">
               <IcSearch size={16} />
@@ -621,7 +637,7 @@ export function BankScreen() {
           {shown.length > 0 && mode === 'cards' && <div className="cards-grid">{shown.map((q) => renderCard(q))}</div>}
           {shown.length > 0 && mode === 'table' && (
             <BankTable rows={shown} sel={sel} activeUid={activeUid} codeOf={(q) => (noIdOf(q) !== null ? null : questionCode(q, q.level))}
-              onToggle={(uid) => setSel(toggleOne(sel, uid))} onOpen={openView} />
+              onToggle={(uid) => setSel(toggleOne(sel, uid))} onOpen={prevOn ? setActiveUid : openView} onBig={prevOn ? openView : undefined} />
           )}
 
 
@@ -639,6 +655,18 @@ export function BankScreen() {
               onNew={newHere} onImport={() => go({ screen: 'import' })} />
           )}
         </section>
+        {prevQ && (() => {
+          const ni = noIdOf(prevQ);
+          const at = ni !== null ? undefined : place(prevQ.lessonId) ?? place(prevQ.chapterId);
+          const where = ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? [at.chapter?.name, at.lesson?.name].filter(Boolean).join(' › ') : '';
+          return (
+            <BankPreview key={prevQ.uid} q={prevQ} code={ni !== null ? null : questionCode(prevQ, prevQ.level)} where={where} index={prevIdx} total={list.length}
+              selected={sel.has(prevQ.uid)} onToggleSel={() => setSel(toggleOne(sel, prevQ.uid))} onPrev={() => stepPrev(-1)} onNext={() => stepPrev(1)}
+              onOpen={() => openView(prevQ.uid)} onEdit={() => { openView(prevQ.uid); setViewEdit(true); }}
+              onAddToExam={featureOn('exam') ? () => go({ screen: 'exam', examPick: [prevQ.uid] }) : undefined}
+              onSlides={() => openSlides('Ngân hàng', [{ latex: prevQ.latex, uid: prevQ.uid }])} />
+          );
+        })()}
       </div>
       {drawerOpen && !docked && (
         <>

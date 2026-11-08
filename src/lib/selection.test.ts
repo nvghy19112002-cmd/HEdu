@@ -56,7 +56,10 @@ console.log('Sắp xếp');
   ok(o('seq-asc') === 'abcd' && o('seq-desc') === 'dcba', 'số câu tăng / giảm dần');
   const tie = [mk('y', 5, 1), mk('x', 5, 1)];
   ok(sortedCopy(tie, 'seq-asc')[0].uid === 'x', 'trùng cả số câu: theo uid, luôn ổn định');
-  ok(SORT_MODES.length === 4 && qs.every((_, i) => sortedCopy(qs, 'updated-desc')[i]), 'đủ 4 kiểu');
+  ok(SORT_MODES.length === 6 && qs.every((_, i) => sortedCopy(qs, 'updated-desc')[i]), 'đủ 6 kiểu');
+  const lq = [{ uid: 'p', seq: 3, level: 'VD' }, { uid: 'q', seq: 1, level: 'VDC' }, { uid: 'r', seq: 2, level: 'NB' }, { uid: 's', seq: 4, level: 'TH' }, { uid: 't', seq: 1, level: 'NB' }] as unknown as Question[];
+  ok(sortedCopy(lq, 'level-asc').map((q) => q.uid).join('') === 'trspq', 'mức độ tăng dần N → H → V → C, cùng mức thì số câu nhỏ trước');
+  ok(sortedCopy(lq, 'level-desc').map((q) => q.uid).join('') === 'qpstr', 'mức độ giảm dần');
   ok(qs.map((q) => q.uid).join('') === 'abcd', 'sắp xếp không làm đổi mảng gốc');
 }
 console.log('Hiệu năng 60.000 câu');

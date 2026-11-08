@@ -1,12 +1,12 @@
 // Màn "Trình chiếu" (Giai đoạn 3 · bước 5): một bộ trình chiếu ở giữa (thứ tự câu, đổi chỗ, bỏ câu),
 // bên phải: cách chiếu (đếm ngược, tự hiện đáp án, trộn, cho xem lời giải) + các bộ khác + phím khi chiếu.
 // Bộ chụp nội dung câu lúc lưu; sửa/xoá bộ không đụng ngân hàng.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { SlideShow } from '../components/SlideShow';
-import { parseExTest } from '../lib/extest';
+import { parseExTest, splitExBlocks } from '../lib/extest';
 import { plainSnippet } from '../lib/snippet';
-import { createDeck, deleteDeck, loadDecks, moveItem, removeItem, renameDeck, useDecks, type Deck } from '../lib/slidedeck';
+import { addToDeck, createDeck, deleteDeck, loadDecks, moveItem, removeItem, renameDeck, useDecks, type Deck } from '../lib/slidedeck';
 import { clock, estimateSecs, loadPlayOpts, savePlayOpts, type PlayOpts } from '../lib/slideshow';
 import type { QType } from '../lib/types';
 
@@ -24,6 +24,30 @@ export function SlidesScreen() {
   const [ren, setRen] = useState<string | null>(null);
   const [askDel, setAskDel] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);
+  // ô dán/mở .tex: tách các khối \begin{ex}…\end{ex} theo đúng thứ tự trong văn bản
+  const [paste, setPaste] = useState('');
+  const [pasteName, setPasteName] = useState('');
+  const fileIn = useRef<HTMLInputElement>(null);
+  const found = useMemo(() => splitExBlocks(paste), [paste]);
+  const addPasted = async () => {
+    if (!found.length) return;
+    const items = found.map((latex) => ({ latex }));
+    if (deck) {
+      const r = await addToDeck(deck.id, items);
+      toast(`Đã thêm ${r.added} câu vào “${deck.name}”${r.skipped ? `; bỏ qua ${r.skipped} câu đã có (hoặc quá 300 câu)` : ''}.`);
+    } else {
+      const d = await createDeck(pasteName || `Bộ mới ${new Date().toLocaleDateString('vi-VN')}`, items);
+      setSel(d.id);
+      toast(`Đã tạo bộ “${d.name}” với ${d.items.length} câu.`);
+    }
+    setPaste(''); setPasteName('');
+  };
+  const openTex = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const texts = await Promise.all([...files].map((f) => f.text()));
+    setPaste((p) => [p, ...texts].filter((x) => x.trim()).join('\n\n'));
+    if (!pasteName) setPasteName(files[0].name.replace(/\.[^.]+$/, ''));
+  };
   useEffect(() => { void loadDecks().catch((e) => toast(`Không đọc được bộ trình chiếu: ${msg(e)}`)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deck: Deck | undefined = decks.find((d) => d.id === sel) ?? decks[0];
@@ -62,6 +86,17 @@ export function SlidesScreen() {
 
       <div className="sl-body">
         <section className="sl-main" aria-label="Các câu trong bộ">
+          <div className="sl-add">
+            <textarea className="xl-in" rows={paste ? 6 : 2} value={paste} spellCheck={false} aria-label="Dán mã LaTeX các câu"
+              placeholder={'Dán mã LaTeX các câu (\\begin{ex} … \\end{ex}) vào đây, hoặc bấm “Mở tệp .tex…”. Câu hiện theo đúng thứ tự trong văn bản.'}
+              onChange={(e) => setPaste(e.target.value)} />
+            <div className="sl-add-r">
+              <input ref={fileIn} type="file" accept=".tex,.txt" multiple hidden onChange={(e) => { void openTex(e.target.files); e.target.value = ''; }} />
+              <button type="button" className="btn btn-sm" onClick={() => fileIn.current?.click()}>Mở tệp .tex…</button>
+              <span className="sl-found">{paste.trim() ? (found.length ? `${found.length} câu` : 'Chưa thấy khối \\begin{ex}') : ''}</span>
+              <button type="button" className="btn btn-sm btn-accent" disabled={!found.length} onClick={() => void run(addPasted)}>{deck ? `Thêm ${found.length || ''} câu vào bộ này` : `Tạo bộ với ${found.length || ''} câu`}</button>
+            </div>
+          </div>
           {!deck ? (
             <div className="sl-empty">
               <b>Chưa có bộ trình chiếu nào</b>
@@ -95,6 +130,12 @@ export function SlidesScreen() {
             <label className="sw"><input type="checkbox" checked={opts.autoAnswer} disabled={!opts.countdown} onChange={(e) => setOpts({ ...opts, autoAnswer: e.target.checked })} />Hết giờ tự hiện đáp án</label>
             <label className="sw"><input type="checkbox" checked={opts.shuffle} onChange={(e) => setOpts({ ...opts, shuffle: e.target.checked })} />Trộn thứ tự câu khi chiếu</label>
             <label className="sw"><input type="checkbox" checked={opts.allowSolution} onChange={(e) => setOpts({ ...opts, allowSolution: e.target.checked })} />Cho xem lời giải (phím G)</label>
+            <label className="sl-theme">Nền khi chiếu
+              <select className="xl-in" value={opts.theme} onChange={(e) => setOpts({ ...opts, theme: e.target.value === 'light' ? 'light' : 'dark' })}>
+                <option value="dark">Tối (phòng tối, màn hình lớn)</option>
+                <option value="light">Sáng (máy chiếu phòng sáng)</option>
+              </select>
+            </label>
             {opts.countdown && (
               <div className="sl-secs">
                 {(['tn', 'ds', 'tln', 'tl'] as const).map((t) => (
