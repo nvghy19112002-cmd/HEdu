@@ -2635,7 +2635,6 @@ button.tsx-saved { cursor: pointer; }
 
 /* ===== NGÂN HÀNG · KHUNG XEM TRƯỚC CẠNH BẢNG (kiểu MathHub) ===== */
 .qlist.has-prev { flex: 1 1 0; min-width: 0; }
-.qlist.has-prev .qt-sn { display: none; }
 .bk-prev { flex: 0 0 clamp(360px, 34%, 640px); position: sticky; top: 8px; align-self: flex-start; max-height: calc(100vh - 16px); display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
 .bkp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-card); }
 .bkp-nav { display: inline-flex; align-items: center; gap: 2px; }
@@ -2844,7 +2843,6 @@ button.bt-caret:hover svg { background: var(--pri-soft); color: var(--pri); }
 }
 
 /* Ngân hàng: cạnh khung xem trước, ẩn luôn tiêu đề cột Nội dung (cột đã ẩn) */
-.qlist.has-prev .qt th:nth-child(6) { display: none; }
 
 /* Sức khoẻ: ô mô tả không bị quy tắc .is-compact của Nhập liệu ẩn chữ; ô tick nằm cạnh chữ */
 .panel.hl-panel { padding: 12px 16px; gap: 8px; }
@@ -2863,3 +2861,8 @@ button.bt-caret:hover svg { background: var(--pri-soft); color: var(--pri); }
 .sl2-dh h1 { white-space: nowrap; }
 /* cột số câu đủ cho số dài (#910050) */
 .qt th:nth-child(2) { width: 84px; }
+
+/* Ngân hàng + khung xem trước: khung cao hết màn (cuộn bên trong); bảng hiện cột Nội dung khi đủ chỗ, chỉ ẩn khi bảng thật hẹp */
+.bk-prev { min-height: calc(100vh - 96px); }
+@container (max-width: 640px) { .qlist.has-prev .qt th:nth-child(6), .qlist.has-prev .qt-row > :nth-child(6) { display: none; } }
+.qlist.has-prev .qt-sn { color: var(--text-secondary, var(--text-muted)); }
