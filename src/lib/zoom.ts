@@ -31,11 +31,31 @@ function saveZoom(z: number): void {
   try { if (z === ZOOM_DEFAULT) localStorage.removeItem(KEY); else localStorage.setItem(KEY, String(z)); } catch { /* bỏ qua */ }
 }
 
+// ——— Tự co giãn theo cửa sổ ———
+// Giữ NGUYÊN bố cục như khi mở toàn màn: cả giao diện thu/phóng theo đúng tỉ lệ bề rộng cửa sổ, để cửa sổ nhỏ trông y như
+// toàn màn nhưng nhỏ hơn (Mục lục, bảng, khung xem trước vẫn đủ). Mốc: bố cục rộng 1720 px (≈ màn Full HD 1920 ở mức 112%).
+// Giới hạn 65–130%: cửa sổ quá hẹp (dưới ~1120 px) thì không thu thêm nữa mà để giao diện tự dàn lại cho đọc được.
+export const FIT_REF = 1720, FIT_MIN = 0.65, FIT_MAX = 1.3;
+/** hệ số tự co giãn theo bề rộng cửa sổ thật (px CSS khi zoom 100%) */
+export function fitFactor(baseWidth: number): number {
+  if (!Number.isFinite(baseWidth) || baseWidth <= 0) return 1;
+  const f = baseWidth / FIT_REF;
+  return Math.round(Math.min(FIT_MAX, Math.max(FIT_MIN, f)) * 100) / 100;
+}
+/** mức zoom thực áp vào cửa sổ = mức người dùng × hệ số co giãn (nếu bật) */
+export const effectiveZoom = (user: number, fit: boolean, baseWidth: number): number =>
+  Math.round(Math.min(1.9, Math.max(0.55, user * (fit ? fitFactor(baseWidth) : 1))) * 100) / 100;
+const FIT_KEY = 'hedu.zoomfit';
+let fitOn = (() => { try { return localStorage.getItem(FIT_KEY) !== '0'; } catch { return true; } })();
+export const getFit = (): boolean => fitOn;
+
 interface WebviewApi { getCurrentWebview(): { setZoom(f: number): Promise<void> } }
 
 let current = ZOOM_DEFAULT;
 let started = false;
 let cssFallback = false;
+/** mức đang thực áp vào cửa sổ (đã nhân hệ số co giãn) */
+let applied = 1;
 const subs = new Set<() => void>();
 
 export const getZoom = (): number => current;
@@ -56,12 +76,31 @@ async function applyToView(z: number): Promise<void> {
   else document.documentElement.style.setProperty('zoom', String(z));
 }
 
+/** bề rộng cửa sổ quy về zoom 100%: zoom thật của WebView2 làm innerWidth nhỏ đi theo mức zoom, CSS zoom thì không */
+function baseWidth(): number {
+  const wv = (window.__TAURI__ as { webview?: WebviewApi } | undefined)?.webview;
+  return wv && !cssFallback ? window.innerWidth * applied : window.innerWidth;
+}
+function applyEffective(): void {
+  const e = effectiveZoom(current, fitOn, baseWidth());
+  if (Math.abs(e - applied) < 0.01) return;
+  applied = e;
+  void applyToView(e);
+  subs.forEach((f) => f()); // hình TikZ dựng lại theo mức zoom thật
+}
+export function setFit(on: boolean): void {
+  fitOn = on;
+  try { localStorage.setItem(FIT_KEY, on ? '1' : '0'); } catch { /* bỏ qua */ }
+  applyEffective();
+  subs.forEach((f) => f());
+}
+
 export function setZoom(z: number): void {
   const next = clampZoom(z);
   if (next === current) return;
   current = next;
   saveZoom(next);
-  void applyToView(next);
+  applyEffective();
   subs.forEach((f) => f());
 }
 
@@ -93,7 +132,11 @@ export function startZoom(): () => void {
   started = true;
   const saved = loadZoom();
   current = saved;
-  if (saved !== ZOOM_DEFAULT) void applyToView(saved);
+  applyEffective();
+  // kéo dãn/thu nhỏ cửa sổ: tính lại hệ số co giãn (chờ người dùng thả tay một chút)
+  let rt: ReturnType<typeof setTimeout> | null = null;
+  const onResize = () => { if (rt) clearTimeout(rt); rt = setTimeout(applyEffective, 160); };
+  window.addEventListener('resize', onResize);
   const stepper = createWheelStepper();
   const onWheel = (e: WheelEvent) => {
     if (!e.ctrlKey) return; // pinch trên touchpad cũng đến dưới dạng wheel + ctrlKey
@@ -113,5 +156,6 @@ export function startZoom(): () => void {
     started = false;
     window.removeEventListener('wheel', onWheel, true);
     window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('resize', onResize);
   };
 }

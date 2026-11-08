@@ -18,6 +18,8 @@ export interface BankEmptyProps {
   onClearAttrs: () => void;
   onNew: () => void;
   onImport: () => void;
+  /** Mục lục đang thu vào ngăn kéo (cửa sổ hẹp): mở nó */
+  onOpenTree?: () => void;
 }
 
 /** Bước lên một cấp của vị trí đang xem, kèm tên và số câu của cấp đó (null nếu đã ở ngoài cùng). */
@@ -58,8 +60,9 @@ export function BankEmpty(p: BankEmptyProps) {
     return (
       <div className="bk-empty" role="status">
         <h3>Chọn một mục ở cây mục lục để xem câu</h3>
-        <p>Bấm một Lớp (rồi Chương, Bài, Dạng) hoặc “Chưa có ID” ở cây bên trái. Muốn xem cả kho thì bấm “Tất cả”. Gõ <b>#số</b> để tìm đúng một câu trong toàn kho.</p>
+        <p>Bấm một Lớp (rồi Chương, Bài, Dạng) hoặc “Chưa có ID” ở {p.onOpenTree ? <>Mục lục (nút <b>Mục lục</b> hoặc Ctrl+B)</> : 'cây bên trái'}. Muốn xem cả kho thì bấm “Tất cả”. Gõ <b>#số</b> để tìm đúng một câu trong toàn kho.</p>
         <div className="be-acts">
+          {p.onOpenTree && <button type="button" className="btn btn-outline" onClick={p.onOpenTree}>Mở Mục lục</button>}
           <button type="button" className="btn btn-accent" onClick={() => p.onF(pickGrade(f, null))}>Tất cả ({nf.format(facets.gradeAll)} câu)</button>
           {tax.grades.map((g) => <button key={g.id} type="button" className="btn btn-outline" onClick={() => p.onF(pickGrade(f, g.id))}>{gradeLabel(g)} ({nf.format(facets.grade.get(g.id) ?? 0)})</button>)}
         </div>

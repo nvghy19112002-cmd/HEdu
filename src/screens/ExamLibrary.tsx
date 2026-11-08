@@ -751,7 +751,7 @@ export function ExamLibraryScreen() {
           </span>
           {view === 'list' && (
             <span className="more-wrap" style={{ position: 'relative' }}>
-              <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={menu === 'cols'} onClick={() => setMenu(menu === 'cols' ? null : 'cols')} title="Chọn các cột hiện trong bảng">Cột ▾</button>
+              <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={menu === 'cols'} onClick={() => setMenu(menu === 'cols' ? null : 'cols')} title="Chọn các cột hiện trong bảng">Hiện cột ▾</button>
               {menu === 'cols' && (
                 <span className="more-menu xl-pop" role="group" aria-label="Cột hiện trong bảng">
                   {COL_ORDER.map((k) => (

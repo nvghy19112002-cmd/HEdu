@@ -72,6 +72,14 @@ export function TexScratchScreen() {
   const [showSol, setShowSol] = useState(true);
   const [askClear, setAskClear] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(false);
+  const draftRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!draftOpen) return;
+    const off = (e: MouseEvent) => { if (!draftRef.current?.contains(e.target as Node)) setDraftOpen(false); };
+    document.addEventListener('mousedown', off);
+    return () => document.removeEventListener('mousedown', off);
+  }, [draftOpen]);
   const [khoOpen, setKhoOpen] = useState(false);
   const [figOpen, setFigOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
@@ -100,7 +108,7 @@ export function TexScratchScreen() {
   }, [toolsOpen]);
   const [fixFor, setFixFor] = useState<'fix' | 'sort' | null>(null);
   // biên dịch PDF
-  const [tab, setTab] = useState<'cau' | 'pdf' | 'hinh'>('cau');
+  const [tab, setTab] = useState<'cau' | 'pdf' | 'hinh' | 'van-de'>('cau');
   const [khoSave, setKhoSave] = useState<{ latex: string; n: number | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<ScratchOut | null>(null);
@@ -235,6 +243,39 @@ export function TexScratchScreen() {
   const chkLook = useMemo(() => new Set([...chkOf].filter(([, l]) => needsLook(l)).map(([n]) => n)), [chkOf]);
   const fctx = useMemo(() => ({ buildErr: new Set(buildErr.keys()), picked: scope ?? new Set<number>(), dup: new Set(dupOf.keys()), check: chkLook }), [buildErr, scope, dupOf, chkLook]);
   const counts = useMemo(() => filterCounts(infos, fctx), [infos, fctx]);
+  // tô cả khối \begin{ex}…\end{ex} của câu đang chọn và đỏ các dòng lỗi ngay trong khung mã
+  const errLines = useMemo(() => {
+    const s = new Set<number>();
+    for (const b of infos) { const m = /^dòng (\d+)/.exec(b.firstProblem ?? ''); if (m) s.add(+m[1]); else if (!b.block.closed) s.add(b.block.line0); }
+    for (const d of errs) { const w = whereOf(d, scan); if (w.kind === 'noi-dung' && w.line) s.add(w.line); }
+    return [...s];
+  }, [infos, errs, scan]);
+  useEffect(() => {
+    if (!ready) return;
+    ed.current?.mark(KEY, { block: cur && infos.length > 0 ? [cur.block.line0, cur.block.line1] : null, errs: errLines });
+  }, [ready, cur?.block.line0, cur?.block.line1, errLines, infos.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** con trỏ trong khung mã nằm trong câu nào thì chọn câu đó (danh sách + xem nhanh đi theo) */
+  const onCursorLine = (_k: string, line: number) => {
+    const b = scan.blocks.find((x) => line >= x.line0 && line <= x.line1);
+    if (b && b.n !== sel) setSel(b.n);
+  };
+  /** tab Vấn đề: gom mọi lỗi/cảnh báo của bàn nháp; bấm để tới dòng */
+  const issues = useMemo(() => {
+    const out: { where: string; text: string; bad: boolean; go?: () => void }[] = [];
+    const toLine = (line: number, n?: number) => () => { ed.current?.jump(KEY, line); if (n != null) setSel(n); setPane('code'); if (vmode === 'view') setVmode('both'); };
+    if (scan.fullDoc.length) out.push({ where: `Dòng ${lines(scan.fullDoc)}`, text: 'Có vẻ là cả một tài liệu (\\documentclass, \\begin{document}). Màn này đã có sẵn khai báo; nên chỉ giữ các khối câu. HEdu không tự xoá phần nào.', bad: false, go: toLine(scan.fullDoc[0]) });
+    if (scan.io.length) out.push({ where: `Dòng ${lines(scan.io.map((x) => x.line))}`, text: `Lệnh đọc/ghi tệp (${[...new Set(scan.io.map((x) => x.text))].join(', ')}): khi biên dịch chỉ đọc được tệp trong thư mục bàn nháp.`, bad: false, go: toLine(scan.io[0].line) });
+    if (scan.strayEnds.length) out.push({ where: `Dòng ${lines(scan.strayEnds)}`, text: '\\end{ex} thừa.', bad: true, go: toLine(scan.strayEnds[0]) });
+    if (scan.outside.length) out.push({ where: `Dòng ${lines(scan.outside.map((o) => o.line0))}`, text: `${scan.outside.length} đoạn nằm ngoài các khối câu: giữ nguyên, không tính là câu.`, bad: false, go: toLine(scan.outside[0].line0) });
+    for (const b of infos) {
+      if (b.firstProblem) out.push({ where: `Câu ${b.block.n}`, text: b.firstProblem + (b.problems > 1 ? ` (và ${b.problems - 1} lỗi khác)` : ''), bad: true, go: toLine(b.block.line0, b.block.n) });
+      for (const i of chkOf.get(b.block.n) ?? []) if (i.level !== 'tin') out.push({ where: `Câu ${b.block.n}`, text: `${LEVEL_TEXT[i.level]}: ${i.message}`, bad: i.level === 'loi', go: toLine(b.block.line0, b.block.n) });
+      const d = dupOf.get(b.block.n)?.[0];
+      if (d) out.push({ where: `Câu ${b.block.n}`, text: `${DUP_KIND_LABEL[d.kind]}: ${d.with === 'bank' ? 'với một câu trong ngân hàng' : `với câu ${d.other}`}`, bad: false, go: toLine(b.block.line0, b.block.n) });
+    }
+    for (const d of errs) { const w = whereOf(d, scan); out.push({ where: whereLabel(w), text: `TeX: ${d.message}`, bad: true, go: w.kind === 'noi-dung' ? () => jumpTo(d) : undefined }); }
+    return out;
+  }, [scan, infos, chkOf, dupOf, errs, vmode]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = useMemo(() => filterInfos(infos, lfilter, fctx), [infos, lfilter, fctx]);
   const togglePick = (n: number) => setPicked((p) => { const q = new Set(p); if (q.has(n)) q.delete(n); else q.add(n); return q; });
   const allShownPicked = shown.length > 0 && shown.every((b) => picked.has(b.block.n));
@@ -430,62 +471,61 @@ export function TexScratchScreen() {
   return (
     <div className="qe-page tsx-page">
       <header className="page-head tsx-head">
-        <div>
-          <h1>Xử lí TeX</h1>
-          <span className="sys-hint">Dán hoặc gõ các khối <code>\begin{'{ex}'}…\end{'{ex}'}</code>; khai báo gói có sẵn. Bàn nháp không ghi vào ngân hàng cho tới khi bạn bấm “Đưa vào Ngân hàng”.</span>
+        <div className="tsx-crumb">
+          <h1>Soạn TeX</h1>
+          <span className="tsx-sep">/</span>
+          <div className="tsx-more" ref={draftRef}>
+            <button type="button" className="tsx-draft" aria-haspopup="menu" aria-expanded={draftOpen} onClick={() => setDraftOpen((o) => !o)} title="Đổi, tạo, đổi tên, xoá bàn nháp. Mỗi bàn nháp lưu riêng (vd. một đề, một chương).">{nameOf(ix, ix.active)} <small>▾</small></button>
+            {draftOpen && (
+              <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setDraftOpen(false); } }}>
+                {[{ id: '', name: MAIN_NAME }, ...ix.items].map((d) => (
+                  <button key={d.id || 'chinh'} type="button" role="menuitemradio" aria-checked={ix.active === d.id} className={ix.active === d.id ? 'on' : undefined} onClick={() => { setDraftOpen(false); if (d.id !== ix.active) void openSlot(d.id, ix); }}>{ix.active === d.id ? '✓ ' : ''}{d.name}</button>
+                ))}
+                <hr className="tsx-hr" />
+                <button type="button" role="menuitem" onClick={() => { setDraftOpen(false); setNameDlg({ kind: 'new', initial: '' }); }}>Bàn nháp mới…</button>
+                <button type="button" role="menuitem" disabled={!ix.active} onClick={() => { setDraftOpen(false); setNameDlg({ kind: 'rename', initial: nameOf(ix, ix.active) }); }}>Đổi tên bàn nháp này…</button>
+                <button type="button" role="menuitem" className="danger" disabled={!ix.active} onClick={() => { setDraftOpen(false); setAskDelete(true); }}>Xoá bàn nháp này…</button>
+              </div>
+            )}
+          </div>
+          {save === 'chua-luu' && !blocked
+            ? <button type="button" className="tsx-saved idle" onClick={() => void flush()} title="Bấm để lưu ngay (Ctrl+S)">{SAVE_LABEL[save]}</button>
+            : <span className={`tsx-saved ${save === 'loi' || blocked ? 'bad' : save === 'da-luu' ? 'ok' : 'idle'}`} role="status" title={saveErr ?? undefined}>{blocked ? 'Không lưu được' : save === 'da-luu' ? '✓ Đã lưu nháp' : SAVE_LABEL[save]}</span>}
         </div>
-        <div className="head-actions">
-          <label className="tsx-slot" title="Chọn bàn nháp. Mỗi bàn nháp lưu riêng (vd. một đề, một chương)."><span>Bàn nháp</span>
-            <select value={ix.active} onChange={(e) => void openSlot(e.target.value, ix)} aria-label="Bàn nháp đang mở">
-              <option value="">{MAIN_NAME}</option>
-              {ix.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </select>
-          </label>
-          <span className={`qs ${save === 'loi' ? 'bad' : save === 'da-luu' ? 'ok' : 'idle'}`} role="status" title={saveErr ?? undefined}>{blocked ? 'Không lưu được' : SAVE_LABEL[save]}</span>
-          <button type="button" className="btn btn-sm" disabled={!!blocked || save === 'da-luu'} onClick={() => void flush()} title="Ctrl+S">Lưu nháp</button>
-        </div>
-      </header>
-
-      <input ref={fileIn} type="file" accept=".tex,.txt,text/plain" multiple hidden onChange={(e) => void onPickWeb(e.target.files)} />
-      <div className="tsx-toolbar" role="toolbar" aria-label="Công cụ bàn nháp">
-        <div className="seg sm qe-vmode" role="group" aria-label="Chế độ xem">
-          {([['code', 'Mã'], ['both', 'Mã + Xem trước'], ['view', 'Xem trước']] as const).map(([k, l]) => (
-            <button key={k} type="button" aria-pressed={vmode === k} onClick={() => setVmode(k)}>{l}</button>
-          ))}
-        </div>
-        <div className="tsx-tools">
+        <input ref={fileIn} type="file" accept=".tex,.txt,text/plain" multiple hidden onChange={(e) => void onPickWeb(e.target.files)} />
+        <div className="head-actions tsx-tools" role="toolbar" aria-label="Công cụ bàn nháp">
+          <div className="seg sm qe-vmode" role="group" aria-label="Chế độ xem">
+            {([['code', 'Mã'], ['both', 'Mã + Xem'], ['view', 'Xem']] as const).map(([k, l]) => (
+              <button key={k} type="button" aria-pressed={vmode === k} onClick={() => setVmode(k)}>{l}</button>
+            ))}
+          </div>
           <div className="tsx-more" ref={toolsRef}>
             <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolsOpen} onClick={() => setToolsOpen((o) => !o)}>Công cụ ▾</button>
             {toolsOpen && (
               <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setToolsOpen(false); } }}>
-                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'new', initial: '' }); }} autoFocus>Bàn nháp mới…</button>
-                <button type="button" role="menuitem" disabled={!ix.active} onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'rename', initial: nameOf(ix, ix.active) }); }}>Đổi tên bàn nháp này…</button>
-                <button type="button" role="menuitem" className="danger" disabled={!ix.active} onClick={() => { setToolsOpen(false); setAskDelete(true); }}>Xoá bàn nháp này…</button>
+                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked} autoFocus>Mở tệp .tex vào bàn nháp…</button>
+                <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <hr className="tsx-hr" />
                 <button type="button" role="menuitem" disabled={!!blocked || !isDesktop()} onClick={() => { setToolsOpen(false); setFigOpen(true); }} title="Vẽ bảng biến thiên, bảng xét dấu, đồ thị hàm số rồi chèn vào bàn nháp">Vẽ hình (bảng biến thiên, đồ thị)…</button>
                 <button type="button" role="menuitem" disabled={!!blocked || !isDesktop()} onClick={() => { setToolsOpen(false); setKhoOpen(true); }} title="Chọn một hình trong Kho hình và chèn vào chỗ con trỏ">Chèn hình từ Kho hình…</button>
-                <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); void openFiles(); }} disabled={!!blocked}>Mở tệp .tex vào bàn nháp…</button>
-                <button type="button" role="menuitem" disabled={!text.trim()} onClick={() => { setToolsOpen(false); void saveFile(); }}>Lưu ra tệp .tex…{nScope ? ' (câu đã chọn)' : ''}</button>
-                <button type="button" role="menuitem" disabled={!scan.blocks.some((b) => b.closed)} onClick={() => { setToolsOpen(false); openSlides(`Xử lí TeX · ${nameOf(ix, ix.active)}`, scan.blocks.filter((b) => b.closed && (!scope || scope.has(b.n))).map((b) => ({ latex: b.text }))); }} title="Chiếu từng câu lên màn hình lớp, hoặc lưu thành bộ trình chiếu">Trình chiếu…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <hr className="tsx-hr" />
                 <button type="button" role="menuitem" disabled={!nDone || !!chkBusy} onClick={() => { setToolsOpen(false); void runCheck(); }} title="Kiểm công thức, ngoặc, đáp án đúng, lời giải… như khi nhập vào Ngân hàng; chỉ báo, không sửa">Soát nội dung…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!dupBusy} onClick={() => { setToolsOpen(false); void runDup(); }} title="So với ngân hàng và giữa các câu trong bàn nháp; chỉ đọc, không sửa gì">Kiểm tra trùng với ngân hàng…{nScope ? ' (câu đã chọn)' : ''}</button>
-                <button type="button" role="menuitem" disabled={!nDone || !!blocked} onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'exam', initial: defaultExamName(nameOf(ix, ix.active)) }); }} title="Tạo một đề mới trong mục Đề thi từ các câu của bàn nháp (nguyên văn)">Lưu thành đề trong Thư viện…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <button type="button" role="menuitem" disabled={!nDone || !!blocked} onClick={() => { setToolsOpen(false); setClaudeOpen(true); }}>Gán ID nhờ Claude…{nScope ? ' (câu đã chọn)' : ''}</button>
                 <hr className="tsx-hr" />
-                <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setReplaceOpen(true); }}>Tìm và thay thế…{nScope ? ' (câu đã chọn)' : ''}</button>
-                <button type="button" role="menuitem" disabled={!text} onClick={() => { setToolsOpen(false); setFixFor('fix'); }}>Chuẩn hoá…{nScope ? ' (câu đã chọn)' : ''}</button>
-                <button type="button" role="menuitem" disabled={!scan.blocks.length} onClick={() => { setToolsOpen(false); setFixFor('sort'); }}>Sắp xếp theo ID…</button>
+                <button type="button" role="menuitem" disabled={!nDone || !!blocked} onClick={() => { setToolsOpen(false); setNameDlg({ kind: 'exam', initial: defaultExamName(nameOf(ix, ix.active)) }); }} title="Tạo một đề mới trong mục Đề thi từ các câu của bàn nháp (nguyên văn)">Lưu thành đề trong Thư viện…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <button type="button" role="menuitem" disabled={!scan.blocks.some((b) => b.closed)} onClick={() => { setToolsOpen(false); openSlides(`Soạn TeX · ${nameOf(ix, ix.active)}`, scan.blocks.filter((b) => b.closed && (!scope || scope.has(b.n))).map((b) => ({ latex: b.text }))); }} title="Chiếu từng câu lên màn hình lớp, hoặc lưu thành bộ trình chiếu">Trình chiếu…{nScope ? ' (câu đã chọn)' : ''}</button>
+                <hr className="tsx-hr" />
                 <button type="button" role="menuitem" className="danger" disabled={!text} onClick={() => { setToolsOpen(false); setAskClear(true); }}>Xoá nội dung…</button>
               </div>
             )}
           </div>
-          <button type="button" className="btn btn-sm" disabled={!nDone || !!blocked} onClick={() => void toBank()} title="Mở màn Nhập liệu với các câu của bàn nháp (hoặc chỉ các câu đã chọn): rà trùng, kiểm ID rồi mới ghi vào ngân hàng">Đưa vào Ngân hàng{nScope ? ` (${nf.format(nScope)} đã chọn)` : nDone ? ` (${nf.format(nDone)} câu)` : ''}…</button>
+          <button type="button" className="btn btn-sm" disabled={!nDone || !!blocked} onClick={() => void toBank()} title="Mở màn Nhập liệu với các câu của bàn nháp (hoặc chỉ các câu đã chọn): rà trùng, kiểm ID rồi mới ghi vào ngân hàng">Đưa vào Ngân hàng{nDone ? <span className="tsx-nb">{nf.format(nScope || nDone)}</span> : null}</button>
           {busy
             ? <button type="button" className="btn btn-sm" onClick={stop}>Dừng biên dịch</button>
-            : <button type="button" className="btn btn-sm btn-accent" disabled={!text.trim()} onClick={() => void compile()} title={nScope ? 'Chỉ biên dịch các câu đã chọn (Ctrl+Enter)' : 'Ctrl+Enter'}>{nScope ? `Biên dịch ${nf.format(nScope)} câu đã chọn` : 'Biên dịch PDF'}</button>}
+            : <button type="button" className="btn btn-sm btn-accent" disabled={!text.trim()} onClick={() => void compile()} title={nScope ? 'Chỉ biên dịch các câu đã chọn (Ctrl+Enter)' : 'Ctrl+Enter'}>{nScope ? `Biên dịch ${nf.format(nScope)} câu` : 'Biên dịch PDF'}<kbd className="tsx-kb">Ctrl ↵</kbd></button>}
         </div>
-      </div>
+      </header>
 
       {blocked && <div className="note bad" role="alert"><div className="note-body"><IcAlert size={16} /><span>{blocked}</span></div></div>}
       {fromBackup && <div className="note warn" role="status"><div className="note-body"><span>Bản nháp chính bị hỏng nên HEdu đã mở bản dự phòng gần nhất. Kiểm tra lại nội dung.</span></div></div>}
@@ -498,9 +538,17 @@ export function TexScratchScreen() {
 
       <div className="qe-panes tsx-panes" data-pane={pane} data-vmode={vmode}>
         <section className="qe-code" aria-label="Mã LaTeX">
-          <div className="qe-bar"><h2>Mã LaTeX</h2><span className="qe-pos">{ready ? `${nf.format(scan.blocks.length)} khối ex` : 'Đang mở bản nháp…'}</span></div>
+          <div className="qe-bar tsx-edbar">
+            <h2 className="tsx-file">{nameOf(ix, ix.active)}</h2>
+            <span className="qe-pos">{ready ? `${nf.format(scan.blocks.length)} khối ex` : 'Đang mở bản nháp…'}</span>
+            <span className="tsx-edact">
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!text} onClick={() => setReplaceOpen(true)} title={nScope ? 'Tìm và thay trong các câu đã chọn' : 'Tìm và thay thế'}>Tìm/Thay</button>
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!text} onClick={() => setFixFor('fix')} title="Chuẩn hoá (có xem trước)">Chuẩn hoá</button>
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!scan.blocks.length} onClick={() => setFixFor('sort')} title="Sắp các câu theo ID (có xem trước)">Sắp theo ID</button>
+            </span>
+          </div>
           <div className="tsx-editor">
-            <CodeEditor ref={ed} label="Soạn nội dung LaTeX" onDirty={() => undefined} onSave={() => void flush()} onChangeText={onChangeText} />
+            <CodeEditor ref={ed} label="Soạn nội dung LaTeX" onDirty={() => undefined} onSave={() => void flush()} onChangeText={onChangeText} onCursor={onCursorLine} />
             {ready && !text && !blocked && (
               <div className="tsx-empty" role="note">
                 <b>Bàn nháp đang trống</b>
@@ -523,7 +571,8 @@ export function TexScratchScreen() {
             <div className="seg sm" role="group" aria-label="Khung bên phải">
               <button type="button" aria-pressed={tab === 'cau'} onClick={() => setTab('cau')}>Câu hỏi</button>
               <button type="button" aria-pressed={tab === 'pdf'} onClick={() => setTab('pdf')}>PDF TeX Live{busy ? ' …' : ''}</button>
-              <button type="button" aria-pressed={tab === 'hinh'} onClick={() => setTab('hinh')} title="Liệt kê mọi khối tikzpicture: mã cạnh hình đã dịch, sửa và áp dụng">Hình TikZ</button>
+              <button type="button" aria-pressed={tab === 'hinh'} onClick={() => setTab('hinh')} title="Liệt kê mọi khối tikzpicture: mã cạnh hình đã dịch, sửa và áp dụng">Hình TikZ{counts.tikz ? <b className="tsx-tb">{nf.format(counts.tikz)}</b> : null}</button>
+              <button type="button" aria-pressed={tab === 'van-de'} onClick={() => setTab('van-de')} title="Mọi lỗi và cảnh báo của bàn nháp gom một chỗ; bấm để tới dòng">Vấn đề{issues.length ? <b className={`tsx-tb${issues.some((x) => x.bad) ? ' bad' : ''}`}>{nf.format(issues.length)}</b> : null}</button>
             </div>
             {tab === 'cau' && <span className="tsx-tag" title="Dựng nhanh trong app, không qua TeX Live">Xem nhanh (có thể khác PDF)</span>}
             {tab === 'cau' && <label className="sw"><input type="checkbox" checked={showSol} onChange={(e) => setShowSol(e.target.checked)} />Lời giải</label>}
@@ -571,12 +620,18 @@ export function TexScratchScreen() {
               )}
             </div>
           )}
-          {tab === 'cau' && <div className="tsx-notes">
-            {scan.fullDoc.length > 0 && <p className="q-warn">Có vẻ đây là cả một tài liệu (<code>\documentclass</code>/<code>\begin{'{document}'}</code> ở dòng {lines(scan.fullDoc)}). Màn này đã có sẵn khai báo; nên chỉ giữ các khối câu hỏi. HEdu không tự xoá phần nào.</p>}
-            {scan.io.length > 0 && <p className="q-warn">Có lệnh đọc/ghi tệp ({[...new Set(scan.io.map((x) => x.text))].join(', ')} ở dòng {lines(scan.io.map((x) => x.line))}). Khi biên dịch, chỉ đọc được tệp trong thư mục của bàn nháp.</p>}
-            {scan.strayEnds.length > 0 && <p className="q-warn"><code>\end{'{ex}'}</code> thừa ở dòng {lines(scan.strayEnds)}.</p>}
-            {scan.outside.length > 0 && <p className="sys-hint">{scan.outside.length} đoạn nằm ngoài các khối câu (dòng {lines(scan.outside.map((o) => o.line0))}): giữ nguyên, không tính là câu.</p>}
-          </div>}
+          {tab === 'van-de' && (
+            <div className="tsx-issues">
+              {issues.length === 0
+                ? <p className="sys-hint"><IcCheckCircle size={15} /> Không thấy vấn đề nào. (Soát nội dung, Kiểm tra trùng ở menu Công cụ; lỗi TeX có sau khi Biên dịch PDF.)</p>
+                : <ul>{issues.map((x, k) => (
+                    <li key={k} className={x.bad ? 'bad' : 'warn'}>
+                      {x.go ? <button type="button" className="linkbtn" onClick={x.go}>{x.where}</button> : <span className="tsx-iw">{x.where}</span>}
+                      <span>{x.text}</span>
+                    </li>))}
+                  </ul>}
+            </div>
+          )}
           {tab === 'cau' && <div className="tsx-split">
             <div className="tsx-listwrap">
               <div className="tsx-filters" role="group" aria-label="Lọc danh sách câu">
@@ -617,6 +672,10 @@ export function TexScratchScreen() {
                     {cur.firstProblem && <p className="q-warn">{cur.firstProblem}</p>}
                     {chkOf.get(cur.block.n)?.filter((i) => i.level !== 'tin').map((i, k) => <p key={k} className={i.level === 'loi' ? 'q-warn' : 'sys-hint'}><b>{LEVEL_TEXT[i.level]}:</b> {i.message}{i.detail ? <> — <code>{i.detail}</code></> : null}</p>)}
                     <QuestionView p={parsed} number={cur.block.n} raw={cur.block.text} showSolution={showSol} />
+                    <div className="tsx-qacts">
+                      {hasTikz(cur.block.text) && <button type="button" className="btn btn-sm" onClick={() => setTab('hinh')}>Sửa hình</button>}
+                      <button type="button" className="btn btn-sm" onClick={() => openSlides(`Soạn TeX · Câu ${cur.block.n}`, [{ latex: cur.block.text }])}>Trình chiếu</button>
+                    </div>
                   </>}
             </div>
           </div>}
@@ -624,10 +683,11 @@ export function TexScratchScreen() {
       </div>
 
       <footer className="qe-status" aria-label="Trạng thái">
-        <span className="qs">{nf.format(infos.length)} câu</span>
-        <span className="qs" title="ID đúng cú pháp và có trong cây chương trình (chưa phải giáo viên xác minh Dạng)">{nf.format(nId)} có ID trong cây</span>
+        <span className="qs">{nf.format(infos.length)} câu · <span title="ID đúng cú pháp và có trong cây chương trình (chưa phải giáo viên xác minh Dạng)">{nf.format(nId)} có ID</span> · {nf.format(counts.tikz)} có hình</span>
         <span className={`qs ${nBad ? 'bad' : 'ok'}`}>{nBad ? <IcAlert size={15} /> : <IcCheckCircle size={15} />}{nBad ? `${nf.format(nBad)} câu cần xem lại` : 'Không thấy lỗi cú pháp'}</span>
         <button type="button" className={`qs ${busy || !out ? 'idle' : out.status === 'ok' && !stale ? 'ok' : out.status === 'ok' ? 'warn' : 'bad'}`} onClick={() => setTab('pdf')} title="Xem khung PDF">{busy ? 'Đang biên dịch…' : !out ? 'PDF: chưa biên dịch' : out.status === 'ok' ? (stale ? 'PDF cũ (mã đã đổi)' : 'PDF mới') : out.status === 'no-tex' ? 'Chưa có TeX Live' : 'PDF: biên dịch lỗi'}</button>
+        <span className="tsx-sp" />
+        <span className="qs idle">Tự lưu nháp</span>
       </footer>
 
       {figOpen && <FigureBuilder onClose={() => setFigOpen(false)} onInsert={(c) => { setFigOpen(false); if (ed.current?.insertAtCursor(KEY, chenText({ code: c, extra_preamble: '' }))) toast('Đã chèn hình vào chỗ con trỏ.'); else toast('Không chèn được: bàn nháp đang chỉ đọc.'); }} onSaved={(m) => toast(m)} />}

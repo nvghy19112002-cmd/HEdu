@@ -126,10 +126,10 @@ export function CurriculumScreen() {
 
   return (
     <>
-      <header className="page-head">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <header className="page-head g3-head">
+        <div className="g3-crumb">
           <h1>Chương trình</h1>
-          <span className="crumbs">{tax.name} · {n.grades} lớp · {n.chapters} chương · {n.lessons} bài · {n.forms} dạng</span>
+          <span className="g3-sub">{tax.name} · {n.grades} lớp · {n.chapters} chương · {n.lessons} bài · {n.forms} dạng</span>
         </div>
         <div className="head-actions">
           <button type="button" className={edit ? 'btn btn-dark' : 'btn btn-outline'} aria-pressed={edit} onClick={() => { setEdit(!edit); setRenaming(null); }}>

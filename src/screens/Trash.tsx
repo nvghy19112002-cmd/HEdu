@@ -178,8 +178,8 @@ export function TrashScreen() {
 
   return (
     <>
-      <header className="page-head" ref={topRef}>
-        <div>
+      <header className="page-head g3-head" ref={topRef}>
+        <div className="g3-crumb">
           <h1>Thùng rác</h1>
           <span className="sys-hint">Câu đã xoá vẫn được giữ cho tới khi bạn chủ động xoá hẳn. HEdu không tự xoá vĩnh viễn.</span>
         </div>

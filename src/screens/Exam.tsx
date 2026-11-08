@@ -1,7 +1,7 @@
 // Tạo đề từ Ngân hàng: ma trận → xem trước (đúng như bản in) → lưu vào Thư viện đề để biên dịch PDF.
 // Lõi chọn câu/trộn/đáp án/dựng .tex nằm ở lib/examgen.ts (có kiểm thử); bản nháp ở lib/examdraft.ts.
 import { mergeImages } from '../lib/qimages';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
 import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
@@ -309,16 +309,24 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
 
   return (
     <>
-      <header className="page-head">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span className="crumbs">Tạo đề / Đề mới</span>
-          <h1>Tạo đề từ Ngân hàng</h1>
+      <header className="page-head te-head">
+        <div className="te-title">
+          <h1>Tạo đề</h1>
+          <span className="te-sub">{d.info.title || 'Đề mới'} · tự lưu nháp</span>
         </div>
         <nav className="te-steps" role="tablist" aria-label="Các bước">
-          <button type="button" role="tab" aria-selected={step === 1} onClick={() => goStep(1)}><i>1</i>Chọn câu</button>
-          <button type="button" role="tab" aria-selected={step === 2} onClick={() => goStep(2)}><i>2</i>Kết quả{total > 0 ? ` (${total} câu)` : ''}</button>
-          <button type="button" role="tab" aria-selected={step === 3} onClick={() => goStep(3)}><i>3</i>Cấu hình &amp; Xuất</button>
+          {([[1, 'Ma trận'], [2, `Chọn câu & xem trước${total > 0 ? ` (${total})` : ''}`], [3, 'Trộn mã & lưu']] as const).map(([n, l], k) => (
+            <Fragment key={n}>
+              {k > 0 && <span className="te-step-sep" aria-hidden="true">›</span>}
+              <button type="button" role="tab" aria-selected={step === n} className={step > n && total > 0 ? 'done' : undefined} onClick={() => goStep(n)}><i>{step > n && total > 0 ? '✓' : n}</i>{l}</button>
+            </Fragment>
+          ))}
         </nav>
+        <div className="head-actions te-nav">
+          {step > 1 && <button type="button" className="btn btn-sm" onClick={() => goStep((step - 1) as 1 | 2)}>‹ {step === 2 ? 'Ma trận' : 'Chọn câu'}</button>}
+          {step === 2 && <button type="button" className="btn btn-sm" onClick={resample} title="Chọn lại câu ngẫu nhiên, giữ nguyên câu đã khóa">⟳ Bốc lại tất cả</button>}
+          {step < 3 && <button type="button" className="btn btn-sm btn-accent" disabled={step === 1 && total === 0} onClick={() => goStep((step + 1) as 2 | 3)}>Tiếp: {step === 1 ? 'Chọn câu' : 'Trộn mã'} ›</button>}
+        </div>
       </header>
 
       <div className="body-row">
@@ -356,7 +364,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (window.confirm('Xóa toàn bộ ma trận và các câu đã chọn/khóa?')) upd({ rows: [], locked: {}, rejected: [] }); }}>Làm lại từ đầu</button>
               </div>
             )}
-            <div className="te-next"><button type="button" className="btn btn-dark" disabled={total === 0} onClick={() => goStep(2)}>Tiếp: Xem kết quả →</button></div>
+            <div className="te-next"><button type="button" className="btn btn-dark" disabled={total === 0} onClick={() => goStep(2)}>Tiếp: Chọn câu &amp; xem trước →</button></div>
           </section>}
 
           {(usageBlocked || lockedUsedList.length > 0 || missing > 0 || unreviewedN > 0 || unverifiedN > 0 || keptN > 0 || issues.length > 0 || lostLocks.length > 0) && (total > 0 || lostLocks.length > 0) && (
@@ -468,8 +476,8 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             </section>
           )}
           <div className="te-next">
-            <button type="button" className="btn" onClick={() => goStep(1)}>← Quay lại chọn câu</button>
-            <button type="button" className="btn btn-dark" onClick={() => goStep(3)}>Tiếp: Cấu hình &amp; Xuất →</button>
+            <button type="button" className="btn" onClick={() => goStep(1)}>← Ma trận</button>
+            <button type="button" className="btn btn-dark" onClick={() => goStep(3)}>Tiếp: Trộn mã &amp; lưu →</button>
           </div>
           </>}
         </div>
@@ -520,9 +528,16 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             <label className="sw" title="Mỗi mã có số đáp án A, B, C, D gần đều nhau và hạn chế một câu có cùng đáp án ở mọi mã">Cân bằng đáp án A–D giữa các mã<input type="checkbox" checked={d.balanceKeys} disabled={!d.shuffleOptions} onChange={(e) => upd({ balanceKeys: e.target.checked })} /></label>
             <p className="te-note">Ghim vị trí hoặc giữ phương án cho từng câu ở nút trên mỗi câu (bước xem kết quả). Đang ghim {d.pins.length} câu, giữ phương án {d.fixedOpts.length} câu.</p>
             {stats.perCode.length > 0 && stats.perCode.some((c) => c.counts.some(Boolean)) && (
-              <div className="te-note" role="status"><b>Kiểm tra đáp án sau trộn:</b> {issues.length === 0 ? 'mọi mã khớp câu gốc.' : `${issues.length} chỗ chưa khớp (xem cảnh báo).`}
-                <ul>{stats.perCode.map((c) => <li key={c.code}>Mã {c.code}: A {c.counts[0]} · B {c.counts[1]} · C {c.counts[2]} · D {c.counts[3]}</li>)}</ul>
-                {stats.sameEverywhere.length > 0 && <span>{stats.sameEverywhere.length} câu có cùng một đáp án ở mọi mã.</span>}
+              <div className="te-bal" role="status">
+                <h3>Cân bằng đáp án Phần I</h3>
+                <table className="te-bal-t">
+                  <thead><tr><th>Mã</th><th>A</th><th>B</th><th>C</th><th>D</th><th aria-label="Tỉ lệ" /></tr></thead>
+                  <tbody>{stats.perCode.map((c) => { return (
+                    <tr key={c.code}><td>{c.code}</td>{c.counts.map((x, i) => <td key={i}>{x}</td>)}
+                      <td className="te-bal-c"><div className="te-bal-bar">{c.counts.map((x, i) => <i key={i} className={`k${i}`} style={{ flexGrow: x, flexBasis: 0 }} title={`${'ABCD'[i]}: ${x}`} />)}</div></td></tr>); })}
+                  </tbody>
+                </table>
+                <p className={issues.length === 0 ? 'te-ok' : 'te-bad'}>{issues.length === 0 ? '✓ Đối chiếu câu gốc: mọi mã khớp.' : `${issues.length} chỗ chưa khớp câu gốc (xem cảnh báo).`}{stats.sameEverywhere.length > 0 ? ` ${stats.sameEverywhere.length} câu có cùng một đáp án ở mọi mã.` : ' Không câu nào trùng đáp án ở mọi mã.'}</p>
               </div>
             )}
             <label className="sw">Tạo tệp đáp án cho giáo viên (không nằm trong PDF đề)<input type="checkbox" checked={d.withKeys} onChange={(e) => upd({ withKeys: e.target.checked })} /></label>
@@ -530,7 +545,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
           </div>}
 
           <div className="te-export" ref={refExport}>
-            {step !== 3 && <button type="button" className="btn btn-dark" style={{ height: 44 }} onClick={() => goStep(step === 1 ? 2 : 3)}>{step === 1 ? 'Tiếp: Xem kết quả →' : 'Tiếp: Cấu hình & Xuất →'}</button>}
+            {step !== 3 && <button type="button" className="btn btn-dark" style={{ height: 44 }} disabled={step === 1 && total === 0} onClick={() => goStep(step === 1 ? 2 : 3)}>{step === 1 ? 'Tiếp: Chọn câu & xem trước →' : 'Tiếp: Trộn mã & lưu →'}</button>}
             {step === 3 && <>
             <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canExport || busy || !desktop} onClick={() => { void saveToLibrary(); }}>{busy ? 'Đang lưu…' : 'Lưu vào Thư viện đề'}</button>
             <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'PDF từng mã đề và gói ZIP giáo viên/học sinh' : 'Lưu vào Thư viện đề trước (đề đã đổi sau lần lưu gần nhất)'} onClick={() => setExportDlg(true)}>Xuất PDF từng mã / ZIP…</button>

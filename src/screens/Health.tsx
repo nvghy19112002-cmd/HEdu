@@ -67,29 +67,40 @@ export function HealthScreen() {
 
   return (
     <>
-      <header className="page-head">
-        <div>
+      <header className="page-head g3-head">
+        <div className="g3-crumb">
           <h1>Sức khoẻ ngân hàng</h1>
           <span className="sys-hint">Quét mọi câu và đếm những chỗ nên xem lại. Bảng quét chỉ đọc; phần “Duyệt hàng loạt” bên dưới là nơi duy nhất ghi (sau khi bạn xác nhận). Nghi trùng kiểm ở màn Kiểm tra trùng trong Ngân hàng.</span>
         </div>
         <div className="head-actions">
-          <button type="button" className="btn btn-sm" disabled={running} onClick={() => setAgain((n) => n + 1)}>Quét lại</button>
+          <button type="button" className="btn btn-sm btn-accent" disabled={running} onClick={() => setAgain((n) => n + 1)}>Kiểm tra lại toàn kho</button>
           <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'bank' })}>Về Ngân hàng</button>
         </div>
       </header>
       <div className="simple">
-        <div className="panel is-compact" role="status" aria-live="polite">
+        {!running && rep.total > 0 && (() => {
+          const score = Math.round((rep.clean / rep.total) * 100);
+          const word = score >= 90 ? 'Ngân hàng rất khoẻ' : score >= 75 ? 'Ngân hàng khá khoẻ' : score >= 50 ? 'Ngân hàng cần chăm sóc' : 'Ngân hàng còn nhiều việc';
+          const jobs = HEALTH.filter((h) => h.tone !== 'tin' && rep.counts[h.key] > 0).length;
+          return (
+            <div className="hl-hero">
+              <div className="hl-ring" style={{ ['--p' as string]: `${score}` } as React.CSSProperties} role="img" aria-label={`Điểm sức khoẻ ${score} trên 100`}><b>{score}</b></div>
+              <div className="hl-hero-t"><b>{word}</b><span>{nf.format(rep.clean)}/{nf.format(rep.total)} câu không có vấn đề nặng · {jobs ? `${jobs} việc nên xử lí` : 'không có việc nào cần xử lí'}</span></div>
+            </div>
+          );
+        })()}
+        {(running || rep.total === 0) && <div className="panel hl-panel" role="status" aria-live="polite">
           {running
             ? <span>Đang quét {nf.format(rep.scanned)}/{nf.format(rep.total)} câu ({pct}%)…</span>
             : rep.total === 0
               ? <span>Ngân hàng chưa có câu nào.</span>
               : <span><b>{nf.format(rep.clean)}</b> / {nf.format(rep.total)} câu không có vấn đề nặng ({Math.round((rep.clean / rep.total) * 100)}%). {heavy === 0 ? 'Không có lỗi hay cảnh báo nào.' : `Còn ${nf.format(heavy)} chỗ lỗi hoặc cảnh báo cần xem.`}</span>}
-        </div>
-        <div className="panel is-compact" style={{ display: 'grid', gap: 8 }}>
+        </div>}
+        <div className="panel hl-panel" style={{ display: 'grid', gap: 8 }}>
           <b>Duyệt hàng loạt các câu đã có ID</b>
           <span className="xl-meta">Đặt “Đã duyệt” và xác minh Dạng + mức độ cho mọi câu đã có ID. Bỏ qua: câu chưa có ID ({nf.format(plan.skippedNoId)}), câu có Dạng “cần xem lại” ({nf.format(plan.skippedXemLai)}){inclFix ? '' : `, câu bạn đã đánh “Cần sửa” (${nf.format(plan.skippedNeedsFix)})`}.</span>
           <span>Cần đặt “Đã duyệt”: <b>{nf.format(plan.review.length)}</b> câu · cần xác minh Dạng/mức độ: <b>{nf.format(plan.verify.length)}</b> câu · đã đủ: {nf.format(plan.already)} câu.</span>
-          <label className="sw">Gồm cả câu đang “Cần sửa”<input type="checkbox" checked={inclFix} disabled={apBusy} onChange={(e) => setInclFix(e.target.checked)} /></label>
+          <label className="sw hl-sw">Gồm cả câu đang “Cần sửa”<input type="checkbox" checked={inclFix} disabled={apBusy} onChange={(e) => setInclFix(e.target.checked)} /></label>
           <div><button type="button" className="btn btn-sm btn-dark" disabled={apBusy || running || !(plan.review.length + plan.verify.length)} onClick={() => { void doApprove(); }}>{apBusy ? 'Đang ghi…' : 'Duyệt và xác minh các câu đã có ID…'}</button></div>
           {apMsg && <span role="status" className={apMsg.ok ? 'okmark' : 'te-bad'}>{apMsg.text}</span>}
         </div>
@@ -125,6 +136,7 @@ export function HealthScreen() {
             );
           })}
         </ul>
+        <p className="hl-foot">Không có việc nào tự sửa dữ liệu khi bạn chưa bấm. Bảng quét chỉ đọc.</p>
       </div>
     </>
   );

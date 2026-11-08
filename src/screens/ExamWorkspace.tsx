@@ -40,6 +40,8 @@ export interface ExamWorkspaceHandle { requestClose(): void }
 export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, schoolYear, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
   const { toast, go } = useApp();
   const [setupOpen, setSetupOpen] = useState(false);
+  /** đóng menu Công cụ sau khi bấm một mục */
+  const closeMenu = (e: React.MouseEvent) => { const d = (e.currentTarget as HTMLElement).closest('details'); if (d) d.open = false; };
   const ed = useRef<CodeEditorHandle>(null);
   const loaded = useRef(new Map<string, string>()); // văn bản lúc mở, dùng khi gắn vào trình soạn lần đầu
   const [list, setList] = useState<ListOut>({ files: [], blocked: [] });
@@ -511,9 +513,14 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
             </div>
           </details>
           {!compiling ? <button type="button" className="btn btn-sm btn-primary" disabled={!mainFile} onClick={compile}>Biên dịch</button> : <button type="button" className="btn btn-sm" title={queued ? 'Đang chờ lượt: 2 đề khác đang biên dịch' : undefined} onClick={() => { if (queued) { gen.current++; setQueued(false); setCompiling(false); } else void examCompileCancel(id); }}>{queued ? 'Huỷ chờ' : 'Dừng'}</button>}
-          <button type="button" className="btn btn-sm" disabled={!goods.length || !active} onClick={() => { void toPdf(); }} title="Tô trên PDF chỗ ứng với dòng đang đặt con trỏ (Ctrl+bấm hoặc bấm đúp trên PDF thì đi ngược lại)">Tới chỗ này trên PDF</button>
-          <button type="button" className="btn btn-sm" disabled={!active} onClick={() => setLintOpen(true)} title="Kiểm ngoặc, dấu $ và lỗi mã LaTeX hay gặp trong tệp đang mở (ChkTeX)">Kiểm lỗi mã</button>
-          <button type="button" className="btn btn-sm" disabled={!active} onClick={() => { void openHistory(); }} title="Xem các bản cũ của tệp đang mở (HEdu giữ 10 bản gần nhất mỗi lần lưu), so sánh và khôi phục">Lịch sử</button>
+          <details className="ew-opts ew-more">
+            <summary className="btn btn-sm" title="Tới chỗ này trên PDF, Kiểm lỗi mã, Lịch sử phiên bản">Công cụ ▾</summary>
+            <div className="ew-pop">
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!goods.length || !active} onClickCapture={closeMenu} onClick={() => { void toPdf(); }} title="Tô trên PDF chỗ ứng với dòng đang đặt con trỏ (Ctrl+bấm hoặc bấm đúp trên PDF thì đi ngược lại)">Tới chỗ này trên PDF</button>
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!active} onClickCapture={closeMenu} onClick={() => setLintOpen(true)} title="Kiểm ngoặc, dấu $ và lỗi mã LaTeX hay gặp trong tệp đang mở (ChkTeX)">Kiểm lỗi mã</button>
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!active} onClickCapture={closeMenu} onClick={() => { void openHistory(); }} title="Xem các bản cũ của tệp đang mở (HEdu giữ 10 bản gần nhất mỗi lần lưu), so sánh và khôi phục">Lịch sử</button>
+            </div>
+          </details>
           <button type="button" className="btn btn-sm" disabled={compiling || result?.status !== 'ok'} title={result?.status === 'ok' ? `Xuất PDF “${modeLabel(result.mode as ExamMode)}” vừa biên dịch thành công ra một tệp` : 'Biên dịch thành công rồi mới xuất được PDF'} onClick={() => { if (result) void exportPdf(id, name, result.mode as ExamMode).then((d) => { if (d) toast(`Đã xuất PDF: ${d}`); }).catch((e) => toast(e instanceof Error ? e.message : String(e))); }}>Xuất PDF…</button>
         </span>
         <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Thông tin đề: đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>

@@ -37,6 +37,7 @@ import { fold, parseBankQuery, queryOk } from '../lib/banksearch';
 import { DupCheck } from '../components/DupCheck';
 import { QuestionModal } from '../components/QuestionModal';
 import { BankTable } from '../components/BankTable';
+import { BankPreview } from '../components/BankPreview';
 import { useCtxHidden } from '../lib/ctxcol';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
 import { ReviewBadge } from '../components/ReviewControl';
@@ -97,6 +98,16 @@ export function BankScreen() {
   const setSort = (m: SortMode) => { setSortState(m); saveSort(m); setPage(0); };
   const setPerPage = (n: PerPage) => { setPerPageState(n); savePerPage(n); setPage(0); };
   const qlistRef = useRef<HTMLElement>(null);
+  // đo chiều cao đầu trang để khung Bảng (Mục lục | bảng | xem trước) vừa khít phần còn lại của cửa sổ
+  const headRef = useRef<HTMLElement>(null);
+  const [headH, setHeadH] = useState(64);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeadH(Math.ceil(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   /** Chuyển trang; từ pager cuối danh sách thì cuộn về đầu danh sách để thấy câu đầu trang mới. */
   const goPage = (n: number, scroll = false) => { setPage(n); if (scroll) requestAnimationFrame(() => { const el = qlistRef.current; if (el) window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - 8) }); }); };
   /** câu vừa được nhảy tới (từ Kiểm tra trùng): cuộn tới thẻ và nháy sáng một lần */
@@ -384,6 +395,19 @@ export function BankScreen() {
     runExport();
   };
 
+  // Khung xem trước cạnh bảng (kiểu MathHub): chỉ khi xem dạng Bảng và cửa sổ đủ rộng; hẹp thì bấm dòng mở cửa sổ như cũ.
+  const [vw, setVw] = useState(() => window.innerWidth);
+  useEffect(() => { const r = () => setVw(window.innerWidth); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
+  const prevOn = mode === 'table' && vw >= 1180 && shown.length > 0;
+  const prevQ = prevOn ? (shown.find((q) => q.uid === activeUid) ?? shown[0]) : null;
+  const prevIdx = prevQ ? list.findIndex((q) => q.uid === prevQ.uid) : -1;
+  /** ↑/↓ ở bảng: chuyển câu đang xem theo cả danh sách đang lọc, sang trang khi cần */
+  const stepPrev = (d: number) => {
+    const i = prevIdx + d;
+    if (prevIdx < 0 || i < 0 || i >= list.length) return;
+    setActiveUid(list[i].uid);
+    setPage(Math.floor(i / PER_PAGE));
+  };
   const viewIdx = viewUid ? list.findIndex((q) => q.uid === viewUid) : -1;
   const viewQ = viewIdx >= 0 ? list[viewIdx] : null;
   /** mở cửa sổ xem một câu; dòng/thẻ đó được tô sáng cho tới khi chọn câu khác */
@@ -403,6 +427,8 @@ export function BankScreen() {
       const t = e.target as HTMLElement;
       if (t.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]') || document.querySelector('[aria-modal="true"]')) return;
       if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
+      else if (prevQ && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !t.closest?.('.fside, [role="tree"], [role="menu"], [role="listbox"]')) { e.preventDefault(); stepPrev(e.key === 'ArrowDown' ? 1 : -1); }
+      else if (prevQ && e.key === 'Enter' && !t.closest?.('button, a, [role="button"]')) { e.preventDefault(); openView(prevQ.uid); }
       else if (e.key === 'PageDown' && cur < pages - 1) { e.preventDefault(); goPage(cur + 1, true); }
       else if (e.key === 'PageUp' && cur > 0) { e.preventDefault(); goPage(cur - 1, true); }
     };
@@ -475,39 +501,41 @@ export function BankScreen() {
 
   return (
     <>
-      <header className="page-head bank-head">
+      <header ref={headRef} className="page-head bank-head">
         <h1>Ngân hàng câu hỏi</h1>
+        <div className="qbar bk-hbar">
+          <label className="search sm">
+            <IcSearch size={16} />
+            <span className="sr-only">Tìm câu hỏi</span>
+            <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu, mã (vd 2D1H1) hoặc số #2086 — phím /" />
+            <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
+              <option value="here">mục này</option>
+              <option value="all">toàn kho</option>
+            </select>
+            <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
+          </label>
+          <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); }} onResetAll={() => { resetEverything(); setIdF('all'); }} canReset={canReset || idF !== 'all'} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
+          <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
+          {!docked && (
+            <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
+              Mục lục
+            </button>
+          )}
+        </div>
         <div className="head-actions">
+          <button type="button" className="btn btn-outline" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
+          <button type="button" className="btn btn-outline" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
           <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'import' })}>Nhập từ file</button>
           <button type="button" className="btn btn-accent" onClick={newHere} title="Soạn câu mới; nếu đang xem một chương/bài thì điền sẵn vị trí đó">+ Câu hỏi mới</button>
         </div>
       </header>
 
-      <div className={`body-row${!docked ? ' tree-hidden' : ''}`}>
+      <div className={`body-row${!docked ? ' tree-hidden' : ''}${mode === 'table' ? ' bk-fit' : ''}`} style={{ ['--bk-head' as string]: `${headH}px` } as React.CSSProperties}>
         {docked && (
           <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onHide={() => undefined} />
         )}
 
-        <section ref={qlistRef} className="qlist" aria-label="Danh sách câu hỏi">
-          <div className="qbar">
-            <label className="search sm">
-              <IcSearch size={16} />
-              <span className="sr-only">Tìm câu hỏi</span>
-              <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu, mã (vd 2D1H1) hoặc số #2086 — phím /" />
-              <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
-                <option value="here">mục này</option>
-                <option value="all">toàn kho</option>
-              </select>
-              <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
-            </label>
-            <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); }} onResetAll={() => { resetEverything(); setIdF('all'); }} canReset={canReset || idF !== 'all'} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
-            <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
-            {!docked && (
-              <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
-                Mục lục
-              </button>
-            )}
-          </div>
+        <section ref={qlistRef} className={`qlist${prevOn ? ' has-prev' : ''}`} aria-label="Danh sách câu hỏi">
 
 
           {sel.size > 0 && (
@@ -593,8 +621,6 @@ export function BankScreen() {
                   <button type="button" aria-pressed={mode === 'table'} onClick={() => pickMode('table')}>Bảng</button>
                   <button type="button" aria-pressed={mode === 'cards'} onClick={() => pickMode('cards')}>Thẻ</button>
                 </span>
-                <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
-                <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
                 <label className="qsel" title="Sắp xếp">
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
                     {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}
@@ -621,7 +647,7 @@ export function BankScreen() {
           {shown.length > 0 && mode === 'cards' && <div className="cards-grid">{shown.map((q) => renderCard(q))}</div>}
           {shown.length > 0 && mode === 'table' && (
             <BankTable rows={shown} sel={sel} activeUid={activeUid} codeOf={(q) => (noIdOf(q) !== null ? null : questionCode(q, q.level))}
-              onToggle={(uid) => setSel(toggleOne(sel, uid))} onOpen={openView} />
+              onToggle={(uid) => setSel(toggleOne(sel, uid))} onOpen={prevOn ? setActiveUid : openView} onBig={prevOn ? openView : undefined} />
           )}
 
 
@@ -636,9 +662,21 @@ export function BankScreen() {
           {!list.length && (
             <BankEmpty tax={tax} f={f} facets={facets} totalQuestions={questions.length} text={text} wide={wideOn} onF={setF}
               onClearText={() => { setText(''); setWide(false); setPage(0); }} onWide={() => setWide(true)} onClearAttrs={clearFilters}
-              onNew={newHere} onImport={() => go({ screen: 'import' })} />
+              onNew={newHere} onImport={() => go({ screen: 'import' })} onOpenTree={docked ? undefined : () => setDrawerOpen(true)} />
           )}
         </section>
+        {prevQ && (() => {
+          const ni = noIdOf(prevQ);
+          const at = ni !== null ? undefined : place(prevQ.lessonId) ?? place(prevQ.chapterId);
+          const where = ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? [at.chapter?.name, at.lesson?.name].filter(Boolean).join(' › ') : '';
+          return (
+            <BankPreview key={prevQ.uid} q={prevQ} code={ni !== null ? null : questionCode(prevQ, prevQ.level)} where={where} index={prevIdx} total={list.length}
+              onPrev={() => stepPrev(-1)} onNext={() => stepPrev(1)}
+              onOpen={() => openView(prevQ.uid)} onEdit={() => { openView(prevQ.uid); setViewEdit(true); }}
+              onAddToExam={featureOn('exam') ? () => go({ screen: 'exam', examPick: [prevQ.uid] }) : undefined}
+              onSlides={() => openSlides('Ngân hàng', [{ latex: prevQ.latex, uid: prevQ.uid }])} />
+          );
+        })()}
       </div>
       {drawerOpen && !docked && (
         <>

@@ -7,7 +7,6 @@ import { startZoom } from './lib/zoom';
 import { FileDialog } from './components/FileDialog';
 import { IcBackup, IcBank, IcEdit, IcExam, IcHealth, IcImport, IcLibrary, IcPlay, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
 import { isCtxKey, toggleCtx } from './lib/ctxcol';
-import { openSlides } from './lib/slideshow';
 import { featureOn, type FeatureKey } from './lib/features';
 import type { BootResult } from './lib/store';
 import { BankScreen } from './screens/Bank';
@@ -18,6 +17,7 @@ import { KhoHinhScreen } from './screens/KhoHinh';
 import { ImportScreen } from './screens/Extra';
 import { TexScratchScreen } from './screens/TexScratch';
 import { SlideHost } from './components/SlideShow';
+import { SlidesScreen } from './screens/Slides';
 import { CurriculumScreen } from './screens/Curriculum';
 import { SystemScreen } from './screens/System';
 import { TrashScreen } from './screens/Trash';
@@ -35,7 +35,7 @@ import { isDesktop } from './lib/platform';
 
 // "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
 // Giao diện mới (giai đoạn 3): dải điều hướng chia 2 nhóm Thư viện · Soạn thảo, đáy là Hệ thống; mỗi mục một màu biểu tượng (tone).
-type NavItem = { s: Screen | 'slides'; label: string; title: string; Icon: typeof IcEdit; tone: string; feature?: FeatureKey };
+type NavItem = { s: Screen; label: string; title: string; Icon: typeof IcEdit; tone: string; feature?: FeatureKey };
 const NAV_GROUPS: NavItem[][] = [
   [
     { s: 'bank', label: 'Câu hỏi', title: 'Ngân hàng câu hỏi', Icon: IcBank, tone: 'q' },
@@ -150,7 +150,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {NAV_GROUPS.map((grp, gi) => (
           <div key={gi} className="rail-grp" role="group" aria-label={gi === 0 ? 'Thư viện' : 'Soạn thảo'}>
             {grp.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, title, Icon, tone }) => (
-              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => (s === 'slides' ? openSlides('Trình chiếu', []) : go({ screen: s }))}>
+              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
                 <span className="rb-ico"><Icon /></span>
                 <span>{label}</span>
               </button>
@@ -185,6 +185,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {screen === 'trash' && <TrashScreen />}
         {screen === 'health' && <HealthScreen />}
         {screen === 'system' && <SystemScreen />}
+        {screen === 'slides' && <SlidesScreen />}
       </main>
     </div>
   );

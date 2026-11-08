@@ -296,8 +296,8 @@ export function KhoHinhScreen() {
 
   return (
     <>
-      <header className="page-head bank-head">
-        <h1>Kho hình TikZ</h1>
+      <header className="page-head bank-head g3-head">
+        <h1>Hình TikZ</h1>
         <div className="head-actions">
           <button type="button" className={`btn btn-outline${trash ? ' on' : ''}`} aria-pressed={trash} disabled={!desktop || !st || (st.thung_rac === 0 && !trash)} onClick={() => setTrash(!trash)}>
             {trash ? '← Về kho hình' : `Thùng rác${st && st.thung_rac ? ` (${nf.format(st.thung_rac)})` : ''}`}

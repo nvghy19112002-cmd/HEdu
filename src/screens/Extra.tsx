@@ -15,7 +15,8 @@ import { applyKey, chooseWordFile, importWord, loadAnswerKey, toExTest } from '.
 import type { AnswerKey } from '../lib/wordkey';
 import type { WordQ } from '../lib/wordimport';
 import { chooseFiles, chooseFolder, describeScan, encodingSample, IMPORT_LIMITS, readAll, scanSources } from '../lib/importfiles';
-import { isDesktop } from '../lib/platform';
+import { isDesktop, listen } from '../lib/platform';
+import { requestPane } from '../lib/settingsnav';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { draftLocation, optionsOf, suggestDrafts, useByDefault, type DraftIdPick } from '../lib/iddraft';
 import { examplesFor, mergeAi, type GanIdRun } from '../lib/ai/tasks/ganidrun';
@@ -144,6 +145,21 @@ export function ImportScreen() {
     setWordKey(null);
   };
   const clearAll = () => { setWordRep(null); setWordQs([]); setWordKey(null); setLots(null); setSrc(''); setSrcs([]); setSkip(new Set()); setEncAsk(new Set()); setScanInfo([]); setReadFailed([]); setFileF('all'); setLoadErr(null); };
+
+  // kéo-thả tệp/thư mục từ Explorer vào màn Nhập liệu (sự kiện của cửa sổ Tauri)
+  const [dragOver, setDragOver] = useState(false);
+  const dropRef = useRef<(paths: string[]) => void>(() => undefined);
+  const dropOk = () => !result && !loadProg && !document.querySelector('.qm, .cfm');
+  dropRef.current = (paths) => { if (dropOk()) void loadPaths(paths); };
+  useEffect(() => {
+    if (!isDesktop()) return;
+    const offs: Promise<() => void>[] = [
+      listen<unknown>('tauri://drag-enter', () => setDragOver(true)),
+      listen<unknown>('tauri://drag-leave', () => setDragOver(false)),
+      listen<{ paths?: string[] }>('tauri://drag-drop', (p) => { setDragOver(false); const all = p?.paths ?? []; const isWord = (x: string) => /\.docx?$/i.test(x); const ps = all.filter((x) => !isWord(x)); if (all.some(isWord)) setLoadErr('Tệp Word chưa kéo thả được: bấm nút đọc tệp Word ở khung này.'); if (ps.length) dropRef.current(ps); }),
+    ];
+    return () => { for (const o of offs) void o.then((f) => f()).catch(() => undefined); };
+  }, []);
 
   const loadPaths = async (paths: string[]) => {
     if (!paths.length || loadProg) return;
@@ -555,13 +571,14 @@ export function ImportScreen() {
 
   return (
     <>
-      <header className="page-head"><h1>Nhập câu hỏi</h1>
+      <header className="page-head g3-head"><h1>Nhập liệu</h1>
         <ol className="steps" aria-label="Các bước nhập">
           {['Dán hoặc mở file', 'Chọn vị trí', 'Rà soát', 'Nhập'].map((t, k) => {
             const cur = !rows.length ? 0 : confirm ? 3 : anaDone ? 2 : 1;
             return <li key={t} aria-current={k === cur ? 'step' : undefined} className={k < cur ? 'done' : ''}><b>{k + 1}</b>{t}</li>;
           })}
         </ol>
+        <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => { requestPane('backup'); go({ screen: 'system' }); }} title="Cài đặt › Sao lưu › Nhật ký nhập">Lịch sử nhập</button></div>
       </header>
       {fromTex && !multi && !result && src === fromTex && (
         <div className="simple"><div className="note" role="status"><div className="note-body">
@@ -578,8 +595,8 @@ export function ImportScreen() {
       )}
       {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag!, all: true }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => { setResult(null); if (lots) clearAll(); }} /></div>}
       {!result && <div className="simple">
-        <div className={`panel${rows.length ? ' is-compact' : ''}`}>
-          <h2>Dán mã LaTeX hoặc mở file .tex</h2>
+        <div className={`panel imp-drop${rows.length ? ' is-compact' : ''}${dragOver ? ' over' : ''}`}>
+          <h2>{isDesktop() ? 'Kéo thả tệp .tex, .docx hoặc cả thư mục vào đây — hoặc dán mã LaTeX' : 'Dán mã LaTeX hoặc mở file .tex'}</h2>
           <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
             Mỗi câu nằm trong <span className="mono">\begin{'{ex}'} … \end{'{ex}'}</span>. Câu có sẵn ID dạng <span className="mono">%[2D1H1-1]</span> sẽ tự vào đúng bài và mức độ; câu không có ID dùng vị trí chọn bên dưới. HEdu sẽ so từng câu với ngân hàng và với các câu khác trong file, rồi để bạn quyết định câu nào nhập, câu nào bỏ qua.
           </span>
