@@ -3,6 +3,8 @@
 // biên dịch chỉ chạy sau khi lưu xong mọi tệp (không lưu được thì không biên dịch). Không báo "đã lưu" khi chưa ghi xong.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
+import { ExamSetupDialog } from '../components/ExamSetupDialog';
+import { setScratchHandoff } from '../lib/importhandoff';
 import { exportPdf } from '../lib/exampdf';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
 import { BankPicker } from '../components/BankPicker';
@@ -36,7 +38,8 @@ interface Props { id: string; name: string; mainFile: string | null; /** năm h�
 export interface ExamWorkspaceHandle { requestClose(): void }
 
 export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, schoolYear, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
-  const { toast } = useApp();
+  const { toast, go } = useApp();
+  const [setupOpen, setSetupOpen] = useState(false);
   const ed = useRef<CodeEditorHandle>(null);
   const loaded = useRef(new Map<string, string>()); // văn bản lúc mở, dùng khi gắn vào trình soạn lần đầu
   const [list, setList] = useState<ListOut>({ files: [], blocked: [] });
@@ -496,6 +499,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
         <span className="ew-grp">
           <button type="button" className="btn btn-sm btn-ghost" disabled={!tab || tab.kind !== 'text' || !!tab.readOnly} onClick={() => setPicker(true)} title="Chèn câu nguyên văn từ Ngân hàng vào chỗ con trỏ">+ Câu</button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={openSources} title="Các câu trong đề lấy từ Ngân hàng">Nguồn câu</button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => { if (tabsRef.current.some((t) => t.dirty)) { toast('Hãy lưu các tệp đang sửa trước khi thiết lập đề.'); return; } setSetupOpen(true); }} title="Khung tiêu đề, chia câu theo phần, đoạn mở đầu mỗi phần (PHẦN I, II…)">Thiết lập đề</button>
         </span>
         <span className="ew-grp ew-compile">
           <select className="xl-in ew-sel" value={mode} disabled={compiling} onChange={(e) => setMode(e.target.value as ExamMode)} aria-label="Bản biên dịch" title="Bản biên dịch">{modeList.map((m) => <option key={m.id} value={m.id} disabled={m.id !== 'nguyen-van' && !modesOk} title={m.id !== 'nguyen-van' && !modesOk ? (profile?.reason ?? 'Chưa nhận diện được') : ''}>{m.label}</option>)}</select>
@@ -662,6 +666,9 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           </div>
         </>
       )}
+      {setupOpen && <ExamSetupDialog id={id} name={name} mainFile={mainFile} onClose={() => setSetupOpen(false)}
+        onWritten={(rel) => { if (tabsRef.current.some((t) => t.rel === rel)) void reload(rel); else void reloadList(); }}
+        onOpenScratch={(text) => { setScratchHandoff(name, text); setSetupOpen(false); go({ screen: 'tex' }); }} />}
     </div>
   );
 });
