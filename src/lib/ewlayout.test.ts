@@ -9,7 +9,8 @@ t('giá trị ngoài khoảng bị kẹp', parseLayout(JSON.stringify({ pdf: 99,
 t('kéo PDF: kẹp + làm tròn', clampPdf(33.333) === 33.3 && clampPdf(-5) === PDF_MIN);
 t('nhật ký không quá ~nửa màn', clampLog(2000, 768) === Math.floor(768 * 0.55) && clampLog(10, 768) === LOG_MIN);
 t('cây tệp tự động: 1 tệp ẩn, nhiều tệp hiện', !treeShown(DEFAULT_LAYOUT, 1) && treeShown(DEFAULT_LAYOUT, 3));
-t('cây tệp người dùng chọn thì theo người dùng', treeShown({ ...DEFAULT_LAYOUT, tree: true }, 1) && !treeShown({ ...DEFAULT_LAYOUT, tree: false }, 5));
+t('cây tệp từ 2 tệp: theo người dùng chọn', treeShown({ ...DEFAULT_LAYOUT, tree: true }, 2) && !treeShown({ ...DEFAULT_LAYOUT, tree: false }, 5));
+t('đề 1 tệp: cây tệp luôn ẩn, kể cả khi từng bật tay', !treeShown({ ...DEFAULT_LAYOUT, tree: true }, 1) && !treeShown({ ...DEFAULT_LAYOUT, tree: true }, 0));
 t('tệp chỉ có nội dung (không \\documentclass)', lacksPreamble('\\TieuDeDeSo{a}\n\\begin{ex}x\\end{ex}'));
 t('tệp đầy đủ', !lacksPreamble('% đề\n\\documentclass[12pt]{book}\n\\begin{document}'));
 t('\\documentclass bị chú thích vẫn tính là thiếu', lacksPreamble('%\\documentclass{book}\nabc'));

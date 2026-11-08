@@ -7,3 +7,8 @@ export const loadSort = (): SortMode => { try { const v = localStorage.getItem('
 export const saveSort = (s: SortMode): void => { try { if (s === DEFAULT_SORT) localStorage.removeItem('hedu.banksort'); else localStorage.setItem('hedu.banksort', s); } catch { /* bỏ qua */ } };
 export const loadPerPage = (): PerPage => { try { return localStorage.getItem('hedu.bankpp') === '50' ? 50 : 20; } catch { return 20; } };
 export const savePerPage = (n: PerPage): void => { try { if (n === 20) localStorage.removeItem('hedu.bankpp'); else localStorage.setItem('hedu.bankpp', String(n)); } catch { /* bỏ qua */ } };
+
+/** Kiểu xem màn Câu hỏi: bảng gọn (mặc định) hoặc thẻ; lưu theo máy. */
+export type ViewMode = 'table' | 'cards';
+export const loadViewMode = (): ViewMode => { try { return localStorage.getItem('hedu.bankmode') === 'cards' ? 'cards' : 'table'; } catch { return 'table'; } };
+export const saveViewMode = (m: ViewMode): void => { try { if (m === 'table') localStorage.removeItem('hedu.bankmode'); else localStorage.setItem('hedu.bankmode', m); } catch { /* bỏ qua */ } };

@@ -1,14 +1,14 @@
 // Ma trận đề theo TỪNG CÂU (kiểu TIAD): mỗi phần là bảng Câu 1…N; mỗi câu chọn Dạng bài (lớp → chương → bài → dạng), mức độ,
 // xem số câu trong kho và câu đang được chọn. Hai cách lấy câu: Ngẫu nhiên (máy chọn, khóa được từng câu) hoặc Tự chọn (giáo viên chọn
-// từng câu). Cấu trúc: Form THPT 2025 (12/4/6) hoặc Tùy chỉnh. Chọn nhiều câu để đặt Dạng bài/mức độ một lần.
+// từng câu). Số câu mỗi phần đặt ngay trên các ô (mặc định 12/4/6/0). Chọn nhiều câu để đặt Dạng bài/mức độ một lần.
 // Mọi câu vẫn là dòng ma trận số câu = 1 nên đi qua đúng bộ phân bổ, khóa câu, mẫu ma trận và xuất đề (examslots.ts).
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { IcAlert, IcDice, IcLock, IcUnlock, IcX } from './Icons';
 import { chapters as chaptersOf, grades } from '../lib/curriculum';
 import { nodeKey } from '../lib/banktree';
 import { fmtScore, PART_NAME, PARTS, partOf, type PartKey, type Row, type Scoring } from '../lib/examgen';
 import { scopeParts } from '../lib/examdraft';
-import { difficultyLabel, formOf, FORM_THPT, MAX_PER_PART, partSlots, sameForm, type LevelStats } from '../lib/examslots';
+import { difficultyLabel, formOf, FORM_THPT, MAX_PER_PART, partSlots, type LevelStats } from '../lib/examslots';
 import { stemSnippet } from '../lib/snippet';
 import { LEVELS, LEVEL_LABEL, type Level, type Question, type Taxonomy } from '../lib/types';
 
@@ -92,8 +92,8 @@ export const SlotMatrix = memo(function SlotMatrix(p: Props) {
   const [chooseFor, setChooseFor] = useState<string | null>(null);
   const [needle, setNeedle] = useState('');
   const form = formOf(rows);
-  const thpt = sameForm(form, FORM_THPT);
-  const [custom, setCustom] = useState(!thpt && rows.length > 0);
+  // ma trận mới (đang trống): đặt sẵn cấu trúc THPT 2025 = 12 / 4 / 6 / 0; giáo viên chỉnh số câu từng phần ngay trên các ô +/−
+  useEffect(() => { if (rows.length === 0) p.onForm(FORM_THPT); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   const ids = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
   const selN = [...sel].filter((x) => ids.has(x)).length;
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -192,17 +192,9 @@ export const SlotMatrix = memo(function SlotMatrix(p: Props) {
             <button type="button" aria-pressed={mode === 'manual'} title="Giáo viên tự chọn câu cho từng ô" onClick={() => p.onMode('manual')}>Tự chọn</button>
           </div>
         </div>
-        <div className="sm-opt"><span>Cấu trúc</span>
-          <div className="seg sm" role="group" aria-label="Cấu trúc đề">
-            <button type="button" aria-pressed={thpt && !custom} title="12 trắc nghiệm · 4 đúng/sai · 6 trả lời ngắn" onClick={() => { setCustom(false); p.onForm(FORM_THPT); }}>Form THPT 2025</button>
-            <button type="button" aria-pressed={!thpt || custom} onClick={() => setCustom(true)}>Tùy chỉnh</button>
-          </div>
-        </div>
-        {(custom || !thpt) && (
-          <div className="sm-form" role="group" aria-label="Số câu mỗi phần">
+        <div className="sm-form" role="group" aria-label="Số câu mỗi phần">
             {PARTS.map((pk) => <PartCount key={pk} label={PART_NAME[pk].split(' · ')[1]} value={form[pk]} onSet={(n) => p.onForm({ ...form, [pk]: n })} />)}
-          </div>
-        )}
+        </div>
       </div>
 
       {selN > 0 && (
@@ -222,7 +214,7 @@ export const SlotMatrix = memo(function SlotMatrix(p: Props) {
       {rows.length === 0 && (
         <div className="te-empty">
           <b>Ma trận đang trống.</b>
-          <span>Bấm “Form THPT 2025” để có ngay 12 câu trắc nghiệm, 4 câu đúng/sai, 6 câu trả lời ngắn (rồi đặt Dạng bài cho từng câu), hoặc “Tùy chỉnh” để tự đặt số câu mỗi phần.</span>
+          <span>Đặt số câu mỗi phần ở các ô phía trên (mặc định 12 trắc nghiệm · 4 đúng/sai · 6 trả lời ngắn), rồi đặt Dạng bài cho từng câu.</span>
         </div>
       )}
 

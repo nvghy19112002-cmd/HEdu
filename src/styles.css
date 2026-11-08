@@ -2506,3 +2506,49 @@ details textarea.kh-code { height: 110px; }
 .app { overflow-x: clip; }
 .main { overflow-x: clip; }
 .cards-grid .card-content { overflow: hidden; }
+
+/* ===================== BETA.63 · CÂU HỎI: BẢNG GỌN =====================
+   Mỗi câu một dòng; bấm dòng mở cửa sổ xem (←/→ ↑/↓ chuyển câu, dòng tô sáng theo). Dùng token sẵn có, không thêm mã màu rời. */
+.bank-mode { padding: 2px; border-radius: var(--radius-md); }
+.bank-mode button { height: 26px; padding: 0 12px; font-size: 13px; }
+.qt-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); box-shadow: var(--shadow-1); }
+.qt { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.qt th { position: sticky; top: 0; z-index: 1; padding: 8px 8px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); background: var(--bg-card); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.qt-c { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qt th:nth-child(1) { width: 36px; } .qt th:nth-child(2) { width: 64px; } .qt th:nth-child(3) { width: 112px; }
+.qt th:nth-child(4) { width: 104px; } .qt th:nth-child(5) { width: 112px; } .qt th:nth-child(7) { width: 96px; } .qt th:nth-child(8) { width: 32px; }
+.qt-row { cursor: pointer; }
+.qt-row:hover { background: var(--pri-soft); }
+.qt-row:focus-visible { outline: 2px solid var(--pri); outline-offset: -2px; }
+.qt-row.is-selected { background: var(--sel); }
+.qt-row.is-active { background: var(--pri-soft); box-shadow: inset 3px 0 0 var(--pri); }
+.qt-no { color: var(--text-muted); }
+.qt-sn { color: var(--text-primary); }
+.qt-ans { color: var(--text-secondary, var(--text-muted)); }
+.qt-fig { text-align: center; color: var(--text-muted); }
+.qt .pill { white-space: nowrap; }
+@media (max-width: 900px) { .qt th:nth-child(4), .qt-row > :nth-child(4), .qt th:nth-child(7), .qt-row > :nth-child(7) { display: none; } }
+@media (max-width: 700px) { .qt th:nth-child(3), .qt-row > :nth-child(3) { display: none; } }
+/* =================== hết BETA.63 BẢNG GỌN =================== */
+
+/* ===================== BETA.63 · CÂY MỤC LỤC GỌN =====================
+   Thụt lề mỗi cấp 9px (trước 14), mũi tên hẹp, dòng lá không chừa ô mũi tên, vạch dẫn mờ, số đếm nhỏ sát phải, lề khung hẹp. */
+.fside .fs-top { padding: 8px 8px 4px; }
+.fside .fs-scroll { padding: 0 6px 8px; }
+.fside .bt-tree { margin: 0 -4px; padding: 2px 4px 6px; }
+.fside .bt-row { gap: 0; }
+.fside .bt-caret { width: 16px; height: 30px; }
+.fside .bt-caret:not(button) { width: 4px; }
+.fside .bt-name { gap: 6px; padding: 6px 6px 6px 0; line-height: 1.35; }
+.fside .bt-tree ul[role="group"]::before { border-left-color: var(--line-3); }
+.fside .bt-n { min-width: 0; font-size: 12px; padding-left: 4px; opacity: .85; }
+.fside .bt-ico { margin-top: 0; }
+/* =================== hết BETA.63 CÂY MỤC LỤC =================== */
+
+/* ===================== BETA.63 · ĐÚNG/SAI: HUY HIỆU THẲNG HÀNG VỚI NHÃN a) b) c) d) =====================
+   Trước: huy hiệu Đ/S căn giữa theo chiều cao cả ý nên trôi xuống khi ý dài/xuống dòng. Nay cùng hàng với dòng đầu của ý. */
+.tf { gap: 8px; }
+.tf li { align-items: start; }
+.tf .tf-l { align-self: start; line-height: 2.1875; } /* = 28px, bằng dòng chữ của nội dung ý */
+.tf .mark { align-self: start; margin-top: 3px; } /* tâm huy hiệu (cao 22px) trùng tâm dòng đầu */
+/* =================== hết BETA.63 ĐÚNG/SAI =================== */

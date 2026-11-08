@@ -33,7 +33,8 @@ export function loadLayout(): EwLayout { try { return parseLayout(localStorage.g
 export function saveLayout(l: EwLayout) { try { localStorage.setItem(KEY, JSON.stringify(l)); } catch { /* bỏ qua */ } }
 
 /** cây tệp có hiện không */
-export const treeShown = (l: EwLayout, fileCount: number) => (l.tree === null ? fileCount > 1 : l.tree);
+/** Đề chỉ có 1 tệp thì cây tệp vô ích (trùng với thẻ tệp của trình soạn) nên luôn ẩn, kể cả khi từng bật tay; từ 2 tệp: tự hiện, bật/tắt tay được. */
+export const treeShown = (l: EwLayout, fileCount: number) => (fileCount <= 1 ? false : l.tree === null ? true : l.tree);
 
 /** Tệp chính không có \documentclass (chỉ là nội dung đề) — dùng để giải thích lỗi "Missing \begin{document}". */
 export const lacksPreamble = (text: string) => !/^[^%\n]*\\documentclass/m.test(text);
