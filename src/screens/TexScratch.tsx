@@ -5,7 +5,7 @@
 // PDF mang nhãn "bản trước" khi mã đã đổi; PDF nguyên văn (có thể chứa lời giải).
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
-import { setImportHandoff } from '../lib/importhandoff';
+import { setImportHandoff, takeScratchHandoff } from '../lib/importhandoff';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IcAlert, IcCheckCircle, IcCopy } from '../components/Icons';
@@ -270,6 +270,21 @@ export function TexScratchScreen() {
     toast(`Đã tạo “${nameOf(r.ix, r.id)}”. Bàn nháp trước vẫn được giữ.`);
     ed.current?.focus();
   };
+  // văn bản chuyển từ nơi khác (vd đề OCR thô ở hộp thoại Thiết lập đề): mở thành một bàn nháp mới
+  useEffect(() => {
+    if (!ready || blockedRef.current) return;
+    const h = takeScratchHandoff();
+    if (!h) return;
+    void (async () => {
+      const r = addDraft(ix, h.name);
+      if ('error' in r) { toast(r.error); return; }
+      await openSlot(r.id, r.ix, true);
+      latest.current = h.text; setText(h.text);
+      ed.current?.reset(KEY, h.text);
+      await flush();
+      toast(`Đã mở “${nameOf(r.ix, r.id)}” ở bàn nháp mới. Thêm khung \\begin{ex}…\\end{ex} cho từng câu, rồi chép lại vào đề.`);
+    })();
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const renameCurrent = async (name: string) => {
     setNameDlg(null);
     const n = renameDraft(ix, slotRef.current, name);

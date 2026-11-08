@@ -38,6 +38,9 @@ import { ExamStatsDialog } from '../components/ExamStatsDialog';
 import { ExamColumns } from '../components/ExamColumns';
 import { PdfThumb } from '../components/PdfThumb';
 import { ExamBatchImportDialog } from '../components/ExamBatchImportDialog';
+import { ExamSetupDialog } from '../components/ExamSetupDialog';
+import { setupAskOn } from '../lib/examsetup';
+import { setScratchHandoff } from '../lib/importhandoff';
 import { batchCandidates, type BatchCandidate } from '../lib/examimportbatch';
 import { chooseFolder as chooseSourceFolder, scanSources } from '../lib/importfiles';
 import { checkExam, type ExamCheck } from '../lib/examcheck';
@@ -189,6 +192,8 @@ export function ExamLibraryScreen() {
   const [peek, setPeek] = useState<{ id: string; name: string; mode: ExamMode } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
+  /** hộp thoại Thiết lập đề (tự hiện sau khi nhập một đề) */
+  const [setup, setSetup] = useState<{ id: string; name: string; mainFile: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [newName, setNewName] = useState<string | null>(null);
@@ -345,7 +350,7 @@ export function ExamLibraryScreen() {
     const s = await placeNew(await examImport(pending.path, pending.name, pending.main || null));
     setPending(null);
     await reload();
-    setActiveId(s.id);
+    if (setupAskOn()) setSetup({ id: s.id, name: s.name, mainFile: s.mainFile }); else setActiveId(s.id);
     toast(`Đã nhập “${s.name}” vào thư viện${place ? ` (${trail.join(' › ')})` : ''}. Tệp gốc không bị thay đổi.`);
   });
   const importBundle = () => run(async () => {
@@ -1131,6 +1136,9 @@ export function ExamLibraryScreen() {
             : 'Chọn lớp, loại đề, chương/bài hoặc thư mục riêng. Chọn lớp/loại chỉ đổi lớp/loại; chọn thư mục chỉ đổi thư mục.'}</p>
         </Modal>
       )}
+      {setup && <ExamSetupDialog id={setup.id} name={setup.name} mainFile={setup.mainFile} fromImport
+        onClose={() => { const sid = setup.id; setSetup(null); setActiveId(sid); }}
+        onOpenScratch={(text) => { setScratchHandoff(setup.name, text); setSetup(null); go({ screen: 'tex' }); }} />}
       {batchImp && <ExamBatchImportDialog folder={batchImp.folder} candidates={batchImp.items} truncated={batchImp.truncated} place={place ? trail.join(' › ') : ''} placeNew={placeNew} onClose={() => { setBatchImp(null); void reload(); }} onDone={(m) => { toast(m); void reload(); }} />}
       {stats && <ExamStatsDialog name={stats.name} spec={stats.spec} onClose={() => setStats(null)} onToast={toast} />}
       {packing && <ExamPackDialog exams={packing} qn={qn} tax={tax} question={(uid) => qmap.get(uid)} onClose={() => setPacking(null)} onToast={toast} />}

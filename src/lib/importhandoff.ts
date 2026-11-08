@@ -11,3 +11,9 @@ export function setImportHandoff(text: string): void { pending = text.trim() ? t
 /** xem nội dung đang chờ (không xoá) */
 export function peekImportHandoff(): string | null { return pending; }
 export function clearImportHandoff(): void { pending = null; }
+
+// Chuyển một văn bản sang màn Xử lí TeX thành một bàn nháp MỚI (vd tệp đề OCR thô từ hộp thoại Thiết lập đề).
+let scratchPending: { name: string; text: string } | null = null;
+export function setScratchHandoff(name: string, text: string): void { scratchPending = text.trim() ? { name, text } : null; }
+/** lấy rồi xoá (màn Xử lí TeX gọi một lần sau khi nạp xong) */
+export function takeScratchHandoff(): { name: string; text: string } | null { const p = scratchPending; scratchPending = null; return p; }
