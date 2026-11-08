@@ -71,7 +71,7 @@ export const ExamTree = memo(function ExamTree({ tree, total, sel, showEmpty, on
       <li key={x.key} role="treeitem" aria-level={depth + 1} aria-selected={isSel} aria-expanded={has ? isOpen : undefined}>
         <div data-node={x.key} onContextMenu={onNodeContext && (x.kind === 'folder' || x.key === 'f') ? (ev) => { ev.preventDefault(); onNodeContext(x.key, ev.clientX, ev.clientY); } : undefined} className={`bt-row k-${x.kind === 'grade' ? 'grade' : x.kind === 'group' ? 'branch' : x.kind === 'chapter' ? 'chapter' : 'lesson'}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 4 + depth * 12 }}>
           {has
-            ? <button type="button" className="bt-caret" aria-label={isOpen ? `Thu gọn ${x.label}` : `Mở ${x.label}`} tabIndex={-1} onClick={() => toggle(x.key)}><svg className={isOpen ? 'is-open' : undefined} width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.2 9 6l-5 3.8z" fill="currentColor" /></svg></button>
+            ? <button type="button" className="bt-caret" aria-label={isOpen ? `Thu gọn ${x.label}` : `Mở ${x.label}`} tabIndex={-1} onClick={() => toggle(x.key)}><svg className={isOpen ? 'is-open' : undefined} width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.2 1.4 10.2 6l-7 4.6z" fill="currentColor" /></svg></button>
             : <span className="bt-caret" aria-hidden="true" />}
           <button type="button" className="bt-name" title={x.label} onClick={() => { if (has && isSel && isOpen) toggle(x.key); else { onPick(x.key); if (has && !isOpen) toggle(x.key); } }}>
             <Ico kind={x.kind} open={isOpen} />

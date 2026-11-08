@@ -494,6 +494,8 @@ export function BankScreen() {
       <header className="page-head bank-head">
         <h1>Ngân hàng câu hỏi</h1>
         <div className="head-actions">
+          <button type="button" className="btn btn-outline" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
+          <button type="button" className="btn btn-outline" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
           <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'import' })}>Nhập từ file</button>
           <button type="button" className="btn btn-accent" onClick={newHere} title="Soạn câu mới; nếu đang xem một chương/bài thì điền sẵn vị trí đó">+ Câu hỏi mới</button>
         </div>
@@ -609,8 +611,6 @@ export function BankScreen() {
                   <button type="button" aria-pressed={mode === 'table'} onClick={() => pickMode('table')}>Bảng</button>
                   <button type="button" aria-pressed={mode === 'cards'} onClick={() => pickMode('cards')}>Thẻ</button>
                 </span>
-                <button type="button" className="btn btn-sm" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
-                <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
                 <label className="qsel" title="Sắp xếp">
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
                     {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}

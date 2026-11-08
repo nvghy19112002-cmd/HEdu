@@ -183,7 +183,7 @@ export function SystemScreen() {
       <div className="set-shell">
         <nav className="set-nav" aria-label="Các mục Cài đặt">
           <label className="search sm set-search">
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cài đặt: TeX Live, API, sao lưu…" aria-label="Tìm cài đặt" />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cài đặt…" title="Tìm theo tên: TeX Live, API, sao lưu…" aria-label="Tìm cài đặt" />
           </label>
           {q.trim() ? (
             <ul className="set-results" aria-label="Kết quả tìm cài đặt">

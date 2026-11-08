@@ -110,7 +110,7 @@ export const BankTree = memo(function BankTree({ tax, path, counts, total, off, 
       <li key={x.key} role="treeitem" aria-level={depth + 1} aria-selected={isSel} aria-expanded={has ? isOpen : undefined}>
         <div className={`bt-row k-${x.kind}${isSel ? ' is-sel' : ''}${x.count === 0 ? ' is-empty' : ''}`} style={{ paddingLeft: 2 + depth * 9 }}>
           {has
-            ? <button type="button" className="bt-caret" aria-label={isOpen ? `Thu gọn ${x.label}` : `Mở ${x.label}`} tabIndex={-1} onClick={() => toggle(x.key)}><svg className={isOpen ? 'is-open' : undefined} width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.2 9 6l-5 3.8z" fill="currentColor" /></svg></button>
+            ? <button type="button" className="bt-caret" aria-label={isOpen ? `Thu gọn ${x.label}` : `Mở ${x.label}`} tabIndex={-1} onClick={() => toggle(x.key)}><svg className={isOpen ? 'is-open' : undefined} width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.2 1.4 10.2 6l-7 4.6z" fill="currentColor" /></svg></button>
             : <span className="bt-caret" aria-hidden="true" />}
           <button type="button" className="bt-name" title={`${x.code} · ${x.label}`} onClick={() => { if (has && isSel && isOpen && !searching) toggle(x.key); else { onPick(x.path); if (has && !isOpen) toggle(x.key); } }}>
             <Folder open={isOpen} />

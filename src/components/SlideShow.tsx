@@ -10,11 +10,11 @@ const ZKEY = 'hedu.slides.zoom';
 const readZoom = () => { try { const v = Number(localStorage.getItem(ZKEY)); return v ? clampZoom(v) : ZOOM_DEFAULT; } catch { return ZOOM_DEFAULT; } };
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export function SlideShow({ title, items: items0, onClose, opts }: { title: string; items: DeckItem[]; onClose(): void; /** cách chiếu (đếm ngược, trộn, cho xem lời giải) */ opts?: PlayOpts }) {
+export function SlideShow({ title, items: items0, onClose, opts, start = 0 }: { title: string; items: DeckItem[]; onClose(): void; /** bắt đầu từ câu thứ mấy (từ 0) */ start?: number; /** cách chiếu (đếm ngược, trộn, cho xem lời giải) */ opts?: PlayOpts }) {
   const o = opts ?? DEFAULT_PLAY;
   // trộn một lần lúc bắt đầu chiếu; bộ đã lưu không đổi
   const items = useMemo(() => (o.shuffle ? shuffled(items0) : items0), [items0]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [i, setI] = useState(0);
+  const [i, setI] = useState(() => Math.max(0, Math.min(start, items0.length - 1)));
   const [slideAt, setSlideAt] = useState(() => Date.now());
   const [ans, setAns] = useState(false);
   const [sol, setSol] = useState(false);
