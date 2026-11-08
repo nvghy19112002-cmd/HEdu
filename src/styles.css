@@ -2861,3 +2861,5 @@ button.bt-caret:hover svg { background: var(--pri-soft); color: var(--pri); }
 .qlist .qtools .lh-left { flex: 0 1 auto; }
 .qlist .qtools .qtools-r { flex-wrap: nowrap; margin-left: auto; flex: 0 0 auto; }
 .sl2-dh h1 { white-space: nowrap; }
+/* cột số câu đủ cho số dài (#910050) */
+.qt th:nth-child(2) { width: 84px; }

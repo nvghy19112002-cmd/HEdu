@@ -5,8 +5,8 @@ import type { Question } from './types';
 export type SortMode = 'level-asc' | 'level-desc' | 'updated-desc' | 'updated-asc' | 'seq-desc' | 'seq-asc';
 export const SORT_MODES: SortMode[] = ['level-asc', 'level-desc', 'updated-desc', 'updated-asc', 'seq-desc', 'seq-asc'];
 export const SORT_LABEL: Record<SortMode, string> = {
-  'level-asc': 'Mức độ tăng dần (N → C)',
-  'level-desc': 'Mức độ giảm dần (C → N)',
+  'level-asc': 'Mức độ tăng dần',
+  'level-desc': 'Mức độ giảm dần',
   'updated-desc': 'Mới cập nhật',
   'updated-asc': 'Cập nhật lâu nhất',
   'seq-desc': 'Số câu giảm dần',

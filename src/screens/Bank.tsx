@@ -234,11 +234,17 @@ export function BankScreen() {
   const [mode, setMode] = useState<ViewMode>(() => loadViewMode());
   const pickMode = (m: ViewMode) => { setMode(m); saveViewMode(m); };
   const ctxHid = useCtxHidden();
-  const docked = !narrow && !ctxHid;
+  // Bảng + khung xem trước cần chỗ: cửa sổ chưa đủ rộng (chế độ cửa sổ) thì Mục lục tự thu vào ngăn kéo (nút Mục lục hoặc Ctrl+B mở ra)
+  const [tight, setTight] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1600);
+  useEffect(() => { const h = () => setTight(window.innerWidth < 1600); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  const docked = !narrow && !ctxHid && !(mode === 'table' && tight);
   const [activeUid, setActiveUid] = useState<string | null>(null); // dòng/thẻ câu xem gần nhất — còn tô sáng sau khi đóng cửa sổ
   const [drawerOpen, setDrawerOpen] = useState(false);
   const openerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (docked && drawerOpen) setDrawerOpen(false); }, [docked, drawerOpen]);
+  // Mục lục đang thu vào ngăn kéo vì cửa sổ hẹp: Ctrl+B mở/đóng ngăn kéo
+  const ctxFirst = useRef(true);
+  useEffect(() => { if (ctxFirst.current) { ctxFirst.current = false; return; } if (!narrow && tight && mode === 'table') setDrawerOpen((o) => !o); }, [ctxHid]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!drawerOpen) return;
     document.querySelector<HTMLElement>('.fside.is-drawer .fs-top button')?.focus();
@@ -652,7 +658,7 @@ export function BankScreen() {
           {!list.length && (
             <BankEmpty tax={tax} f={f} facets={facets} totalQuestions={questions.length} text={text} wide={wideOn} onF={setF}
               onClearText={() => { setText(''); setWide(false); setPage(0); }} onWide={() => setWide(true)} onClearAttrs={clearFilters}
-              onNew={newHere} onImport={() => go({ screen: 'import' })} />
+              onNew={newHere} onImport={() => go({ screen: 'import' })} onOpenTree={docked ? undefined : () => setDrawerOpen(true)} />
           )}
         </section>
         {prevQ && (() => {
