@@ -1,3 +1,14 @@
+## Có gì mới trong beta.64 (kênh beta): hoàn thiện giao diện, Trình chiếu mới, hộp thoại Thiết lập đề
+Gồm PR #272 (Thiết lập đề) và nhánh hoàn thiện giao diện (so với beta.63). Chỉ đổi cách trình bày và luồng thao tác: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử, build và xem trên app thử; chưa thử trên máy Windows thật của bạn.
+
+- **Ngân hàng**: bảng + khung xem trước bên phải (↑/↓ chuyển câu, Enter mở cửa sổ lớn), sắp mặc định theo mức độ, tìm kiếm trên dòng tiêu đề, Mục lục | bảng | xem trước vừa khít cửa sổ.
+- **Tự co giãn theo cửa sổ** (65–130%, tắt được ở Cài đặt › Cỡ hiển thị): cửa sổ nhỏ vẫn giữ y bố cục toàn màn.
+- **Trình chiếu**: màn riêng (các bộ | lưới slide | cách chiếu), đếm ngược, tự hiện đáp án, trộn, nền Tối/Sáng, dán hoặc mở .tex.
+- **Soạn TeX**: một thanh công cụ, tab Vấn đề (bấm lỗi nhảy tới dòng), tô khối câu đang chọn và dòng lỗi.
+- **Tạo đề**: thanh 3 bước, bảng cân bằng đáp án A–D. **Biên tập đề**: menu Công cụ gọn.
+- **Nhập liệu**: kéo-thả tệp/thư mục, nút Lịch sử nhập. **Sức khoẻ**: điểm tổng.
+- **Thiết lập đề** (khi nhập một đề): khung tiêu đề, chia câu theo phần, tự điền đoạn mở đầu PHẦN I–IV.
+
 ## Có gì mới trong beta.63 (kênh beta): màn Câu hỏi dạng bảng gọn, Mục lục gọn, Đúng/Sai thẳng hàng
 Gồm PR #269 (so với beta.62). Chỉ đổi cách trình bày: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử và xem trên trình duyệt với dữ liệu mẫu ở các cỡ 768–1920 px; chưa thử trên app Tauri thật và máy Windows thật của bạn. Đây là bản beta.
 
