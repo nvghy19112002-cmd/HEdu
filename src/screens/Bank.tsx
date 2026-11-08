@@ -661,7 +661,7 @@ export function BankScreen() {
           const where = ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? [at.chapter?.name, at.lesson?.name].filter(Boolean).join(' › ') : '';
           return (
             <BankPreview key={prevQ.uid} q={prevQ} code={ni !== null ? null : questionCode(prevQ, prevQ.level)} where={where} index={prevIdx} total={list.length}
-              selected={sel.has(prevQ.uid)} onToggleSel={() => setSel(toggleOne(sel, prevQ.uid))} onPrev={() => stepPrev(-1)} onNext={() => stepPrev(1)}
+              onPrev={() => stepPrev(-1)} onNext={() => stepPrev(1)}
               onOpen={() => openView(prevQ.uid)} onEdit={() => { openView(prevQ.uid); setViewEdit(true); }}
               onAddToExam={featureOn('exam') ? () => go({ screen: 'exam', examPick: [prevQ.uid] }) : undefined}
               onSlides={() => openSlides('Ngân hàng', [{ latex: prevQ.latex, uid: prevQ.uid }])} />

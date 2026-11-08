@@ -15,8 +15,6 @@ interface Props {
   where: string;
   index: number;
   total: number;
-  selected: boolean;
-  onToggleSel(): void;
   onPrev(): void;
   onNext(): void;
   onOpen(): void;
@@ -25,7 +23,7 @@ interface Props {
   onSlides(): void;
 }
 
-export function BankPreview({ q, code, where, index, total, selected, onToggleSel, onPrev, onNext, onOpen, onEdit, onAddToExam, onSlides }: Props) {
+export function BankPreview({ q, code, where, index, total, onPrev, onNext, onOpen, onEdit, onAddToExam, onSlides }: Props) {
   const p = useMemo(() => parseExTest(q.latex), [q.latex]);
   const [sol, setSolState] = useState(readSol);
   const setSol = (v: boolean) => { setSolState(v); try { localStorage.setItem(SOL_KEY, v ? '1' : '0'); } catch { /* tiện lợi */ } };
@@ -41,7 +39,6 @@ export function BankPreview({ q, code, where, index, total, selected, onToggleSe
         {code ? <span className="code-tag">{code}</span> : <span className="code-tag is-noid">Chưa có ID</span>}
         <span className={`pill l-${q.level}`}>{LEVEL_LABEL[q.level]}</span>
         <span className={`pill t-${q.type}`}>{TYPE_LABEL[q.type]}</span>
-        <label className="sw bkp-sel" title="Chọn câu này"><input type="checkbox" checked={selected} onChange={onToggleSel} />Chọn</label>
       </div>
       {where && <div className="bkp-where" title={where}>{where}</div>}
       <div className="bkp-body">

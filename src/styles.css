@@ -2866,3 +2866,6 @@ button.bt-caret:hover svg { background: var(--pri-soft); color: var(--pri); }
 .bk-prev { min-height: calc(100vh - 96px); }
 @container (max-width: 640px) { .qlist.has-prev .qt th:nth-child(6), .qlist.has-prev .qt-row > :nth-child(6) { display: none; } }
 .qlist.has-prev .qt-sn { color: var(--text-secondary, var(--text-muted)); }
+/* đầu khung xem trước: một dòng gọn */
+.bkp-head { flex-wrap: nowrap; overflow: hidden; }
+.bkp-head .code-tag, .bkp-head .pill { flex: none; }
