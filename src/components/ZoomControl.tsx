@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { FIG_MAX, FIG_MIN, getFigPrefs, setFigPrefs, subscribeFig } from '../lib/figscale';
-import { getZoom, resetZoom, setZoom, stepZoom, subscribeZoom, ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN } from '../lib/zoom';
+import { getFit, getZoom, resetZoom, setFit, setZoom, stepZoom, subscribeZoom, ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN } from '../lib/zoom';
 
 export const useZoom = (): number => useSyncExternalStore(subscribeZoom, getZoom, getZoom);
 const pct = (z: number) => `${Math.round(z * 100)}%`;
@@ -28,6 +28,7 @@ export function ZoomIndicator() {
 /** Khối điều chỉnh trong màn Hệ thống. */
 export function ZoomPanel() {
   const z = useZoom();
+  const fit = useSyncExternalStore(subscribeZoom, getFit, getFit);
   return (
     <section className="panel" aria-label="Cỡ hiển thị">
       <h2>Cỡ hiển thị</h2>
@@ -38,6 +39,7 @@ export function ZoomPanel() {
         <button type="button" className="btn btn-sm" aria-label="Phóng to" disabled={z >= ZOOM_MAX} onClick={() => setZoom(stepZoom(z, 1))}>+</button>
         <button type="button" className="btn btn-sm" disabled={z === ZOOM_DEFAULT} onClick={resetZoom}>Đặt lại 100%</button>
       </div>
+      <label className="sw"><input type="checkbox" checked={fit} onChange={(e) => setFit(e.target.checked)} />Tự co giãn theo cửa sổ: cửa sổ hẹp thì chữ nhỏ lại để không bị rớt dòng, cửa sổ rộng thì chữ to ra (85–115%)</label>
     </section>
   );
 }

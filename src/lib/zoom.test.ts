@@ -1,4 +1,4 @@
-import { clampZoom, createWheelStepper, stepZoom, zoomKey } from './zoom';
+import { clampZoom, createWheelStepper, effectiveZoom, fitFactor, stepZoom, zoomKey } from './zoom';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 console.log('zoom');
@@ -17,4 +17,11 @@ ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '+' }) === 1, 'C
 ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '-' }) === -1, 'Ctrl − thu nhỏ');
 ok(zoomKey({ ctrlKey: true, metaKey: false, altKey: false, key: '0' }) === 'reset', 'Ctrl 0 đặt lại');
 ok(zoomKey({ ctrlKey: false, metaKey: false, altKey: false, key: '=' }) === null, 'không Ctrl thì bỏ qua');
+
+ok(fitFactor(1600) === 1, 'cửa sổ 1600 px: giữ nguyên');
+ok(fitFactor(1366) < 1 && fitFactor(1366) >= 0.85, 'laptop 1366: thu nhẹ');
+ok(fitFactor(1920) > 1 && fitFactor(1920) <= 1.15, 'Full HD: to ra');
+ok(fitFactor(800) === 0.85 && fitFactor(4000) === 1.15, 'giới hạn 85–115%');
+ok(effectiveZoom(1.2, false, 1366) === 1.2, 'tắt co giãn: đúng mức người dùng');
+ok(effectiveZoom(1, true, 1366) === fitFactor(1366), 'bật co giãn: nhân hệ số');
 if (fail) { console.log(`${fail} lỗi`); process.exit(1); }

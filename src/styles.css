@@ -2760,3 +2760,6 @@ button.bt-caret:hover svg { background: var(--pri-soft); color: var(--pri); }
 /* bảng cạnh khung xem trước: khung đã hiện đáp án nên bỏ cột Đáp án; vùng bảng hẹp thì bỏ thêm cột Loại câu */
 .qlist.has-prev .qt th:nth-child(7), .qlist.has-prev .qt-row > :nth-child(7) { display: none; }
 @container (max-width: 520px) { .qt th:nth-child(5), .qt-row > :nth-child(5) { display: none; } }
+/* bảng câu hỏi: đủ chỗ cho nhãn "Trả lời ngắn", "Vận dụng cao" (không bị cắt) */
+.qt th:nth-child(4) { width: 112px; } .qt th:nth-child(5) { width: 128px; }
+.qt .pill { font-size: 12px; padding-left: 8px; padding-right: 8px; }
