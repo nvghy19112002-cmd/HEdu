@@ -102,13 +102,27 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
     rendered.current.delete(i);
   }, []);
 
+  // Độ phân giải màn hình (đổi khi app tự co giãn theo cửa sổ, phóng to/thu nhỏ, kéo sang màn hình khác) ⇒ vẽ lại cho nét.
+  const [dpr, setDpr] = useState(() => window.devicePixelRatio || 1);
+  useEffect(() => {
+    let mq: MediaQueryList | null = null;
+    const watch = () => {
+      const now = window.devicePixelRatio || 1;
+      setDpr(now);
+      mq?.removeEventListener('change', watch);
+      mq = window.matchMedia?.(`(resolution: ${now}dppx)`) ?? null;
+      mq?.addEventListener('change', watch);
+    };
+    watch();
+    return () => mq?.removeEventListener('change', watch);
+  }, []);
+
   const paint = useCallback(async (i: number, g: number) => {
     if (!doc || rendered.current.has(i) || pending.current.has(i)) return;
     pending.current.add(i);
     try {
       const page = await doc.getPage(i + 1);
       if (g !== gen.current) return;
-      const dpr = window.devicePixelRatio || 1;
       const vp0 = page.getViewport({ scale });
       const k = canvasShrink(vp0.width * dpr, vp0.height * dpr);
       const vp = page.getViewport({ scale: scale * dpr * k });
@@ -127,7 +141,7 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
       const name = (e as { name?: string })?.name;
       if (name !== 'RenderingCancelledException') setMsg(`Không vẽ được trang ${i + 1}: ${e instanceof Error ? e.message : String(e)}`);
     } finally { pending.current.delete(i); }
-  }, [doc, scale, release]);
+  }, [doc, scale, dpr, release]);
 
   const refresh = useCallback(() => {
     const el = scroller.current;
@@ -146,7 +160,7 @@ export function PdfViewer({ id, title, stale, note, onClose, embedded, mode = 'n
     pending.current.clear();
     for (const h of holders.current) h?.replaceChildren();
     refresh();
-  }, [scale, doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scale, doc, dpr]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => () => { for (const i of [...rendered.current.keys()]) release(i); }, [release]);
 
