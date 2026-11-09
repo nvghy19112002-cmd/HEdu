@@ -140,9 +140,19 @@ pub fn find_pandoc(root: &Path) -> Option<(PathBuf, String)> {
 const MISSING: &str = "Chưa có Pandoc để xuất Word. Giải nén Pandoc vào D:\\HEdu-tools\\pandoc (hoặc thư mục tools\\pandoc trong dữ liệu HEdu) rồi thử lại.";
 
 pub fn export_word(root: &Path, lib: &Path, id: &str, inp: &WordIn) -> Result<WordOut, String> {
-    let (pandoc, _) = find_pandoc(root).ok_or_else(|| MISSING.to_string())?;
     read_manifest(lib, id)?;
     let proj = projects_dir(lib).join(id);
+    run_export(root, &proj, &[], inp)
+}
+
+/// Xuất Word cho đề chưa lưu (màn Tạo đề): không có thư mục dự án; ảnh câu hỏi chép từ kho ảnh vào thư mục tạm.
+pub fn export_word_draft(root: &Path, imgs: &[crate::qimg::ImgRef], inp: &WordIn) -> Result<WordOut, String> {
+    let none = root.join("tmp-word-khong-co-du-an");
+    run_export(root, &none, imgs, inp)
+}
+
+fn run_export(root: &Path, proj: &Path, imgs: &[crate::qimg::ImgRef], inp: &WordIn) -> Result<WordOut, String> {
+    let (pandoc, _) = find_pandoc(root).ok_or_else(|| MISSING.to_string())?;
     let dest = PathBuf::from(&inp.dest_dir);
     if !dest.is_dir() {
         return Err("Thư mục đích không tồn tại.".into());
@@ -153,6 +163,9 @@ pub fn export_word(root: &Path, lib: &Path, id: &str, inp: &WordIn) -> Result<Wo
         fs::write(work.join("in.tex"), format!("{PRE}{}\n\\end{{document}}\n", inp.body)).map_err(|e| e.to_string())?;
         fs::write(work.join("filter.lua"), FILTER).map_err(|e| e.to_string())?;
         fs::write(work.join("reference.docx"), REFERENCE).map_err(|e| e.to_string())?;
+        if !imgs.is_empty() {
+            crate::qimg::materialize(&crate::qimg::dir_of(root), &work, imgs)?;
+        }
         for f in &inp.figures {
             if f.name.is_empty() || f.name.contains(['/', '\\', ':']) {
                 return Err("Tên hình không hợp lệ.".into());
@@ -249,6 +262,13 @@ pub async fn exam_word_export(app: AppHandle, id: String, input: WordIn) -> Resu
     let root = root_of(&app)?;
     let lib = root.join("exam-library");
     tauri::async_runtime::spawn_blocking(move || export_word(&root, &lib, &id, &input)).await.map_err(|e| e.to_string())?
+}
+
+/// Xuất Word thẳng từ màn Tạo đề (đề chưa lưu vào Thư viện).
+#[tauri::command]
+pub async fn exam_word_export_draft(app: AppHandle, input: WordIn, images: Vec<crate::qimg::ImgRef>) -> Result<WordOut, String> {
+    let root = root_of(&app)?;
+    tauri::async_runtime::spawn_blocking(move || export_word_draft(&root, &images, &input)).await.map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]
