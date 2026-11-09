@@ -1039,7 +1039,7 @@ pub fn export_codes(root: &Path, id: &str, o: &ExportOpts, support_dir: &Option<
                 pairs.push((c.clone(), "loigiai"));
             }
         }
-        let lanes = std::thread::available_parallelism().map(|n| n.get() / 2).unwrap_or(1).clamp(1, 3).min(pairs.len());
+        let lanes = crate::proc::export_lanes(crate::proc::cpus()).min(pairs.len());
         if lanes >= 2 {
             progress(Progress { id: id.to_string(), phase: "dich-de".into(), index: 1, total: plan.codes.len(), code: plan.codes.first().cloned().unwrap_or_default() });
             prewarm(root, id, &pairs, &o.engine, &o.tex_bin, o.timeout_secs, support_dir, &flag, lanes);
@@ -1417,3 +1417,7 @@ mod backfill_tests;
 #[cfg(test)]
 #[path = "examexport_hardening_tests.rs"]
 mod hardening_tests;
+
+#[cfg(test)]
+#[path = "examexport_bench_tests.rs"]
+mod bench_tests;

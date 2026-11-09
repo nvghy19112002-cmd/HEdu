@@ -266,8 +266,8 @@ fn restore_backup(app: AppHandle, gate: State<Gate>) -> Result<String, String> {
     Ok(format!("Đã khôi phục ({} byte).", bytes.len()))
 }
 
-/// Tối đa 3 hình dịch cùng lúc; hình còn lại xếp hàng chờ (không làm đứng giao diện).
-static RENDER_SLOTS: proc::Slots = proc::Slots::new(3);
+/// Số hình dịch cùng lúc theo số nhân của máy (3–6, `proc::preview_lanes`); hình còn lại xếp hàng chờ (không làm đứng giao diện).
+static RENDER_SLOTS: proc::Slots = proc::Slots::auto(proc::preview_slots);
 
 /// Dịch một hình TikZ thành SVG (chạy ở luồng riêng để giao diện không bị đứng).
 #[tauri::command]
