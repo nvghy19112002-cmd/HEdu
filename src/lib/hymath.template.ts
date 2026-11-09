@@ -1642,18 +1642,27 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
 \def\ThemeName{SKY PANEL}
 
 % ---------- Tiêu đề: khung xanh nhạt chuyển sắc, chữ xanh đậm, vạch nhấn bên trái; hai cột (trường | kỳ thi) cách nhau bằng vạch mảnh ----------
+% Tên trường: "--" là chỗ xuống dòng (vd "SỞ GD&ĐT--TRƯỜNG THPT A" thành hai dòng), in hoa.
+\ExplSyntaxOn
+\tl_new:N \l_hy_sky_school_tl
+\NewDocumentCommand{\HySkySchool}{}{
+ \tl_set_eq:NN \l_hy_sky_school_tl \SchoolName
+ \tl_replace_all:Nnn \l_hy_sky_school_tl {--} {\\}
+ \exp_args:NV \MakeUppercase \l_hy_sky_school_tl}
+\ExplSyntaxOff
 \newcommand{\HyThemeTitle}{%
  \begin{tcolorbox}[hytitle]
+  \sffamily
   \begin{minipage}[c]{.40\linewidth}\centering
-   {\bfseries\fontsize{12}{15}\selectfont\MakeUppercase{\SchoolName}\par}
-   \ifx\SchoolYear\empty\else\vspace{1.6mm}{\fontsize{10.5}{13}\selectfont\color{ExamAccent}Năm học \SchoolYear\par}\fi
-   \vspace{2.2mm}\tcbox[on line,hypill]{\sffamily\bfseries\fontsize{8.5}{11}\selectfont ĐỀ CHÍNH THỨC}\par
+   {\bfseries\fontsize{10.5}{13}\selectfont\HySkySchool\par}
+   \ifx\SchoolYear\empty\else\vspace{1mm}{\fontsize{9.5}{11.5}\selectfont\color{ExamAccent}Năm học \SchoolYear\par}\fi
+   \vspace{1.6mm}\tcbox[on line,hypill]{\bfseries\fontsize{8}{10}\selectfont ĐỀ CHÍNH THỨC}\par
   \end{minipage}%
-  \hfill{\color{SkyHi}\vrule width .6pt height 10mm depth 10mm}\hfill%
+  \hfill{\color{SkyHi}\vrule width .6pt height 8mm depth 8mm}\hfill%
   \begin{minipage}[c]{.52\linewidth}\centering
-   {\bfseries\fontsize{15}{18.5}\selectfont\MakeUppercase{\ExamName}\par}
-   \vspace{1.2mm}{\bfseries\fontsize{12}{15}\selectfont\color{ExamAccent}\SubjectName\par}
-   \vspace{1.2mm}{\itshape\fontsize{10}{13}\selectfont\color{SkyInk}Thời gian: \ExamTime\ (không kể thời gian phát đề)\par}
+   {\bfseries\fontsize{14}{17}\selectfont\MakeUppercase{\ExamName}\par}
+   \vspace{.8mm}{\bfseries\fontsize{11}{13.5}\selectfont\color{ExamAccent}\SubjectName\par}
+   \vspace{.8mm}{\itshape\fontsize{9.5}{11.5}\selectfont\color{SkyInk}Thời gian: \ExamTime\ (không kể thời gian phát đề)\par}
   \end{minipage}
  \end{tcolorbox}}
 
@@ -1662,7 +1671,7 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
  \par\noindent
  \begin{tcolorbox}[hyinfo]
   \fontsize{10.5}{13}\selectfont
-  \textbf{Họ và tên thí sinh:}\,\dotfill\par\vspace{2.6mm}
+  \textbf{Họ và tên thí sinh:}\,\dotfill\par\vspace{2mm}
   \noindent\textbf{Lớp:}\,\makebox[24mm]{\dotfill}\hfill\textbf{Số báo danh:}\,\makebox[44mm]{\dotfill}\par
   \tcblower
   \centering
@@ -1765,7 +1774,7 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
   \definecolor{SkyPale}{HTML}{F3F7FF}\definecolor{SkyMist}{HTML}{DCE8FC}\definecolor{SkyInk}{HTML}{334E7A}
   \tcbset{
    hytitle/.style={enhanced,interior style={left color=SkyPale,right color=SkyMist},colframe=SkyHi,boxrule=.6pt,arc=3mm,
-    left=8mm,right=6mm,top=4.4mm,bottom=4.4mm,before skip=2mm,after skip=3.5mm,coltext=SkyDeep,
+    left=8mm,right=6mm,top=3mm,bottom=3mm,before skip=1mm,after skip=2.6mm,coltext=SkyDeep,
     overlay={\begin{scope}\clip[rounded corners=3mm] (frame.south west) rectangle (frame.north east);
      \fill[ExamAccent] (frame.south west) rectangle ([xshift=2.2mm]frame.north west);\end{scope}}},
    hypill/.style={colback=ExamAccent,colframe=ExamAccent,boxrule=0pt,arc=1.6mm,left=8pt,right=8pt,top=2.4pt,bottom=2.4pt,coltext=white}}
@@ -1773,13 +1782,13 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
   \colorlet{SkyDeep}{black}\colorlet{SkyHi}{black}\colorlet{SkyInk}{black}
   \tcbset{
    hytitle/.style={enhanced,colback=white,colframe=black,boxrule=.9pt,arc=3mm,
-    left=6mm,right=6mm,top=4.4mm,bottom=4.4mm,before skip=2mm,after skip=3.5mm,coltext=black},
+    left=6mm,right=6mm,top=3mm,bottom=3mm,before skip=1mm,after skip=2.6mm,coltext=black},
    hypill/.style={colback=white,colframe=black!70,boxrule=.5pt,arc=1.4mm,left=7pt,right=7pt,top=2pt,bottom=2pt,coltext=black}}
  \fi
  \tcbset{
   hyinfo/.style={enhanced,sidebyside,lefthand width=\dimexpr\linewidth-36mm\relax,sidebyside align=center,sidebyside gap=4mm,
    segmentation style={solid,ExamAccent!45,line width=.5pt},colback=ExamLight,colframe=ExamAccent!40,boxrule=.5pt,arc=2.2mm,
-   left=4.5mm,right=2mm,top=2.4mm,bottom=2.4mm,before skip=0mm,after skip=3.5mm},
+   left=4.5mm,right=2mm,top=1.8mm,bottom=1.8mm,before skip=0mm,after skip=3mm},
   hypart/.style={enhanced,colback=ExamLight,colframe=ExamAccent,boxrule=0pt,leftrule=1.8mm,arc=1.4mm,
    left=3mm,right=3mm,top=2mm,bottom=2mm,before skip=0mm,after skip=0mm},
   hytag/.style={colback=ExamAccent,colframe=ExamAccent,boxrule=0pt,arc=1.3mm,left=6pt,right=6pt,top=2.2pt,bottom=2.2pt,coltext=white},
@@ -1788,6 +1797,8 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
  \setsansfont{texgyreheros}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]%
  \setmathfont{texgyretermes-math.otf}%
  \settowidth{\widthalpha}{\AnswerBadge{D}}\addtolength{\widthalpha}{2pt}%
+ % Câu Đúng/Sai: bảng Mệnh đề | Đúng | Sai (ô tròn để tô); câu trả lời ngắn: ô "Đáp số" kẻ ô ly
+ \OPTN{kindTF=1t,dongPB=1,cotDS=2,phatbieu=Mệnh đề,ketquaSA={\sffamily\bfseries\color{ExamAccent}Đáp số:},kindSA=oly}%
  % Một họ chữ (serif) cho nhãn Câu và hàng tiêu đề bảng đúng/sai; sans chỉ còn ở nhãn A B C D, tiêu đề phần và đầu/chân trang.
  \renewtheorem{ex}{\bfseries\color{ExamAccent}Câu}%
  \AtBeginEnvironment{longtable}{%
