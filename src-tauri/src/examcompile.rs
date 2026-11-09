@@ -241,6 +241,48 @@ pub(crate) fn engine_command(tex_bin: &Option<String>, engine: &str, support_dir
 #[path = "examfmt.rs"]
 pub(crate) mod examfmt;
 
+/// Nơi giữ các tệp phụ (.aux, .out, .thm, .toc…) của lần dịch thành công gần nhất cho (chế độ, tệp chính); dùng chung mọi làn của một đề.
+pub(crate) fn aux_store(root: &Path, id: &str, mode: &str, slot: &str) -> PathBuf {
+    let slot = if slot.is_empty() { "chinh" } else { slot };
+    build_dir(root, id).join("aux").join(format!("{mode}-{slot}"))
+}
+
+/// Tệp phụ của lần dịch: `hedu-out.*` trừ PDF, nhật ký, SyncTeX (là kết quả, không phải dữ liệu cho lượt sau).
+fn is_aux_file(name: &str) -> bool {
+    name.strip_prefix(&format!("{JOBNAME}.")).map(|x| !matches!(x.to_ascii_lowercase().as_str(), "pdf" | "log" | "synctex" | "synctex.gz" | "fls" | "fmt") && !x.ends_with(".part")).unwrap_or(false)
+}
+
+/// Đặt các tệp phụ đã giữ vào thư mục dịch (không có thì để nguyên như cũ).
+pub(crate) fn restore_aux(store: &Path, cwd: &Path) {
+    let Ok(rd) = fs::read_dir(store) else { return };
+    for e in rd.flatten() {
+        let n = e.file_name().to_string_lossy().into_owned();
+        if is_aux_file(&n) {
+            let _ = fs::copy(e.path(), cwd.join(&n));
+        }
+    }
+}
+
+/// Giữ các tệp phụ vừa dịch xong: ghi vào thư mục tạm rồi đổi tên, nên không bao giờ còn bộ tệp dở dang.
+pub(crate) fn keep_aux(cwd: &Path, store: &Path) {
+    let Some(parent) = store.parent() else { return };
+    let Ok(rd) = fs::read_dir(cwd) else { return };
+    let files: Vec<PathBuf> = rd.flatten().filter(|e| is_aux_file(&e.file_name().to_string_lossy())).map(|e| e.path()).collect();
+    if files.is_empty() || fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let tmp = store.with_extension(format!("{}.part", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    if fs::create_dir_all(&tmp).is_err() || !files.iter().all(|f| f.file_name().map(|n| fs::copy(f, tmp.join(n)).is_ok()).unwrap_or(false)) {
+        let _ = fs::remove_dir_all(&tmp);
+        return;
+    }
+    let _ = fs::remove_dir_all(store);
+    if fs::rename(&tmp, store).is_err() {
+        let _ = fs::remove_dir_all(&tmp);
+    }
+}
+
 // ---------- phiên bản TeX: hỏi một lần, nhớ trong phiên ----------
 
 /// Dấu nhận diện tệp chạy của bộ dịch: đường dẫn + cỡ + thời điểm sửa. Cài/cập nhật TeX Live (đổi tệp chạy) ⇒ dấu khác ⇒ hỏi lại.
@@ -832,6 +874,10 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     let logp = cwd.join(format!("{JOBNAME}.log"));
     let _ = fs::remove_file(&pdf); // không bao giờ nhầm PDF cũ là kết quả lần này
     let _ = fs::remove_file(&logp);
+    // Tệp phụ (.aux, .out…) của đúng (chế độ, tệp chính) lần dịch thành công trước: số trang "x/y", nhãn, mục lục đã có sẵn nên
+    // thường chỉ cần MỘT lượt. TeX vẫn tự báo khi cần chạy lại (needs_rerun) nên tệp phụ cũ không bao giờ làm sai kết quả.
+    let aux_keep = aux_store(root, id, mode, &slot);
+    restore_aux(&aux_keep, &cwd);
 
     // pdfLaTeX: phần đầu đề nạp sẵn thành định dạng (.fmt) nếu đã có; chưa có thì dịch như cũ và dựng ở luồng nền cho lần sau
     let mut fmt = if engine == "pdflatex" { examfmt::ensure(root, &cwd, &compile_name, &tex_bin, support_dir, &ver) } else { None };
@@ -898,6 +944,9 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     }
     if let (Some(f), "ok") = (&tried_fmt, out.status.as_str()) {
         examfmt::discard(f); // định dạng làm hỏng lần dịch mà kiểu cũ thì được: bỏ, không dựng lại cho phần đầu này
+    }
+    if out.status == "ok" {
+        keep_aux(&cwd, &aux_keep);
     }
     out.ms = started.elapsed().as_millis() as u64;
     out.pages = parse_pages(&last_log);
@@ -1318,6 +1367,40 @@ mod tests {
         assert_eq!(remember_version(None, || ask("A", true)).unwrap(), "A");
         assert_eq!(remember_version(None, || ask("B", true)).unwrap(), "B");
         assert_eq!(calls, 6);
+    }
+
+    #[test]
+    fn giu_aux_rieng_theo_che_do_va_tep_chinh() {
+        let d = crate::testutil::dir("examcompile-giu-aux");
+        let _ = fs::remove_dir_all(&d);
+        let a = aux_store(&d, "de1", "de", &slot_of("main-101.tex"));
+        let b = aux_store(&d, "de1", "loigiai", &slot_of("main-101.tex"));
+        let c = aux_store(&d, "de1", "de", &slot_of("main-102.tex"));
+        let m = aux_store(&d, "de1", "de", "");
+        assert!(a != b && a != c && a != m && a.starts_with(build_dir(&d, "de1")));
+        let w = d.join("work");
+        fs::create_dir_all(&w).unwrap();
+        keep_aux(&w, &a);
+        assert!(!a.exists(), "không có tệp phụ thì không ghi gì");
+        for (n, t) in [("hedu-out.aux", "\\zref@newlabel{101-lastpage}{3}"), ("hedu-out.out", "bookmark"), ("hedu-out.pdf", "%PDF"), ("hedu-out.log", "log"), ("hedu-out.synctex.gz", "s"), ("khac.aux", "x")] {
+            fs::write(w.join(n), t).unwrap();
+        }
+        keep_aux(&w, &a);
+        let mut kept: Vec<String> = fs::read_dir(&a).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        kept.sort();
+        assert_eq!(kept, vec!["hedu-out.aux", "hedu-out.out"], "chỉ giữ tệp phụ của lần dịch, không giữ PDF/nhật ký/SyncTeX");
+        fs::write(w.join("hedu-out.aux"), b"moi").unwrap();
+        fs::remove_file(w.join("hedu-out.out")).unwrap();
+        keep_aux(&w, &a);
+        assert_eq!(fs::read(a.join("hedu-out.aux")).unwrap(), b"moi", "ghi đè bản cũ");
+        assert!(!a.join("hedu-out.out").exists(), "thay cả bộ, không trộn bộ cũ");
+        assert_eq!(fs::read_dir(a.parent().unwrap()).unwrap().count(), 1, "không sót thư mục tạm");
+        let w2 = d.join("work2");
+        fs::create_dir_all(&w2).unwrap();
+        restore_aux(&a, &w2);
+        assert_eq!(fs::read(w2.join("hedu-out.aux")).unwrap(), b"moi");
+        restore_aux(&d.join("khong-co"), &w2); // không có bộ giữ: không làm gì
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]
