@@ -1641,19 +1641,19 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
 \definecolor{ThemeSecondary}{HTML}{6C97CF}
 \def\ThemeName{SKY PANEL}
 
-% ---------- Tiêu đề: khung xanh đậm chuyển sắc, hai cột (trường | kỳ thi) cách nhau bằng vạch mảnh ----------
+% ---------- Tiêu đề: khung xanh nhạt chuyển sắc, chữ xanh đậm, vạch nhấn bên trái; hai cột (trường | kỳ thi) cách nhau bằng vạch mảnh ----------
 \newcommand{\HyThemeTitle}{%
  \begin{tcolorbox}[hytitle]
   \begin{minipage}[c]{.40\linewidth}\centering
    {\bfseries\fontsize{12}{15}\selectfont\MakeUppercase{\SchoolName}\par}
-   \ifx\SchoolYear\empty\else\vspace{1.6mm}{\fontsize{10.5}{13}\selectfont\color{SkyHi}Năm học \SchoolYear\par}\fi
-   \vspace{2.2mm}\tcbox[on line,hypill]{\scshape\fontsize{9.5}{12}\selectfont Đề chính thức}\par
+   \ifx\SchoolYear\empty\else\vspace{1.6mm}{\fontsize{10.5}{13}\selectfont\color{ExamAccent}Năm học \SchoolYear\par}\fi
+   \vspace{2.2mm}\tcbox[on line,hypill]{\sffamily\bfseries\fontsize{8.5}{11}\selectfont ĐỀ CHÍNH THỨC}\par
   \end{minipage}%
-  \hfill{\color{SkyHi!70}\vrule width .5pt height 10mm depth 10mm}\hfill%
+  \hfill{\color{SkyHi}\vrule width .6pt height 10mm depth 10mm}\hfill%
   \begin{minipage}[c]{.52\linewidth}\centering
    {\bfseries\fontsize{15}{18.5}\selectfont\MakeUppercase{\ExamName}\par}
-   \vspace{1.2mm}{\bfseries\fontsize{12}{15}\selectfont\color{SkyHi}\SubjectName\par}
-   \vspace{1.2mm}{\itshape\fontsize{10}{13}\selectfont Thời gian: \ExamTime\ (không kể thời gian phát đề)\par}
+   \vspace{1.2mm}{\bfseries\fontsize{12}{15}\selectfont\color{ExamAccent}\SubjectName\par}
+   \vspace{1.2mm}{\itshape\fontsize{10}{13}\selectfont\color{SkyInk}Thời gian: \ExamTime\ (không kể thời gian phát đề)\par}
   \end{minipage}
  \end{tcolorbox}}
 
@@ -1666,7 +1666,7 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
   \noindent\textbf{Lớp:}\,\makebox[24mm]{\dotfill}\hfill\textbf{Số báo danh:}\,\makebox[44mm]{\dotfill}\par
   \tcblower
   \centering
-  {\sffamily\bfseries\scshape\fontsize{8.5}{10}\selectfont\color{ExamAccent}Mã đề thi\par}\vspace{.8mm}
+  {\sffamily\bfseries\fontsize{8}{10}\selectfont\color{ExamAccent}MÃ ĐỀ THI\par}\vspace{.8mm}
   {\sffamily\bfseries\fontsize{24}{26}\selectfont\color{SkyDeep}\ExamCode\par}
  \end{tcolorbox}}
 
@@ -1762,13 +1762,15 @@ export const HYMATH_THEMES: readonly HyTheme[] = [
  % Màu và kiểu khung dùng cho tiêu đề, ô thông tin, tiêu đề phần (bản in trắng đen: khung đen, nền trắng).
  \ifExamColor
   \definecolor{SkyDeep}{HTML}{0F2F66}\definecolor{SkyHi}{HTML}{BFDBFE}
+  \definecolor{SkyPale}{HTML}{F3F7FF}\definecolor{SkyMist}{HTML}{DCE8FC}\definecolor{SkyInk}{HTML}{334E7A}
   \tcbset{
-   hytitle/.style={enhanced,interior style={left color=SkyDeep,right color=ExamAccent},frame hidden,boxrule=0pt,arc=3mm,
-    left=6mm,right=6mm,top=4.4mm,bottom=4.4mm,before skip=2mm,after skip=3.5mm,coltext=white,
-    overlay={\fill[SkyHi!85] ([xshift=7mm]frame.north west) rectangle ++(20mm,-1.2mm);}},
-   hypill/.style={colback=white!16!SkyDeep,colframe=SkyHi!75,boxrule=.5pt,arc=1.4mm,left=7pt,right=7pt,top=2pt,bottom=2pt,coltext=white}}
+   hytitle/.style={enhanced,interior style={left color=SkyPale,right color=SkyMist},colframe=SkyHi,boxrule=.6pt,arc=3mm,
+    left=8mm,right=6mm,top=4.4mm,bottom=4.4mm,before skip=2mm,after skip=3.5mm,coltext=SkyDeep,
+    overlay={\begin{scope}\clip[rounded corners=3mm] (frame.south west) rectangle (frame.north east);
+     \fill[ExamAccent] (frame.south west) rectangle ([xshift=2.2mm]frame.north west);\end{scope}}},
+   hypill/.style={colback=ExamAccent,colframe=ExamAccent,boxrule=0pt,arc=1.6mm,left=8pt,right=8pt,top=2.4pt,bottom=2.4pt,coltext=white}}
  \else
-  \colorlet{SkyDeep}{black}\colorlet{SkyHi}{black}
+  \colorlet{SkyDeep}{black}\colorlet{SkyHi}{black}\colorlet{SkyInk}{black}
   \tcbset{
    hytitle/.style={enhanced,colback=white,colframe=black,boxrule=.9pt,arc=3mm,
     left=6mm,right=6mm,top=4.4mm,bottom=4.4mm,before skip=2mm,after skip=3.5mm,coltext=black},
