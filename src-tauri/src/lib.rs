@@ -535,6 +535,7 @@ pub fn run() {
             examword::exam_word_info,
             examword::exam_word_export,
             examword::exam_word_export_draft,
+            examword::word_decor_pdf,
             wordimport::word_import,
             wordimport::word_import_json,
             wordimport::word_import_cleanup,

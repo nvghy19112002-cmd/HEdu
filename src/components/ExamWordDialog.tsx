@@ -1,14 +1,17 @@
 // Xuất Word thẳng từ màn Tạo đề (đề chưa cần lưu vào Thư viện): chọn mã đề, chế độ, thư mục rồi xuất.
 import { useEffect, useRef, useState } from 'react';
 import { chooseProjectFolder } from '../lib/examlib';
-import { exportWordText, type WordOut } from '../lib/examword';
+import { exportWordText, type WordOut, type WordSource } from '../lib/examword';
+import { buildDecor, type Decor } from '../lib/worddecorrun';
+import type { WrapInfo } from '../lib/examwrap';
 import type { QImg } from '../lib/qimages';
 import { DEFAULT_WORD_MODES, WORD_MODES, wordModeById } from '../lib/wordmodes';
 
 export interface WordCode { code: string; text: string }
 type Res = { code: string; mode: string; out?: WordOut; err?: string };
 
-export function ExamWordDialog({ codes, images, onClose, onToast }: { codes: readonly WordCode[]; images: readonly QImg[]; onClose(): void; onToast(m: string): void }) {
+/** `themed`: dựng Word giống mẫu in HyMath (khung tiêu đề, dải PHẦN, đầu/chân trang lấy từ chính mẫu TeX). */
+export function ExamWordDialog({ codes, images, src, themed, title = 'Xuất Word (.docx)', onClose, onToast }: { codes: readonly WordCode[]; images?: readonly QImg[]; src?: WordSource; themed?: { themeId: string; themeName: string; info: WrapInfo }; title?: string; onClose(): void; onToast(m: string): void }) {
   const [chosen, setChosen] = useState<string[]>(() => codes.map((c) => c.code));
   const [modes, setModes] = useState<string[]>(DEFAULT_WORD_MODES);
   const [dest, setDest] = useState<string | null>(null);
@@ -33,11 +36,21 @@ export function ExamWordDialog({ codes, images, onClose, onToast }: { codes: rea
     if (why || busy || !dest) return;
     setBusy(true); setRes([]);
     const out: Res[] = [];
+    const decors = new Map<string, Decor>();
+    const source: WordSource = src ?? { images: images ?? [] };
     try {
       for (const c of codes.filter((x) => chosen.includes(x.code))) {
         for (const m of ms) {
           setProg(`Đang xuất mã ${c.code} · ${m.label} (${out.length + 1}/${total})`);
-          try { out.push({ code: c.code, mode: m.id, out: await exportWordText(c.text, c.code, { solution: m.solution, mark: m.mark, print: m.print, suffix: m.suffix }, dest, { images }, (i, n) => setProg(`Mã ${c.code}: dịch hình ${i}/${n}`)) }); }
+          try {
+            let decor: Decor | undefined;
+            if (themed) {
+              const k = `${c.code}|${m.print ? 1 : 0}`;
+              if (!decors.has(k)) { setProg(`Mã ${c.code}: dựng khung theo mẫu ${themed.themeName}…`); decors.set(k, await buildDecor(c.text, themed.themeId, m.print, themed.info)); }
+              decor = decors.get(k);
+            }
+            out.push({ code: c.code, mode: m.id, out: await exportWordText(c.text, c.code, { solution: m.solution, mark: m.mark, print: m.print, suffix: m.suffix }, dest, source, (i, n) => setProg(`Mã ${c.code}: dịch hình ${i}/${n}`), decor) });
+          }
           catch (e) { out.push({ code: c.code, mode: m.id, err: e instanceof Error ? e.message : String(e) }); }
           setRes([...out]);
         }
@@ -50,9 +63,9 @@ export function ExamWordDialog({ codes, images, onClose, onToast }: { codes: rea
     <>
       <div className="cfm-scrim" onClick={() => { if (!busy) onClose(); }} />
       <div className="cfm" role="dialog" aria-modal="true" aria-label="Xuất Word" style={{ maxWidth: 600 }}>
-        <h3>Xuất Word (.docx)</h3>
+        <h3>{title}</h3>
         <div className="cfm-body">
-          <p className="te-note" style={{ marginTop: 0 }}>Mỗi mã đề một tệp. Công thức là Equation của Word (sửa được); hình TikZ thành ảnh. Không cần lưu đề vào Thư viện trước.</p>
+          <p className="te-note" style={{ marginTop: 0 }}>Mỗi mã đề một tệp. Công thức là Equation của Word (sửa được); hình TikZ thành ảnh. {themed ? ` Khung tiêu đề, dải PHẦN, đầu/chân trang theo mẫu ${themed.themeName} (giống bản PDF).` : ' Không cần lưu đề vào Thư viện trước.'}</p>
           <div style={{ margin: '8px 0 6px' }}><b>Mã đề ({chosen.length}/{codes.length})</b></div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {codes.map((c) => (

@@ -4,6 +4,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useApp } from '../app-context';
 import { ExamSetupDialog } from '../components/ExamSetupDialog';
+import { ExamWordDialog } from '../components/ExamWordDialog';
+import { findTitle } from '../lib/worddecor';
 import { setScratchHandoff } from '../lib/importhandoff';
 import { exportPdf } from '../lib/exampdf';
 import { CodeEditor, type CodeEditorHandle } from '../components/CodeEditor';
@@ -42,6 +44,7 @@ export interface ExamWorkspaceHandle { requestClose(): void }
 export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function ExamWorkspace({ id, name, mainFile, schoolYear, hidden, onLibrary, onInfo, onClose, onStatus }, ref) {
   const { toast, go } = useApp();
   const [setupOpen, setSetupOpen] = useState(false);
+  const [wordOpen, setWordOpen] = useState(false);
   /** đóng menu Công cụ sau khi bấm một mục */
   const closeMenu = (e: React.MouseEvent) => { const d = (e.currentTarget as HTMLElement).closest('details'); if (d) d.open = false; };
   const ed = useRef<CodeEditorHandle>(null);
@@ -534,6 +537,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
             </div>
           </details>
           <button type="button" className="btn btn-sm" disabled={compiling || result?.status !== 'ok'} title={result?.status === 'ok' ? `Xuất PDF “${modeLabel(result.mode as ExamMode)}” vừa biên dịch thành công ra một tệp` : 'Biên dịch thành công rồi mới xuất được PDF'} onClick={() => { if (result) void exportPdf(id, name, result.mode as ExamMode).then((d) => { if (d) toast(`Đã xuất PDF: ${d}`); }).catch((e) => toast(e instanceof Error ? e.message : String(e))); }}>Xuất PDF…</button>
+          {hyData && <button type="button" className="btn btn-sm" disabled={compiling} title={`Xuất Word giống bản PDF theo mẫu ${themeName}: khung tiêu đề, dải PHẦN, đầu/chân trang; công thức là Equation sửa được`} onClick={() => setWordOpen(true)}>Xuất Word…</button>}
         </span>
         <button type="button" className="btn btn-sm btn-ghost" onClick={onInfo} title="Thông tin đề: đổi tên, lớp, loại đề, chốt đề, xuất gói, sao chép, Thùng rác…">Thông tin…</button>
       </header>
@@ -685,6 +689,11 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
           </div>
         </>
       )}
+      {wordOpen && mainText !== null && (() => {
+        const di = loadDefaultInfo();
+        const code = findTitle(mainText)?.code.replace(/[^A-Za-z0-9_-]/g, '') || 'de';
+        return <ExamWordDialog title={`Xuất Word theo mẫu ${themeName}`} codes={[{ code, text: mainText }]} src={{ id }} themed={{ themeId: loadThemeId(), themeName, info: { schoolYear: schoolYear || di.year, teacher: di.teacher } }} onToast={toast} onClose={() => setWordOpen(false)} />;
+      })()}
       {setupOpen && <ExamSetupDialog id={id} name={name} mainFile={mainFile} onClose={() => setSetupOpen(false)}
         onWritten={(rel) => { if (tabsRef.current.some((t) => t.rel === rel)) void reload(rel); else void reloadList(); }}
         onOpenScratch={(text) => { setScratchHandoff(name, text); setSetupOpen(false); go({ screen: 'tex' }); }} />}
