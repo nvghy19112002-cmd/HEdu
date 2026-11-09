@@ -1,7 +1,7 @@
-// Cài đặt › Đề thi: chọn mẫu in (9 mẫu HyMath + kiểu cũ của HEdu) cho tệp đề chỉ có dữ liệu + Thông tin mặc định
+// Cài đặt › Đề thi: mẫu in đang dùng cho tệp đề chỉ có dữ liệu (hiện chỉ Sky Panel) + Thông tin mặc định
 // (Sở/Phòng, Trường, Tổ tự điền vào đề mới ở Tạo đề; dòng tên giáo viên và năm học in trên mẫu HyMath).
 import { useState } from 'react';
-import { EMPTY_INFO, loadDefaultInfo, loadThemeId, saveDefaultInfo, saveThemeId, themeOf, THEMES, type DefaultInfo } from '../lib/examtheme';
+import { ACTIVE_THEMES, EMPTY_INFO, loadDefaultInfo, loadThemeId, saveDefaultInfo, saveThemeId, themeOf, type DefaultInfo } from '../lib/examtheme';
 
 export function ExamThemePanel({ toast }: { toast(m: string): void }) {
   const [theme, setTheme] = useState(loadThemeId);
@@ -16,16 +16,19 @@ export function ExamThemePanel({ toast }: { toast(m: string): void }) {
     <>
       <section className="panel" aria-label="Mẫu in đề thi">
         <h2>Mẫu in đề thi</h2>
-        <span className="sys-hint">Dùng khi biên dịch tệp đề <b>chỉ có dữ liệu</b> (không có \documentclass, vd tệp có \TieuDeDeSo…): HEdu tự ghép phần đầu theo mẫu chọn ở đây, tệp đề không bị sửa. Mẫu HyMath dịch bằng XeLaTeX và có ba bản: Đề, Đề in trắng đen, Lời giải. Đề có \documentclass riêng và đề tạo từ Ngân hàng giữ cách in của chúng.</span>
-        <div className="xt-themes" role="radiogroup" aria-label="Mẫu in">
-          {THEMES.map((x) => (
-            <label key={x.id} className={`xt-theme${x.id === theme ? ' on' : ''}`}>
-              <input type="radio" name="examtheme" checked={x.id === theme} onChange={() => { saveThemeId(x.id); setTheme(x.id); toast(`Tệp đề chỉ có dữ liệu sẽ dịch theo mẫu “${x.name}”.`); }} />
-              <span><b>{x.name}</b> <small className="xl-meta">{x.kind === 'hymath' ? `HyMath · ${x.file}` : `phiên bản ${x.version}`}</small><br /><span className="xl-meta">{x.desc}</span></span>
-            </label>
-          ))}
-        </div>
-        <span className="xl-meta">Đang dùng: <b>{t.name}</b>.</span>
+        <span className="sys-hint">Dùng khi biên dịch tệp đề <b>chỉ có dữ liệu</b> (không có \documentclass, vd tệp có \TieuDeDeSo…): HEdu tự ghép phần đầu theo mẫu dưới đây, tệp đề không bị sửa. Mẫu HyMath dịch bằng XeLaTeX và có ba bản: Đề, Đề in trắng đen, Lời giải. Đề có \documentclass riêng và đề tạo từ Ngân hàng giữ cách in của chúng.</span>
+        {ACTIVE_THEMES.length > 1 ? (
+          <div className="xt-themes" role="radiogroup" aria-label="Mẫu in">
+            {ACTIVE_THEMES.map((x) => (
+              <label key={x.id} className={`xt-theme${x.id === theme ? ' on' : ''}`}>
+                <input type="radio" name="examtheme" checked={x.id === theme} onChange={() => { saveThemeId(x.id); setTheme(x.id); toast(`Tệp đề chỉ có dữ liệu sẽ dịch theo mẫu “${x.name}”.`); }} />
+                <span><b>{x.name}</b><br /><span className="xl-meta">{x.desc}</span></span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <div className="xt-themes"><div className="xt-theme on"><span><b>{t.name}</b> <small className="xl-meta">mẫu đang dùng</small><br /><span className="xl-meta">{t.desc}</span></span></div></div>
+        )}
       </section>
       <section className="panel" aria-label="Thông tin mặc định">
         <h2>Thông tin mặc định</h2>
