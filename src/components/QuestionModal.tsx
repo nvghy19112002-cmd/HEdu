@@ -70,7 +70,7 @@ export function QuestionModal({ q, index, total, eff, selected, onToggleSel, onP
       <div className="qm-scrim" onMouseDown={() => guard(onClose)} aria-hidden="true" />
       {editing ? (
         <div className="qm qm-edit" role="dialog" aria-modal="true" aria-label={`Sửa câu ${seqLabel(q.seq)}`} tabIndex={-1} ref={root}>
-          <QuestionEditor key={q.uid} editing={q} variant="drawer" leaveRef={leaveRef} onSaved={() => onEditing(false)} onClose={() => guard(() => onEditing(false))} />
+          <QuestionEditor key={q.uid} editing={q} variant="drawer" leaveRef={leaveRef} onSaved={() => onEditing(false)} onClose={() => guard(() => onEditing(false))} nav={{ pos: `${index + 1} / ${total}`, prev: index > 0 ? () => { onPrev(); onEditing(true); } : undefined, next: index < total - 1 ? () => { onNext(); onEditing(true); } : undefined }} />
         </div>
       ) : (
       <div className="qm" role="dialog" aria-modal="true" aria-label={`Câu ${seqLabel(q.seq)}`} tabIndex={-1} ref={root}>

@@ -71,9 +71,11 @@ export interface QuestionEditorProps {
   onBack?(): void;
   /** để bên ngoài (ngăn sửa) hỏi “có rời đi được không” theo cùng một cách với go() */
   leaveRef?: MutableRefObject<((proceed: () => void) => boolean) | null>;
+  /** câu trước/sau trong danh sách đang lọc (ngăn sửa ở Ngân hàng); `pos` vd "3 / 72" */
+  nav?: { prev?(): void; next?(): void; pos?: string };
 }
 
-export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, leaveRef, prefill, onBack }: QuestionEditorProps) {
+export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, leaveRef, prefill, onBack, nav }: QuestionEditorProps) {
   const { go, toast, setGuard } = useApp();
   const { questions } = useBank();
 
@@ -250,6 +252,7 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
   const warns = issues.filter((i) => i.level === 'canh');
   const title = editing ? `Sửa câu ${seqLabel(editing.seq)}` : 'Câu hỏi mới';
   const statusText = editing ? (dirty ? 'Có thay đổi chưa lưu' : 'Đã lưu trong ngân hàng') : 'Bản nháp · đã tự lưu';
+  const latexChanged = !!editing && latex.trim() !== editing.latex.trim();
 
   return (
     <div className={`qe qe-${variant}`}>
@@ -257,12 +260,19 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
         <div className="qe-title">
           <h1>{title}</h1>
           <span className={`status-chip${editing && dirty ? ' dirty' : ''}`} role="status">{statusText}</span>
+          {variant === 'drawer' && nav && (nav.prev || nav.next) && (
+            <span className="qe-nav">
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!nav.prev} title="Câu trước (Alt+←)" aria-label="Câu trước" onClick={() => { if (nav.prev) leave(nav.prev); }}>‹ Câu trước</button>
+              {nav.pos && <span className="xl-meta">{nav.pos}</span>}
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!nav.next} title="Câu sau (Alt+→)" aria-label="Câu sau" onClick={() => { if (nav.next) leave(nav.next); }}>Câu sau ›</button>
+            </span>
+          )}
         </div>
         <div className="head-actions">
           {onBack && variant === 'page' && <button type="button" className="btn btn-outline" onClick={onBack}>‹ Về Ngân hàng</button>}
           {editing && variant === 'page' && <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'editor', fromBank: !!onBack })}>+ Câu mới</button>}
-          <button type="button" className="btn btn-accent" onClick={() => save()} disabled={!!editing && !dirty} title="Ctrl S">{editing ? 'Lưu câu hỏi' : 'Lưu vào ngân hàng'}</button>
-          {variant === 'drawer' && <button type="button" className="btn btn-outline" onClick={onClose}>Đóng</button>}
+          {variant !== 'drawer' && <button type="button" className="btn btn-accent" onClick={() => save()} disabled={!!editing && !dirty} title="Ctrl S">{editing ? 'Lưu câu hỏi' : 'Lưu vào ngân hàng'}</button>}
+          {variant === 'drawer' && <button type="button" className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Đóng" title="Đóng (Esc)">✕</button>}
         </div>
       </header>
 
@@ -488,6 +498,16 @@ export function QuestionEditor({ editing, variant, onDirty, onSaved, onClose, le
         {undo != null && <button type="button" className="linkbtn" onClick={() => { setLatex(undo); setUndo(null); }}>Hoàn tác đổi loại</button>}
         <button type="button" className="linkbtn qe-more" aria-expanded={details} onClick={() => setDetails(!details)}>{details ? 'Ẩn chi tiết' : 'Chi tiết'}</button>
       </footer>
+      {variant === 'drawer' && (
+        <div className="qe-acts">
+          {editing?.review && <span className={`qe-review-note${latexChanged ? ' warn' : ''}`}>{editing.review === 'approved' ? 'Đã duyệt' : 'Cần sửa'} · sửa LaTeX sẽ đưa câu về “Chưa kiểm tra”</span>}
+          <span className="qe-acts-r">
+            <button type="button" className="btn btn-outline" onClick={onClose}>Huỷ</button>
+            {editing && nav?.next && <button type="button" className="btn btn-outline" disabled={!dirty} title="Lưu rồi mở câu sau trong danh sách" onClick={() => { if (save()) nav.next?.(); }}>Lưu &amp; câu sau</button>}
+            <button type="button" className="btn btn-accent" onClick={() => save()} disabled={!!editing && !dirty} title="Ctrl S">{editing ? 'Lưu' : 'Lưu vào ngân hàng'}</button>
+          </span>
+        </div>
+      )}
       {details && (
         <div className="qe-details">
           <p className="sys-hint">“Đã đọc được cú pháp” là HEdu tự đọc cấu trúc, chưa phải TeX đã biên dịch. Bấm “Xem chuẩn” để TeX Live biên dịch thật.</p>

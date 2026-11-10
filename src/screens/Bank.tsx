@@ -714,7 +714,11 @@ export function BankScreen() {
           onSlides={() => openSlides('Ngân hàng', [{ latex: viewQ.latex, uid: viewQ.uid }])}
           onPrev={() => stepView(-1)} onNext={() => stepView(1)} editing={viewEdit} onEditing={setViewEdit} onReview={(s) => changeReview(viewQ, s)} onClose={() => { setViewUid(null); setViewEdit(false); }} />
       )}
-      {opened && <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} />}
+      {opened && (() => {
+        const i = list.findIndex((x) => x.uid === opened.uid);
+        const nav = i < 0 ? undefined : { pos: `${i + 1} / ${list.length}`, prev: i > 0 ? () => setOpenUid(list[i - 1].uid) : undefined, next: i + 1 < list.length ? () => setOpenUid(list[i + 1].uid) : undefined };
+        return <QuestionDrawer q={opened} onClose={() => setOpenUid(null)} onDirty={() => undefined} nav={nav} />;
+      })()}
     </>
   );
 }

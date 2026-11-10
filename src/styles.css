@@ -2929,3 +2929,10 @@ button.bt-caret:hover svg { background: var(--pri-soft); color: var(--pri); }
 .xp-col { display: flex; flex-direction: column; gap: 8px; }
 .xp-radio { display: flex; gap: 10px; align-items: flex-start; }
 .xp-foot-note { margin: 8px 0 0; }
+
+/* ===== SỬA CÂU (thiết kế giai đoạn 3, màn 18): câu trước/sau ở đầu, hàng nút Huỷ · Lưu & câu sau · Lưu ở đáy ===== */
+.qe-nav { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
+.qe-acts { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--paper); }
+.qe-acts-r { display: flex; gap: 8px; margin-left: auto; }
+.qe-review-note { font-size: 12.5px; color: var(--ink-3); }
+.qe-review-note.warn { color: var(--warn-ink, var(--ink-2)); font-weight: 600; }
