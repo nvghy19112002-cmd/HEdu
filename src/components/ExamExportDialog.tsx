@@ -1,4 +1,4 @@
-// Xuất PDF từng mã đề và gói ZIP (giáo viên / học sinh) cho một đề đã lưu trong Thư viện đề.
+// Hộp Xuất đề (thiết kế giai đoạn 3, màn 19) cho một đề đã lưu trong Thư viện đề: PDF từng mã + ZIP, Word, Excel đáp án, Excel nền tảng, QR, phiếu tô.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { examDuplicate, chooseProjectFolder } from '../lib/examlib';
 import { answerSheetTex } from '../lib/answersheet';
@@ -23,6 +23,11 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
   const [wModes, setWModes] = useState<string[]>(DEFAULT_WORD_MODES);
   const [wRes, setWRes] = useState<{ code: string; mode: string; out?: WordOut; err?: string }[]>([]);
   const [wProg, setWProg] = useState('');
+  const [tile, setTile] = useState<'pdf' | 'word' | 'xlsx' | 'plat' | 'qr' | 'phieu'>('pdf');
+  const [plat, setPlat] = useState<string>('tnmaker');
+  // nơi lưu nhớ lần trước (chỉ là tiện lợi theo máy)
+  useEffect(() => { try { const d = localStorage.getItem('hedu.exportdir'); if (d) setDest(d); } catch { /* bỏ qua */ } }, []);
+  useEffect(() => { try { if (dest) localStorage.setItem('hedu.exportdir', dest); } catch { /* bỏ qua */ } }, [dest]);
 
   const load = useCallback(async () => {
     try {
@@ -128,29 +133,64 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
 
   const toggle = (c: string) => setChosen((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]));
 
+  // ——— bố cục mới (thiết kế giai đoạn 3, màn 19): mã đề + nơi lưu · 6 ô kiểu xuất · tuỳ chọn của ô đang chọn · nút làm đúng việc ———
+  type Tile = 'pdf' | 'word' | 'xlsx' | 'plat' | 'qr' | 'phieu';
+  const TILES: { id: Tile; tag: string; name: string; note: string }[] = [
+    { id: 'pdf', tag: 'PDF', name: 'Đề + đáp án', note: 'PDF từng mã; gói giáo viên (có đáp án) hoặc học sinh, nén ZIP.' },
+    { id: 'word', tag: 'DOCX', name: 'Word', note: '6 kiểu: học sinh, in đen trắng, lời giải, tô đáp án…' },
+    { id: 'xlsx', tag: 'XLSX', name: 'Excel đáp án', note: 'Một tệp: theo mã đề và theo câu, mọi mã.' },
+    { id: 'plat', tag: 'XLSX', name: 'Nền tảng thi', note: 'TNMaker, SmartTest, AZOTA, OLM, YoungMix.' },
+    { id: 'qr', tag: 'QR', name: 'Mã QR đáp án', note: 'Ảnh PNG cho TNMaker, SmartTest, YoungMix.' },
+    { id: 'phieu', tag: 'PHIẾU', name: 'Phiếu tô A4', note: 'Đúng số câu của đề: SBD, mã đề, Phần I–III.' },
+  ];
+  const n = chosen.length;
+  const qrList = PLATFORM_XLSX.filter((p) => (QR_PLATFORMS as readonly string[]).includes(p.id));
+  const platOf = (list: readonly (typeof PLATFORM_XLSX)[number][]) => list.find((p) => p.id === plat) ?? list[0];
+  const act: { label: string; ok: boolean; why?: string; run(): void } = (() => {
+    const needDest = dest ? undefined : 'Chọn nơi lưu trước';
+    switch (tile) {
+      case 'pdf': return { label: busy ? 'Đang xuất…' : `Xuất ${PACK_LABEL[kind].toLowerCase()} · ${n} mã`, ok: gate.ok, why: gate.ok ? undefined : gate.why, run: () => { void run(); } };
+      case 'word': return { label: busy ? 'Đang xuất…' : `Xuất Word ${n} mã × ${wModes.length} kiểu`, ok: !!dest && n > 0 && wModes.length > 0, why: needDest ?? (!n ? 'Chọn ít nhất một mã đề' : !wModes.length ? 'Chọn ít nhất một kiểu bản' : undefined), run: () => { void wordRun(); } };
+      case 'xlsx': return { label: 'Xuất Excel đáp án', ok: !!dest, why: needDest, run: () => { void xlsx(); } };
+      case 'plat': { const p = platOf(PLATFORM_XLSX); return { label: `Xuất Excel cho ${p.label}`, ok: !!dest, why: needDest, run: () => { void platRun(p); } }; }
+      case 'qr': { const p = platOf(qrList); return { label: `Tạo mã QR cho ${p.label}`, ok: !!dest, why: needDest, run: () => { void qrRun(p); } }; }
+      default: return { label: 'Tạo phiếu tô', ok: !!dest, why: needDest, run: () => { void sheetRun(); } };
+    }
+  })();
+
   return (
     <>
       <div className="cfm-scrim" onClick={() => { if (!busy) onClose(); }} />
-      <div className="cfm" role="dialog" aria-modal="true" aria-label="Xuất từng mã đề" style={{ maxWidth: 640 }}>
-        <h3>Xuất từng mã đề (PDF, Word) · {name}</h3>
+      <div className="cfm xp-dlg" role="dialog" aria-modal="true" aria-label="Xuất đề">
+        <h3>Xuất đề “{name}”{info ? <span className="xl-meta"> · {info.codes.length} mã</span> : null}</h3>
         <div className="cfm-body">
           {err && <p className="te-bad" role="alert">{err}</p>}
           {!info && !err && <p>Đang đọc dữ liệu mã đề…</p>}
           {info && !info.hasSpec && <p>{info.problems[0]}</p>}
           {info && info.hasSpec && (
             <>
-              <div role="group" aria-label="Loại gói" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-                {(['giao-vien', 'hoc-sinh'] as PackKind[]).map((k, i) => (
-                  <label key={k} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                    <input type="radio" name="packkind" checked={kind === k} disabled={busy} onChange={() => setKind(k)} ref={i === 0 ? undefined : undefined} />
-                    <span><b>{PACK_LABEL[k]}</b><br /><span style={{ color: 'var(--ink-3)' }}>{PACK_NOTE[k]}</span></span>
-                  </label>
-                ))}
-                {kind === 'giao-vien' && <label className="sw" style={{ paddingLeft: 26 }}>Kèm PDF lời giải từng mã (dịch thêm một lượt mỗi mã)<input type="checkbox" checked={sol} disabled={busy} onChange={(e) => setSol(e.target.checked)} /></label>}
+              <div className="xp-top">
+                <div className="xp-codes" role="group" aria-label="Mã đề">
+                  <span className="xp-lbl">Mã đề</span>
+                  {info.codes.map((c) => {
+                    const ok = c.hasMain && !c.problem;
+                    const r = out?.results.find((x) => x.code === c.code);
+                    return (
+                      <button key={c.code} type="button" className={`xp-chip${chosen.includes(c.code) ? ' on' : ''}`} aria-pressed={chosen.includes(c.code)} disabled={busy || !ok}
+                        title={c.problem ?? (!c.hasMain ? 'Chưa có tệp chính riêng' : `${c.counts[0]}+${c.counts[1]}+${c.counts[2]}${c.counts[3] ? `+${c.counts[3]}` : ''} câu`)} onClick={() => toggle(c.code)}>
+                        {c.code}{r ? <span className={r.status === 'ok' ? 'okmark' : 'te-bad'}> {r.status === 'ok' ? '✓' : '✗'}</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="xp-dest">
+                  <span className="xp-lbl">Lưu vào</span>
+                  <button type="button" className="btn btn-sm" ref={first} disabled={busy} onClick={() => { void pick(); }} title={dest ?? 'Chọn thư mục lưu'}>{dest ? dest.split(/[\\/]/).filter(Boolean).slice(-2).join('\\') : 'Chọn thư mục…'}</button>
+                </div>
               </div>
 
               {missingMain.length > 0 && (
-                <div className="te-warn" style={{ marginBottom: 12 }}>
+                <div className="te-warn" style={{ margin: '8px 0' }}>
                   <p><b>{missingMain.length} mã chưa có tệp chính riêng</b> (đề lưu từ phiên bản trước): {missingMain.map((c) => c.code).join(', ')}.</p>
                   {info.canBackfill
                     ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { void backfill(); }}>Bổ sung tệp chính từng mã…</button>
@@ -158,69 +198,62 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
                 </div>
               )}
 
-              <div style={{ marginBottom: 8 }}><b>Mã đề ({chosen.length}/{info.codes.length}, tối đa {info.maxCodes} mỗi lượt)</b></div>
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflow: 'auto' }}>
-                {info.codes.map((c) => {
-                  const r = out?.results.find((x) => x.code === c.code);
-                  const ok = c.hasMain && !c.problem;
-                  return (
-                    <li key={c.code} style={{ display: 'flex', gap: 10, alignItems: 'center', opacity: ok ? 1 : 0.7 }}>
-                      <input type="checkbox" aria-label={`Mã ${c.code}`} checked={chosen.includes(c.code)} disabled={busy || !ok} onChange={() => toggle(c.code)} />
-                      <span style={{ fontFamily: 'var(--f-code)' }}>{c.code}</span>
-                      <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>{c.counts[0]}+{c.counts[1]}+{c.counts[2]}{c.counts[3] ? `+${c.counts[3]}` : ''} câu</span>
-                      {c.problem && <span className="te-bad" style={{ fontSize: 13 }}>{c.problem}</span>}
-                      {!c.hasMain && !c.problem && <span className="te-bad" style={{ fontSize: 13 }}>chưa có tệp chính riêng</span>}
-                      {r && <span style={{ marginLeft: 'auto', fontSize: 13, color: r.status === 'ok' ? 'var(--ok)' : 'var(--danger)' }}>{r.status === 'ok' ? `✓ ${r.pages ?? '?'} trang${r.cached ? ' (dùng lại)' : ''}` : r.status === 'cancelled' ? 'đã dừng' : `✗ ${r.message}`}</span>}
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="xp-tiles" role="radiogroup" aria-label="Kiểu xuất">
+                {TILES.map((t) => (
+                  <button key={t.id} type="button" role="radio" aria-checked={tile === t.id} className={`xp-tile${tile === t.id ? ' on' : ''}`} disabled={busy} onClick={() => setTile(t.id)}>
+                    <span className="xp-tag">{t.tag}</span><b>{t.name}</b><span className="xp-note">{t.note}</span>
+                  </button>
+                ))}
+              </div>
 
-              <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { void pick(); }}>Chọn thư mục lưu…</button>
-                <span style={{ fontSize: 13, color: 'var(--ink-2)', overflowWrap: 'anywhere' }}>{dest ?? 'Chưa chọn'}</span>
-                <button type="button" className="btn btn-sm btn-outline" style={{ marginLeft: 'auto' }} disabled={busy || !dest} title={dest ? 'Một tệp .xlsx: trang "Theo mã đề" và "Theo câu", mọi mã đề. Không cần biên dịch PDF.' : 'Chọn thư mục lưu trước'} onClick={() => { void xlsx(); }}>Chỉ xuất Excel đáp án</button>
-              </div>
-              <div className="fb-rowbox" style={{ marginTop: 12 }}>
-                <b>Excel đáp án cho nền tảng thi</b>
-                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Một tệp .xlsx đúng bố cục nhập đáp án của từng nền tảng, gồm mọi mã đề. Bố cục lấy từ tệp mẫu của các nền tảng; nên mở thử nhập vào nền tảng một lần.</span>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {PLATFORM_XLSX.map((p) => <button key={p.id} type="button" className="btn btn-sm btn-outline" disabled={busy || !dest} title={dest ? p.hint : 'Chọn thư mục lưu trước'} onClick={() => { void platRun(p); }}>{p.label}</button>)}
-                </div>
-                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Mã QR đáp án (ảnh PNG, gồm mọi mã đề) để quét vào nền tảng thay cho nhập Excel:</span>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {PLATFORM_XLSX.filter((p) => (QR_PLATFORMS as readonly string[]).includes(p.id)).map((p) => <button key={p.id} type="button" className="btn btn-sm btn-outline" disabled={busy || !dest} title={dest ? undefined : 'Chọn thư mục lưu trước'} onClick={() => { void qrRun(p); }}>QR {p.label}</button>)}
-                </div>
-              </div>
-              <div className="fb-rowbox" style={{ marginTop: 12 }}>
-                <b>Phiếu trả lời trắc nghiệm (PDF, A4)</b>
-                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Phiếu trống đúng số câu của đề: Số báo danh, Mã đề, Phần I (A–D), Phần II (Đúng/Sai), Phần III (đáp số). In cho học sinh tô bút chì.</span>
-                <div><button type="button" className="btn btn-sm btn-outline" disabled={busy || !dest} title={dest ? undefined : 'Chọn thư mục lưu trước'} onClick={() => { void sheetRun(); }}>Tạo phiếu tô…</button></div>
-              </div>
-              <div className="fb-rowbox" style={{ marginTop: 12 }}>
-                <b>Word (.docx)</b>
-                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>Mỗi mã đề một tệp. Công thức là Equation của Word; dùng MathType thì chọn “Convert Equations” để đổi sang MathType.</span>
-                {WORD_MODES.map((m) => (
-                  <label key={m.id} className="sw" title={m.hint}>{m.label} <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>· {m.hint}</span><input type="checkbox" checked={wModes.includes(m.id)} disabled={busy} onChange={() => toggleMode(m.id)} /></label>
-                ))}
-                <div><button type="button" className="btn btn-sm btn-dark" disabled={busy || !dest || !chosen.length || !wModes.length} title={dest ? undefined : 'Chọn thư mục lưu trước'} onClick={() => { void wordRun(); }}>Xuất Word {chosen.length} mã × {wModes.length} chế độ…</button></div>
-                {wProg && <span role="status" aria-live="polite">{wProg}</span>}
-                {wRes.map((r) => (
-                  <div key={r.code + r.mode} style={{ fontSize: 13 }}>
-                    {r.out ? <span className="okmark">✓ Mã {r.code} · {wordModeById(r.mode)?.label}: {r.out.path}{r.out.warnings.length ? ` · Word không hiểu: ${r.out.warnings.join(', ')}` : ''}</span> : <span className="te-bad">Mã {r.code} · {wordModeById(r.mode)?.label}: {r.err}</span>}
+              <div className="xp-opts">
+                {tile === 'pdf' && (
+                  <div role="group" aria-label="Loại gói" className="xp-col">
+                    {(['giao-vien', 'hoc-sinh'] as PackKind[]).map((k) => (
+                      <label key={k} className="xp-radio">
+                        <input type="radio" name="packkind" checked={kind === k} disabled={busy} onChange={() => setKind(k)} />
+                        <span><b>{PACK_LABEL[k]}</b><br /><span className="xl-meta">{PACK_NOTE[k]}</span></span>
+                      </label>
+                    ))}
+                    {kind === 'giao-vien' && <label className="sw">Kèm PDF lời giải từng mã (dịch thêm một lượt mỗi mã)<input type="checkbox" checked={sol} disabled={busy} onChange={(e) => setSol(e.target.checked)} /></label>}
+                    {busy && prog && <p role="status" aria-live="polite">{phaseText(prog)}</p>}
+                    {out && <p role="status" className={out.ok ? 'okmark' : 'te-bad'}>{summarize(out)}</p>}
                   </div>
-                ))}
+                )}
+                {tile === 'word' && (
+                  <div className="xp-col">
+                    {WORD_MODES.map((m) => (
+                      <label key={m.id} className="sw" title={m.hint}>{m.label} <span className="xl-meta">· {m.hint}</span><input type="checkbox" checked={wModes.includes(m.id)} disabled={busy} onChange={() => toggleMode(m.id)} /></label>
+                    ))}
+                    <span className="xl-meta">Công thức là Equation của Word; dùng MathType thì chọn “Convert Equations”. Đề theo mẫu in thì Word cũng theo mẫu.</span>
+                    {wProg && <span role="status" aria-live="polite">{wProg}</span>}
+                    {wRes.map((r) => (
+                      <div key={r.code + r.mode} className="xl-meta">
+                        {r.out ? <span className="okmark">✓ Mã {r.code} · {wordModeById(r.mode)?.label}: {r.out.path}{r.out.warnings.length ? ` · Word không hiểu: ${r.out.warnings.join(', ')}` : ''}</span> : <span className="te-bad">Mã {r.code} · {wordModeById(r.mode)?.label}: {r.err}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {tile === 'xlsx' && <p className="xl-meta">Một tệp .xlsx gồm trang “Theo mã đề” và “Theo câu” cho mọi mã đề. Không cần biên dịch PDF.</p>}
+                {(tile === 'plat' || tile === 'qr') && (
+                  <div className="xp-col">
+                    <div className="xp-codes" role="radiogroup" aria-label="Nền tảng">
+                      {(tile === 'qr' ? qrList : PLATFORM_XLSX).map((p) => (
+                        <button key={p.id} type="button" role="radio" aria-checked={platOf(tile === 'qr' ? qrList : PLATFORM_XLSX).id === p.id} className={`xp-chip${platOf(tile === 'qr' ? qrList : PLATFORM_XLSX).id === p.id ? ' on' : ''}`} disabled={busy} title={p.hint} onClick={() => setPlat(p.id)}>{p.label}</button>
+                      ))}
+                    </div>
+                    <span className="xl-meta">{tile === 'qr' ? 'Ảnh PNG gồm mọi mã đề để quét vào nền tảng thay cho nhập Excel.' : `${platOf(PLATFORM_XLSX).hint}. Bố cục lấy từ tệp mẫu của nền tảng; nên nhập thử một lần.`}</span>
+                  </div>
+                )}
+                {tile === 'phieu' && <p className="xl-meta">Phiếu trống A4 đúng số câu của đề: Số báo danh, Mã đề, Phần I (A–D), Phần II (Đúng/Sai), Phần III (đáp số). In cho học sinh tô bút chì.</p>}
               </div>
-              {!gate.ok && <p className="te-note" style={{ marginTop: 8 }}>{gate.why}</p>}
-              {busy && prog && <p role="status" aria-live="polite" style={{ marginTop: 8 }}>{phaseText(prog)}</p>}
-              {out && <p role="status" className={out.ok ? 'okmark' : 'te-bad'} style={{ marginTop: 8 }}>{summarize(out)}</p>}
-              <p className="te-note" style={{ marginTop: 8 }}>HEdu ghi ZIP vào tệp tạm, đọc lại và đối chiếu từng tệp rồi mới đổi tên; không bao giờ ghi đè bản xuất cũ. Thời gian dịch phụ thuộc số mã và hình TikZ; có thể bấm Dừng bất cứ lúc nào.</p>
+              <p className="xl-meta xp-foot-note">Không ghi đè tệp có sẵn{tile === 'pdf' ? ' · dịch song song, có thể bấm Dừng bất cứ lúc nào' : ''}.</p>
             </>
           )}
         </div>
         <div className="cfm-acts">
-          {busy ? <button type="button" className="btn btn-outline" onClick={() => { void codesExportCancel(id); }}>Dừng</button> : <button type="button" className="btn btn-outline" ref={first} onClick={onClose}>Đóng</button>}
-          <button type="button" className="btn btn-accent" disabled={busy || !gate.ok} title={gate.ok ? undefined : gate.why} onClick={() => { void run(); }}>{busy ? 'Đang xuất…' : `Xuất ${PACK_LABEL[kind].toLowerCase()}`}</button>
+          {busy && tile === 'pdf' ? <button type="button" className="btn btn-outline" onClick={() => { void codesExportCancel(id); }}>Dừng</button> : <button type="button" className="btn btn-outline" disabled={busy} onClick={onClose}>Đóng</button>}
+          <button type="button" className="btn btn-accent" disabled={busy || !info?.hasSpec || !act.ok} title={act.why} onClick={act.run}>{act.label}</button>
         </div>
       </div>
     </>

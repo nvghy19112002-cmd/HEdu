@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 import type { Question } from '../lib/types';
 import { QuestionEditor } from './QuestionEditor';
 
-export function QuestionDrawer({ q, onClose, onDirty }: { q: Question; onClose: () => void; onDirty: (d: boolean) => void }) {
+export function QuestionDrawer({ q, onClose, onDirty, nav }: { q: Question; onClose: () => void; onDirty: (d: boolean) => void; nav?: { prev?(): void; next?(): void; pos?: string } }) {
   const leaveRef = useRef<((proceed: () => void) => boolean) | null>(null);
   const root = useRef<HTMLElement>(null);
   const opener = useRef<Element | null>(document.activeElement);
@@ -22,6 +22,11 @@ export function QuestionDrawer({ q, onClose, onDirty }: { q: Question; onClose: 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); tryClose(); }
+      // Alt+←/→: câu trước/sau (qua cùng câu hỏi "bỏ thay đổi chưa lưu?")
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.defaultPrevented) {
+        const go = e.key === 'ArrowLeft' ? nav?.prev : nav?.next;
+        if (go) { e.preventDefault(); const l = leaveRef.current; if (l) l(go); else go(); }
+      }
       if (e.key === 'Tab' && root.current) {
         const f = [...root.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null);
         if (!f.length) return;
@@ -38,7 +43,7 @@ export function QuestionDrawer({ q, onClose, onDirty }: { q: Question; onClose: 
     <>
       <div className="drw-scrim" onMouseDown={tryClose} aria-hidden="true" />
       <aside className="drw" role="dialog" aria-modal="true" aria-label="Sửa câu hỏi" tabIndex={-1} ref={root}>
-        <QuestionEditor key={q.uid} editing={q} variant="drawer" onDirty={onDirty} onClose={tryClose} leaveRef={leaveRef} />
+        <QuestionEditor key={q.uid} editing={q} variant="drawer" onDirty={onDirty} onClose={tryClose} leaveRef={leaveRef} nav={nav} />
       </aside>
     </>
   );
