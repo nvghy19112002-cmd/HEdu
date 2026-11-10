@@ -4,6 +4,8 @@
 //! Đề/Lời giải: HEdu không bao giờ xuất một PDF có thể chứa lời giải dưới tên "Đề". Bản dẫn xuất chỉ được ghi trong thư mục build.
 //! - Chế độ Đề: tuỳ chọn của ex_test = giữ nguyên các tuỳ chọn khác, bỏ `loigiai`, đặt `dethi`.
 //! - Chế độ Lời giải: bỏ `dethi`, đặt `loigiai`; dòng `\anloigiai` đang bật (ẩn lời giải) bị tắt (thêm %) trong bản dẫn xuất.
+//! - Đề dựng theo mẫu in HyMath (Tạo đề, 11/2026): tệp chính có dòng `\def\CheDo{…}` quyết định Đề / Đề in / Lời giải. Bản dẫn xuất đặt
+//!   `\CheDo` = `mau` (Đề), `in` (Đề in trắng đen), `loigiai` (Lời giải) CÙNG LÚC với tuỳ chọn ex_test ở trên (hai lớp cùng chiều).
 #![allow(dead_code)]
 
 use serde::Serialize;
@@ -15,6 +17,8 @@ use crate::examlib::open_inside;
 
 pub const MODE_DE: &str = "de";
 pub const MODE_LOIGIAI: &str = "loigiai";
+pub const MODE_DE_IN: &str = "de-in";
+const CHEDO: &str = "\\def\\CheDo{";
 const MAX_SCAN_BYTES: u64 = 5 * 1024 * 1024;
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -194,14 +198,56 @@ pub struct Derived {
     pub changes: Vec<Change>,
 }
 
-/// Dựng bản dẫn xuất cho `mode` ("de" hoặc "loigiai"). Không ghi gì ra đĩa.
+/// Dòng `\def\CheDo{…}` đang hoạt động (không nằm sau %), dạng đúng một dòng: trả về vị trí giá trị trong dòng.
+fn chedo_value(raw: &str) -> Option<(usize, usize)> {
+    let code = code_part(raw);
+    let t = code.trim_start();
+    if !t.starts_with(CHEDO) {
+        return None;
+    }
+    let lead = code.len() - t.len();
+    let from = lead + CHEDO.len();
+    let close = code[from..].find('}')? + from;
+    let v = &code[from..close];
+    (!v.is_empty() && v.chars().all(|c| c.is_ascii_lowercase())).then_some((from, close))
+}
+
+/// Dự án có dòng `\def\CheDo{…}` (đề dựng theo mẫu in HyMath) trong tệp TeX nào không.
+pub fn has_chedo(dir: &Path, rels: &[String]) -> bool {
+    rels.iter().filter(|r| is_tex_like(r)).any(|r| read_text(dir, r).map(|t| t.lines().any(|l| chedo_value(l).is_some())).unwrap_or(false))
+}
+
+/// Đặt `\CheDo` theo chế độ trong một tệp; None nếu tệp không có dòng nào.
+fn set_chedo(text: &str, value: &str, rel: &str, changes: &mut Vec<Change>) -> Option<String> {
+    let mut out = String::with_capacity(text.len() + 8);
+    let mut touched = false;
+    for (ln, raw) in text.split_inclusive('\n').enumerate() {
+        match chedo_value(raw) {
+            Some((a, b)) => {
+                let new = format!("{}{value}{}", &raw[..a], &raw[b..]);
+                if new != raw {
+                    changes.push(Change { file: rel.to_string(), line: ln as u32 + 1, before: raw.trim_end().to_string(), after: new.trim_end().to_string() });
+                }
+                out.push_str(&new);
+                touched = true;
+            }
+            None => out.push_str(raw),
+        }
+    }
+    touched.then_some(out)
+}
+
+/// Dựng bản dẫn xuất cho `mode` ("de", "loigiai"; "de-in" chỉ với đề theo mẫu HyMath có `\CheDo`). Không ghi gì ra đĩa.
 pub fn derive(dir: &Path, rels: &[String], mode: &str) -> Result<Derived, String> {
-    if mode != MODE_DE && mode != MODE_LOIGIAI {
+    if mode != MODE_DE && mode != MODE_LOIGIAI && mode != MODE_DE_IN {
         return Err("Chế độ không hợp lệ.".into());
+    }
+    if mode == MODE_DE_IN && !has_chedo(dir, rels) {
+        return Err("Bản “Đề in trắng đen” chỉ có với đề theo mẫu in HyMath.".into());
     }
     let f = locate(dir, rels)?;
     let u = &f.usage;
-    let new_opts = mode_options(&u.opts, mode).join(",");
+    let new_opts = mode_options(&u.opts, if mode == MODE_DE_IN { MODE_DE } else { mode }).join(",");
     let mut text = f.text.clone();
     let before = text[line_start(&text, u.from)..line_end(&text, u.to)].trim_end_matches('\r').to_string();
     let insert = if u.had_brackets { new_opts.clone() } else { format!("[{new_opts}]") };
@@ -231,6 +277,16 @@ pub fn derive(dir: &Path, rels: &[String], mode: &str) -> Result<Derived, String
                 files.retain(|(r, _)| r != rel);
                 files.push((rel.clone(), out));
             }
+        }
+    }
+    // mẫu HyMath: \CheDo quyết định ẩn/hiện lời giải và bản màu/đen trắng
+    let value = match mode { MODE_LOIGIAI => "loigiai", MODE_DE_IN => "in", _ => "mau" };
+    for rel in rels.iter().filter(|r| is_tex_like(r)) {
+        let cur = files.iter().find(|(r, _)| r == rel).map(|(_, t)| t.clone()).or_else(|| read_text(dir, rel));
+        let Some(cur) = cur else { continue };
+        if let Some(out) = set_chedo(&cur, value, rel, &mut changes) {
+            files.retain(|(r, _)| r != rel);
+            files.push((rel.clone(), out));
         }
     }
     Ok(Derived { files, changes })
@@ -386,5 +442,37 @@ mod tests {
         assert!(!work.join("main.hedu-derive").exists());
         let _ = fs::remove_dir_all(&src);
         let _ = fs::remove_dir_all(&work);
+    }
+
+    #[test]
+    fn de_theo_mau_hymath_doi_chedo_theo_che_do() {
+        // đề dựng theo mẫu HyMath: tệp chính có \def\CheDo{mau}, lõi nạp ex_test không tuỳ chọn
+        let main = "\\documentclass{article}\n\\def\\CheDo{mau}\n% \\def\\CheDo{loigiai}\n\\input{hymath-caidat.tex}\n\\begin{document}\n\\input{de-101}\n\\end{document}\n";
+        let (d, rels) = proj("chedo", &[("main-101.tex", main), ("hymath-core.tex", "\\usepackage{ex_test}\n"), ("de-101.tex", "\\caulc\n")]);
+        assert!(has_chedo(&d, &rels));
+        let get = |m: &str| { let x = derive(&d, &rels, m).unwrap(); x.files.iter().find(|(r, _)| r == "main-101.tex").map(|(_, t)| t.clone()).unwrap() };
+        let lg = get(MODE_LOIGIAI);
+        assert!(lg.contains("\\def\\CheDo{loigiai}\n") && lg.contains("% \\def\\CheDo{loigiai}"), "dòng chú thích giữ nguyên: {lg}");
+        assert!(get(MODE_DE).contains("\\def\\CheDo{mau}\n"));
+        assert!(get(MODE_DE_IN).contains("\\def\\CheDo{in}\n"));
+        // tuỳ chọn ex_test đổi cùng chiều
+        let de = derive(&d, &rels, MODE_DE_IN).unwrap();
+        assert!(de.files.iter().any(|(r, t)| r == "hymath-core.tex" && t.contains("[dethi]{ex_test}")));
+        assert!(de.changes.iter().any(|c| c.after.contains("\\def\\CheDo{in}")));
+        // tệp nguồn không bị sửa
+        assert_eq!(fs::read_to_string(d.join("main-101.tex")).unwrap(), main);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn de_in_chi_co_khi_co_chedo() {
+        let (d, rels) = proj("khongchedo", &[("main.tex", "\\usepackage[loigiai]{ex_test}\nA\n")]);
+        assert!(!has_chedo(&d, &rels));
+        assert!(derive(&d, &rels, MODE_DE_IN).is_err());
+        assert!(derive(&d, &rels, MODE_DE).is_ok());
+        assert_eq!(chedo_value("  \\def\\CheDo{mau} % x"), Some((13, 16)));
+        assert_eq!(chedo_value("\\def\\CheDo{}"), None);
+        assert_eq!(chedo_value("%\\def\\CheDo{mau}"), None);
+        let _ = fs::remove_dir_all(&d);
     }
 }

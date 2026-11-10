@@ -21,7 +21,8 @@ import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usage
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
 import { requirementsMd, safeFolderName } from '../lib/texproject';
-import { HEDU_THEME_ID, themeFiles, themeStamp } from '../lib/examtheme';
+import { HEDU_THEME_ID, loadDefaultInfo, loadThemeId, themeFiles, themeOf, themeStamp } from '../lib/examtheme';
+import { skyExamFiles } from '../lib/examsky';
 import { invoke, isDesktop } from '../lib/platform';
 import { stemSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
@@ -252,6 +253,14 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
   const canExport = !usageBlocked && unchosen === 0 && total > 0 && missing === 0 && variants.length > 0 && issues.length === 0 && lostLocks.length === 0;
   const jump = (r: { current: HTMLElement | null }) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  /** Tệp .tex của đề: theo mẫu in đang dùng ở Cài đặt (Sky Panel) nếu dựng được bằng pdfLaTeX, không thì kiểu cũ của HEdu. Mẫu ghi vào hedu-de.json (mauIn). */
+  const texSet = (withKeys: boolean): { files: ReturnType<typeof examFiles>; themeId: string; sky: boolean } => {
+    const id = loadThemeId();
+    const di = loadDefaultInfo();
+    const sky = id !== HEDU_THEME_ID ? skyExamFiles(d.info, variants, { withKeys }, id, { schoolYear: di.year, teacher: di.teacher }) : null;
+    return sky ? { files: sky, themeId: id, sky: true } : { files: examFiles(d.info, variants, { withKeys }), themeId: HEDU_THEME_ID, sky: false };
+  };
+
   /** Bộ tệp của đề, kèm dấu vân SHA-256 từng tệp nguồn trong hedu-de.json (để về sau biết tệp có bị sửa tay không). */
   const projectFiles = async (name: string) => {
     // tầng xuất: không bao giờ ghi đề khi ma trận còn dòng chưa xử lý (kể cả khi giao diện bị bỏ qua)
@@ -261,12 +270,11 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
       const fresh = buildIndex((await scanUsage()).projects, d.usage);
       if (usageSig(fresh, d.reuse) !== usageSig(idx, d.reuse)) { usage.refresh(); throw new Error('Thư viện đề đã thay đổi kể từ lần quét trước nên danh sách câu đã dùng được làm mới. Hãy xem lại đề rồi lưu lại'); }
     }
-    const theme = HEDU_THEME_ID; // đề tạo từ Ngân hàng có \documentclass riêng: luôn bộ khai báo HEdu (mẫu HyMath áp cho tệp chỉ có dữ liệu)
-    const tex = examFiles(d.info, variants, { withKeys: d.withKeys });
+    const { files: tex, themeId: theme, sky } = texSet(d.withKeys);
     const fileHashes = await sourceHashes(tex);
     return [
       ...tex,
-      ...themeFiles(theme, picks, ''),
+      ...(sky ? [] : themeFiles(theme, picks, '')),
       { path: 'hedu-de.json', text: specJson({ info: d.info, rows, policy: d.policy, seed: d.seed, scoring: d.scoring, variants, at: new Date().toISOString(), exceptions: d.exceptions, locked: d.locked, fileHashes, tranhCauDaDung: traceOf(d.usage, idx, d.reuse, new Date().toISOString(), lockedSet), mauIn: themeStamp(theme) }) },
       { path: 'CAN-CO-GI.md', text: requirementsMd(picks, '', name) },
     ];
@@ -303,7 +311,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
 
   const viewTex = () => {
     if (!variant) return;
-    const f = examFiles(d.info, variants, { withKeys: false }).find((x) => x.path === variantFile(variant.code));
+    const f = texSet(false).files.find((x) => x.path === variantFile(variant.code));
     if (f) showFile({ title: `Mã LaTeX · mã đề ${variant.code}`, name: f.path, text: f.text, mime: 'application/x-tex' });
   };
 
@@ -565,7 +573,12 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
         </aside>
       </div>
       {tplDlg && <ExamTemplatesDialog draft={d} onToast={toast} onClose={() => setTplDlg(false)} onApply={(next, prev, note) => { setUndoTpl({ prev, note }); setD(next); setSwap(null); }} />}
-      {wordDlg && <ExamWordDialog codes={examFiles(d.info, variants, { withKeys: false }).filter((f) => variants.some((v) => f.path === variantFile(v.code))).map((f) => ({ code: variants.find((v) => f.path === variantFile(v.code))!.code, text: f.text }))} images={pimg.images} onToast={toast} onClose={() => setWordDlg(false)} />}
+      {wordDlg && (() => {
+        const t = texSet(false);
+        const codes = variants.map((v) => ({ code: v.code, text: t.files.find((f) => f.path === variantFile(v.code))?.text ?? '' })).filter((c) => c.text);
+        const di = loadDefaultInfo();
+        return <ExamWordDialog codes={codes} images={pimg.images} themed={t.sky ? { themeId: t.themeId, themeName: themeOf(t.themeId).name, info: { schoolYear: di.year, teacher: di.teacher } } : undefined} onToast={toast} onClose={() => setWordDlg(false)} />;
+      })()}
       {exportDlg && saved && <ExamExportDialog id={saved.id} name={saved.name} onToast={toast} onClose={() => setExportDlg(false)} />}
     </>
   );

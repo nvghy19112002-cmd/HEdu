@@ -7,6 +7,7 @@ import { answersXlsx, codesShape, sheetPdf, platformXlsx, qrPng, QR_PLATFORMS, P
 import { listen } from '../lib/platform';
 import { exportWordCode, type WordOut } from '../lib/examword';
 import { DEFAULT_WORD_MODES, WORD_MODES, wordModeById } from '../lib/wordmodes';
+import { loadDefaultInfo, loadThemeId } from '../lib/examtheme';
 
 export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; name: string; onClose(): void; onToast(m: string): void }) {
   const [info, setInfo] = useState<CodesInfo | null>(null);
@@ -107,11 +108,13 @@ export function ExamExportDialog({ id, name, onClose, onToast }: { id: string; n
     setBusy(true); setErr(null); setWRes([]);
     const res: { code: string; mode: string; out?: WordOut; err?: string }[] = [];
     const total = chosen.length * modes.length;
+    const di = loadDefaultInfo();
+    const themed = { themeId: loadThemeId(), info: { schoolYear: di.year, teacher: di.teacher } };
     try {
       for (const code of chosen) {
         for (const m of modes) {
           setWProg(`Đang xuất Word · mã ${code} · ${m.label} (${res.length + 1}/${total})`);
-          try { res.push({ code, mode: m.id, out: await exportWordCode(id, code, { solution: m.solution, mark: m.mark, print: m.print, suffix: m.suffix }, dest, (i, n) => setWProg(`Mã ${code}: dịch hình ${i}/${n}`)) }); }
+          try { res.push({ code, mode: m.id, out: await exportWordCode(id, code, { solution: m.solution, mark: m.mark, print: m.print, suffix: m.suffix }, dest, (i, n) => setWProg(`Mã ${code}: dịch hình ${i}/${n}`), themed) }); }
           catch (e) { res.push({ code, mode: m.id, err: e instanceof Error ? e.message : String(e) }); }
           setWRes([...res]);
         }
