@@ -11,16 +11,18 @@ type Tab = 'view' | 'diff' | 'src';
 /** Dưới bề rộng này (px) hai khung cạnh nhau sẽ quá chật để đọc Toán ⇒ chuyển sang xem từng câu theo tab A/B. */
 export const SIDE_BY_SIDE_MIN = 900;
 
-function Toks({ toks }: { toks: Tok[] }) {
+/** side: câu bên trái (A) — chỗ khác là phần THÊM (tô xanh); câu bên phải (B) — chỗ khác là phần BỚT (tô cam, gạch ngang). Không dùng đỏ. */
+function Toks({ toks, side }: { toks: Tok[]; side: 'A' | 'B' }) {
+  const cls = side === 'A' ? 'dd-add' : 'dd-del';
   const out: ReactNode[] = [];
   for (let i = 0; i < toks.length; ) {
     const t = toks[i];
     if (t.math) {
       let j = i; while (j < toks.length && toks[j].math && toks[j].run === t.run) j++;
       const seg = toks.slice(i, j);
-      out.push(<code key={i} className="dd-m">{seg.map((x, k) => <span key={k} className={x.changed ? 'dd-x' : undefined}>{x.t}{' '}</span>)}</code>);
+      out.push(<code key={i} className="dd-m">{seg.map((x, k) => <span key={k} className={x.changed ? cls : undefined}>{x.t}{' '}</span>)}</code>);
       i = j;
-    } else { out.push(<span key={i} className={t.changed ? 'dd-x' : undefined}>{t.t}{' '}</span>); i++; }
+    } else { out.push(<span key={i} className={t.changed ? cls : undefined}>{t.t}{' '}</span>); i++; }
   }
   return <>{out}</>;
 }
@@ -46,6 +48,7 @@ export function PairCompare({ A, B, result, note, footer, blind }: { A: CmpSide;
   const pa = useMemo(() => parseExTest(A.latex), [A.latex]);
   const pb = useMemo(() => parseExTest(B.latex), [B.latex]);
   const r = result;
+  const diffN = rows.filter((x) => !x.same).length;
 
   const card = (s: CmpSide, p: typeof pa, key: 'A' | 'B') => (
     <article className="dc-card" key={key} aria-label={s.title}>
@@ -66,6 +69,7 @@ export function PairCompare({ A, B, result, note, footer, blind }: { A: CmpSide;
       {!blind && <div className="dc-why">
         <div className="dc-why-h">
           <b className={`dc-kind k-${r.kind}`}>{DUP_KIND_LABEL[r.kind]}</b>
+          <b className="dc-big">{Math.round(r.score * 100)}% giống nhau{diffN ? ` · khác ở ${diffN} chỗ` : ' · không thấy chỗ khác'}</b>{diffN > 0 && tab !== 'diff' && <button type="button" className="linkbtn" onClick={() => setTab('diff')}>Chỉ xem chỗ khác</button>}
           <span className="dc-sc">Mức tương đồng {Math.round(r.score * 100)}% (chữ {Math.round(r.text * 100)}%, công thức {Math.round(r.math * 100)}%) — chỉ để tham khảo, không phải xác suất trùng.</span>
         </div>
         {note}
@@ -103,11 +107,11 @@ export function PairCompare({ A, B, result, note, footer, blind }: { A: CmpSide;
           {rows.map((x, i) => (
             <div key={i} role="row" className={`dd-row${x.same ? '' : ' ne'}`}>
               <span role="rowheader" className="dd-l">{x.label}<em>{x.same ? 'giống' : 'khác'}</em></span>
-              <span role="cell">{x.emptyA ? <i>(không có)</i> : <Toks toks={x.a} />}</span>
-              <span role="cell">{x.emptyB ? <i>(không có)</i> : <Toks toks={x.b} />}</span>
+              <span role="cell">{x.emptyA ? <i>(không có)</i> : <Toks toks={x.a} side="A" />}</span>
+              <span role="cell">{x.emptyB ? <i>(không có)</i> : <Toks toks={x.b} side="B" />}</span>
             </div>
           ))}
-          <p className="dc-sc">Ký hiệu tô đậm là chỗ hai câu khác nhau. Đây là bản đã chuẩn hoá để so sánh (bỏ \left, \dfrac→\frac…), không phải mã gốc — xem mã gốc ở tab “Mã LaTeX”.</p>
+          <p className="dc-sc">Chỗ tô xanh là phần có ở “{A.title}”, tô cam gạch ngang là phần có ở “{B.title}”. Đây là bản đã chuẩn hoá để so sánh (bỏ \left, \dfrac→\frac…), không phải mã gốc — xem mã gốc ở tab “Mã LaTeX”.</p>
         </div>
       ) : (
         <div className={`dc-pair${narrow ? ' narrow' : ''}`}>
