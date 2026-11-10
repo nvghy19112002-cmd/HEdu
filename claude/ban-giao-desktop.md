@@ -2,19 +2,19 @@
 
 Quy tắc chung ở `AGENTS.md`. Ghi đè tệp này mỗi lần dừng việc.
 
-## Đã gộp vào main (10/11)
-#274–#278 (Word ở Tạo đề, Sky Panel mới, PDF hết mờ, Word theo mẫu, chỉ giữ Sky Panel), #279–#282 (tăng tốc biên dịch, HyMath dịch bằng pdfLaTeX).
+## Trạng thái
+- main đã có #274–#283 (Word theo mẫu, Sky Panel, tăng tốc + pdfLaTeX, Tạo đề in theo Sky Panel, trình chiếu ra PDF…). beta.65 CHƯA phát hành.
+- Giao diện giai đoạn 3 (bản thiết kế v1.2, `D:\HEdu-rac\scratch\finder\HEdu-thiet-ke-giao-dien-v1.2.pdf`): bước 0–6 ở beta.61–64; bước 7 + màn 14/18/19 ở PR nhánh `claude/giao-dien-buoc7`.
 
-## PR đang mở: nhánh `claude/hoan-tat-beta65`
-- Tạo đề in theo Sky Panel: `src/lib/examsky.ts` (+ test), `Exam.tsx` (`texSet`), Rust `examprofile.rs` (`\def\CheDo`, bản Đề in), `examcompile.rs` (cho phép Đề in khi có `\CheDo`).
-- Bản Lời giải tô đỏ phương án đúng (`hymath.template.ts`, `\AnswerBadgeTrue`).
-- Xuất bộ trình chiếu ra PDF (`slidepdf.ts`, `Slides.tsx`, Rust `tex_pdf_to_dir`); `word_decor_pdf` nhận `engine`.
-- Kéo-thả .docx vào Nhập liệu (`Extra.tsx`); thanh tab đề (CSS cuối `styles.css`); bảng câu hỏi giữ căn/phân số (`snippet.ts`, câu #3743); ghi chú nút PDF ở Tạo đề.
-- Word: Tạo đề và Thư viện dùng Word theo mẫu cho đề có `\TieuDeDeSo`; `filter.lua` bỏ tiêu đề phần trùng.
+## PR nhánh `claude/giao-dien-buoc7`
+- Màn 19 Hộp Xuất đề: `ExamExportDialog.tsx` (6 ô, tuỳ chọn theo ô, nút làm đúng việc), CSS `xp-*` cuối `styles.css`.
+- Màn 18 Sửa câu: `QuestionEditor.tsx` (`nav`, hàng nút đáy `qe-acts`), `QuestionDrawer.tsx` (Alt+←/→), `QuestionModal.tsx`, `Bank.tsx`.
+- Màn 14 So sánh câu nghi trùng: `PairCompare.tsx` (tô xanh/cam, dòng tóm tắt), CSS `dd-add/dd-del`.
+- Dọn 63 quy tắc CSS chết (FilterMenu, kiểu Danh sách/Chi tiết cũ, nút nhóm cũ).
 
 ## Đã kiểm
-npm test, typecheck, build; cargo test --lib; dịch thật bằng TeX Live: đề Sky (Đề, Đề in, Lời giải) qua `compile()` của app (test tay `de_theo_mau_ba_ban`), PDF trình chiếu.
-Chưa kiểm: app Windows thật; thanh tab mới chưa xem tận mắt (chỉ CSS).
+typecheck, npm test, build; xem bằng trình duyệt (dữ liệu mẫu / trang thử giả lập): hộp Xuất đề, Sửa câu (câu sau giữ chế độ sửa), khung so sánh; đo 11 màn ở 1366×768, 1093×614, 911×512: không tràn ngang, không vượt mép, không nút cắt chữ.
+Chưa kiểm: app Windows thật; hộp Xuất đề với đề thật (cần bản cài).
 
 ## Bước tiếp
-CI xanh → hỏi chủ dự án gộp → (khi được bảo) phát hành beta.65 bằng release.yml.
+CI xanh → hỏi chủ dự án gộp → (khi được bảo) phát hành beta.65.
