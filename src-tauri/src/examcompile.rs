@@ -238,6 +238,51 @@ pub(crate) fn engine_command(tex_bin: &Option<String>, engine: &str, support_dir
     c
 }
 
+// ---------- phiên bản TeX: hỏi một lần, nhớ trong phiên ----------
+
+/// Dấu nhận diện tệp chạy của bộ dịch: đường dẫn + cỡ + thời điểm sửa. Cài/cập nhật TeX Live (đổi tệp chạy) ⇒ dấu khác ⇒ hỏi lại.
+/// None khi không tìm thấy tệp chạy (khi đó không nhớ, hỏi mỗi lần như cũ).
+pub(crate) fn exe_stamp(tex_bin: &Option<String>, engine: &str) -> Option<String> {
+    let p = PathBuf::from(tikz::prog(tex_bin, engine));
+    let found = if p.components().count() > 1 {
+        Some(p)
+    } else {
+        let exts: &[&str] = if cfg!(windows) { &["exe", "bat", "cmd"] } else { &[""] };
+        std::env::var_os("PATH").and_then(|paths| {
+            std::env::split_paths(&paths).find_map(|d| exts.iter().map(|x| if x.is_empty() { d.join(engine) } else { d.join(engine).with_extension(x) }).find(|c| c.is_file()))
+        })
+    }?;
+    let m = fs::metadata(&found).ok()?;
+    let t = m.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+    Some(format!("{}|{}|{t}", found.display(), m.len()))
+}
+
+static TEX_VERSIONS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+/// Lấy phiên bản đã nhớ theo `key`, chưa có thì gọi `ask` (trả (dòng phiên bản, chạy thành công?)) và chỉ nhớ khi thành công.
+fn remember_version(key: Option<String>, ask: impl FnOnce() -> std::io::Result<(String, bool)>) -> std::io::Result<String> {
+    if let Some(k) = &key {
+        if let Some(v) = TEX_VERSIONS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).get(k) {
+            return Ok(v.clone());
+        }
+    }
+    let (v, ok) = ask()?;
+    if let (Some(k), true) = (key, ok && !v.is_empty()) {
+        TEX_VERSIONS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new).insert(k, v.clone());
+    }
+    Ok(v)
+}
+
+/// Dòng đầu của `<engine> --version`. Chạy lệnh này mất ~0,4 s nên chỉ hỏi một lần cho mỗi tệp chạy trong phiên làm việc.
+pub(crate) fn tex_version(tex_bin: &Option<String>, engine: &str, support_dir: &Option<PathBuf>, cwd: &Path, cancel: &AtomicBool) -> std::io::Result<String> {
+    remember_version(exe_stamp(tex_bin, engine).map(|s| format!("{engine}|{s}")), || {
+        let mut vc = engine_command(tex_bin, engine, support_dir, cwd);
+        vc.arg("--version");
+        let v = run_job(&mut vc, Duration::from_secs(20), cancel)?;
+        Ok((first_line(&v.stdout), v.success))
+    })
+}
+
 // ---------- phân tích log ----------
 
 const TEX_EXT: &[&str] = &[".tex", ".sty", ".cls", ".def", ".cfg", ".ltx", ".tikz", ".fd", ".clo", ".bib", ".dtx", ".code", ".lua"];
@@ -743,10 +788,8 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
 
     // phiên bản TeX (vào dấu vân bộ đệm; cũng là phép thử có TeX Live hay chưa)
     let tex_bin = opts.tex_bin.clone();
-    let mut vc = engine_command(&tex_bin, engine, support_dir, &work);
-    vc.arg("--version");
-    let ver = match run_job(&mut vc, Duration::from_secs(20), &cancel_flag) {
-        Ok(v) => first_line(&v.stdout),
+    let ver = match tex_version(&tex_bin, engine, support_dir, &work, &cancel_flag) {
+        Ok(v) => v,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             let t = tikz::missing_tool(engine);
             out.status = "no-tex".into();
@@ -1227,6 +1270,34 @@ mod tests {
         assert!(!needs_rerun("all good"));
         assert!(needs_rerun("LaTeX Warning: There were undefined references."));
         assert!(needs_rerun("Package rerunfilecheck Warning: File foo.out has changed. Please (re)run LaTeX."));
+    }
+
+    #[test]
+    fn phien_ban_tex_hoi_mot_lan_va_hoi_lai_khi_doi_tep_chay() {
+        let d = crate::testutil::dir("examcompile-phien-ban-tex");
+        fs::create_dir_all(&d).unwrap();
+        let exe = d.join(if cfg!(windows) { "gialap.exe" } else { "gialap" });
+        fs::write(&exe, b"v1").unwrap();
+        let bin = Some(d.to_string_lossy().into_owned());
+        let s1 = exe_stamp(&bin, "gialap").expect("tìm thấy tệp chạy trong thư mục bin");
+        assert!(exe_stamp(&bin, "khong-co-tep-nay-123").is_none());
+        let mut calls = 0;
+        let mut ask = |v: &str, ok: bool| { calls += 1; Ok::<_, std::io::Error>((v.to_string(), ok)) };
+        let k1 = Some(format!("thu|{s1}"));
+        assert_eq!(remember_version(k1.clone(), || ask("TeX 1", true)).unwrap(), "TeX 1");
+        assert_eq!(remember_version(k1.clone(), || ask("KHÔNG ĐƯỢC GỌI", true)).unwrap(), "TeX 1", "lần sau dùng bản đã nhớ");
+        // tệp chạy đổi (cập nhật TeX Live) ⇒ dấu khác ⇒ hỏi lại
+        fs::write(&exe, b"phien-ban-moi-dai-hon").unwrap();
+        let s2 = exe_stamp(&bin, "gialap").unwrap();
+        assert_ne!(s1, s2);
+        assert_eq!(remember_version(Some(format!("thu|{s2}")), || ask("TeX 2", true)).unwrap(), "TeX 2");
+        // chạy lỗi thì không nhớ; không tìm được tệp chạy thì không nhớ
+        let k3 = Some("thu|loi".to_string());
+        assert_eq!(remember_version(k3.clone(), || ask("", false)).unwrap(), "");
+        assert_eq!(remember_version(k3, || ask("TeX 3", true)).unwrap(), "TeX 3");
+        assert_eq!(remember_version(None, || ask("A", true)).unwrap(), "A");
+        assert_eq!(remember_version(None, || ask("B", true)).unwrap(), "B");
+        assert_eq!(calls, 6);
     }
 
     #[test]
