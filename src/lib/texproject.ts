@@ -84,7 +84,6 @@ export function requirementsMd(qs: readonly Question[], sharedContent: string, f
   const needs = collectNeeds(qs, sharedContent);
   const ctan = needs.filter((n) => !n.bundled && (n.kind === 'package' || n.kind === 'class') && !BASE.has(n.name));
   const libs = needs.filter((n) => !n.bundled && (n.kind === 'tikzlib' || n.kind === 'pgfplotslib'));
-  const bundled = needs.filter((n) => n.bundled);
   const extra = needs.filter((n) => n.from !== 'khai-bao' && !n.bundled);
   const L: string[] = [];
   L.push(`# Cần gì để biên dịch thư mục "${folder}"`, '');

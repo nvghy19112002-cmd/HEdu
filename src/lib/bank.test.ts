@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { parseExTest, splitExBlocks } from './extest';
 import { parseCode } from './id';
-import { checkQuestion, worstLevel } from './check';
+import { checkQuestion } from './check';
 import { cleanForDisplay, renderPartsEx } from './render';
 
 const DIR = 'data/test';

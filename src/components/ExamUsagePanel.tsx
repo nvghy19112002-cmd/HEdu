@@ -1,6 +1,6 @@
 // PR 4B: ô "Tránh câu đã dùng trong…" ở màn Tạo đề. Mặc định tắt. Dữ liệu là bản quét các đề đang hoạt động trong Thư viện (không có kho riêng).
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildIndex, describeScope, scanUsage, type UsageIndex, type UsageProject, type UsageScope } from '../lib/examusage';
+import { describeScope, scanUsage, type UsageIndex, type UsageProject, type UsageScope } from '../lib/examusage';
 
 export interface UsageState { projects: UsageProject[]; loading: boolean; error: string | null; scannedAt: number | null }
 
