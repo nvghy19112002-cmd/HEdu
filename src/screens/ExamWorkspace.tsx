@@ -27,12 +27,14 @@ import { addToGoiThem, missingPackages } from '../lib/missingpkg';
 import { compileSlots, type TabStatus } from '../lib/examtabs';
 import { clampLog, clampPdf, lacksPreamble, loadLayout, saveLayout, treeShown, type EwLayout } from '../lib/ewlayout';
 import { TEX_KEYS_HINT } from '../lib/texextras';
-import { inputName, wrapFiles } from '../lib/examwrap';
+import { inputName, needsXeLaTeX, wrapFiles, type WrapEngine } from '../lib/examwrap';
 import { HEDU_THEME_ID, loadDefaultInfo, loadThemeId, themeOf } from '../lib/examtheme';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Pane = 'files' | 'edit' | 'pdf' | 'log';
 const NARROW = 1000;
+/** Đề (mã đề + tệp chính) đã phải dịch lại bằng XeLaTeX trong phiên này: lần sau dịch XeLaTeX luôn, khỏi thử pdfLaTeX. */
+const XE_ONLY = new Set<string>();
 
 /** Mỗi đề đang mở là một tab ở Thư viện đề: tab ẩn vẫn giữ nguyên trạng thái (tệp đang sửa, PDF, nhật ký).
  * `onLibrary` = về tab Thư viện (đề vẫn mở) · `onInfo` = mở hộp Thông tin & thao tác của đề · `onClose` = đóng tab (đã hỏi lưu nếu cần). */
@@ -298,9 +300,19 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
       // tệp chính chỉ có nội dung đề ⇒ HEdu ghép phần đầu theo mẫu in (chỉ trong thư mục build)
       const mt = mainFile ? (ed.current?.text(mainFile) ?? loaded.current.get(mainFile) ?? (await fileRead(id, mainFile).then((x) => x.text).catch(() => null))) : null;
       const di = loadDefaultInfo();
-      const wrap = mainFile && mt !== null ? wrapFiles(mainFile, mt, loadThemeId(), mode, { schoolYear: schoolYear || di.year, teacher: di.teacher }) : null;
+      // HyMath dịch bằng pdfLaTeX (nhanh); đề từng phải dịch bằng XeLaTeX trong phiên này thì dùng XeLaTeX luôn
+      const xeKey = `${id}|${mainFile}`;
+      const wrapFor = (e: WrapEngine) => (mainFile && mt !== null ? wrapFiles(mainFile, mt, loadThemeId(), mode, { schoolYear: schoolYear || di.year, teacher: di.teacher }, e) : null);
+      const wrap = wrapFor(XE_ONLY.has(xeKey) ? 'xelatex' : 'pdflatex');
       if (!wrap && mode === 'de-in') { setNote('Bản “Đề in trắng đen” chỉ có với tệp đề chỉ có dữ liệu và mẫu in HyMath.'); return; }
-      const r = await examCompile(id, { engine: wrap?.engine ?? engine, runs: wrap?.modes ? Math.max(runs, 2) : runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120), ...(wrap ? { wrap: wrap.files, wrapModes: wrap.modes } : {}) });
+      const run = (w: typeof wrap) => examCompile(id, { engine: w?.engine ?? engine, runs: w?.modes ? Math.max(runs, 2) : runs, mode, texBin: st.texBin || undefined, timeoutSecs: Math.max(st.timeoutSecs, 120), ...(w ? { wrap: w.files, wrapModes: w.modes } : {}) });
+      let r = await run(wrap);
+      // nội dung đề cần XeLaTeX (ký tự Unicode ngoài bảng mã tiếng Việt T5, gói chỉ chạy với XeLaTeX…) ⇒ dịch lại bằng XeLaTeX như trước
+      if (wrap?.engine === 'pdflatex' && r.status === 'failed' && needsXeLaTeX(r.rawLog)) {
+        XE_ONLY.add(xeKey);
+        r = await run(wrapFor('xelatex'));
+        r = { ...r, warnings: ['Đề có ký tự hoặc gói chỉ dịch được bằng XeLaTeX nên HEdu dịch bằng XeLaTeX (chậm hơn).', ...r.warnings] };
+      }
       setResult(r);
       examCompileAll(id).then(setGoods).catch(() => undefined);
       if (r.status === 'ok') setViewMode(mode);
