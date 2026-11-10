@@ -13,4 +13,9 @@ const c = stemSnippet("\\begin{ex}%[2D1H1-1]\n Hàm số $y=x^4-2x^2+3$ có bao 
 ok(c === 'Hàm số y=x⁴-2x²+3 có bao nhiêu điểm cực trị?', `chỉ lấy đề, số mũ đọc được: “${c}”`);
 const d = plainSnippet('$u_n=2^{n+1}$, $x^{1/2}$');
 ok(d === 'uₙ=2ⁿ⁺¹ , x^(1/2)', `chỉ số dưới/trên: “${d}”`);
+// câu #3743: căn trong phân số, căn bậc n, tên hàm sin/cos không được mất trong bảng gọn
+const e = plainSnippet(String.raw`Cho $\sin\alpha=\dfrac{1}{5}$. Biết $\cos\alpha=\dfrac{2\sqrt{a}}{b}$, $\sqrt[3]{x+1}$, $N(6;-4)$.`);
+ok(e === 'Cho sin α=1/5 . Biết cos α=2√a/b , ³√(x+1) , N(6;-4) .', `căn lồng phân số, căn bậc 3, sin/cos, dấu chấm phẩy: “${e}”`);
+const f = plainSnippet(String.raw`$\frac{\sqrt{3}+1}{\sqrt{2}}$`);
+ok(f === '(√3+1)/√2', `phân số có căn ở cả tử và mẫu: “${f}”`);
 if (fail) { console.log(`${fail} lỗi`); process.exit(1); }

@@ -10,6 +10,9 @@ import { SlideShow } from '../components/SlideShow';
 import { parseExTest, splitExBlocks } from '../lib/extest';
 import { addToDeck, createDeck, deleteDeck, loadDecks, moveItem, removeItem, renameDeck, useDecks, type Deck, type DeckItem } from '../lib/slidedeck';
 import { clock, estimateSecs, loadPlayOpts, savePlayOpts, type PlayOpts } from '../lib/slideshow';
+import { exportSlidesPdf } from '../lib/slidepdf';
+import { chooseProjectFolder } from '../lib/examlib';
+import { isDesktop } from '../lib/platform';
 import type { QType } from '../lib/types';
 
 const LAST_KEY = 'hedu.slides.last';
@@ -75,6 +78,13 @@ export function SlidesScreen() {
   const types = useMemo(() => (deck?.items ?? []).map((it) => parseExTest(it.latex).type), [deck]);
   const secs = estimateSecs(types, opts);
   const run = async (f: () => Promise<unknown>, ok?: string) => { try { await f(); if (ok) toast(ok); } catch (e) { toast(msg(e)); } };
+  /** Xuất bộ ra PDF khổ 16:9 (mỗi câu một trang), dịch bằng TeX Live trên máy. */
+  const pdfOut = async (d: Deck, solution: boolean) => {
+    const dir = await chooseProjectFolder();
+    if (!dir) return;
+    toast(`Đang dịch PDF “${d.name}” (${d.items.length} câu)…`);
+    try { toast(`Đã xuất PDF: ${await exportSlidesPdf(d.name, d.items, solution, dir)}`); } catch (e) { toast(`Không xuất được PDF: ${msg(e)}`); }
+  };
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'F5' && playing === null && deck?.items.length && !adding) { e.preventDefault(); setPlaying(0); } };
@@ -141,6 +151,10 @@ export function SlidesScreen() {
                     <span className="more-menu" role="menu">
                       <button type="button" role="menuitem" onClick={() => { setMenu(false); setRen(deck.name); }}>Đổi tên bộ</button>
                       <button type="button" role="menuitem" onClick={() => { setMenu(false); go({ screen: 'bank' }); }}>Thêm câu từ Ngân hàng</button>
+                      {isDesktop() && deck.items.length > 0 && <>
+                        <button type="button" role="menuitem" onClick={() => { setMenu(false); void pdfOut(deck, false); }}>Xuất PDF trình chiếu…</button>
+                        <button type="button" role="menuitem" onClick={() => { setMenu(false); void pdfOut(deck, true); }}>Xuất PDF kèm lời giải…</button>
+                      </>}
                       <button type="button" role="menuitem" className="danger" onClick={() => { setMenu(false); setAskDel(true); }}>Xoá bộ này…</button>
                     </span>
                   )}

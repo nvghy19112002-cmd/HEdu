@@ -17,7 +17,7 @@ export function plainSnippet(src: string, max = 110): string {
     .replace(/\\(?:immini|resizebox|scalebox)\b(\[[^\]]*\])?/g, ' ')
     .replace(TEXT_CMDS, '$1')
     .replace(/\$\$?([^$]*)\$\$?/g, (_m, m: string) => ' ' + mathText(m) + ' ')
-    .replace(/\\\\|\\quad|\\qquad|\\,|\;|\\!|\\ /g, ' ')
+    .replace(/\\\\|\\quad|\\qquad|\\,|\\;|\\!|\\ /g, ' ')
     .replace(/\\[a-zA-Z]+\*?/g, ' ')                          // lệnh còn sót
     .replace(/[{}]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -35,19 +35,35 @@ const scr = (map: Record<string, string>, mark: string) => (_m: string, a: strin
 };
 
 /** Công thức → chữ gần đúng: phân số a/b, căn, số mũ/chỉ số nhỏ, ký hiệu thường gặp, bỏ lệnh còn lại. */
+/** a/b, √(x): đối số một "từ" thì bỏ ngoặc cho gọn. */
+const grp = (x: string) => (/^[\p{L}\p{N}.√⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ]+$/u.test(x.trim()) ? x.trim() : `(${x.trim()})`);
+const supOf = (n: string) => ([...n].every((c) => c in SUP) ? [...n].map((c) => SUP[c]).join('') : n);
+
+/** \sqrt[n]{…}, \frac{…}{…} lồng nhau (vd \dfrac{2\sqrt{a}}{b}): thay từ trong ra ngoài, lặp tới khi hết. */
+function nested(m: string): string {
+  let prev = '';
+  for (let k = 0; k < 8 && prev !== m; k++) {
+    prev = m;
+    m = m
+      .replace(/\\sqrt\s*\[([^\]{}]*)\]\s*\{([^{}]*)\}/g, (_x, n: string, a: string) => `${supOf(n.trim())}√${grp(a)}`)
+      .replace(/\\sqrt\s*\{([^{}]*)\}/g, (_x, a: string) => `√${grp(a)}`)
+      .replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (_x, a: string, b: string) => `${grp(a)}/${grp(b)}`);
+  }
+  return m;
+}
+
 function mathText(m: string): string {
-  return m
+  return nested(m)
     .replace(/\\(?:mathbb|mathrm|text)\s*\{([^{}]*)\}/g, '$1')
     .replace(/\\(?:vec|overrightarrow)\s*\{([^{}]*)\}/g, '$1⃗')
-    .replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '($1)/($2)')
-    .replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)')
+    .replace(/\\(?:sin|cos|tan|cot|log|ln|lim|max|min|exp)\b/g, (f) => ` ${f.slice(1)} `)
     .replace(/\^\s*(?:\{([^{}]*)\}|([0-9a-zA-Z+-]))/g, scr(SUP, '^'))
     .replace(/_\s*(?:\{([^{}]*)\}|([0-9a-zA-Z]))/g, scr(SUB, '_'))
     .replace(/\\(?:left|right|big|Big)\b/g, '')
     .replace(/\\infty/g, '∞').replace(/\\cup/g, '∪').replace(/\\cap/g, '∩').replace(/\\setminus/g, '\\')
     .replace(/\\(?:le|leq|leqslant)\b/g, '≤').replace(/\\(?:ge|geq|geqslant)\b/g, '≥').replace(/\\neq?\b/g, '≠')
     .replace(/\\(?:to|rightarrow)\b/g, '→').replace(/\\pi\b/g, 'π').replace(/\\cdot\b/g, '·').replace(/\\times\b/g, '×')
-    .replace(/\\in\b/g, '∈').replace(/\\(?:Rightarrow|implies)\b/g, '⇒').replace(/\\pm\b/g, '±').replace(/\\alpha\b/g, 'α').replace(/\\beta\b/g, 'β').replace(/\\Delta\b/g, 'Δ').replace(/\\int\b/g, '∫').replace(/\\sum\b/g, '∑')
+    .replace(/\\in\b/g, '∈').replace(/\\(?:Rightarrow|implies)\b/g, '⇒').replace(/\\pm\b/g, '±').replace(/\\alpha\b/g, 'α').replace(/\\gamma\b/g, 'γ').replace(/\\theta\b/g, 'θ').replace(/\\lambda\b/g, 'λ').replace(/\\mu\b/g, 'μ').replace(/\\(?:varphi|phi)\b/g, 'φ').replace(/\\omega\b/g, 'ω').replace(/\\(?:varepsilon|epsilon)\b/g, 'ε').replace(/\\circ\b/g, '°').replace(/\\perp\b/g, '⊥').replace(/\\parallel\b/g, '∥').replace(/\\forall\b/g, '∀').replace(/\\exists\b/g, '∃').replace(/\\beta\b/g, 'β').replace(/\\Delta\b/g, 'Δ').replace(/\\int\b/g, '∫').replace(/\\sum\b/g, '∑')
     .replace(/\\[a-zA-Z]+/g, '')
     .replace(/[{}]/g, '')
     .replace(/\s+/g, ' ')

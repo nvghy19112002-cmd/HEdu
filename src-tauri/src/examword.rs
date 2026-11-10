@@ -479,8 +479,17 @@ pub struct DecorFile {
     pub text: String,
 }
 
-/// Biên dịch tài liệu "trang trí" (cùng mẫu HyMath với đề) bằng XeLaTeX, trả về PDF để giao diện cắt thành ảnh.
-pub fn decor_pdf(work_root: &Path, tex_bin: &Option<String>, support: &Option<PathBuf>, files: &[DecorFile], main: &str) -> Result<Vec<u8>, String> {
+/// Trình dịch được phép: pdflatex (mặc định của HEdu) hoặc xelatex (mẫu cần phông hệ thống).
+fn engine_of(e: &Option<String>) -> Result<&'static str, String> {
+    match e.as_deref().map(str::trim) {
+        None | Some("") | Some("xelatex") => Ok("xelatex"),
+        Some("pdflatex") => Ok("pdflatex"),
+        Some(x) => Err(format!("Trình dịch không hỗ trợ: {x}")),
+    }
+}
+
+/// Biên dịch một bộ tệp .tex nhỏ (phần trang trí của mẫu in, bộ trình chiếu) trong thư mục tạm, trả về PDF.
+pub fn decor_pdf(work_root: &Path, tex_bin: &Option<String>, support: &Option<PathBuf>, files: &[DecorFile], main: &str, engine: &str) -> Result<Vec<u8>, String> {
     let ok = |p: &str| !p.is_empty() && !p.contains(['/', '\\', ':']) && !p.starts_with('.') && p.len() < 80;
     if !ok(main) || files.iter().any(|f| !ok(&f.path)) || !files.iter().any(|f| f.path == main) {
         return Err("Tệp trang trí không hợp lệ.".into());
@@ -492,34 +501,58 @@ pub fn decor_pdf(work_root: &Path, tex_bin: &Option<String>, support: &Option<Pa
             fs::write(work.join(&f.path), &f.text).map_err(|e| e.to_string())?;
         }
         let never = std::sync::atomic::AtomicBool::new(false);
-        let mut c = crate::examcompile::engine_command(tex_bin, "xelatex", support, &work);
+        let mut c = crate::examcompile::engine_command(tex_bin, engine, support, &work);
         c.args(["-interaction=nonstopmode", "-halt-on-error", "-no-shell-escape", main]);
         let stem = main.trim_end_matches(".tex");
-        match crate::proc::run_job(&mut c, Duration::from_secs(120), &never) {
-            Ok(o) if o.timed_out => return Err("Dịch phần trang trí của mẫu quá 120 giây nên đã dừng.".into()),
+        match crate::proc::run_job(&mut c, Duration::from_secs(240), &never) {
+            Ok(o) if o.timed_out => return Err("Dịch quá 240 giây nên đã dừng.".into()),
             Ok(o) if !o.success => {
                 let log = fs::read_to_string(work.join(format!("{stem}.log"))).unwrap_or_default();
                 let first = log.lines().find(|l| l.starts_with('!')).unwrap_or("TeX báo lỗi.");
-                return Err(format!("Không dịch được khung tiêu đề theo mẫu: {first}"));
+                return Err(format!("TeX báo lỗi khi dịch: {first}"));
             }
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(crate::tikz::missing_tool("xelatex").message),
-            Err(e) => return Err(format!("Không chạy được xelatex: {e}")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(crate::tikz::missing_tool(engine).message),
+            Err(e) => return Err(format!("Không chạy được {engine}: {e}")),
         }
-        fs::read(work.join(format!("{stem}.pdf"))).map_err(|_| "TeX không tạo được PDF phần trang trí.".to_string())
+        fs::read(work.join(format!("{stem}.pdf"))).map_err(|_| "TeX không tạo được PDF.".to_string())
     })();
     let _ = fs::remove_dir_all(&work);
     r
 }
 
 #[tauri::command]
-pub async fn word_decor_pdf(app: AppHandle, files: Vec<DecorFile>, main: String, tex_bin: Option<String>) -> Result<tauri::ipc::Response, String> {
+pub async fn word_decor_pdf(app: AppHandle, files: Vec<DecorFile>, main: String, tex_bin: Option<String>, engine: Option<String>) -> Result<tauri::ipc::Response, String> {
     let root = root_of(&app)?;
     let sup = crate::support::prepare(&root);
     let work_root = root.join("cache");
     fs::create_dir_all(&work_root).map_err(|e| e.to_string())?;
     let tex_bin = tex_bin.filter(|s| !s.trim().is_empty());
-    tauri::async_runtime::spawn_blocking(move || decor_pdf(&work_root, &tex_bin, &sup, &files, &main)).await.map_err(|e| e.to_string())?.map(tauri::ipc::Response::new)
+    let eng = engine_of(&engine)?;
+    tauri::async_runtime::spawn_blocking(move || decor_pdf(&work_root, &tex_bin, &sup, &files, &main, eng)).await.map_err(|e| e.to_string())?.map(tauri::ipc::Response::new)
+}
+
+/// Dịch một bộ tệp .tex (vd bộ trình chiếu) rồi lưu PDF vào thư mục người dùng chọn, không ghi đè tệp có sẵn. Trả về đường dẫn tệp.
+#[tauri::command]
+pub async fn tex_pdf_to_dir(app: AppHandle, files: Vec<DecorFile>, main: String, tex_bin: Option<String>, engine: Option<String>, dest_dir: String, base: String) -> Result<String, String> {
+    let root = root_of(&app)?;
+    let sup = crate::support::prepare(&root);
+    let work_root = root.join("cache");
+    fs::create_dir_all(&work_root).map_err(|e| e.to_string())?;
+    let tex_bin = tex_bin.filter(|s| !s.trim().is_empty());
+    let eng = engine_of(&engine)?;
+    let dest = PathBuf::from(&dest_dir);
+    if !dest.is_dir() {
+        return Err("Thư mục đích không tồn tại.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
+        let pdf = decor_pdf(&work_root, &tex_bin, &sup, &files, &main, eng)?;
+        let target = unique_path(&dest, &safe_name(&base), "pdf");
+        fs::write(&target, pdf).map_err(|e| format!("Không ghi được PDF: {e}"))?;
+        Ok(target.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn root_of(app: &AppHandle) -> Result<PathBuf, String> {
@@ -580,6 +613,13 @@ mod tests {
     fn doc_canh_bao_tu_stderr() {
         let w = warnings_of("x\nHEDU-CANH-BAO lệnh \\foo\nHEDU-CANH-BAO lệnh \\foo\nHEDU-CANH-BAO lệnh \\bar\n");
         assert_eq!(w, vec!["lệnh \\bar".to_string(), "lệnh \\foo".to_string()]);
+    }
+
+    #[test]
+    fn chon_trinh_dich() {
+        assert_eq!(engine_of(&None).unwrap(), "xelatex");
+        assert_eq!(engine_of(&Some("pdflatex".into())).unwrap(), "pdflatex");
+        assert!(engine_of(&Some("lualatex --shell-escape".into())).is_err());
     }
 
     #[test]

@@ -551,6 +551,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             {step === 3 && <>
             <button type="button" className="btn btn-dark" style={{ height: 48 }} disabled={!canExport || busy || !desktop} onClick={() => { void saveToLibrary(); }}>{busy ? 'Đang lưu…' : 'Lưu vào Thư viện đề'}</button>
             <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'PDF từng mã đề và gói ZIP giáo viên/học sinh' : 'Lưu vào Thư viện đề trước (đề đã đổi sau lần lưu gần nhất)'} onClick={() => setExportDlg(true)}>Xuất PDF từng mã / ZIP…</button>
+            {desktop && canExport && !(saved && saved.sig === draftSig) && <span className="te-note">PDF từng mã / ZIP lấy từ bản đã lưu: bấm “Lưu vào Thư viện đề” trước (Word và thư mục .tex thì xuất được ngay).</span>}
             {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
             <div className="grid2" style={{ gap: 10 }}>
               <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
