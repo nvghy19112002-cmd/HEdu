@@ -4,7 +4,9 @@ import { fileRead } from './examfiles';
 import { renderTikz } from './tikz';
 import { fillWidths, prepareBody, strangeCommands } from './wordfig';
 import type { QImg } from './qimages';
-import type { Decor } from './worddecorrun';
+import { buildDecor, type Decor } from './worddecorrun';
+import { findTitle } from './worddecor';
+import type { WrapInfo } from './examwrap';
 
 export interface WordOpts { solution: boolean; mark: boolean; print?: boolean; suffix?: string }
 export interface WordOut { path: string; bytes: number; warnings: string[] }
@@ -36,9 +38,11 @@ export async function svgToPng(svg: string): Promise<{ b64: string; wcm: number 
 }
 
 /** Xuất một mã đề; `onFigure` báo tiến độ dịch hình. Ném lỗi (tiếng Việt) nếu không xuất được. */
-export async function exportWordCode(id: string, code: string, opts: WordOpts, destDir: string, onFigure?: (i: number, n: number) => void): Promise<WordOut> {
+export async function exportWordCode(id: string, code: string, opts: WordOpts, destDir: string, onFigure?: (i: number, n: number) => void, themed?: { themeId: string; info: WrapInfo }): Promise<WordOut> {
   const tex = await fileRead(id, `de-${code}.tex`);
-  return exportWordText(tex.text, code, opts, destDir, { id }, onFigure);
+  // đề dựng theo mẫu in (có \TieuDeDeSo): Word cũng theo mẫu
+  const decor = themed && findTitle(tex.text) ? await buildDecor(tex.text, themed.themeId, !!opts.print, themed.info) : undefined;
+  return exportWordText(tex.text, code, opts, destDir, { id }, onFigure, decor);
 }
 
 /** Nơi lấy đề: đề đã lưu trong Thư viện (`id`) hoặc đề chưa lưu ở Tạo đề (`images` = ảnh câu hỏi trong kho ảnh). */

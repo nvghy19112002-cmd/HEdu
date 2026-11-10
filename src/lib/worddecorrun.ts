@@ -39,7 +39,7 @@ export async function buildDecor(text: string, themeId: string, print: boolean, 
   if (!w || !w.engine) throw new Error('Mẫu in đang chọn không phải mẫu HyMath nên không dựng được Word theo mẫu.');
   const files = [...w.files, { path: DECOR_NAME, text: body }];
   const texBin = getSettings().texBin.trim() || null;
-  const buf = await invoke<ArrayBuffer>('word_decor_pdf', { files, main: WRAP_MAIN, texBin });
+  const buf = await invoke<ArrayBuffer>('word_decor_pdf', { files, main: WRAP_MAIN, texBin, engine: w.engine });
   const lib = await loadLib();
   const doc = await lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useWorkerFetch: false, verbosity: 0 }).promise;
   const figures: Decor['figures'] = [];

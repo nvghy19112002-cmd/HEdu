@@ -184,7 +184,9 @@ export const HYMATH_CORE: Readonly<Record<string, string>> = {
 \setlist[enumerate]{label=\textbf{\alph*)},leftmargin=8mm,itemsep=3pt,topsep=3pt}
 \renewcommand{\nameex}{\sffamily\bfseries\color{ExamAccent}Câu}
 \renewcommand{\FalseEX}{\stepcounter{dapan}\AnswerBadge{\Alph{dapan}}\ignorespaces}
-\renewcommand{\TrueEX}{\FalseEX}
+% Bản Lời giải: phương án đúng tô màu đỏ đậm (cùng kiểu nhãn của mẫu, không đổi bề rộng); bản Đề giữ như phương án khác.
+\newcommand{\AnswerBadgeTrue}[1]{\begingroup\colorlet{ExamAccent}{red!75!black}\AnswerBadge{#1}\endgroup}
+\renewcommand{\TrueEX}{\stepcounter{dapan}\ifExamSolutions\AnswerBadgeTrue{\Alph{dapan}}\else\AnswerBadge{\Alph{dapan}}\fi\ignorespaces}
 \settowidth{\widthalpha}{\AnswerBadge{D}}
 \addtolength{\widthalpha}{2pt}
 \renewcommand{\arraystretch}{1.25}

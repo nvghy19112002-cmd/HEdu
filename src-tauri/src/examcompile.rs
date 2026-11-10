@@ -797,9 +797,14 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     // chế độ Đề/Lời giải: bản dẫn xuất CHỈ trong thư mục build; không chắc cách bật/tắt lời giải ⇒ KHÔNG biên dịch (không xuất PDF mang nhãn Đề)
     let mut mode_sig = mode.to_string();
     let wrap_modes = !wrap_used.is_empty() && opts.wrap_modes.unwrap_or(false);
-    if mode == MODE_DE_IN && !wrap_modes {
+    // Đề in trắng đen: tệp bọc HyMath (tệp chỉ có dữ liệu) hoặc đề dựng sẵn theo mẫu HyMath (có \def\CheDo, xử lí ở examprofile::derive)
+    let chedo = mode == MODE_DE_IN && !wrap_modes && {
+        let rels: Vec<String> = sync.files.iter().map(|(r, _)| r.clone()).collect();
+        examprofile::has_chedo(&projects_dir(&lib).join(id), &rels)
+    };
+    if mode == MODE_DE_IN && !wrap_modes && !chedo {
         out.status = "no-profile".into();
-        out.message = "Bản “Đề in trắng đen” chỉ có khi tệp đề chỉ có dữ liệu và được ghép theo mẫu in HyMath.".into();
+        out.message = "Bản “Đề in trắng đen” chỉ có khi đề theo mẫu in HyMath.".into();
         out.last_good = last_good_slot(root, id, mode, &slot);
         out.kept_previous = out.last_good.is_some();
         return Ok(out);

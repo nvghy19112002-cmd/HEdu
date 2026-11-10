@@ -51,3 +51,29 @@ fn do_toc_do_xuat_de() {
     }
     let _ = fs::remove_dir_all(&root);
 }
+
+// Đề Tạo đề theo mẫu in HyMath (có \def\CheDo): dịch THẬT bản Đề / Đề in / Lời giải của main-101.tex qua đúng đường của app.
+// Chạy: HEDU_TEX_BIN=<bin> HEDU_SKY_DE=<thư mục đề do examsky dựng> [HEDU_SKY_OUT=<nơi chép PDF>] cargo test --lib --locked de_theo_mau_ba_ban -- --ignored --nocapture
+#[test]
+#[ignore]
+fn de_theo_mau_ba_ban() {
+    let (Ok(bin), Ok(src)) = (std::env::var("HEDU_TEX_BIN"), std::env::var("HEDU_SKY_DE")) else { return };
+    let root = crate::testutil::dir("examexport-de-theo-mau");
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    let s = crate::examlib::import(&root.join("exam-library"), Path::new(&src), "Đề theo mẫu", Some("main.tex")).unwrap();
+    let sup = support::prepare(&root);
+    for m in ["de", "de-in", "loigiai"] {
+        let co = CompileOpts { engine: None, timeout_secs: Some(180), runs: Some(2), tex_bin: Some(bin.clone()), force: None, mode: Some(m.to_string()), main: Some("main-101.tex".into()), wrap: None, wrap_modes: None, lane: None };
+        let r = compile(&root, &s.id, &co, &sup).unwrap();
+        assert_eq!(r.status, "ok", "{m}: {} {}", r.message, r.raw_log);
+        let want = match m { "de" => "{mau}", "de-in" => "{in}", _ => "{loigiai}" };
+        assert!(r.profile_changes.iter().any(|c| c.after.contains("CheDo") && c.after.contains(want)) || m == "de", "{m}: {:?}", r.profile_changes);
+        if let Ok(out) = std::env::var("HEDU_SKY_OUT") {
+            let _ = fs::create_dir_all(&out);
+            let _ = fs::copy(&r.last_good.as_ref().unwrap().pdf_path, Path::new(&out).join(format!("app-{m}.pdf")));
+        }
+        eprintln!("{m}: ok, {} trang", r.last_good.as_ref().and_then(|g| g.pages).unwrap_or(0));
+    }
+    let _ = fs::remove_dir_all(&root);
+}

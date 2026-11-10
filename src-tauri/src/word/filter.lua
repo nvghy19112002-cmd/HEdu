@@ -341,7 +341,7 @@ function Pandoc(doc)
   local partk = 0
   local out = pandoc.List()
   local phan, num = 0, 0
-  for _, b in ipairs(doc.blocks) do
+  for bi, b in ipairs(doc.blocks) do
     local rest = part_para(b)
     if has_class(b, 'hytitle') then
       if decor and dtitle ~= '' then out:insert(decor_img('decor-title.png', dtitle))
@@ -356,6 +356,9 @@ function Pandoc(doc)
       end
     elseif has_class(b, 'hd') then
       out:extend(header_table(b))
+    elseif has_class(b, 'phan') and doc.blocks[bi + 1] and part_para(doc.blocks[bi + 1]) then
+      -- đề theo mẫu in: \caulc… chỉ là dấu đánh phần, dòng PHẦN in đậm ngay sau đó mới là tiêu đề ⇒ không dựng tiêu đề trùng
+      phan = phan + 1; num = 0
     elseif has_class(b, 'phan') then
       phan = phan + 1; num = 0
       local kind = S(b)

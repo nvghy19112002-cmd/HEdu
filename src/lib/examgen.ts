@@ -598,7 +598,7 @@ export function keyTex(v: Variant): string {
 
 /** Một mã đề: tiêu đề bằng môi trường `name` của khaibaochung, từng phần bằng \caulc/\cauds/\caukq/\cautl, câu chép nguyên văn. */
 /** Định nghĩa riêng của các câu trong mã đề (macro từ đầu tệp nguồn), gộp và bỏ trùng; rỗng nếu không câu nào có. */
-const ownDefs = (v: Variant): string[] => { const m = mergePreambles(PARTS.flatMap((p) => v.parts[p].map((s) => s.q.preamble))); return m ? [m] : []; };
+export const ownDefs = (v: Variant): string[] => { const m = mergePreambles(PARTS.flatMap((p) => v.parts[p].map((s) => s.q.preamble))); return m ? [m] : []; };
 
 export function variantTex(info: ExamInfo, v: Variant): string {
   const n = (p: PartKey) => v.parts[p].length;

@@ -113,17 +113,23 @@ export function ImportScreen() {
     setLots({ list, idx: k });
   };
   const lotPlan = useMemo(() => planLots(fileStats.filter((f) => !encAsk.has(f.srcIdx))), [fileStats, encAsk]);
-  const openWord = async () => {
+  /** Đọc một tệp Word (nút "Mở file Word" hoặc kéo-thả). */
+  const readWord = async (path: string) => {
     setLoadErr(null);
     try {
-      const path = await chooseWordFile();
-      if (!path) return;
       setWordBusy(true);
       const r = await importWord(path);
       if (!r.conv.questions.length) { setWordRep(null); setLoadErr('Không tìm thấy câu nào dạng “Câu 1.” trong tệp Word này.'); return; }
       setSrcs([]); setSrc(r.tex); setWordQs(r.conv.questions); setWordKey(null);
       setWordRep({ name: path.split(/[\\/]/).pop() ?? path, summary: r.summary, notes: r.notes });
     } catch (e) { setLoadErr(e instanceof Error ? e.message : String(e)); } finally { setWordBusy(false); }
+  };
+  const openWord = async () => {
+    setLoadErr(null);
+    try {
+      const path = await chooseWordFile();
+      if (path) await readWord(path);
+    } catch (e) { setLoadErr(e instanceof Error ? e.message : String(e)); }
   };
   const openKey = async () => {
     setLoadErr(null);
@@ -151,12 +157,15 @@ export function ImportScreen() {
   const dropRef = useRef<(paths: string[]) => void>(() => undefined);
   const dropOk = () => !result && !loadProg && !document.querySelector('.qm, .cfm');
   dropRef.current = (paths) => { if (dropOk()) void loadPaths(paths); };
+  // kéo-thả tệp Word: đọc như nút "Mở file Word" (mỗi lần một tệp)
+  const wordDropRef = useRef<(path: string) => void>(() => undefined);
+  wordDropRef.current = (path) => { if (dropOk() && !wordBusy) void readWord(path); };
   useEffect(() => {
     if (!isDesktop()) return;
     const offs: Promise<() => void>[] = [
       listen<unknown>('tauri://drag-enter', () => setDragOver(true)),
       listen<unknown>('tauri://drag-leave', () => setDragOver(false)),
-      listen<{ paths?: string[] }>('tauri://drag-drop', (p) => { setDragOver(false); const all = p?.paths ?? []; const isWord = (x: string) => /\.docx?$/i.test(x); const ps = all.filter((x) => !isWord(x)); if (all.some(isWord)) setLoadErr('Tệp Word chưa kéo thả được: bấm nút đọc tệp Word ở khung này.'); if (ps.length) dropRef.current(ps); }),
+      listen<{ paths?: string[] }>('tauri://drag-drop', (p) => { setDragOver(false); const all = p?.paths ?? []; const isWord = (x: string) => /\.docx?$/i.test(x); const words = all.filter(isWord); const ps = all.filter((x) => !isWord(x)); if (words.length) { wordDropRef.current(words[0]); if (words.length > 1 || ps.length) setLoadErr(`Mỗi lần chỉ đọc một tệp Word: đang đọc “${words[0].split(/[\\/]/).pop()}”, các tệp khác chưa đọc.`); return; } if (ps.length) dropRef.current(ps); }),
     ];
     return () => { for (const o of offs) void o.then((f) => f()).catch(() => undefined); };
   }, []);
