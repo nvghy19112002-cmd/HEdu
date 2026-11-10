@@ -26,6 +26,10 @@ export const THEMES: readonly ExamTheme[] = [
   { id: HEDU_THEME_ID, name: 'Mặc định HEdu (kiểu cũ)', version: HEDU_STY_VERSION, kind: 'hedu', desc: 'Bộ khai báo cũ của HEdu (hedu.sty), pdfLaTeX. Không có \\TieuDeDeSo.' },
 ];
 
+/** Mẫu đang cho dùng (chủ dự án chốt 09/11/2026: chỉ giữ Sky Panel; các mẫu khác để dành cho nút "Chọn mẫu" sau này). */
+export const ACTIVE_THEME_IDS: readonly string[] = [DEFAULT_THEME_ID];
+export const ACTIVE_THEMES: readonly ExamTheme[] = THEMES.filter((t) => ACTIVE_THEME_IDS.includes(t.id));
+
 export const themeOf = (id: string | null | undefined): ExamTheme => THEMES.find((t) => t.id === id) ?? THEMES.find((t) => t.id === DEFAULT_THEME_ID)!;
 /** Bộ tệp khai báo cho đề do Tạo đề dựng (luôn "Mặc định HEdu"). */
 export const themeFiles = (_id: string | null | undefined, qs: readonly Question[], shared: string) => heduFiles(qs, shared);
@@ -39,7 +43,8 @@ const INFO_KEY = 'hedu.examinfo';
 export function loadThemeId(): string {
   try {
     const v = localStorage.getItem(THEME_KEY);
-    return v && v !== HEDU_THEME_ID ? themeOf(v).id : v === HEDU_THEME_ID && localStorage.getItem(`${THEME_KEY}.chon`) ? HEDU_THEME_ID : DEFAULT_THEME_ID;
+    // mẫu đã chọn trước đây nhưng nay không còn trong danh sách dùng ⇒ về Sky Panel
+    return v && ACTIVE_THEME_IDS.includes(v) ? v : DEFAULT_THEME_ID;
   } catch { return DEFAULT_THEME_ID; }
 }
 export function saveThemeId(id: string) {

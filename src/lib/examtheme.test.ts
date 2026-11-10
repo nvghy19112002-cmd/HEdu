@@ -1,5 +1,5 @@
 import { DEFAULT_INFO } from './examdraft';
-import { DEFAULT_THEME_ID, EMPTY_INFO, fillInfo, HEDU_THEME_ID, hymathFiles, parseDefaultInfo, themeFiles, themeOf, themeStamp, THEMES } from './examtheme';
+import { ACTIVE_THEMES, DEFAULT_THEME_ID, EMPTY_INFO, fillInfo, HEDU_THEME_ID, hymathFiles, parseDefaultInfo, themeFiles, themeOf, themeStamp, THEMES } from './examtheme';
 import { HEDU_STY_VERSION, heduFiles } from './hedusty';
 import { HYMATH_CORE, HYMATH_THEMES } from './hymath.template';
 import type { Question } from './types';
@@ -27,5 +27,6 @@ t('chưa đặt mặc định ⇒ không đổi gì', JSON.stringify(fillInfo(DE
 t('đọc: gọn khoảng trắng, cắt 120 ký tự; có tên giáo viên, năm học', (() => { const r = parseDefaultInfo(JSON.stringify({ dept: '  SỞ   GD ', school: 'x'.repeat(300), group: 5, teacher: ' GV:  A ', year: '2026–2027' })); return r.dept === 'SỞ GD' && r.school.length === 120 && r.group === '' && r.teacher === 'GV: A' && r.year === '2026–2027'; })());
 t('đọc: hỏng / chưa có ⇒ rỗng; bản cũ chưa có teacher/year vẫn đọc được', JSON.stringify(parseDefaultInfo('{hỏng')) === JSON.stringify(EMPTY_INFO) && parseDefaultInfo(JSON.stringify({ school: 'A' })).teacher === '');
 
+t('chỉ cho dùng mẫu Sky Panel (09/11/2026); kho vẫn giữ các mẫu khác cho nút chọn mẫu sau này', ACTIVE_THEMES.length === 1 && ACTIVE_THEMES[0].id === 'hymath-13-sky-panel');
 if (fails) { console.log(`\n${fails} test lỗi`); process.exit(1); }
 console.log('\nOK');
