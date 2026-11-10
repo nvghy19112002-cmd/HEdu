@@ -207,9 +207,32 @@ pub fn run_job_fn(cmd: &mut Command, limit: Duration, cancelled_now: &dyn Fn() -
     })
 }
 
+/// Số nhân CPU máy đang chạy (không đọc được thì coi là 2).
+pub fn cpus() -> usize {
+    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2)
+}
+
+/// Số hình TikZ dịch cùng lúc: số nhân − 1, ít nhất 3 (như trước đây), nhiều nhất 6 (để máy vẫn mượt khi đang dịch).
+pub fn preview_lanes(cpus: usize) -> usize {
+    cpus.saturating_sub(1).clamp(3, 6)
+}
+
+/// Sức chứa hàng đợi dịch hình của máy này (dùng cho `Slots::auto`).
+pub fn preview_slots() -> usize {
+    preview_lanes(cpus())
+}
+
+/// Số mã đề dịch song song khi xuất: số nhân − 1, từ 1 đến 6.
+pub fn export_lanes(cpus: usize) -> usize {
+    cpus.saturating_sub(1).clamp(1, 6)
+}
+
 /// Giới hạn số tiến trình TeX chạy cùng lúc, để mở file nhiều hình không làm máy đứng.
 pub struct Slots {
-    left: Mutex<usize>,
+    /// (đã biết sức chứa chưa, số chỗ còn trống)
+    left: Mutex<(bool, usize)>,
+    /// sức chứa tính lúc dùng lần đầu (theo số nhân của máy); None = cố định
+    init: Option<fn() -> usize>,
     cv: Condvar,
 }
 
@@ -217,14 +240,21 @@ pub struct Permit<'a>(&'a Slots);
 
 impl Slots {
     pub const fn new(n: usize) -> Slots {
-        Slots { left: Mutex::new(n), cv: Condvar::new() }
+        Slots { left: Mutex::new((true, n)), init: None, cv: Condvar::new() }
+    }
+    /// Sức chứa do `f` tính một lần, lúc xin chỗ đầu tiên.
+    pub const fn auto(f: fn() -> usize) -> Slots {
+        Slots { left: Mutex::new((false, 0)), init: Some(f), cv: Condvar::new() }
     }
     pub fn acquire(&self) -> Permit<'_> {
         let mut g = self.left.lock().unwrap_or_else(|e| e.into_inner());
-        while *g == 0 {
+        if !g.0 {
+            *g = (true, self.init.map(|f| f()).unwrap_or(1).max(1));
+        }
+        while g.1 == 0 {
             g = self.cv.wait(g).unwrap_or_else(|e| e.into_inner());
         }
-        *g -= 1;
+        g.1 -= 1;
         Permit(self)
     }
 }
@@ -232,7 +262,7 @@ impl Slots {
 impl Drop for Permit<'_> {
     fn drop(&mut self) {
         let mut g = self.0.left.lock().unwrap_or_else(|e| e.into_inner());
-        *g += 1;
+        g.1 += 1;
         self.0.cv.notify_one();
     }
 }
@@ -297,6 +327,38 @@ mod tests {
             h.join().unwrap();
         }
         assert!(peak.load(Ordering::SeqCst) <= 2);
+    }
+
+    #[test]
+    fn so_lan_theo_so_nhan() {
+        // máy yếu vẫn giữ 3 hình như trước; máy mạnh tối đa 6
+        assert_eq!(preview_lanes(1), 3);
+        assert_eq!(preview_lanes(4), 3);
+        assert_eq!(preview_lanes(8), 6);
+        assert_eq!(preview_lanes(64), 6);
+        assert_eq!(export_lanes(1), 1);
+        assert_eq!(export_lanes(2), 1);
+        assert_eq!(export_lanes(4), 3);
+        assert_eq!(export_lanes(16), 6);
+    }
+
+    #[test]
+    fn suc_chua_tu_tinh_mot_lan() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        fn two() -> usize {
+            CALLS.fetch_add(1, Ordering::SeqCst);
+            2
+        }
+        static S: Slots = Slots::auto(two);
+        let a = S.acquire();
+        let b = S.acquire();
+        assert_eq!(S.left.lock().unwrap().1, 0, "đã dùng hết 2 chỗ");
+        drop(a);
+        drop(b);
+        let _c = S.acquire();
+        assert_eq!(CALLS.load(Ordering::SeqCst), 1, "chỉ tính sức chứa một lần");
+        assert_eq!(S.left.lock().unwrap().1, 1);
     }
     #[cfg(windows)]
     fn pid_alive(pid: u32) -> bool {

@@ -153,7 +153,7 @@ pub async fn tex_scratch_delete(app: AppHandle, slot: String) -> Result<(), Stri
 // Giao diện gửi NỘI DUNG các tệp, không gửi đường dẫn: tên tệp phải thuộc danh sách cố định dưới đây.
 // An toàn (claude/de-xuat-man-xu-li-tex.md mục 10.2-6): -no-shell-escape, thư mục riêng, Job Object (giết cả cây), giới hạn thời gian/kích thước.
 
-use crate::examcompile::{self, engine_command, first_line, has_severe, needs_rerun, parse_log, parse_pages, read_capped, tail, Diag, JOBNAME, MAX_PDF_VIEW, RAW_LOG_KEEP};
+use crate::examcompile::{self, engine_command, has_severe, needs_rerun, parse_log, parse_pages, read_capped, tail, Diag, JOBNAME, MAX_PDF_VIEW, RAW_LOG_KEEP};
 use crate::proc::run_job;
 use std::time::{Duration, Instant};
 
@@ -252,10 +252,8 @@ pub fn compile(p: &Paths, files: &[FileIn], tex_bin: &Option<String>, support_di
         fs::write(work.join(&f.path), f.text.as_bytes()).map_err(|e| format!("Không ghi được {}: {e}", f.path))?;
     }
 
-    let mut vc = engine_command(tex_bin, engine, support_dir, &work);
-    vc.arg("--version");
-    out.tex_version = match run_job(&mut vc, Duration::from_secs(20), &cancel_flag) {
-        Ok(v) => first_line(&v.stdout),
+    out.tex_version = match examcompile::tex_version(tex_bin, engine, support_dir, &work, &cancel_flag) {
+        Ok(v) => v,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             out.status = "no-tex".into();
             out.message = crate::tikz::missing_tool(engine).message;
