@@ -1,6 +1,5 @@
 // Kiểm thử “Xem chuẩn”: chỉ phần thuần (đầu file, phân loại lỗi); phần chạy TeX do CI Windows và máy thật kiểm.
-import { categorize, compileBatch, compileQuestion, forgetCompiled, settingsSignature, withSolution, type Result } from './xemchuan';
-import { DEFAULT_SETTINGS, getSettings, setSettings } from './tikz';
+import { categorize, compileBatch, withSolution, type Result } from './xemchuan';
 
 let failed = 0;
 function ok(cond: unknown, msg: string) {

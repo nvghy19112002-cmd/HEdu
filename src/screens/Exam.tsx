@@ -13,10 +13,10 @@ import { SlotMatrix, SlotStats } from '../components/SlotMatrix';
 import { applyForm, expandRows, levelStats, moveSlot, patchSlots } from '../lib/examslots';
 import { stockIndex } from '../lib/examgrid';
 import { useEffectiveOf } from '../components/IdReviewControl';
-import { IcAlert, IcCheck, IcDice, IcLock, IcPlus, IcSwap, IcUnlock, IcX } from '../components/Icons';
-import { chapters as chaptersOf, useTaxonomy } from '../lib/curriculum';
-import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, keyStats, verifyAgainstOriginal, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, partOf, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
-import { confirmRow, effectiveRows, lastGrade, loadDraft, newRowId, rescopeRow, rowsFromPick, saveDraft, scopeLabel, scopeParts, template2025, type Draft } from '../lib/examdraft';
+import { IcAlert, IcCheck, IcDice, IcLock, IcSwap, IcUnlock } from '../components/Icons';
+import { useTaxonomy } from '../lib/curriculum';
+import { allocate, brokenQuestions, candidatesFor, checkVariants, collect, keyStats, verifyAgainstOriginal, countsOf, DS_POINTS_CENTI, eligible, examFiles, fmtScore, hasControlChars, LOST_LABEL, rowMatches, makeVariants, PART_NAME, PARTS, POLICY_LABEL, reconcile, sourceHashes, specJson, totalCenti, variantFile, verified, type PartKey, type Policy, type Row, type Slot } from '../lib/examgen';
+import { effectiveRows, loadDraft, newRowId, rowsFromPick, saveDraft, scopeLabel, type Draft } from '../lib/examdraft';
 import { avoidSet, avoidedFor, buildIndex, lockedUsed, scanUsage, traceOf, usageSig, usedAtLabel } from '../lib/examusage';
 import { parseExTest } from '../lib/extest';
 import { createFromFiles, toSource } from '../lib/examsources';
@@ -28,7 +28,7 @@ import { stemSnippet } from '../lib/snippet';
 import { useBank } from '../lib/store';
 import { getRec } from '../lib/idreview';
 import { busiestGrade, scopeCounts } from '../lib/examscope';
-import { LEVELS, LEVEL_LABEL, TYPES, TYPE_LABEL, type Level, type QType, type Question } from '../lib/types';
+import { LEVEL_LABEL, type Level, type Question } from '../lib/types';
 
 const PART_HEAD: Record<PartKey, string> = {
   p1: 'PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn.',
@@ -83,10 +83,8 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [d, setD] = useState<Draft>(() => loadDraft());
   const [shown, setShown] = useState(0);
   const [swap, setSwap] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tplDlg, setTplDlg] = useState(false);
-  const [rescope, setRescope] = useState<string | null>(null);
   /** bản nháp ngay trước lần áp dụng mẫu gần nhất, để hoàn tác (chỉ trong phiên) */
   const [undoTpl, setUndoTpl] = useState<{ prev: Draft; note: string } | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string; sig: string } | null>(null);
@@ -223,7 +221,6 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
     pimg.conflicts.length > 0 ? `ảnh trùng tên nhưng khác nội dung (${pimg.conflicts.slice(0, 3).join(', ')})` : '',
   ].filter(Boolean);
   const refWarn = useRef<HTMLElement>(null);
-  const setRow = (id: string, p: Partial<Row>) => upd({ rows: d.rows.map((r) => (r.id === id ? { ...r, ...p } : r)) });
   const delRow = (id: string) => { const { [id]: _drop, ...rest } = d.locked; upd({ rows: d.rows.filter((r) => r.id !== id), locked: rest }); };
   const toggleLock = (uid: string) => {
     const rid = rowOf.get(uid);
