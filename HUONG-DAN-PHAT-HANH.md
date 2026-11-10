@@ -7,12 +7,12 @@ Mỗi đợt cập nhật gồm hai bước: **thử bằng beta**, rồi **đư
 | Kênh | Ai nhận | Dùng khi |
 |---|---|---|
 | **Chính thức** | Mọi người dùng | Bản đã thử kỹ |
-| **Thử nghiệm (beta)** | Chỉ máy bạn chọn kênh beta trong *Hệ thống* | Thử bản mới trước |
+| **Thử nghiệm (beta)** | Chỉ máy bạn chọn kênh beta trong *Cài đặt* | Thử bản mới trước |
 | **Bản trước** | Nút "Quay lại bản trước" | Bản mới có lỗi |
 
-Trên GitHub luôn chỉ giữ tối đa **3 bản cài**: chính thức, bản trước, beta mới nhất. Bản cũ hơn tự bị xóa.
+Trên GitHub chỉ giữ ít bản cài: bản mà mỗi kênh đang trỏ tới, **3 bản mới nhất** (để quay lại) và bản được ghim trong `scripts/giu-lai-phat-hanh.json` (hiện là beta.34). Bản cũ hơn tự bị xóa sau mỗi lần phát hành.
 
-Trên máy người dùng luôn có đúng **1 bản sao lưu dữ liệu**: lấy ngay trước lần cập nhật gần nhất. Mỗi lần cập nhật, bản sao lưu cũ được thay bằng bản mới, nên không bao giờ chất đống. Dữ liệu nằm ở thư mục dữ liệu của app (hiện đường dẫn trong *Hệ thống*), không nằm trong thư mục cài đặt nên cập nhật không đụng tới.
+Trên máy người dùng luôn có đúng **1 bản sao lưu trước cập nhật**: lấy ngay trước lần cập nhật gần nhất (ngoài ra app còn giữ vài điểm khôi phục và bản sao lưu tự động, xem trong *Cài đặt*). Mỗi lần cập nhật, bản sao lưu cũ được thay bằng bản mới, nên không bao giờ chất đống. Dữ liệu nằm ở thư mục dữ liệu của app (hiện đường dẫn trong *Cài đặt*), không nằm trong thư mục cài đặt nên cập nhật không đụng tới.
 
 ## 2. Làm một lần: chuẩn bị
 
@@ -34,7 +34,7 @@ Trên máy người dùng luôn có đúng **1 bản sao lưu dữ liệu**: l�
 1. Sửa `GHI-CHU-PHAT-HANH.md` (nội dung này hiện ở khung "Có bản mới" trong app).
 2. Vào kho trên GitHub → thẻ **Actions** → chọn **Phát hành** ở cột trái → nút **Run workflow** bên phải → gõ tên phiên bản dạng `v0.2.0-beta.1` → bấm **Run workflow**.
 3. GitHub tự kiểm thử, đóng gói, ký và đưa vào kênh beta (khoảng 10–15 phút). Xong thì thẻ Actions hiện dấu tích xanh.
-4. Trên máy bạn: *Hệ thống → Kênh cập nhật: Thử nghiệm → Kiểm tra bản mới → Cập nhật*.
+4. Trên máy bạn: *Cài đặt → Kênh cập nhật: Thử nghiệm → Kiểm tra bản mới → Cập nhật*.
 5. Dùng thử kỹ. Có lỗi thì sửa rồi phát hành `v0.2.0-beta.2`.
 
 ## 4. Đưa lên chính thức
@@ -43,7 +43,7 @@ Khi beta chạy ổn, làm lại bước 2 nhưng gõ `v0.2.0` (không có chữ
 
 ## 5. Có sự cố
 
-- **Bản mới lỗi**: *Hệ thống → Quay lại bản trước*. Dữ liệu: *Khôi phục dữ liệu trước cập nhật*. Cả hai đều làm lại được (bấm lần nữa để đảo ngược).
+- **Bản mới lỗi**: *Cài đặt → Quay lại bản trước*. Dữ liệu: *Khôi phục dữ liệu trước cập nhật*. Cả hai đều làm lại được (bấm lần nữa để đảo ngược).
 - **Mở app báo "dữ liệu thuộc bản mới hơn"**: do quay lại bản cũ sau khi dữ liệu đã lên cấu trúc mới. App không mở và không ghi đè gì. Chọn cập nhật lại, hoặc khôi phục dữ liệu trước cập nhật.
 - **Mất mạng khi cập nhật**: không sao, chưa cài gì, thử lại sau.
 

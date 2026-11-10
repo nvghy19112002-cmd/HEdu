@@ -21,9 +21,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Kiểm tra kiểu dữ liệu (chỉ cảnh báo)
+      - name: Kiểm tra kiểu dữ liệu
         run: npm run typecheck
-        continue-on-error: true
 
   windows:
     runs-on: windows-latest
