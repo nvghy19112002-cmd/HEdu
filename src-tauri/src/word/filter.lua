@@ -7,6 +7,8 @@ local made = ''
 local printmode = false
 local function nm(n) if printmode then return n .. 'In' end return n end
 local warned = {}
+-- Word theo mẫu in HyMath (ảnh trang trí): bám cách trình bày của ex_test trong PDF
+local decor_on = false
 
 local function has_class(b, c)
   if b.t ~= 'Div' then return false end
@@ -73,6 +75,14 @@ local function labelled(text, blocks, correct)
     end
   end
   if #out == 0 then out:insert(pandoc.Para({ label_inline(text, correct) })) end
+  -- ex_test tự thêm dấu chấm cuối mỗi phương án / ý
+  if decor_on then
+    local last = out[#out]
+    if last.t == 'Para' or last.t == 'Plain' then
+      local tail = S(last):match('(%S)%s*$')
+      if tail and not tail:match('[%.%?!:]') then last.content:insert(pandoc.Str('.')) end
+    end
+  end
   return out
 end
 
@@ -191,7 +201,8 @@ local function convert_ex(div, num)
   if #opts == 4 then
     if acc.side then main:extend(stack_options(opts)) else main:insert(options_block(opts)) end
   end
-  for _, t in ipairs(tfs) do main:extend(labelled(t.text, t.blocks, t.correct)) end
+  if decor_on and #tfs == 4 and not acc.side then main:insert(options_block(tfs))
+  else for _, t in ipairs(tfs) do main:extend(labelled(t.text, t.blocks, t.correct)) end end
   local out = pandoc.List()
   if acc.side then
     local t = pandoc.SimpleTable(pandoc.List(), { pandoc.AlignLeft, pandoc.AlignCenter }, { 0.62, 0.38 }, { {}, {} }, { { main, acc.side } })
@@ -210,7 +221,13 @@ local function convert_ex(div, num)
   if sans and mark then
     out:insert(styled('HeduDapAn', pandoc.Para({ pandoc.Emph({ pandoc.Str('Đáp án: ' .. sans) }) })))
   end
-  if solution and lg then
+  if solution and lg and decor_on then
+    -- như ex_test: dòng "Lời giải." căn giữa, rồi nội dung lời giải
+    out:insert(styled('HeduLGTieuDe', pandoc.Para({ pandoc.Str('Lời giải.') })))
+    for _, b in ipairs(lg) do
+      if b.t == 'Para' or b.t == 'Plain' then out:insert(styled('HeduLoiGiai', pandoc.Para(b.content))) else out:insert(b) end
+    end
+  elseif solution and lg then
     local c = pandoc.List({ sty('HeduLG', 'Lời giải.'), pandoc.Space() })
     if #lg > 0 and (lg[1].t == 'Para' or lg[1].t == 'Plain') then
       c:extend(lg[1].content)
@@ -230,6 +247,26 @@ local function convert_ex(div, num)
     end
   end
   return out
+end
+
+-- Word theo mẫu in: ảnh trang trí (khung tiêu đề, dải PHẦN) do HEdu dịch bằng chính mẫu TeX
+local function decor_img(src, wcm)
+  local img = pandoc.Image({}, src, '', pandoc.Attr('', {}, { width = wcm .. 'cm' }))
+  return pandoc.Div({ pandoc.Para({ img }) }, pandoc.Attr('', {}, { ['custom-style'] = 'HeduDecor' }))
+end
+
+-- Đoạn mở đầu bằng chữ đậm "PHẦN …" (cách viết tệp đề HyMath); trả về phần chữ còn lại sau nhãn đậm
+local function part_para(b)
+  if b.t ~= 'Para' and b.t ~= 'Plain' then return nil end
+  local c = b.content
+  local i = 1
+  while c[i] and (c[i].t == 'Space' or c[i].t == 'SoftBreak' or c[i].t == 'RawInline') do i = i + 1 end
+  if not c[i] or c[i].t ~= 'Strong' then return nil end
+  if not S(c[i]):match('^%s*PHẦN') then return nil end
+  local rest = pandoc.List()
+  for j = i + 1, #c do rest:insert(c[j]) end
+  while #rest > 0 and (rest[1].t == 'Space' or rest[1].t == 'SoftBreak' or rest[1].t == 'LineBreak') do rest:remove(1) end
+  return rest
 end
 
 local ROMAN = { 'I', 'II', 'III', 'IV', 'V', 'VI' }
@@ -296,10 +333,28 @@ function Pandoc(doc)
       counts[cur] = counts[cur] + 1
     end
   end
+  local decor = m.decor ~= nil and S(m.decor) == '1'
+  decor_on = decor
+  local dtitle = m.dtitle and S(m.dtitle) or ''
+  local dparts = {}
+  if m.dparts then for w in S(m.dparts):gmatch('[^,]+') do dparts[#dparts + 1] = w end end
+  local partk = 0
   local out = pandoc.List()
   local phan, num = 0, 0
   for _, b in ipairs(doc.blocks) do
-    if has_class(b, 'hd') then
+    local rest = part_para(b)
+    if has_class(b, 'hytitle') then
+      if decor and dtitle ~= '' then out:insert(decor_img('decor-title.png', dtitle))
+      else out:insert(styled('HeduTieuDe', pandoc.Para(pandoc.utils.blocks_to_inlines(b.content)))) end
+    elseif rest then
+      partk = partk + 1; num = 0
+      if decor and dparts[partk] then
+        out:insert(decor_img('decor-part-' .. partk .. '.png', dparts[partk]))
+        if #rest > 0 then out:insert(pandoc.Para(rest)) end
+      else
+        out:insert(b)
+      end
+    elseif has_class(b, 'hd') then
       out:extend(header_table(b))
     elseif has_class(b, 'phan') then
       phan = phan + 1; num = 0

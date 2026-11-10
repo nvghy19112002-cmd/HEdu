@@ -6,6 +6,7 @@ import { useApp } from '../app-context';
 import { QuestionView } from '../components/QuestionView';
 import { ExamTemplatesDialog } from '../components/ExamTemplatesDialog';
 import { ExamExportDialog } from '../components/ExamExportDialog';
+import { ExamWordDialog } from '../components/ExamWordDialog';
 import { ExamUsagePanel, useUsageScan } from '../components/ExamUsagePanel';
 import { ExamMatrixGrid } from '../components/ExamMatrixGrid';
 import { SlotMatrix, SlotStats } from '../components/SlotMatrix';
@@ -89,6 +90,7 @@ export function ExamScreen({ pick }: { pick?: string[] }) {
   const [undoTpl, setUndoTpl] = useState<{ prev: Draft; note: string } | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string; sig: string } | null>(null);
   const [exportDlg, setExportDlg] = useState(false);
+  const [wordDlg, setWordDlg] = useState(false);
   /** bước đang mở: 1 chọn câu · 2 kết quả · 3 cấu hình & xuất */
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const upd = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
@@ -552,7 +554,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
             {!desktop && <span className="te-note">Lưu vào Thư viện đề và biên dịch PDF chỉ có trong bản cài trên Windows. Ở đây xem được mã .tex.</span>}
             <div className="grid2" style={{ gap: 10 }}>
               <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy} onClick={desktop ? () => { void exportFolder(); } : viewTex}>{desktop ? 'Xuất thư mục .tex' : 'Xem mã .tex'}</button>
-              <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!saved || saved.sig !== draftSig || busy || !desktop} title={saved && saved.sig === draftSig ? 'Xuất từng mã đề ra Word (.docx)' : 'Lưu vào Thư viện đề trước'} onClick={() => setExportDlg(true)}>Xuất Word…</button>
+              <button type="button" className="btn btn-outline" style={{ height: 44 }} disabled={!canExport || busy || !desktop} title={desktop ? 'Xuất từng mã đề ra Word (.docx), không cần lưu trước' : 'Xuất Word chỉ có trong bản cài trên Windows'} onClick={() => setWordDlg(true)}>Xuất Word…</button>
             </div>
             </>}
             {blockers.length > 0
@@ -562,6 +564,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
         </aside>
       </div>
       {tplDlg && <ExamTemplatesDialog draft={d} onToast={toast} onClose={() => setTplDlg(false)} onApply={(next, prev, note) => { setUndoTpl({ prev, note }); setD(next); setSwap(null); }} />}
+      {wordDlg && <ExamWordDialog codes={examFiles(d.info, variants, { withKeys: false }).filter((f) => variants.some((v) => f.path === variantFile(v.code))).map((f) => ({ code: variants.find((v) => f.path === variantFile(v.code))!.code, text: f.text }))} images={pimg.images} onToast={toast} onClose={() => setWordDlg(false)} />}
       {exportDlg && saved && <ExamExportDialog id={saved.id} name={saved.name} onToast={toast} onClose={() => setExportDlg(false)} />}
     </>
   );
