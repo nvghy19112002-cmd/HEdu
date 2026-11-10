@@ -238,6 +238,9 @@ pub(crate) fn engine_command(tex_bin: &Option<String>, engine: &str, support_dir
     c
 }
 
+#[path = "examfmt.rs"]
+pub(crate) mod examfmt;
+
 // ---------- phiên bản TeX: hỏi một lần, nhớ trong phiên ----------
 
 /// Dấu nhận diện tệp chạy của bộ dịch: đường dẫn + cỡ + thời điểm sửa. Cài/cập nhật TeX Live (đổi tệp chạy) ⇒ dấu khác ⇒ hỏi lại.
@@ -830,6 +833,9 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
     let _ = fs::remove_file(&pdf); // không bao giờ nhầm PDF cũ là kết quả lần này
     let _ = fs::remove_file(&logp);
 
+    // pdfLaTeX: phần đầu đề nạp sẵn thành định dạng (.fmt) nếu đã có; chưa có thì dịch như cũ và dựng ở luồng nền cho lần sau
+    let mut fmt = if engine == "pdflatex" { examfmt::ensure(root, &cwd, &compile_name, &tex_bin, support_dir, &ver) } else { None };
+    let mut tried_fmt: Option<PathBuf> = None;
     let mut run_no = 0;
     let mut last_log = String::new();
     let mut ok_run;
@@ -841,6 +847,9 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
             break;
         }
         let mut c = engine_command(&tex_bin, engine, support_dir, &cwd);
+        if let Some(f) = &fmt {
+            c.arg(format!("-fmt={}", f.with_extension("").to_string_lossy().replace('\\', "/")));
+        }
         c.args(["-interaction=nonstopmode", "-file-line-error", "-no-shell-escape", "-synctex=1"]).arg(format!("-jobname={JOBNAME}")).arg(&compile_name);
         let r = match run_job(&mut c, left, &cancel_flag) {
             Ok(r) => r,
@@ -866,6 +875,14 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
         let severe = has_severe(&last_log);
         ok_run = r.success && !severe && pdf.is_file();
         if !ok_run {
+            // lỗi khi dùng định dạng dựng sẵn ⇒ dịch lại từ đầu kiểu cũ (kết quả không bao giờ phụ thuộc vào định dạng)
+            if let Some(f) = fmt.take() {
+                tried_fmt = Some(f);
+                run_no = 0;
+                let _ = fs::remove_file(&pdf);
+                let _ = fs::remove_file(&logp);
+                continue;
+            }
             out.status = "failed".into();
             out.invalid_pdf = pdf.is_file();
             break;
@@ -878,6 +895,9 @@ pub fn compile(root: &Path, id: &str, opts: &CompileOpts, support_dir: &Option<P
         }
         out.status = "ok".into();
         break;
+    }
+    if let (Some(f), "ok") = (&tried_fmt, out.status.as_str()) {
+        examfmt::discard(f); // định dạng làm hỏng lần dịch mà kiểu cũ thì được: bỏ, không dựng lại cho phần đầu này
     }
     out.ms = started.elapsed().as_millis() as u64;
     out.pages = parse_pages(&last_log);
@@ -1693,6 +1713,48 @@ B
         assert_eq!((e.file.as_deref(), e.line, e.in_project), (Some("chapters/c1.tex"), Some(2), true));
         assert!(r.kept_previous && !r.published);
         assert_eq!(fs::read(&r.last_good.unwrap().pdf_path).unwrap(), fs::read(&good.pdf_path).unwrap());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// Định dạng dựng sẵn với TeX Live THẬT: lần đầu dịch thường + dựng nền; lần sau dùng định dạng (cùng số trang);
+    /// lỗi trong thân đề vẫn báo đúng tệp/dòng và KHÔNG bỏ định dạng; sửa phần đầu ⇒ không dùng định dạng cũ.
+    #[test]
+    #[ignore]
+    fn tex_live_that_dinh_dang_dung_san() {
+        let Ok(bin) = std::env::var("HEDU_TEX_BIN") else { return };
+        let d = tmp("real-fmt");
+        let root = d.join("root");
+        put(&d, "src/main.tex", b"\\documentclass[12pt]{article}\n\\input{khaibao}\n\\begin{document}\n\\input{than}\n\\end{document}\n");
+        put(&d, "src/khaibao.tex", b"\\usepackage{amsmath,tikz}\n\\usepackage{ex_test}\n");
+        put(&d, "src/than.tex", "Xin chào $x^2+1$.\n\\begin{tikzpicture}\\draw (0,0) circle (1);\\end{tikzpicture}\n".as_bytes());
+        let s = examlib::import(&root.join("exam-library"), &d.join("src"), "Định dạng", None).unwrap();
+        let sup = support::prepare(&root);
+        let o = CompileOpts { tex_bin: Some(bin.clone()), timeout_secs: Some(180), force: Some(true), ..Default::default() };
+        let fmts = || fs::read_dir(examfmt::cache_dir(&root)).map(|rd| rd.flatten().filter(|e| e.path().extension().map(|x| x == "fmt").unwrap_or(false)).count()).unwrap_or(0);
+        let a = compile(&root, &s.id, &o, &sup).unwrap();
+        assert_eq!(a.status, "ok", "{}", a.raw_log);
+        for _ in 0..60 {
+            if fmts() > 0 { break; }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        assert_eq!(fmts(), 1, "dựng định dạng ở luồng nền");
+        let b = compile(&root, &s.id, &o, &sup).unwrap();
+        eprintln!("không định dạng {} ms, có định dạng {} ms", a.ms, b.ms);
+        assert_eq!((b.status.as_str(), b.pages), ("ok", a.pages));
+        // lỗi trong thân đề
+        let proj = root.join("exam-library/projects").join(&s.id);
+        fs::write(proj.join("than.tex"), "Dòng 1.\nDòng 2 \\lenhkhongco.\n").unwrap();
+        let e = compile(&root, &s.id, &o, &sup).unwrap();
+        assert_eq!(e.status, "failed");
+        let x = e.diagnostics.iter().find(|x| x.severity == "error").unwrap();
+        assert_eq!((x.file.as_deref(), x.line), (Some("than.tex"), Some(2)));
+        assert_eq!(fmts(), 1, "lỗi của đề không làm bỏ định dạng");
+        // sửa phần đầu ⇒ định dạng cũ không khớp, vẫn dịch đúng
+        fs::write(proj.join("than.tex"), "Xin chào.\n").unwrap();
+        fs::write(proj.join("khaibao.tex"), "\\usepackage{amsmath}\n\\usepackage{ex_test}\n\\newcommand{\\moi}{MỚI}\n").unwrap();
+        fs::write(proj.join("than.tex"), "Xin chào \\moi.\n").unwrap();
+        let f = compile(&root, &s.id, &o, &sup).unwrap();
+        assert_eq!(f.status, "ok", "phần đầu đổi mà dùng định dạng cũ thì \\moi sẽ lỗi: {}", f.raw_log);
         let _ = fs::remove_dir_all(&d);
     }
 
