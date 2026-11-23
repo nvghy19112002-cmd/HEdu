@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn ma_model_khong_chen_duong_dan() {
-        assert!(valid_model("gemini-3.8-flash") && valid_model("gemini-2.5-pro"));
+        assert!(valid_model("gemini-3.8-flash") && valid_model("gemini-3.1-pro-preview"));
         for bad in ["", "../x", "a/b", "m:generate", "Gemini", "x y", "https://evil", &"a".repeat(65)] { assert!(!valid_model(bad), "{bad}"); }
         assert_eq!(endpoint("gemini-3.8-flash"), "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent");
     }
