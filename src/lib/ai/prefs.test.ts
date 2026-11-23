@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL, DEFAULT_PRO_MODEL, loadAiPrefs, saveAiPrefs, thinkingFor, validModelId } from './prefs';
+import { AI_MODELS, DEFAULT_MODEL, DEFAULT_PRO_MODEL, loadAiPrefs, saveAiPrefs, thinkingFor, validModelId } from './prefs';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 const store = new Map<string, string>();
@@ -22,8 +22,14 @@ ok(store.size === 0, 'tắt đồng ý + model mặc định ⇒ không để l�
 ok(thinkingFor('gemini-3.8-flash') === 'low' && thinkingFor('gemini-3.6-flash') === 'minimal' && thinkingFor('gemini-3.5-flash-lite') === 'minimal' && thinkingFor('gemini-2.5-pro') === 'low' && thinkingFor('gemini-2.5-flash') === undefined, 'mức suy nghĩ thấp nhất model cho phép (3.8 Flash không có minimal)');
 
 localStorage.setItem('hedu.ai.promodel', 'gemini-2.5-pro'); localStorage.setItem('hedu.ai.model', 'gemini-2.5-flash');
-{ const r = loadAiPrefs(); ok(r.proModel === DEFAULT_PRO_MODEL && r.model === DEFAULT_MODEL && DEFAULT_PRO_MODEL === 'gemini-3.1-pro-preview', 'model 2.5 đã ngừng → quay về mặc định'); }
+{ const r = loadAiPrefs(); ok(r.proModel === DEFAULT_PRO_MODEL && r.model === DEFAULT_MODEL && DEFAULT_PRO_MODEL === 'gemini-4-hydrogen', 'model 2.5 đã ngừng → quay về mặc định'); }
 localStorage.removeItem('hedu.ai.promodel'); localStorage.removeItem('hedu.ai.model');
+
+localStorage.setItem('hedu.ai.model', 'gemini-3.7-flash');
+ok(loadAiPrefs().model === DEFAULT_MODEL, 'gemini-3.7-flash (Google đã bỏ) → mặc định');
+localStorage.removeItem('hedu.ai.model');
+ok(thinkingFor('gemini-4-hydrogen') === 'low', 'Gemini 4: mức suy nghĩ thấp nhất là low');
+ok(AI_MODELS.every((m) => validModelId(m.id)) && AI_MODELS.some((m) => m.id === DEFAULT_PRO_MODEL), 'danh sách model hợp lệ, có model Pro mặc định');
 
 if (fail) process.exit(1);
 console.log('ai/prefs: đạt hết.');

@@ -6,10 +6,13 @@ export interface AiModelChoice { id: string; label: string; note: string }
 
 /** Danh sách gợi ý; mã model sửa được (Google hay đổi tên model) nhưng KHÔNG sửa được địa chỉ máy chủ. */
 export const AI_MODELS: readonly AiModelChoice[] = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Mặc định — có gói miễn phí (chậm: ~1–2 phút/10 câu)' },
-  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', note: 'Nhanh — có gói miễn phí (chưa đo độ chính xác)' },
-  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Ứng viên chính cho Gán ID (rất nhanh, suy nghĩ tối thiểu) — CHƯA đo trên bộ nhãn chuẩn, chưa làm mặc định' },
-  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (xem trước)', note: 'Cho câu khó — chỉ khi gói miễn phí của tài khoản cho phép' },
+  // Tra trang models/deprecations của Google ngày 23/11/2026. Google hay đổi tên: cập nhật danh sách + RETIRED cùng lúc.
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Mặc định — miễn phí tới 31/12/2026; giờ cao điểm hay báo "quá tải", thử lại sau ít phút' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', note: 'Nhanh — có gói miễn phí; dùng khi 3.8 Flash quá tải' },
+  { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen', note: 'Thế hệ 4, suy luận tốt — có gói miễn phí; hợp cho câu khó, trang nhiều hình' },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Rẻ, rất nhanh — có gói miễn phí; ứng viên cho Gán ID, chưa đo trên bộ nhãn chuẩn' },
+  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (xem trước)', note: 'Pro — KHÔNG có gói miễn phí, cần tài khoản trả phí' },
+  { id: 'gemini-4-carbon', label: 'Gemini 4 Carbon', note: 'Mạnh nhất — KHÔNG có gói miễn phí, cần tài khoản trả phí' },
 ];
 
 /**
@@ -17,15 +20,16 @@ export const AI_MODELS: readonly AiModelChoice[] = [
  * Để mặc định, 3.8 Flash "suy nghĩ" quá lâu (> 120 s cho câu 1+1) và hết giới hạn token trước khi trả lời.
  */
 export function thinkingFor(model: string): ThinkingLevel | undefined {
-  if (/^gemini-3\.8-flash/.test(model) || /pro/.test(model)) return 'low';
+  if (/^gemini-3\.8-flash/.test(model) || /pro/.test(model) || /^gemini-4-/.test(model)) return 'low';
   if (/^gemini-3(\.\d+)?-flash/.test(model)) return 'minimal';
   return undefined;
 }
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
-export const DEFAULT_PRO_MODEL = 'gemini-3.1-pro-preview';
+/** model cho câu khó: Gemini 4 Hydrogen vì có gói miễn phí (3.1 Pro chỉ dùng được khi trả phí) */
+export const DEFAULT_PRO_MODEL = 'gemini-4-hydrogen';
 
 /** Model Google đã ngừng (01/12/2026 tự chuyển sang model khác): máy nào còn lưu thì quay về mặc định. */
-const RETIRED = new Set(['gemini-2.5-pro', 'gemini-2.5-flash']);
+const RETIRED = new Set(['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3-pro-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.0-flash', 'gemini-2.0-flash-lite']);
 const usable = (m: string | null): m is string => !!m && validModelId(m) && !RETIRED.has(m);
 
 /** Giống kiểm tra phía Rust: chữ thường, số, '.', '-' — không chèn được đường dẫn. */
