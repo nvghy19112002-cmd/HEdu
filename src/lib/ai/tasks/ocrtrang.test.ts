@@ -1,4 +1,4 @@
-import { checkCau, ocrJob, OCR_TRANG_SYSTEM, parseTrang } from './ocrtrang';
+import { checkCau, ocrJob, OCR_TRANG_SYSTEM, parsePageRange, parseTrang } from './ocrtrang';
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fail++; };
 
@@ -34,6 +34,9 @@ ok(threw, 'khuôn sai ⇒ ném lỗi cho riêng trang đó');
 const j = ocrJob('j1', 'gemini-3.8-flash', [{ id: 'p1', mime: 'image/png', dataB64: 'AAAA' }]);
 ok(j.thinkingLevel === 'low' && j.parallel === 2 && j.schema.required.includes('cau'), 'dựng lượt gửi ocr_run');
 ok(/DỮ LIỆU/.test(OCR_TRANG_SYSTEM) && /\\loigiai\{ \}/.test(OCR_TRANG_SYSTEM) && /left\./.test(OCR_TRANG_SYSTEM), 'prompt có: chống tiêm lệnh, OCR thuần, ngoặc tự giãn');
+
+ok(JSON.stringify(parsePageRange('1-3, 5', 8)) === '[1,2,3,5]' && parsePageRange('', 3)?.length === 3 && JSON.stringify(parsePageRange('5;2-3,3', 6)) === '[2,3,5]', 'khoảng trang "1-3, 5"');
+ok(parsePageRange('0', 5) === null && parsePageRange('3-1', 5) === null && parsePageRange('9', 5) === null && parsePageRange('a', 5) === null, 'khoảng trang sai ⇒ null');
 
 if (fail) process.exit(1);
 console.log('ai/tasks/ocrtrang: đạt hết.');
