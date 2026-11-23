@@ -28,7 +28,17 @@ pub struct OcrPage {
     /// image/png | image/jpeg | image/webp
     pub mime: String,
     pub data_b64: String,
+    /// ảnh trang kế tiếp gửi CÙNG lượt (lô nhiều trang: nối câu vắt trang, lấy khoá ở trang sau), tối đa 3
+    #[serde(default)]
+    pub more: Vec<OcrImg>,
+    /// lời nhắn riêng cho lượt này (vd bố cục đã duyệt của lô); vắng ⇒ dùng `user` của cả lượt
+    #[serde(default)]
+    pub user: Option<String>,
 }
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrImg { pub mime: String, pub data_b64: String }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -75,9 +85,17 @@ pub fn validate(job: &OcrJob) -> Result<(), AiError> {
     if job.pages.len() > MAX_PAGES { return Err(err("too_large", "Quá nhiều trang trong một lượt — hãy chia nhỏ.")); }
     if job.job_id.is_empty() || job.job_id.len() > 64 { return Err(err("bad_request", "Mã lượt không hợp lệ.")); }
     for p in &job.pages {
-        if !matches!(p.mime.as_str(), "image/png" | "image/jpeg" | "image/webp") { return Err(err("bad_request", "Chỉ nhận ảnh PNG, JPEG, WebP.")); }
-        if p.data_b64.len() > MAX_IMAGE_B64 { return Err(err("too_large", "Ảnh một trang quá lớn — hãy giảm độ phân giải.")); }
-        if !valid_b64(&p.data_b64) { return Err(err("bad_request", "Dữ liệu ảnh hỏng.")); }
+        if p.more.len() > 3 { return Err(err("too_large", "Mỗi lượt tối đa 4 trang.")); }
+        let imgs = std::iter::once((&p.mime, &p.data_b64)).chain(p.more.iter().map(|m| (&m.mime, &m.data_b64)));
+        let mut total = 0;
+        for (mime, data) in imgs {
+            if !matches!(mime.as_str(), "image/png" | "image/jpeg" | "image/webp") { return Err(err("bad_request", "Chỉ nhận ảnh PNG, JPEG, WebP.")); }
+            if data.len() > MAX_IMAGE_B64 { return Err(err("too_large", "Ảnh một trang quá lớn — hãy giảm độ phân giải.")); }
+            if !valid_b64(data) { return Err(err("bad_request", "Dữ liệu ảnh hỏng.")); }
+            total += data.len();
+        }
+        if total > 18_000_000 { return Err(err("too_large", "Một lượt quá lớn — giảm số trang mỗi lô.")); }
+        if p.user.as_ref().is_some_and(|u| u.len() > ai::MAX_PROMPT_BYTES / 2) { return Err(err("too_large", "Lời nhắn của lượt quá dài.")); }
     }
     Ok(())
 }
@@ -85,13 +103,15 @@ pub fn validate(job: &OcrJob) -> Result<(), AiError> {
 /// Thân yêu cầu cho MỘT trang: dựng như nhiệm vụ chữ thường rồi chèn ảnh TRƯỚC lời nhắn.
 pub fn page_body(job: &OcrJob, page: &OcrPage) -> Result<Value, AiError> {
     let req = ai::AiRequest {
-        provider: "gemini".into(), model: job.model.clone(), system: job.system.clone(), user: job.user.clone(),
+        provider: "gemini".into(), model: job.model.clone(), system: job.system.clone(), user: page.user.clone().unwrap_or_else(|| job.user.clone()),
         schema: job.schema.clone(), max_output_tokens: Some(16_384), timeout_secs: None,
         thinking_level: job.thinking_level.clone(), profile_id: job.profile_id.clone(),
     };
     let mut body = ai::build_body(&req)?;
     let parts = body["contents"][0]["parts"].as_array_mut().ok_or_else(|| err("bad_request", "Yêu cầu hỏng."))?;
-    parts.insert(0, json!({ "inline_data": { "mime_type": page.mime, "data": page.data_b64 } }));
+    let mut imgs = vec![json!({ "inline_data": { "mime_type": page.mime, "data": page.data_b64 } })];
+    imgs.extend(page.more.iter().map(|m| json!({ "inline_data": { "mime_type": m.mime, "data": m.data_b64 } })));
+    parts.splice(0..0, imgs);
     body["generationConfig"]["temperature"] = json!(0);
     Ok(body)
 }
@@ -180,7 +200,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
 
-    fn page(id: &str) -> OcrPage { OcrPage { id: id.into(), mime: "image/png".into(), data_b64: "iVBORw0KGgo=".into() } }
+    fn page(id: &str) -> OcrPage { OcrPage { id: id.into(), mime: "image/png".into(), data_b64: "iVBORw0KGgo=".into(), more: vec![], user: None } }
     fn job(n: usize) -> OcrJob {
         OcrJob { job_id: "j1".into(), model: "gemini-3.8-flash".into(), system: "S".into(), user: "U".into(), schema: Some(json!({"type":"object"})),
             pages: (0..n).map(|i| page(&format!("p{i}"))).collect(), thinking_level: Some("low".into()), profile_id: None, parallel: Some(2), min_gap_ms: Some(0) }
@@ -205,6 +225,15 @@ mod tests {
         assert_eq!(parts[1]["text"], "U");
         assert_eq!(b["generationConfig"]["temperature"], 0);
         assert_eq!(b["generationConfig"]["thinkingConfig"]["thinkingLevel"], "low");
+        // lô nhiều trang + lời nhắn riêng
+        let mut p = page("lo1"); p.more = vec![OcrImg { mime: "image/jpeg".into(), data_b64: "AAAA".into() }]; p.user = Some("Bo cuc lo 1".into());
+        let b = page_body(&job(1), &p).unwrap();
+        let parts = b["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[1]["inline_data"]["mime_type"], "image/jpeg");
+        assert_eq!(parts[2]["text"], "Bo cuc lo 1");
+        let mut j = job(1); j.pages[0].more = vec![OcrImg { mime: "image/jpeg".into(), data_b64: "AAAA".into() }; 4];
+        assert_eq!(validate(&j).unwrap_err().kind, "too_large", "tối đa 4 trang một lượt");
     }
 
     #[test]

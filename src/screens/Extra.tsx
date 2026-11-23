@@ -588,14 +588,14 @@ export function ImportScreen() {
             return <li key={t} aria-current={k === cur ? 'step' : undefined} className={k < cur ? 'done' : ''}><b>{k + 1}</b>{t}</li>;
           })}
         </ol>
-        <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'ocr' })} title="Đọc đề scan bằng Gemini">Từ PDF/ảnh…</button><button type="button" className="btn btn-sm" onClick={() => { requestPane('backup'); go({ screen: 'system' }); }} title="Cài đặt › Sao lưu › Nhật ký nhập">Lịch sử nhập</button></div>
+        <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'docde' })} title="Đọc đề scan bằng Gemini">Từ PDF/ảnh…</button><button type="button" className="btn btn-sm" onClick={() => { requestPane('backup'); go({ screen: 'system' }); }} title="Cài đặt › Sao lưu › Nhật ký nhập">Lịch sử nhập</button></div>
       </header>
       {fromTex && !multi && !result && src === fromTex && (
         <div className="simple"><div className="note" role="status"><div className="note-body">
           {handoffFrom === 'ocr'
             ? <span>Các câu dưới đây vừa <b>đọc từ PDF/ảnh</b> bằng Gemini. Nhập đủ các bước như mọi lần: rà trùng, kiểm ID, xem lại rồi mới ghi vào ngân hàng; câu còn <b>Cần xác minh</b> sẽ mang nhãn Chưa duyệt.</span>
             : <span>Các câu dưới đây lấy từ bàn nháp <b>Xử lí TeX</b> (bàn nháp vẫn còn nguyên, nhập xong không bị xoá). Nhập đủ các bước như mọi lần: rà trùng, kiểm ID, xem lại rồi mới ghi vào ngân hàng.</span>}
-          <button type="button" className="btn btn-sm" onClick={() => go({ screen: handoffFrom === 'ocr' ? 'ocr' : 'tex' })}>{handoffFrom === 'ocr' ? '← Về Đọc đề PDF/ảnh' : '← Về Xử lí TeX'}</button>
+          <button type="button" className="btn btn-sm" onClick={() => go({ screen: handoffFrom === 'ocr' ? 'docde' : 'tex' })}>{handoffFrom === 'ocr' ? '← Về Đọc đề' : '← Về Xử lí TeX'}</button>
         </div></div></div>
       )}
       {result && lots && lots.idx < lots.list.length - 1 && (

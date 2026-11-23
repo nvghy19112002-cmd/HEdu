@@ -5,7 +5,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { ZoomIndicator } from './components/ZoomControl';
 import { startZoom } from './lib/zoom';
 import { FileDialog } from './components/FileDialog';
-import { IcBackup, IcBank, IcEdit, IcExam, IcHealth, IcImport, IcLibrary, IcPlay, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
+import { IcBackup, IcBank, IcEdit, IcExam, IcHealth, IcImport, IcLibrary, IcPlay, IcScan, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
 import { isCtxKey, toggleCtx } from './lib/ctxcol';
 import { featureOn, type FeatureKey } from './lib/features';
 import type { BootResult } from './lib/store';
@@ -15,7 +15,7 @@ import { ExamScreen } from './screens/Exam';
 import { ExamLibraryScreen } from './screens/ExamLibrary';
 import { KhoHinhScreen } from './screens/KhoHinh';
 import { ImportScreen } from './screens/Extra';
-import { OcrScreen } from './screens/OcrPdf';
+import { DocDeScreen } from './screens/DocDe';
 import { TexScratchScreen } from './screens/TexScratch';
 import { SlideHost } from './components/SlideShow';
 import { SlidesScreen } from './screens/Slides';
@@ -48,6 +48,7 @@ const NAV_GROUPS: NavItem[][] = [
     { s: 'tex', label: 'Soạn TeX', title: 'Soạn TeX (Xử lí TeX)', Icon: IcTex, tone: 'tex' },
     { s: 'exam', label: 'Tạo đề', title: 'Tạo đề', Icon: IcExam, tone: 'taode', feature: 'exam' },
     { s: 'import', label: 'Nhập', title: 'Nhập liệu', Icon: IcImport, tone: 'nhap' },
+    { s: 'docde', label: 'Đọc đề', title: 'Đọc đề (PDF/ảnh → ex_test)', Icon: IcScan, tone: 'docde' },
   ],
 ];
 const NAV_SYS: NavItem[] = [
@@ -151,7 +152,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {NAV_GROUPS.map((grp, gi) => (
           <div key={gi} className="rail-grp" role="group" aria-label={gi === 0 ? 'Thư viện' : 'Soạn thảo'}>
             {grp.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, title, Icon, tone }) => (
-              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={(screen === 'ocr' ? 'import' : screen) === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
+              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
                 <span className="rb-ico"><Icon /></span>
                 <span>{label}</span>
               </button>
@@ -160,7 +161,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         ))}
         <div className="rail-spacer" />
         {NAV_SYS.map(({ s, label, title, Icon, tone }) => (
-          <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={(screen === 'ocr' ? 'import' : screen) === s ? 'page' : undefined} onClick={() => go({ screen: s as Screen })}>
+          <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s as Screen })}>
             <span className="rb-ico"><Icon /></span>
             <span>{label}</span>
           </button>
@@ -179,7 +180,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {screen === 'bank' && <BankScreen />}
         {screen === 'exam' && featureOn('exam') && <ExamScreen pick={nav.examPick} />}
         {screen === 'import' && <ImportScreen />}
-        {screen === 'ocr' && <OcrScreen />}
+        {screen === 'docde' && <DocDeScreen />}
         {screen === 'tex' && <TexScratchScreen />}
         {screen === 'examlib' && <ExamLibraryScreen />}
         {screen === 'curriculum' && <CurriculumScreen />}

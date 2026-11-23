@@ -2,6 +2,7 @@
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod ai;
 mod ocr;
+mod ocrproj;
 mod chktex;
 mod db;
 mod dbbackup;
@@ -450,6 +451,28 @@ async fn ocr_run(app: AppHandle, jobs: State<'_, ocr::Jobs>, job: ocr::OcrJob, o
     Ok(fin)
 }
 
+fn ocr_root(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_data_dir().map(|d| d.join("ocr-projects")).map_err(|e| e.to_string())
+}
+#[tauri::command]
+fn ocr_proj_list(app: AppHandle) -> Result<Vec<ocrproj::ProjInfo>, String> { ocrproj::list(&ocr_root(&app)?) }
+#[tauri::command]
+fn ocr_proj_load(app: AppHandle, id: String) -> Result<Option<String>, String> { ocrproj::load_state(&ocr_root(&app)?, &id) }
+#[tauri::command]
+fn ocr_proj_save(app: AppHandle, id: String, json: String) -> Result<(), String> { ocrproj::save_state(&ocr_root(&app)?, &id, &json) }
+#[tauri::command]
+fn ocr_proj_delete(app: AppHandle, id: String) -> Result<(), String> { ocrproj::delete(&ocr_root(&app)?, &id) }
+/// ảnh trang gửi lên dạng base64 (JPEG), lưu thành tệp
+#[tauri::command]
+fn ocr_proj_save_page(app: AppHandle, id: String, page: String, b64: String) -> Result<(), String> {
+    let bytes = examword::b64_decode(&b64)?;
+    ocrproj::save_page(&ocr_root(&app)?, &id, &page, &bytes)
+}
+#[tauri::command]
+fn ocr_proj_read_page(app: AppHandle, id: String, page: String) -> Result<tauri::ipc::Response, String> {
+    Ok(tauri::ipc::Response::new(ocrproj::read_page(&ocr_root(&app)?, &id, &page)?))
+}
+
 #[tauri::command]
 fn ocr_cancel(jobs: State<'_, ocr::Jobs>, job_id: String) -> bool {
     ocr::cancel(&jobs, &job_id)
@@ -507,6 +530,12 @@ pub fn run() {
             ai_run,
             ocr_run,
             ocr_cancel,
+            ocr_proj_list,
+            ocr_proj_load,
+            ocr_proj_save,
+            ocr_proj_delete,
+            ocr_proj_save_page,
+            ocr_proj_read_page,
             dbcmd::storage_status,
             dbcmd::storage_preflight,
             dbcmd::storage_migrate,

@@ -30,6 +30,11 @@ HÌNH: dựng lại bằng TikZ thuần trong tikzpicture, hình đi với đề
 
 KHÔNG CHẮC điều gì (chữ mờ, số khó đọc, nét khuất): ghi "% CAN_XAC_MINH: <ly do ngan, khong dau>" ngay dòng đó VÀ thêm một mục vào can_xac_minh. Không đoán rồi im lặng. Không sửa đề cho "đẹp".`;
 
+/** Bản cho "Đọc đề" (lô nhiều trang, bố cục đã duyệt): KHÔNG vẽ hình, đặt mốc để bước Dựng hình làm riêng. */
+const LO_HINH = String.raw`HÌNH: KHÔNG vẽ hình trong bước này. Tại vị trí mỗi hình/bảng biến thiên trong đề, đặt đúng MỘT dòng mốc theo số bố cục đã cho, vd %%%HINH-3%%% (là dòng chú thích, không cản biên dịch). Hình đi kèm phương án thì đặt mốc ngay sau \choice. Không \includegraphics.
+NHIỀU ẢNH: các ảnh là các trang LIÊN TIẾP của cùng một đề, theo thứ tự. Câu vắt trang thì chép trọn thành một câu. Nếu trong các ảnh có bảng đáp án in thì dùng nó để gắn \True / \shortans / ý đúng-sai cho đúng số câu; không chép bảng đáp án thành câu.`;
+export const OCR_LO_SYSTEM = OCR_TRANG_SYSTEM.replace(/^HÌNH:.*$/m, () => LO_HINH);
+
 export const OCR_TRANG_USER = 'Chép trang trên theo quy tắc. Trả JSON đúng khuôn.';
 
 export const OCR_TRANG_SCHEMA = {
@@ -42,6 +47,7 @@ export const OCR_TRANG_SCHEMA = {
         type: 'object',
         properties: {
           so_nguon: { type: 'string', description: 'số câu in trên trang, vd "3"' },
+          phan: { type: 'string', enum: ['I', 'II', 'III', 'IV', ''] },
           dang: { type: 'string', enum: ['tn', 'ds', 'tln', 'tl'] },
           tex: { type: 'string', description: 'một khối \\begin{ex}...\\end{ex}' },
           hinh: { type: 'array', items: { type: 'array', items: { type: 'integer' } } },
@@ -55,7 +61,7 @@ export const OCR_TRANG_SCHEMA = {
   required: ['trang_co_de', 'cau'],
 } as const;
 
-export interface OcrCau { soNguon: string; dang: 'tn' | 'ds' | 'tln' | 'tl'; tex: string; hinh: [number, number, number, number][]; canXacMinh: string[]; loi: string[] }
+export interface OcrCau { soNguon: string; phan: '' | 'I' | 'II' | 'III' | 'IV'; dang: 'tn' | 'ds' | 'tln' | 'tl'; tex: string; hinh: [number, number, number, number][]; canXacMinh: string[]; loi: string[] }
 export interface OcrTrang { coDe: boolean; cau: OcrCau[]; dangDo: boolean }
 
 /** Kiểm khung tối thiểu (không thay check/chktex khi nhập): lỗi ghi vào loi, câu vẫn giữ để giáo viên sửa. */
@@ -86,7 +92,8 @@ export function parseTrang(text: string): OcrTrang {
     const hinh = Array.isArray(c.hinh) ? c.hinh.filter((b): b is [number, number, number, number] =>
       Array.isArray(b) && b.length === 4 && b.every((n) => Number.isInteger(n) && n >= 0 && n <= 1000) && b[0] < b[2] && b[1] < b[3]) : [];
     const cx = Array.isArray(c.can_xac_minh) ? c.can_xac_minh.filter((s): s is string => typeof s === 'string') : [];
-    return { soNguon: String(c.so_nguon ?? ''), dang, tex, hinh, canXacMinh: cx, loi: checkCau(tex, dang) };
+    const phan = (['I', 'II', 'III', 'IV'] as const).find((x) => x === c.phan) ?? '';
+    return { soNguon: String(c.so_nguon ?? ''), phan, dang, tex, hinh, canXacMinh: cx, loi: checkCau(tex, dang) };
   });
   return { coDe: v.trang_co_de, cau: v.trang_co_de ? cau : [], dangDo: v.cau_dang_do === true };
 }

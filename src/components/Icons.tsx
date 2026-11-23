@@ -6,6 +6,7 @@ export const IcEdit = ({ size = 22 }: P) => <svg {...base(size)}><path d="M4 20h
 export const IcBank = ({ size = 22 }: P) => <svg {...base(size)}><path d="M4 5h4v14H4zM10 5h4v14h-4z" /><path d="M16 6.5l3.5-1 3 13-3.5 1z" /></svg>;
 export const IcLibrary = ({ size = 22 }: P) => <svg {...base(size)}><path d="M4 5h5v14H4zM11 5h5v14h-5zM18.5 6l2.5 13" /></svg>;
 export const IcExam = ({ size = 22 }: P) => <svg {...base(size)}><path d="M6 3h8l5 5v13H6z" /><path d="M14 3v5h5M9.5 13h6M9.5 17h6" /></svg>;
+export const IcScan = ({ size = 22 }: P) => <svg {...base(size)}><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 9h10M7 12h10M7 15h6" /></svg>;
 export const IcImport = ({ size = 22 }: P) => <svg {...base(size)}><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>;
 export const IcTex = ({ size = 22 }: P) => <svg {...base(size)}><path d="M8 5c-2 0-3 1-3 3v2.5c0 1-.6 1.5-1.5 1.5.9 0 1.5.5 1.5 1.5V16c0 2 1 3 3 3M16 5c2 0 3 1 3 3v2.5c0 1 .6 1.5 1.5 1.5-.9 0-1.5.5-1.5 1.5V16c0 2-1 3-3 3" /><path d="M10 9.5l4 5M14 9.5l-4 5" /></svg>;
 export const IcTree = ({ size = 22 }: P) => <svg {...base(size)}><path d="M6 4v16M6 8h7M6 15h7" /><path d="M13 6h6v4h-6zM13 13h6v4h-6z" /></svg>;
