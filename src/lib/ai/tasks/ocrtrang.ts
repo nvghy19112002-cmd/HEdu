@@ -98,3 +98,18 @@ export function ocrJob(jobId: string, model: string, pages: { id: string; mime: 
     thinkingLevel: thinkingFor(model), profileId, parallel: 2, minGapMs: 4000,
   };
 }
+
+/** "1-3, 5" ⇒ [1,2,3,5] (từ 1, không trùng, theo thứ tự tăng). Trống ⇒ cả tệp. Sai cú pháp/ngoài phạm vi ⇒ null. */
+export function parsePageRange(s: string, total: number): number[] | null {
+  const t = s.trim();
+  if (!t) return Array.from({ length: total }, (_, i) => i + 1);
+  const out = new Set<number>();
+  for (const part of t.split(/[,;]\s*/)) {
+    const m = /^(\d+)\s*(?:[-–]\s*(\d+))?$/.exec(part.trim());
+    if (!m) return null;
+    const a = Number(m[1]), b = m[2] ? Number(m[2]) : a;
+    if (a < 1 || b < a || b > total) return null;
+    for (let i = a; i <= b; i++) out.add(i);
+  }
+  return [...out].sort((x, y) => x - y);
+}

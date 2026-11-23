@@ -15,6 +15,7 @@ import { ExamScreen } from './screens/Exam';
 import { ExamLibraryScreen } from './screens/ExamLibrary';
 import { KhoHinhScreen } from './screens/KhoHinh';
 import { ImportScreen } from './screens/Extra';
+import { OcrScreen } from './screens/OcrPdf';
 import { TexScratchScreen } from './screens/TexScratch';
 import { SlideHost } from './components/SlideShow';
 import { SlidesScreen } from './screens/Slides';
@@ -150,7 +151,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {NAV_GROUPS.map((grp, gi) => (
           <div key={gi} className="rail-grp" role="group" aria-label={gi === 0 ? 'Thư viện' : 'Soạn thảo'}>
             {grp.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, title, Icon, tone }) => (
-              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
+              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={(screen === 'ocr' ? 'import' : screen) === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
                 <span className="rb-ico"><Icon /></span>
                 <span>{label}</span>
               </button>
@@ -159,7 +160,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         ))}
         <div className="rail-spacer" />
         {NAV_SYS.map(({ s, label, title, Icon, tone }) => (
-          <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={screen === s ? 'page' : undefined} onClick={() => go({ screen: s as Screen })}>
+          <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={(screen === 'ocr' ? 'import' : screen) === s ? 'page' : undefined} onClick={() => go({ screen: s as Screen })}>
             <span className="rb-ico"><Icon /></span>
             <span>{label}</span>
           </button>
@@ -178,6 +179,7 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {screen === 'bank' && <BankScreen />}
         {screen === 'exam' && featureOn('exam') && <ExamScreen pick={nav.examPick} />}
         {screen === 'import' && <ImportScreen />}
+        {screen === 'ocr' && <OcrScreen />}
         {screen === 'tex' && <TexScratchScreen />}
         {screen === 'examlib' && <ExamLibraryScreen />}
         {screen === 'curriculum' && <CurriculumScreen />}

@@ -3,7 +3,7 @@
 // Tauri bật withGlobalTauri nên dùng được window.__TAURI__ mà không cần thêm thư viện.
 
 interface TauriGlobal {
-  core: { invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> };
+  core: { invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T>; Channel?: new () => { onmessage: (m: unknown) => void } };
   webview?: { getCurrentWebview(): { setZoom(f: number): Promise<void> } };
   dialog?: { save(o: { title?: string; defaultPath?: string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>; open?(o: { title?: string; directory?: boolean; multiple?: boolean }): Promise<string | string[] | null> };
   event: { listen<T>(name: string, cb: (e: { payload: T }) => void): Promise<() => void> };
@@ -37,4 +37,13 @@ export async function listen<T>(name: string, cb: (payload: T) => void): Promise
   const t = window.__TAURI__;
   if (!t?.event) return () => {};
   return t.event.listen<T>(name, (e) => cb(e.payload));
+}
+
+/** Kênh nhận sự kiện theo thứ tự từ một lệnh Rust (tauri::ipc::Channel). Ngoài app cài đặt thì ném lỗi như invoke. */
+export function channel<T>(onMessage: (m: T) => void): unknown {
+  const C = window.__TAURI__?.core?.Channel;
+  if (!C) throw new Error('Chỉ có trong bản cài trên Windows.');
+  const ch = new C();
+  ch.onmessage = (m) => onMessage(m as T);
+  return ch;
 }

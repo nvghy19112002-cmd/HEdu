@@ -4,13 +4,17 @@
 
 export const HANDOFF_SOURCE = 'bàn nháp Xử lí TeX';
 
+/** nơi gửi sang: bàn nháp Xử lí TeX (mặc định) hoặc màn Đọc đề PDF/ảnh */
+export type HandoffFrom = 'tex' | 'ocr';
 let pending: string | null = null;
+let pendingFrom: HandoffFrom = 'tex';
 
 /** đặt nội dung chờ chuyển; chuỗi trống thì bỏ */
-export function setImportHandoff(text: string): void { pending = text.trim() ? text : null; }
+export function setImportHandoff(text: string, from: HandoffFrom = 'tex'): void { pending = text.trim() ? text : null; pendingFrom = from; }
 /** xem nội dung đang chờ (không xoá) */
 export function peekImportHandoff(): string | null { return pending; }
-export function clearImportHandoff(): void { pending = null; }
+export function peekImportHandoffFrom(): HandoffFrom { return pendingFrom; }
+export function clearImportHandoff(): void { pending = null; pendingFrom = 'tex'; }
 
 // Chuyển một văn bản sang màn Xử lí TeX thành một bàn nháp MỚI (vd tệp đề OCR thô từ hộp thoại Thiết lập đề).
 let scratchPending: { name: string; text: string } | null = null;

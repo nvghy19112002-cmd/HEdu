@@ -40,7 +40,7 @@ import { DEFAULT_SORT } from '../lib/qsort';
 import { ImportReportView } from '../components/ImportReportView';
 import { appendLog, buildReport, type IdPlace, type ImportReport, type ReportRow } from '../lib/importreport';
 import { addMany, flushSave, getState, isLastSaveOk, useBank, type Draft } from '../lib/store';
-import { clearImportHandoff, peekImportHandoff } from '../lib/importhandoff';
+import { clearImportHandoff, peekImportHandoff, peekImportHandoffFrom } from '../lib/importhandoff';
 import { TRUST_BLOCK_LABEL, trustBlock, trustTag, type TrustBlock } from '../lib/importtrust';
 import { LEVEL_LABEL, LEVELS, TYPE_LABEL, type Level, type Location } from '../lib/types';
 
@@ -60,6 +60,7 @@ export function ImportScreen() {
   const effOf = (q: (typeof questions)[number]) => effectiveOf(q, getRec(q.uid), { ix: taxIx, taxRev: taxRevNow });
   // Nội dung chuyển từ bàn nháp Xử lí TeX (nếu có): vào ô dán như dán tay, rồi đi đủ các bước nhập như mọi lần.
   const [fromTex] = useState(() => peekImportHandoff());
+  const [handoffFrom] = useState(() => peekImportHandoffFrom());
   const [src, setSrc] = useState(fromTex ?? '');
   const [wordRep, setWordRep] = useState<{ name: string; summary: string; notes: string[] } | null>(null);
   const [wordBusy, setWordBusy] = useState(false);
@@ -587,12 +588,14 @@ export function ImportScreen() {
             return <li key={t} aria-current={k === cur ? 'step' : undefined} className={k < cur ? 'done' : ''}><b>{k + 1}</b>{t}</li>;
           })}
         </ol>
-        <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => { requestPane('backup'); go({ screen: 'system' }); }} title="Cài đặt › Sao lưu › Nhật ký nhập">Lịch sử nhập</button></div>
+        <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'ocr' })} title="Đọc đề scan bằng Gemini">Từ PDF/ảnh…</button><button type="button" className="btn btn-sm" onClick={() => { requestPane('backup'); go({ screen: 'system' }); }} title="Cài đặt › Sao lưu › Nhật ký nhập">Lịch sử nhập</button></div>
       </header>
       {fromTex && !multi && !result && src === fromTex && (
         <div className="simple"><div className="note" role="status"><div className="note-body">
-          <span>Các câu dưới đây lấy từ bàn nháp <b>Xử lí TeX</b> (bàn nháp vẫn còn nguyên, nhập xong không bị xoá). Nhập đủ các bước như mọi lần: rà trùng, kiểm ID, xem lại rồi mới ghi vào ngân hàng.</span>
-          <button type="button" className="btn btn-sm" onClick={() => go({ screen: 'tex' })}>← Về Xử lí TeX</button>
+          {handoffFrom === 'ocr'
+            ? <span>Các câu dưới đây vừa <b>đọc từ PDF/ảnh</b> bằng Gemini. Nhập đủ các bước như mọi lần: rà trùng, kiểm ID, xem lại rồi mới ghi vào ngân hàng; câu còn <b>Cần xác minh</b> sẽ mang nhãn Chưa duyệt.</span>
+            : <span>Các câu dưới đây lấy từ bàn nháp <b>Xử lí TeX</b> (bàn nháp vẫn còn nguyên, nhập xong không bị xoá). Nhập đủ các bước như mọi lần: rà trùng, kiểm ID, xem lại rồi mới ghi vào ngân hàng.</span>}
+          <button type="button" className="btn btn-sm" onClick={() => go({ screen: handoffFrom === 'ocr' ? 'ocr' : 'tex' })}>{handoffFrom === 'ocr' ? '← Về Đọc đề PDF/ảnh' : '← Về Xử lí TeX'}</button>
         </div></div></div>
       )}
       {result && lots && lots.idx < lots.list.length - 1 && (
