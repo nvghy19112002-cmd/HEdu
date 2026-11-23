@@ -51,4 +51,8 @@ jobs:
         run: cargo test --lib --locked
       - name: Kiểm cổng quét Defender (cùng script với phát hành)
         shell: pwsh
-        run: ./scripts/quet-defender.ps1 src-tauri/target/debug/deps/hedu_lib-*.exe
+        # cargo mới đặt tệp kiểm thử ở target/debug/build/<gói>/<hash>/out thay vì target/debug/deps: tìm ở cả hai chỗ
+        run: |
+          $exe = Get-ChildItem src-tauri/target/debug -Recurse -File -Filter 'hedu_lib-*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw 'Không thấy tệp kiểm thử hedu_lib-*.exe để quét' }
+          ./scripts/quet-defender.ps1 $exe.FullName
