@@ -1,3 +1,20 @@
+## Có gì mới trong beta.65 (kênh beta): Đọc đề từ PDF/ảnh bằng Gemini, mẫu in Sky Panel, biên dịch nhanh hơn
+Gồm PR #274–#288 (so với beta.64). Không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX đã có. Đã thử bằng bộ kiểm thử và build; phần đọc đề bằng Gemini CHƯA chạy với khoá thật trên máy Windows của bạn — đây là bản để thử.
+
+**Mới: Đọc đề từ PDF/ảnh** (Nhập liệu › nút *Từ PDF/ảnh…*)
+- Chọn PDF hoặc ảnh (nhiều tệp), gõ trang cần đọc kiểu "1-3, 5"; trang bìa, quảng cáo tự bỏ qua.
+- Gemini **chỉ chép đề** sang ex_test (khung lời giải để trống, chỉ gắn đáp án khi trang có khoá in). Mỗi trang một lượt, gặp giới hạn tốc độ thì tự chờ rồi thử lại, dừng được giữa chừng.
+- Màn 3 cột: trang gốc | mã ex_test sửa trực tiếp | xem trước. Chỗ AI không chắc hiện ô vàng **Cần xác minh**; tự sửa ngoặc thành ngoặc tự giãn, 0.5 → 0{,}5… (bấm Hoàn tác được).
+- Bấm *Tiếp: Nhập liệu* để rà trùng, kiểm ID, xem lại như mọi lần rồi mới ghi vào ngân hàng.
+- Cần khoá Gemini (Cài đặt › AI). Gói miễn phí: Google có thể dùng ảnh đề để huấn luyện — đề chưa công bố nên dùng khoá trả phí.
+
+**Đề thi**
+- Mẫu in **Sky Panel** (tiêu đề sáng, bảng Đúng/Sai, ô Đáp số); Xuất Word giống bản PDF; xuất Word thẳng từ Tạo đề.
+- Biên dịch nhanh hơn (dựng sẵn phần đầu đề, chạy song song theo số nhân máy, mẫu HyMath dùng pdfLaTeX).
+- Hộp Xuất đề 6 ô; Sửa câu có câu trước/sau; So sánh trùng tô xanh/cam; trình chiếu ra PDF; kéo-thả Word.
+
+**AI**: model Pro mặc định đổi sang Gemini 3.1 Pro (Google ngừng Gemini 2.5 từ 01/12/2026; máy còn lưu 2.5 tự chuyển).
+
 ## Có gì mới trong beta.64 (kênh beta): hoàn thiện giao diện, Trình chiếu mới, hộp thoại Thiết lập đề
 Gồm PR #272 (Thiết lập đề) và nhánh hoàn thiện giao diện (so với beta.63). Chỉ đổi cách trình bày và luồng thao tác: không đổi ngân hàng câu hỏi, đề, ID hay mã LaTeX. Đã thử bằng bộ kiểm thử, build và xem trên app thử; chưa thử trên máy Windows thật của bạn.
 
