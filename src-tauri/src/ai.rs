@@ -56,7 +56,7 @@ pub struct AiRequest {
     pub profile_id: Option<String>,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AiReply {
     pub text: String,
@@ -210,40 +210,54 @@ pub fn key_get(service: &str, profile: &str) -> Result<Option<String>, AiError> 
 
 // ---------------- gọi mạng ----------------
 
-pub async fn run(service: &str, req: AiRequest) -> Result<AiReply, AiError> {
-    let body = build_body(&req)?;
-    let profile = req.profile_id.as_deref().unwrap_or(LEGACY_PROFILE);
-    let key = key_get(service, profile)?.ok_or_else(|| err("no_key", "Cấu hình đang dùng chưa có khoá API Gemini (Cài đặt → AI Gemini)."))?;
+fn client(timeout: Duration) -> Result<reqwest::Client, AiError> {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
-    let timeout = Duration::from_secs(req.timeout_secs.unwrap_or(90).clamp(5, 300));
-    let client = reqwest::Client::builder()
+    reqwest::Client::builder()
         .timeout(timeout)
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .map_err(|_| err("network", "Không khởi tạo được kết nối mạng."))?;
-    let url = endpoint(&req.model);
+        .map_err(|_| err("network", "Không khởi tạo được kết nối mạng."))
+}
+
+fn key_for(service: &str, profile: &str) -> Result<String, AiError> {
+    key_get(service, profile)?.ok_or_else(|| err("no_key", "Cấu hình đang dùng chưa có khoá API Gemini (Cài đặt → AI Gemini)."))
+}
+
+/// Gửi MỘT lần (không thử lại) tới địa chỉ cố định của model.
+async fn post(client: &reqwest::Client, key: &str, model: &str, body: &Value) -> Result<AiReply, AiError> {
+    if !valid_model(model) { return Err(err("bad_request", "Mã model không hợp lệ.")); }
+    match client.post(endpoint(model)).header("x-goog-api-key", key).json(body).send().await {
+        Err(e) if e.is_timeout() => Err(err("timeout", "AI trả lời quá lâu — hãy thử lại với ít câu hơn.")),
+        Err(_) => Err(err("network", "Không kết nối được tới máy chủ AI — kiểm tra mạng.")),
+        Ok(r) => {
+            let status = r.status().as_u16();
+            let ra = r.headers().get("retry-after").and_then(|v| v.to_str().ok()).map(str::to_string);
+            if r.content_length().is_some_and(|n| n as usize > MAX_RESPONSE_BYTES) {
+                return Err(err("bad_response", "Câu trả lời quá lớn."));
+            }
+            match r.bytes().await {
+                Ok(b) => classify(status, ra.as_deref(), &b, model),
+                Err(_) => Err(err("network", "Mất kết nối khi đang nhận câu trả lời.")),
+            }
+        }
+    }
+}
+
+/// Một lượt không thử lại (hàng đợi OCR tự lo việc chờ/thử lại).
+pub async fn send_once(service: &str, profile: &str, model: &str, body: &Value, timeout: Duration) -> Result<AiReply, AiError> {
+    let key = key_for(service, profile)?;
+    post(&client(timeout)?, &key, model, body).await
+}
+
+pub async fn run(service: &str, req: AiRequest) -> Result<AiReply, AiError> {
+    let body = build_body(&req)?;
+    let key = key_for(service, req.profile_id.as_deref().unwrap_or(LEGACY_PROFILE))?;
+    let client = client(Duration::from_secs(req.timeout_secs.unwrap_or(90).clamp(5, 300)))?;
     let mut attempt = 0;
     loop {
-        let res = client.post(&url).header("x-goog-api-key", &key).json(&body).send().await;
-        let out = match res {
-            Err(e) if e.is_timeout() => Err(err("timeout", "AI trả lời quá lâu — hãy thử lại với ít câu hơn.")),
-            Err(_) => Err(err("network", "Không kết nối được tới máy chủ AI — kiểm tra mạng.")),
-            Ok(r) => {
-                let status = r.status().as_u16();
-                let ra = r.headers().get("retry-after").and_then(|v| v.to_str().ok()).map(str::to_string);
-                if r.content_length().is_some_and(|n| n as usize > MAX_RESPONSE_BYTES) {
-                    Err(err("bad_response", "Câu trả lời quá lớn."))
-                } else {
-                    match r.bytes().await {
-                        Ok(b) => classify(status, ra.as_deref(), &b, &req.model),
-                        Err(_) => Err(err("network", "Mất kết nối khi đang nhận câu trả lời.")),
-                    }
-                }
-            }
-        };
-        match out {
+        match post(&client, &key, &req.model, &body).await {
             Err(e) => match retry_delay(&e, attempt) {
                 Some(d) => { tokio::time::sleep(d).await; attempt += 1; }
                 None => return Err(e),

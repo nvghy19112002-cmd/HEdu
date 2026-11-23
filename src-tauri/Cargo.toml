@@ -24,7 +24,7 @@ url = "2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 keyring = { version = "3", features = ["windows-native"] }
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "sync", "rt", "macros"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 sha2 = "0.10.9"
 # PR 3: ZIP gói xuất. Đã nằm sẵn trong Cargo.lock (cùng bản 4.6.1 qua tauri-plugin-updater, không bật nén): chỉ khai báo trực tiếp, không thêm crate mới
@@ -45,3 +45,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+# kiểm thử hàng đợi OCR với đồng hồ giả (không chờ thật)
+tokio = { version = "1", features = ["test-util"] }

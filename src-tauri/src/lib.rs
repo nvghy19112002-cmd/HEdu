@@ -1,6 +1,7 @@
 // Lõi desktop của HEdu: lưu dữ liệu an toàn + cập nhật hai kênh + quay lại bản trước.
 // Giao diện (React) chỉ gọi các lệnh dưới đây; mọi việc nặng làm ở đây.
 mod ai;
+mod ocr;
 mod chktex;
 mod db;
 mod dbbackup;
@@ -433,6 +434,27 @@ async fn ai_run(app: AppHandle, req: ai::AiRequest) -> Result<ai::AiReply, ai::A
     ai::run(&ai_service(&app), req).await
 }
 
+/// Đọc đề bằng Gemini: mỗi trang một lượt, báo tiến độ qua `on_event`. Giao diện phải hỏi người dùng trước khi gọi.
+#[tauri::command]
+async fn ocr_run(app: AppHandle, jobs: State<'_, ocr::Jobs>, job: ocr::OcrJob, on_event: tauri::ipc::Channel<ocr::OcrEvent>) -> Result<ocr::OcrEvent, ai::AiError> {
+    ocr::validate(&job)?;
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let id = job.job_id.clone();
+    jobs.0.lock().map_err(|_| ai::AiError { kind: "bad_request".into(), message: "Hàng đợi đang bận.".into(), retry_after_secs: None })?.insert(id.clone(), stop.clone());
+    let (service, profile, model) = (ai_service(&app), job.profile_id.clone().unwrap_or_else(|| ai::LEGACY_PROFILE.into()), job.model.clone());
+    let send = move |body: serde_json::Value| ocr::send_real(service.clone(), profile.clone(), model.clone(), body);
+    let ch = on_event.clone();
+    let fin = ocr::run_job(job, stop, send, move |e| { let _ = ch.send(e); }).await;
+    if let Ok(mut m) = jobs.0.lock() { m.remove(&id); }
+    let _ = on_event.send(fin.clone());
+    Ok(fin)
+}
+
+#[tauri::command]
+fn ocr_cancel(jobs: State<'_, ocr::Jobs>, job_id: String) -> bool {
+    ocr::cancel(&jobs, &job_id)
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -444,6 +466,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(Gate(Mutex::new(())))
+        .manage(ocr::Jobs::default())
         .manage(dbcmd::DbState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             load_data,
@@ -482,6 +505,8 @@ pub fn run() {
             ai_profiles_load,
             ai_profiles_save,
             ai_run,
+            ocr_run,
+            ocr_cancel,
             dbcmd::storage_status,
             dbcmd::storage_preflight,
             dbcmd::storage_migrate,
