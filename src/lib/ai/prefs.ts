@@ -9,7 +9,7 @@ export const AI_MODELS: readonly AiModelChoice[] = [
   { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Mặc định — có gói miễn phí (chậm: ~1–2 phút/10 câu)' },
   { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', note: 'Nhanh — có gói miễn phí (chưa đo độ chính xác)' },
   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Ứng viên chính cho Gán ID (rất nhanh, suy nghĩ tối thiểu) — CHƯA đo trên bộ nhãn chuẩn, chưa làm mặc định' },
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Cho câu khó — chỉ khi gói miễn phí của tài khoản cho phép' },
+  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (xem trước)', note: 'Cho câu khó — chỉ khi gói miễn phí của tài khoản cho phép' },
 ];
 
 /**
@@ -22,7 +22,11 @@ export function thinkingFor(model: string): ThinkingLevel | undefined {
   return undefined;
 }
 export const DEFAULT_MODEL = 'gemini-3.8-flash';
-export const DEFAULT_PRO_MODEL = 'gemini-2.5-pro';
+export const DEFAULT_PRO_MODEL = 'gemini-3.1-pro-preview';
+
+/** Model Google đã ngừng (01/12/2026 tự chuyển sang model khác): máy nào còn lưu thì quay về mặc định. */
+const RETIRED = new Set(['gemini-2.5-pro', 'gemini-2.5-flash']);
+const usable = (m: string | null): m is string => !!m && validModelId(m) && !RETIRED.has(m);
 
 /** Giống kiểm tra phía Rust: chữ thường, số, '.', '-' — không chèn được đường dẫn. */
 export const validModelId = (m: string): boolean => /^[a-z0-9][a-z0-9.-]{0,63}$/.test(m);
@@ -42,8 +46,8 @@ export function loadAiPrefs(): AiPrefs {
   const m = read(K.model), p = read(K.pro);
   return {
     consent: read(K.consent) === 'yes',
-    model: m && validModelId(m) ? m : DEFAULT_MODEL,
-    proModel: p && validModelId(p) ? p : DEFAULT_PRO_MODEL,
+    model: usable(m) ? m : DEFAULT_MODEL,
+    proModel: usable(p) ? p : DEFAULT_PRO_MODEL,
   };
 }
 
