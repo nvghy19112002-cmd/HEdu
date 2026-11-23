@@ -16,14 +16,6 @@ import { ALL_SCOPE, changedCount, isAll, scopeKey, scopeLabel, scopeOptions, sco
 import { LEVEL_LABEL, TYPE_LABEL, type Question } from '../lib/types';
 
 const SHOWN: DupKind[] = ['raw', 'conflict', 'same', 'near', 'template', 'insufficient'];
-const HINT: Record<DupKind, string> = {
-  raw: 'Mã LaTeX giống hệt nhau.',
-  conflict: 'Cùng đề, phương án, hình nhưng đáp án khác nhau — cần xem câu nào đúng.',
-  same: 'Cùng đề, phương án, hình, đáp án; chỉ khác cách trình bày.',
-  near: 'Cùng số liệu, dấu và hình nhưng diễn đạt khác.',
-  template: 'Cùng mẫu nhưng khác số liệu, dấu, điều kiện, hình hoặc loại câu — thường là câu khác nhau.',
-  insufficient: 'Có câu chưa đọc được đầy đủ (lỗi cú pháp/thiếu thành phần) nên chưa thể kết luận — nên mở ra sửa mã rồi quét lại.', unrelated: '',
-};
 const PAGE = 50;
 /** Đã đổi so với lúc quét? So từng câu (uid + nội dung), không dựa vào đồng hồ. */
 

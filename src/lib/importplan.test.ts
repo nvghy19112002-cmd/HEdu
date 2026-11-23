@@ -7,7 +7,6 @@ import { strictCode } from './idsync';
 import { addMany, getState, initStore } from './store';
 import type { Effective } from './idreview';
 import { decide, summarizeVerify, verifierFor, verifyId, type IdVerification } from './idverify';
-import { buildDefault } from './taxonomy';
 import { taxRevision } from './taxpath';
 import type { Level, Location, Question } from './types';
 let fail = 0;

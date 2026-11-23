@@ -497,7 +497,6 @@ export function BankScreen() {
   };
 
 
-  const heading = wideOn ? 'Kết quả tìm trong toàn kho' : f.noId != null ? `Chưa có ID${f.noId === 'all' ? '' : f.noId === NOID_UNKNOWN ? ' · chưa rõ lớp' : ` · Lớp ${f.noId}`}` : chapter && gradeObj ? `${gradeLabel(gradeObj)} · ${chapter.name}` : gradeObj ? gradeLabel(gradeObj) : 'Toàn bộ ngân hàng';
 
   return (
     <>

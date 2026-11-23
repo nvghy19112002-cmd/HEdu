@@ -512,8 +512,6 @@ export function ExamLibraryScreen() {
     await reload();
     toast(`Đã đổi tên thành “${name}”.`);
   });
-  /** kéo thẻ/hàng đề vào một mục của cây: ghi lớp, loại, chương, bài hoặc thư mục theo mục đó */
-  const moveExam = (e: ExamSummary, key: string) => moveExams([e], key);
   const exportMatrix = (e: ExamSummary) => run(async () => {
     const r = await exportMatrixXlsx(e, tax, (uid) => qmap.get(uid));
     if (r === 'none') toast('Đề này soạn tay (không tạo từ ngân hàng) nên không có ma trận để xuất.');

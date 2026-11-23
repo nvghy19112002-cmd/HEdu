@@ -11,7 +11,6 @@ function ok(cond: unknown, msg: string) {
 }
 
 const FIG = (n: number) => `\\begin{tikzpicture}[scale=.6]\n  \\draw (0,0)--(${n},0);\n\\end{tikzpicture}`;
-const figs = (parts: Part[]) => parts.filter((p) => p.kind === 'figure').length;
 const text = (parts: Part[]) => parts.filter((p) => p.kind === 'html').map((p) => (p as { html: string }).html).join('').replace(/<[^>]+>/g, ' ');
 const all = (p: ReturnType<typeof parseExTest>) => [p.stem, p.figure ?? '', ...p.options.map((o) => o.text), p.solution ?? '', p.tail];
 const countFigs = (p: ReturnType<typeof parseExTest>) => all(p).reduce((n, s) => n + renderPartsEx(s).figures, 0);

@@ -41,7 +41,6 @@ import { getState } from '../lib/store';
 import { saveTextFile } from '../lib/savefile';
 import { downloadText } from '../app-context';
 import { filterCounts, FILTER_LABEL, FILTER_ORDER, filterInfos, hasTikz, mapBlocks, pickBlocks, type ListFilter } from '../lib/scratchsel';
-import type { ScratchScan } from '../lib/texscratch';
 
 interface ScratchOut { status: 'ok' | 'failed' | 'timeout' | 'cancelled' | 'no-tex'; message: string; pages: number | null; runs: number; ms: number; texVersion: string; diagnostics: Diag[]; errorCount: number; warningCount: number; rawLog: string; invalidPdf: boolean; hasPdf: boolean }
 const PKG_KEY = 'hedu.texscratch.goi';
