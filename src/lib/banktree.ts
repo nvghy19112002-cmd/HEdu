@@ -78,3 +78,44 @@ export function pathKeys(f: NodePath): Set<string> {
 
 /** Áp đường dẫn của một mục vào bộ lọc (giữ nguyên các bộ lọc thuộc tính). */
 export const pickPath = (f: BankFilters, p: NodePath): BankFilters => ({ ...f, ...p, noId: null });
+
+// ---- Thống kê từng mục cho mục lục mới (phân bố mức độ, thiếu lời giải, đã duyệt) ----
+export interface NodeStat { lv: [number, number, number, number]; noSol: number; approved: number }
+const LV_IX: Record<string, number> = { NB: 0, TH: 1, VD: 2, VDC: 3 };
+/** Câu có lời giải chưa: có \loigiai{…} mà bên trong còn chữ (bỏ khoảng trắng, ngoặc, chú thích). */
+export function hasSolution(latex: string): boolean {
+  const i = latex.search(/\loigiai\s*\{/);
+  if (i < 0) return false;
+  const body = latex.slice(latex.indexOf('{', i) + 1).split(/\end\{ex\}/)[0].replace(/%[^\n]*/g, '');
+  return body.replace(/[\s{}]/g, '').length >= 2;
+}
+/**
+ * Một lượt O(N) trên TOÀN kho (không theo bộ lọc): mỗi câu cộng vào Lớp, Phân môn, Chương, Bài, Dạng của nó.
+ * Câu "Chưa có ID" (noIdOf ≠ null) không thuộc mục nào nên không cộng, giống `computeFacets`.
+ */
+export function nodeStats(
+  questions: readonly { uid: string; level: string; latex: string; review?: string; grade: number; chapterId: string; lessonId: string; formId: string }[],
+  maps: { chapterBranch: ReadonlyMap<string, string>; chapterGrade: ReadonlyMap<string, string>; gradeByNum: ReadonlyMap<number, string> },
+  noIdOf?: (q: never) => number | null,
+): Map<string, NodeStat> {
+  const out = new Map<string, NodeStat>();
+  const add = (k: string, lv: number, noSol: boolean, ok: boolean) => {
+    let s = out.get(k);
+    if (!s) { s = { lv: [0, 0, 0, 0], noSol: 0, approved: 0 }; out.set(k, s); }
+    if (lv >= 0) s.lv[lv]++;
+    if (noSol) s.noSol++;
+    if (ok) s.approved++;
+  };
+  for (const q of questions) {
+    if (noIdOf && (noIdOf as (x: typeof q) => number | null)(q) !== null) continue;
+    const g = maps.chapterGrade.get(q.chapterId) ?? maps.gradeByNum.get(q.grade);
+    const b = maps.chapterBranch.get(q.chapterId);
+    const lv = LV_IX[q.level] ?? -1, noSol = !hasSolution(q.latex), ok = q.review === 'approved';
+    if (g) add(`g:${g}`, lv, noSol, ok);
+    if (b) add(`b:${b}`, lv, noSol, ok);
+    if (q.chapterId) add(`c:${q.chapterId}`, lv, noSol, ok);
+    if (q.lessonId) add(`l:${q.lessonId}`, lv, noSol, ok);
+    if (q.formId) add(`f:${q.formId}`, lv, noSol, ok);
+  }
+  return out;
+}

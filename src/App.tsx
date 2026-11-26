@@ -5,7 +5,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { ZoomIndicator } from './components/ZoomControl';
 import { startZoom } from './lib/zoom';
 import { FileDialog } from './components/FileDialog';
-import { IcBackup, IcBank, IcEdit, IcExam, IcHealth, IcImport, IcLibrary, IcPlay, IcShapes, IcTex, IcTrash, IcTree } from './components/Icons';
+import { IcBackup, IcBank, IcEdit, IcImport, IcLibrary } from './components/Icons';
 import { isCtxKey, toggleCtx } from './lib/ctxcol';
 import { featureOn, type FeatureKey } from './lib/features';
 import type { BootResult } from './lib/store';
@@ -31,29 +31,26 @@ import { loadTemplates } from './lib/examtemplates';
 import { UpdateProvider, useUpdates } from './update-context';
 import { dataSig, runAutoBackup } from './lib/autobackup';
 import { examList } from './lib/examlib';
-import { getState } from './lib/store';
+import { getState, useBank } from './lib/store';
 import { isDesktop } from './lib/platform';
 
-// "Soạn thảo" không nằm ở thanh bên: nó mở ra khi bấm "+ Câu hỏi mới" hoặc sửa một câu.
-// Giao diện mới (giai đoạn 3): dải điều hướng chia 2 nhóm Thư viện · Soạn thảo, đáy là Hệ thống; mỗi mục một màu biểu tượng (tone).
-type NavItem = { s: Screen; label: string; title: string; Icon: typeof IcEdit; tone: string; feature?: FeatureKey };
-const NAV_GROUPS: NavItem[][] = [
-  [
-    { s: 'bank', label: 'Câu hỏi', title: 'Ngân hàng câu hỏi', Icon: IcBank, tone: 'q' },
-    { s: 'examlib', label: 'Đề thi', title: 'Thư viện đề thi', Icon: IcLibrary, tone: 'de' },
-    { s: 'khohinh', label: 'Hình', title: 'Kho hình TikZ', Icon: IcShapes, tone: 'hinh' },
-    { s: 'slides', label: 'Chiếu', title: 'Bộ trình chiếu', Icon: IcPlay, tone: 'chieu' },
-  ],
-  [
-    { s: 'tex', label: 'Soạn TeX', title: 'Soạn TeX (Xử lí TeX)', Icon: IcTex, tone: 'tex' },
-    { s: 'exam', label: 'Tạo đề', title: 'Tạo đề', Icon: IcExam, tone: 'taode', feature: 'exam' },
-    { s: 'import', label: 'Nhập', title: 'Nhập liệu', Icon: IcImport, tone: 'nhap' },
-  ],
+// Điều hướng theo VIỆC của giáo viên (chủ dự án duyệt 26/11/2026): 3 khu + Hệ thống thay cho 12 mục ngang hàng.
+// Mỗi khu gồm vài màn sẵn có; dải phân đoạn trên cùng chuyển giữa các màn trong khu. "Soạn thảo" (editor) thuộc khu Ngân hàng.
+type KhuScreen = { s: Screen; label: string; feature?: FeatureKey };
+type Khu = { id: string; label: string; Icon: typeof IcEdit; screens: KhuScreen[]; also?: Screen[] };
+const KHU: Khu[] = [
+  { id: 'nganhang', label: 'Ngân hàng', Icon: IcBank, also: ['editor'], screens: [
+    { s: 'bank', label: 'Câu hỏi' }, { s: 'khohinh', label: 'Hình TikZ' }, { s: 'health', label: 'Sức khoẻ' }, { s: 'curriculum', label: 'Chương trình' }] },
+  { id: 'dua', label: 'Đưa đề vào', Icon: IcImport, screens: [
+    { s: 'import', label: 'Nhập tệp & đọc đề' }, { s: 'tex', label: 'Soạn TeX' }] },
+  { id: 'dethi', label: 'Đề thi', Icon: IcLibrary, screens: [
+    { s: 'examlib', label: 'Thư viện đề' }, { s: 'exam', label: 'Tạo đề', feature: 'exam' }, { s: 'slides', label: 'Trình chiếu' }] },
 ];
-const NAV_SYS: NavItem[] = [
-  { s: 'health', label: 'Sức khoẻ', title: 'Sức khoẻ ngân hàng', Icon: IcHealth, tone: 'sys' },
-  { s: 'curriculum', label: 'Chương trình', title: 'Khung chương trình', Icon: IcTree, tone: 'sys' },
-];
+const KHU_SYS: Khu = { id: 'hethong', label: 'Hệ thống', Icon: IcBackup, screens: [{ s: 'system', label: 'Cài đặt' }, { s: 'trash', label: 'Thùng rác' }] };
+const ALL_KHU = [...KHU, KHU_SYS];
+const khuOf = (s: Screen) => ALL_KHU.find((k) => k.screens.some((x) => x.s === s) || k.also?.includes(s)) ?? KHU[0];
+const LAST_KEY = 'hedu.khu.last.v1';
+const loadLast = (): Record<string, Screen> => { try { return JSON.parse(localStorage.getItem(LAST_KEY) ?? '{}') ?? {}; } catch { return {}; } };
 
 export function App({ boot }: { boot: BootResult }) {
   if (!boot.ok) return <BootGate boot={boot} />;
@@ -144,37 +141,38 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
   const { available } = useUpdates();
   useDecisions(); // theo dõi để số câu trong Thùng rác (badge) luôn đúng; tệp phụ được đọc ở Shell lúc mở app
   const trashN = trashCount();
+  const { questions } = useBank();
+  const khu = khuOf(screen);
+  const shown = khu.screens.filter((x) => !x.feature || featureOn(x.feature));
+  // nhớ màn cuối cùng của mỗi khu: bấm lại khu thì về đúng chỗ đang làm dở
+  useEffect(() => { const m = loadLast(); if (m[khu.id] !== screen && khu.screens.some((x) => x.s === screen)) { m[khu.id] = screen; try { localStorage.setItem(LAST_KEY, JSON.stringify(m)); } catch { /* tiện lợi */ } } }, [khu, screen]);
+  const openKhu = (k: Khu) => {
+    const last = loadLast()[k.id];
+    const ok = (s?: Screen) => !!s && k.screens.some((x) => x.s === s && (!x.feature || featureOn(x.feature)));
+    go({ screen: ok(last) ? last! : k.screens[0].s });
+  };
   return (
     <div className="app">
       <nav className="rail" aria-label="Điều hướng chính">
         <div className="logo" aria-label="HEdu">√</div>
-        {NAV_GROUPS.map((grp, gi) => (
-          <div key={gi} className="rail-grp" role="group" aria-label={gi === 0 ? 'Thư viện' : 'Soạn thảo'}>
-            {grp.filter((n) => !n.feature || featureOn(n.feature)).map(({ s, label, title, Icon, tone }) => (
-              <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={(screen === 'ocr' ? 'import' : screen) === s ? 'page' : undefined} onClick={() => go({ screen: s })}>
-                <span className="rb-ico"><Icon /></span>
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-        ))}
+        {KHU.map((k) => <RailBtn key={k.id} k={k} on={khu.id === k.id} go={openKhu} />)}
         <div className="rail-spacer" />
-        {NAV_SYS.map(({ s, label, title, Icon, tone }) => (
-          <button key={s} type="button" className={`rb tone-${tone}`} title={title} aria-current={(screen === 'ocr' ? 'import' : screen) === s ? 'page' : undefined} onClick={() => go({ screen: s as Screen })}>
-            <span className="rb-ico"><Icon /></span>
-            <span>{label}</span>
-          </button>
-        ))}
-        <button type="button" className="rb" aria-current={screen === 'trash' ? 'page' : undefined} onClick={() => go({ screen: 'trash' })} aria-label={trashN > 0 ? `Thùng rác, ${trashN} câu` : undefined}>
-          <span className="rb-ico"><IcTrash />{trashN > 0 && <span className="rb-count" aria-hidden="true">{trashN > 999 ? '999+' : trashN}</span>}</span>
-          <span>Thùng rác</span>
-        </button>
-        <button type="button" className="rb" aria-current={screen === 'system' ? 'page' : undefined} onClick={() => go({ screen: 'system' })}>
-          <span className="rb-ico"><IcBackup />{available && <span className="dot" role="img" aria-label={`Có bản mới v${available.version}`} />}</span>
-          <span>Cài đặt</span>
-        </button>
+        <RailBtn k={KHU_SYS} on={khu.id === KHU_SYS.id} go={openKhu} dot={!!available} badge={trashN} />
+        <div className="rail-store" title="Số câu trong kho đang mở"><i />Kho<b>{questions.length.toLocaleString('vi-VN')}</b>câu</div>
       </nav>
       <main className="main">
+        {shown.length > 1 && (
+          <div className="khu-bar">
+            <span className="khu-name">{khu.label}</span>
+            <div className="seg" role="tablist" aria-label={khu.label}>
+              {shown.map((x) => (
+                <button key={x.s} type="button" role="tab" aria-current={screen === x.s ? 'page' : undefined} aria-selected={screen === x.s} onClick={() => go({ screen: x.s })}>
+                  {x.label}{x.s === 'trash' && trashN > 0 && <span className="seg-n">{trashN > 999 ? '999+' : trashN}</span>}{x.s === 'system' && available && <span className="dot" role="img" aria-label={`Có bản mới v${available.version}`} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {screen === 'editor' && <EditorScreen key={nav.editUid ?? `new:${nav.newAt ? JSON.stringify(nav.newAt) : ''}`} editUid={nav.editUid} newAt={nav.newAt} fromBank={nav.fromBank} />}
         {screen === 'bank' && <BankScreen />}
         {screen === 'exam' && featureOn('exam') && <ExamScreen pick={nav.examPick} />}
@@ -190,5 +188,15 @@ function Frame({ screen, nav }: { screen: Screen; nav: Nav }) {
         {screen === 'slides' && <SlidesScreen />}
       </main>
     </div>
+  );
+}
+
+function RailBtn({ k, on, go, dot, badge }: { k: Khu; on: boolean; go: (k: Khu) => void; dot?: boolean; badge?: number }) {
+  const { Icon } = k;
+  return (
+    <button type="button" className="rb" title={k.screens.map((x) => x.label).join(' · ')} aria-current={on ? 'page' : undefined} onClick={() => go(k)}>
+      <span className="rb-ico"><Icon />{dot && <span className="dot" role="img" aria-label="Có bản mới" />}{!!badge && !dot && <span className="rb-count" aria-hidden="true">{badge > 999 ? '999+' : badge}</span>}</span>
+      <span>{k.label}</span>
+    </button>
   );
 }

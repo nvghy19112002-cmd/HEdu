@@ -3,14 +3,16 @@
 // Dùng cho cả kiểu gắn cố định bên trái và kiểu ngăn trượt khi cửa sổ hẹp/đã ẩn mục lục (cùng một thành phần, cùng một trạng thái).
 import { useEffect, useRef } from 'react';
 import { pickGrade, pickNoId, type BankFilters, type Facets } from '../lib/bankfilter';
-import { pickPath } from '../lib/banktree';
+import { pickPath, type NodeStat } from '../lib/banktree';
 import type { Taxonomy } from '../lib/types';
-import { BankTree } from './BankTree';
+import { CurriculumTree } from './CurriculumTree';
 
 export interface BankSidebarProps {
   tax: Taxonomy;
   f: BankFilters;
   facets: Facets;
+  /** thống kê từng mục trên toàn kho (nodeStats) */
+  stats: ReadonlyMap<string, NodeStat>;
   /** Đang tìm "toàn kho" (có chữ tìm): mục lục tạm không áp dụng */
   wide: boolean;
   onF: (next: BankFilters) => void;
@@ -35,24 +37,15 @@ function useFitHeight(on: boolean) {
   return ref;
 }
 
-export function BankSidebar({ tax, f, facets, wide, onF, onHide, variant }: BankSidebarProps) {
+export function BankSidebar({ tax, f, facets, stats, wide, onF, onHide, variant }: BankSidebarProps) {
   const ref = useFitHeight(variant === 'dock');
   return (
     <aside ref={ref} className={`fside${variant === 'drawer' ? ' is-drawer' : ''}`} aria-label="Mục lục">
-      <div className="fs-top">
-        <h2 title={tax.name}>Cây mục lục</h2>
-        {variant === 'drawer' && <button type="button" className="btn btn-sm" onClick={onHide} title="Đóng (Esc)">Đóng ✕</button>}
-      </div>
-
-      <div className="fs-scroll is-tree">
-        <div className={`fs-block${wide ? ' is-off' : ''}`}>
-          {wide && <p className="fs-note" role="note">Đang tìm trong toàn kho nên mục lục tạm không áp dụng. Xoá chữ tìm để lọc theo mục lục.</p>}
-          <BankTree tax={tax} path={{ gradeId: f.gradeId, branchId: f.branchId, chapterId: f.chapterId, lessonId: f.lessonId, formId: f.formId }} counts={facets.node} total={facets.gradeAll} off={wide}
-            allOn={!!f.all}
-            onPick={(p) => onF(p ? pickPath(f, p) : pickGrade(f, null))}
-            noId={{ total: facets.noId, by: facets.noIdBy, sel: f.noId, onPick: (v) => onF(pickNoId(f, v)) }} />
-        </div>
-      </div>
+      {variant === 'drawer' && <div className="fs-top"><h2 title={tax.name}>Mục lục</h2><button type="button" className="btn btn-sm" onClick={onHide} title="Đóng (Esc)">Đóng ✕</button></div>}
+      <CurriculumTree tax={tax} path={{ gradeId: f.gradeId, branchId: f.branchId, chapterId: f.chapterId, lessonId: f.lessonId, formId: f.formId }} counts={facets.node} total={facets.gradeAll}
+        stats={stats} off={wide} allOn={!!f.all}
+        onPick={(p) => onF(p ? pickPath(f, p) : pickGrade(f, null))}
+        noId={{ total: facets.noId, sel: f.noId, onPick: (v) => onF(pickNoId(f, v)) }} />
 
     </aside>
   );

@@ -19,6 +19,7 @@ import { moveManyToTrash, moveToTrash, trashBlockReason, undoMoveToTrash } from 
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
 import { decisionsLoaded, loadDecisions } from '../lib/dupdecisions';
 import { BankSidebar } from '../components/BankSidebar';
+import { nodeStats } from '../lib/banktree';
 import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AutoIdDialog } from '../components/AutoIdDialog';
@@ -151,6 +152,8 @@ export function BankScreen() {
     };
     return computeFacets(questions, f, facetCtx(tax, (uid) => queryOk(query, index.get(uid)!, qByUid.get(uid)?.seq ?? -1) && idOk(uid), wideOn, sort, noIdOf, scopeChosen(f)));
   }, [questions, f, query, wideOn, tax, index, sort, idF, qByUid, effOf, noIdOf]);
+  // Thống kê từng mục trên toàn kho cho mục lục (mức độ, thiếu lời giải, đã duyệt); không theo bộ lọc
+  const treeStats = useMemo(() => nodeStats(questions, taxMaps(tax), noIdOf as never), [questions, tax, noIdOf]);
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
   // câu đã xoá thì khỏi tập chọn; tập chọn rỗng thì thoát chế độ "chỉ xem đã chọn"
   useEffect(() => { setSel((s) => prune(s, uidSet) as Set<string>); }, [uidSet]);
@@ -532,7 +535,7 @@ export function BankScreen() {
 
       <div className={`body-row${!docked ? ' tree-hidden' : ''}${mode === 'table' ? ' bk-fit' : ''}`} style={{ ['--bk-head' as string]: `${headH}px` } as React.CSSProperties}>
         {docked && (
-          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onHide={() => undefined} />
+          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} stats={treeStats} wide={wideOn} onF={setF} onHide={() => undefined} />
         )}
 
         <section ref={qlistRef} className={`qlist${prevOn ? ' has-prev' : ''}`} aria-label="Danh sách câu hỏi">
@@ -681,7 +684,7 @@ export function BankScreen() {
       {drawerOpen && !docked && (
         <>
           <div className="fs-scrim" onClick={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
-          <BankSidebar variant="drawer" tax={tax} f={f} facets={facets} wide={wideOn} onF={setF} onHide={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
+          <BankSidebar variant="drawer" tax={tax} f={f} facets={facets} stats={treeStats} wide={wideOn} onF={setF} onHide={() => { setDrawerOpen(false); openerRef.current?.focus(); }} />
         </>
       )}
       {vqOpen && <VerifyQueue pool={list} onClose={() => setVqOpen(false)} />}

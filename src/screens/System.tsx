@@ -456,7 +456,10 @@ export function SystemScreen() {
             <>
               <span className="sys-hint">Dữ liệu nằm ngoài thư mục cài đặt nên cập nhật hay cài lại app không làm mất.{up.info && <> Vị trí: <span className="mono" style={{ wordBreak: 'break-all' }}>{up.info.dataDir}</span></>}</span>
               <div className="head-actions">
-                <button type="button" className="btn btn-sm" onClick={() => toast(`Đã thêm ${addSamples()} câu mẫu.`)}>Nạp 15 câu mẫu Toán 12</button>
+                {/* Câu mẫu chỉ để thử khi kho còn trống: kho thật đã có câu thì không cho trộn câu mẫu vào (26/11/2026). */}
+                {questions.length === 0
+                  ? <button type="button" className="btn btn-sm" onClick={() => toast(`Đã thêm ${addSamples()} câu mẫu.`)}>Nạp 15 câu mẫu Toán 12</button>
+                  : <span className="sys-hint">Kho đang có {questions.length.toLocaleString('vi-VN')} câu nên không nạp câu mẫu (tránh lẫn câu thử với câu thật).</span>}
               </div>
             </>
           ) : (
