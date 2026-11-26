@@ -42,7 +42,7 @@ const KHU: Khu[] = [
   { id: 'nganhang', label: 'Ngân hàng', Icon: IcBank, also: ['editor'], screens: [
     { s: 'bank', label: 'Câu hỏi' }, { s: 'khohinh', label: 'Hình TikZ' }, { s: 'health', label: 'Sức khoẻ' }, { s: 'curriculum', label: 'Chương trình' }] },
   { id: 'dua', label: 'Đưa đề vào', Icon: IcImport, screens: [
-    { s: 'import', label: 'Nhập tệp & đọc đề' }, { s: 'tex', label: 'Soạn TeX' }] },
+    { s: 'import', label: 'Nhập tệp Word/TeX' }, { s: 'ocr', label: 'Đọc đề PDF/ảnh' }, { s: 'tex', label: 'Soạn TeX' }] },
   { id: 'dethi', label: 'Đề thi', Icon: IcLibrary, screens: [
     { s: 'examlib', label: 'Thư viện đề' }, { s: 'exam', label: 'Tạo đề', feature: 'exam' }, { s: 'slides', label: 'Trình chiếu' }] },
 ];
