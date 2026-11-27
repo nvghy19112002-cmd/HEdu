@@ -5,7 +5,7 @@ import { useApp } from '../app-context';
 import { dataSig, FREQ_LABEL, loadPrefs, runAutoBackup, savePrefs, type BackupFreq } from '../lib/autobackup';
 import { examList } from '../lib/examlib';
 import { getState } from '../lib/store';
-import { IcAlert, IcCheckCircle } from '../components/Icons';
+import { IcAlert, IcBackup, IcBank, IcCheckCircle, IcExam, IcGauge, IcInfo, IcMonitor, IcRefresh, IcSpark, IcTex } from '../components/Icons';
 import { isDesktop } from '../lib/platform';
 import { getStorageMode, storageSummary } from '../lib/storage';
 import { clearTikzCache, defaultPreamble, findTeX, getSettings as getTikz, probeTeX, setSettings as setTikz, type TikzSettings } from '../lib/tikz';
@@ -30,6 +30,13 @@ import { initProfiles } from '../lib/ai/profiles';
 import { loadAiPrefs } from '../lib/ai/prefs';
 import { PANES, paneLabel, searchSettings, takePane, type PaneId } from '../lib/settingsnav';
 import { useUpdates } from '../update-context';
+
+/** Biểu tượng + màu ô vuông cho từng mục ở danh sách trái (kiểu Cài đặt hệ thống macOS). */
+const PANE_ICON: Record<PaneId, [typeof IcInfo, string]> = {
+  overview: [IcGauge, '#8E8E93'], source: [IcBank, '#007AFF'], display: [IcMonitor, '#5856D6'], latex: [IcTex, '#34C759'],
+  exam: [IcExam, '#FF9500'], ai: [IcSpark, '#AF52DE'], backup: [IcBackup, '#0A84FF'], updates: [IcRefresh, '#FF3B30'], help: [IcInfo, '#8E8E93'],
+};
+const PaneIcon = ({ id }: { id: PaneId }) => { const [I, c] = PANE_ICON[id]; return <i className="ht-ic" style={{ background: c }} aria-hidden="true"><I size={13} /></i>; };
 
 function readFile(file: File): Promise<string> {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsText(file, 'utf-8'); });
@@ -171,8 +178,8 @@ export function SystemScreen() {
   const store = storageSummary(getStorageMode(), up.info?.dataDir);
 
   return (
-    <>
-      <header className="page-head g3-head">
+    <div className="ht">
+      <header className="page-head g3-head ht-head">
         <div className="g3-crumb">
           <h1>Cài đặt</h1>
           <span className="tsx-sep">/</span>
@@ -180,23 +187,23 @@ export function SystemScreen() {
         </div>
       </header>
 
-      <div className="set-shell">
-        <nav className="set-nav" aria-label="Các mục Cài đặt">
+      <div className="set-shell ht-shell">
+        <nav className="set-nav ht-nav" aria-label="Các mục Cài đặt">
           <label className="search sm set-search">
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cài đặt…" title="Tìm theo tên: TeX Live, API, sao lưu…" aria-label="Tìm cài đặt" />
           </label>
           {q.trim() ? (
             <ul className="set-results" aria-label="Kết quả tìm cài đặt">
               {found.length === 0 && <li className="sys-hint">Không có cài đặt nào khớp.</li>}
-              {found.map((e, i) => <li key={i}><button type="button" onClick={() => open(e.pane, e.target)}><b>{e.label}</b><small>{paneLabel(e.pane)}</small></button></li>)}
+              {found.map((e, i) => <li key={i}><button type="button" onClick={() => open(e.pane, e.target)}><PaneIcon id={e.pane} /><span><b>{e.label}</b><small>{paneLabel(e.pane)}</small></span></button></li>)}
             </ul>
           ) : (
             <ul className="set-list">
-              {PANES.map((p) => <li key={p.id}><button type="button" className={is(p.id) ? 'is-on' : undefined} aria-current={is(p.id) ? 'page' : undefined} onClick={() => open(p.id)}>{p.label}</button></li>)}
+              {PANES.map((p) => <li key={p.id}><button type="button" className={is(p.id) ? 'is-on' : undefined} aria-current={is(p.id) ? 'page' : undefined} onClick={() => open(p.id)}><PaneIcon id={p.id} />{p.label}</button></li>)}
             </ul>
           )}
         </nav>
-      <div className="simple set-body">
+      <div className="simple set-body ht-body">
         {!desktop && (
           <div className="note warn">
             <IcAlert />
@@ -205,7 +212,7 @@ export function SystemScreen() {
         )}
 
         {is('overview') && (
-          <div className="set-cards">
+          <div className="set-cards ht-group">
             <section className="panel" aria-label="Phiên bản HEdu">
               <h2>Phiên bản HEdu</h2>
               <span className="sys-hint"><b className="mono">{up.info ? `v${up.info.version}` : 'bản xem thử'}</b> · kênh {up.channel === 'beta' ? 'beta' : up.channel === 'stable' ? 'chính thức' : up.channel}{up.checkedAt ? ` · kiểm tra lúc ${when(up.checkedAt)}` : ' · chưa kiểm tra bản mới trong phiên này'}</span>
@@ -559,6 +566,6 @@ export function SystemScreen() {
         )}
       </div>
       </div>
-    </>
+    </div>
   );
 }
