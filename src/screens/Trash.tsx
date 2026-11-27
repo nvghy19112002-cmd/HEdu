@@ -177,8 +177,8 @@ export function TrashScreen() {
   );
 
   return (
-    <>
-      <header className="page-head g3-head" ref={topRef}>
+    <div className="ht ht-trash">
+      <header className="page-head g3-head ht-head" ref={topRef}>
         <div className="g3-crumb">
           <h1>Thùng rác</h1>
           <span className="sys-hint">Câu đã xoá vẫn được giữ cho tới khi bạn chủ động xoá hẳn. HEdu không tự xoá vĩnh viễn.</span>
@@ -364,7 +364,7 @@ export function TrashScreen() {
         </ConfirmDialog>
       )}
       {exportQs && <ExportChoiceDialog qs={exportQs} onFileOnly={runFileOnly} onClose={() => setExportQs(null)} onToast={toast} />}
-    </>
+    </div>
   );
 }
 
