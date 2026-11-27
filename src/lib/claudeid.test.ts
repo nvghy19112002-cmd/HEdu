@@ -55,6 +55,7 @@ ok(r1.form === 'may' && r1.src === 'ai-ngoai' && r1.formId === A.f.id && /Claude
 ok(r2.form === 'xem-lai' && r2.prop === B.f.id && r2.formId === A.f.id, 'khác ⇒ "Cần xem lại" + Dạng đề xuất; KHÔNG đổi Dạng đang lưu');
 ok(r1.propLevel === 'NB' && r1.level0 === 'TH' && r2.propLevel === undefined, 'mức đề xuất khác mức đang lưu ⇒ giữ ở propLevel để giáo viên bấm dùng, KHÔNG đổi mức của câu');
 ok(lot.huongDan.some((x) => x.includes('YÊU CẦU TƯ DUY')) && lot.huongDan.some((x) => x.includes('nhiều ý')), 'hướng dẫn có quy tắc mức độ và cách làm câu nhiều ý');
+ok(lot.huongDan.some((x) => x.includes('SAU CÙNG') && x.includes('KHÔNG theo số đông')), 'câu nhiều ý khác Dạng: lấy Dạng của ý học sau cùng, không theo số đông (E4, 31/10/2026)');
 ok(plan.skip['doi-noi-dung'] === 1 && plan.skip['dang-la'] === 1 && plan.skip.trung === 1, 'bỏ qua có lý do: câu đã sửa, Dạng lạ, trùng');
 ok(plan.gold.n === 2 && plan.gold.dang === 1 && plan.gold.chuong >= 1 && plan.gold.muc === 1 && plan.gold.sai[0].uid === 'u7', 'đo độ đúng trên câu đối chứng, không đổi câu đã xác minh');
 ok(!plan.recs.some(([u]) => gv.has(u)), 'câu giáo viên đã xác minh không bị đặt bản ghi');
