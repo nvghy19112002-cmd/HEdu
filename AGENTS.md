@@ -98,6 +98,7 @@ Claude không coi giải pháp trong phiếu là mệnh lệnh: nếu có cách 
 - Đọc đúng file cần; không dán lại file dài; không kể lại lịch sử; không kiểm lại điều chưa thay đổi; không chạy lại test nặng khi không có lý do; không tạo tài liệu trùng; không mở agent/công cụ không liên quan. KHÔNG được tiết kiệm bằng cách bỏ test cần thiết hay kiểm tra an toàn dữ liệu.
 - Việc khó (kiến trúc, lỗi khó, dữ liệu quan trọng): Claude đề nghị chủ dự án chọn model mạnh hơn trong app.
 - Phiên quá dài: cập nhật `claude/ban-giao-desktop.md` (ghi đè, không tạo file mới): việc đang làm · file đã đổi · test · bước tiếp.
+- **Ngữ cảnh đạt 50%** (chủ dự án chốt 28/11): từ lúc đó, mỗi việc tiếp theo mở một phiên con nhỏ mới (phiên riêng, bản giao ngắn: việc · tệp · tiêu chí xong), không làm tiếp trong phiên dài; phiên chính chỉ điều phối và kiểm kết quả.
 - Mỗi bản phát hành: cập nhật `GHI-CHU-PHAT-HANH.md` và mục "Trạng thái" dưới đây.
 - Trao đổi giữa hai AI qua Issue/PR hoặc file Markdown ngắn, không dán cả hội thoại.
 - Mẫu báo cáo mặc định: (1) Đã làm · (2) Kiểm thử: số test, kết quả, giới hạn · (3) Git: nhánh, commit, PR · (4) Còn tồn · (5) Cần chủ dự án quyết định (chỉ khi thật cần). Không kể nhật ký dài trừ khi được yêu cầu điều tra.
