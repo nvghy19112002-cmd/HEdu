@@ -658,7 +658,7 @@ export function ExamLibraryScreen() {
           {warn > 0 && <span className="xr-warn" title={!e.mainFile ? 'Chưa chọn tệp chính' : `${e.warningCount} cảnh báo`}>⚠</span>}
           <button type="button" className={`fx-star${isStar(e) ? ' on' : ''}`} title={isStar(e) ? 'Bỏ gắn sao' : 'Gắn sao'} aria-label={isStar(e) ? 'Bỏ gắn sao' : 'Gắn sao'} aria-pressed={isStar(e)} {...stop} onClick={(ev) => { ev.stopPropagation(); void toggleStar(e); }}>★</button>
         </span>
-        <span className="fx-cell c-type"><span className={`xc-type tone-${catTone(c)}`}>{typeText(e.metadata.examType)}</span></span>
+        <span className="fx-cell c-type"><span className={`xc-type tone-${catTone(c)}`} title={typeText(e.metadata.examType)}>{typeText(e.metadata.examType)}</span></span>
         <span className="fx-cell c-grade">{e.metadata.grade ?? ''}</span>
         <span className="fx-cell c-year">{e.metadata.schoolYear ?? ''}</span>
         <span className="fx-cell c-status"><span className={`xc-st st-${e.status}`}>{STATUS_LABEL[e.status]}</span></span>

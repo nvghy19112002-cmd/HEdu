@@ -519,3 +519,16 @@ body { font-feature-settings: "tnum" 0; }
 .ht-trash .tr-empty span { font-size: 12.5px; color: var(--ink-3); }
 .ht-trash .pager { font-size: 12.5px; }
 @media (max-width: 900px) { .set-shell.ht-shell { grid-template-columns: 1fr; } .set-nav.ht-nav { position: static; } }
+
+/* ---------- Soát zoom (28/11/2026): 1366×768 · 125% (1093×614) · 150% (911×512) ----------
+   Khi giao diện co bằng CSS zoom (bản web, hoặc app khi WebView không đổi được mức zoom), đơn vị vh bị co theo ⇒
+   thanh bên chỉ cao ~2/3 cửa sổ, hộp thoại lệch lên trên. Chia lại cho --hedu-cssz (app thường = 1, không đổi gì). */
+.rail { height: calc(100vh / var(--hedu-cssz, 1)); }
+.qm { top: calc(4vh / var(--hedu-cssz, 1)); max-height: calc(92vh / var(--hedu-cssz, 1)); }
+.qm.xm-side { top: 0; height: calc(100vh / var(--hedu-cssz, 1)); max-height: none; }
+.cfm { max-height: calc(100vh / var(--hedu-cssz, 1) - 32px); }
+.cfm.aid { height: min(760px, calc(100vh / var(--hedu-cssz, 1) - 32px)); }
+/* Thư viện đề, cột Loại hẹp: nhãn dài ("Ôn tập theo chương") hiện dấu … thay vì bị cắt cụt */
+.fx-cell.c-type .xc-type { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.qm.qm-edit { top: calc(2vh / var(--hedu-cssz, 1)); height: calc(96vh / var(--hedu-cssz, 1)); max-height: calc(96vh / var(--hedu-cssz, 1)); }
+.qm.xm-sm { top: calc(12vh / var(--hedu-cssz, 1)); }
