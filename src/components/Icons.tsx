@@ -26,3 +26,9 @@ export const IcLock = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}
 export const IcUnlock = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 7.5-2" /></svg>;
 export const IcSwap = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4" /></svg>;
 export const IcDice = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><rect x="4" y="4" width="16" height="16" rx="3" /><circle cx="9" cy="9" r="1.2" fill="currentColor" /><circle cx="15" cy="15" r="1.2" fill="currentColor" /><circle cx="15" cy="9" r="1.2" fill="currentColor" /><circle cx="9" cy="15" r="1.2" fill="currentColor" /></svg>;
+// Khu Hệ thống (danh sách mục Cài đặt)
+export const IcSpark = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg>;
+export const IcInfo = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.5" /></svg>;
+export const IcRefresh = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4" /></svg>;
+export const IcGauge = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><path d="M4 18a8 8 0 1 1 16 0" /><path d="M12 18l4-6" /></svg>;
+export const IcMonitor = ({ size = 16 }: P) => <svg {...base(size)} strokeWidth={2}><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>;
