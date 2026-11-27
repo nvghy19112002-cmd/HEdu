@@ -497,7 +497,7 @@ export const ExamWorkspace = forwardRef<ExamWorkspaceHandle, Props>(function Exa
   const themeName = themeOf(loadThemeId()).name;
 
   return (
-    <div className={`ew tabbed${hidden ? ' off' : ''}`} role="dialog" aria-modal={!hidden} aria-hidden={hidden || undefined} aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
+    <div className={`ew tabbed dt-ew${hidden ? ' off' : ''}`} role="dialog" aria-modal={!hidden} aria-hidden={hidden || undefined} aria-label={`Biên tập đề: ${name}`} onKeyDown={onKey}>
       {hist && <HistoryDialog title={`Lịch sử phiên bản của ${hist.rel}`} current={ed.current?.text(hist.rel) ?? loaded.current.get(hist.rel) ?? ''} versions={hist.versions} onRestore={(t) => { ed.current?.replaceDoc(hist.rel, t); setNote('Đã đưa bản cũ vào khung soạn (chưa lưu). Xem lại rồi bấm Lưu.'); }} onClose={() => setHist(null)} />}
       {lintOpen && <LintDialog text={lintText()} texBin={getSettings().texBin || undefined} onJump={(l) => { if (active) { setPane('edit'); window.setTimeout(() => ed.current?.jump(active, l), 60); } }} onClose={() => setLintOpen(false)} />}
       <header className="ew-head">
