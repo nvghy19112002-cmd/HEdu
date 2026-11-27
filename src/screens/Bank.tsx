@@ -17,9 +17,11 @@ import { LEVEL_LETTER, questionCode, seqLabel } from '../lib/id';
 import { duplicateQuestion, setReview, useBank, updateMany } from '../lib/store';
 import { moveManyToTrash, moveToTrash, trashBlockReason, undoMoveToTrash } from '../lib/trashflow';
 import { BIG_OP, ensureRestorePoint } from '../lib/dbbackup';
-import { decisionsLoaded, loadDecisions } from '../lib/dupdecisions';
+import { decisionsLoaded, loadDecisions, statusOf, useDecisions } from '../lib/dupdecisions';
+import { fingerprint } from '../lib/dup2';
+import { TRIAGE_KINDS, TRIAGE_LABEL, triage, triageOk, type TriageKind } from '../lib/banktriage';
 import { BankSidebar } from '../components/BankSidebar';
-import { nodeStats } from '../lib/banktree';
+import { hasSolution, nodeStats } from '../lib/banktree';
 import { BankEmpty } from '../components/BankEmpty';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AutoIdDialog } from '../components/AutoIdDialog';
@@ -37,8 +39,8 @@ import { getRec } from '../lib/idreview';
 import { fold, parseBankQuery, queryOk } from '../lib/banksearch';
 import { DupCheck } from '../components/DupCheck';
 import { QuestionModal } from '../components/QuestionModal';
-import { BankTable } from '../components/BankTable';
-import { BankPreview } from '../components/BankPreview';
+import { BankCards, type CardBadge } from '../components/BankCards';
+import { BankDetail } from '../components/BankDetail';
 import { useCtxHidden } from '../lib/ctxcol';
 import { BankMoreFilters, type IdFilter } from '../components/BankMoreFilters';
 import { ReviewBadge } from '../components/ReviewControl';
@@ -106,7 +108,7 @@ export function BankScreen() {
   useEffect(() => {
     const el = headRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setHeadH(Math.ceil(el.getBoundingClientRect().height)));
+    const ro = new ResizeObserver(() => setHeadH(el.offsetTop + el.offsetHeight)); // px bố cục (không bị CSS zoom co lại), tính cả dải chuyển màn phía trên
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -142,9 +144,25 @@ export function BankScreen() {
     const e = effOf(q);
     return e.unclassified ? e.rec?.lop ?? NOID_UNKNOWN : null;
   }, [effOf]);
+  // Nút "Cần xử lí · n": trùng nội dung + Chưa có ID + thiếu lời giải, đếm trên TOÀN kho (không theo bộ lọc)
+  const decVer = useDecisions();
+  useEffect(() => { if (!decisionsLoaded()) void loadDecisions(); }, []);
+  const tri = useMemo(() => {
+    void decVer;
+    return triage(questions, {
+      noId: (q) => noIdOf(q) !== null,
+      dupKey: (q) => { const fp = fingerprint(q.latex); return fp.stemKey ? `${fp.type}|${fp.stemKey}|${fp.optSet}|${fp.ansKey}|${fp.figKey}` : null; },
+      decided: (a, b) => { const s = statusOf(a, b); return s.status === 'valid' && s.rec?.d !== 'review_later'; },
+      hasSolution,
+    });
+  }, [questions, noIdOf, decVer]);
+  const [triF, setTriF] = useState<TriageKind | 'all' | null>(null);
+  const [triMenu, setTriMenu] = useState(false);
+  const [toolMenu, setToolMenu] = useState(false); // menu Công cụ ở thanh trên
   /** Một lượt duyệt: danh sách hiện ra + số đếm theo chiều cho mọi ô lọc. */
   const facets = useMemo(() => {
     const idOk = (uid: string) => {
+      if (triF && !triageOk(tri, uid, triF)) return false;
       if (idF === 'all') return true;
       const q = qByUid.get(uid);
       if (!q) return false;
@@ -152,7 +170,7 @@ export function BankScreen() {
       return idF === 'chua-phan-loai' ? e.unclassified : !e.unclassified && e.form === idF;
     };
     return computeFacets(questions, f, facetCtx(tax, (uid) => queryOk(query, index.get(uid)!, qByUid.get(uid)?.seq ?? -1) && idOk(uid), wideOn, sort, noIdOf, scopeChosen(f)));
-  }, [questions, f, query, wideOn, tax, index, sort, idF, qByUid, effOf, noIdOf]);
+  }, [questions, f, query, wideOn, tax, index, sort, idF, qByUid, effOf, noIdOf, triF, tri]);
   // Thống kê từng mục trên toàn kho cho mục lục (mức độ, thiếu lời giải, đã duyệt); không theo bộ lọc
   const treeStats = useMemo(() => nodeStats(questions, taxMaps(tax), noIdOf as never), [questions, tax, noIdOf]);
   const uidSet = useMemo(() => new Set(questions.map((q) => q.uid)), [questions]);
@@ -432,8 +450,9 @@ export function BankScreen() {
       const t = e.target as HTMLElement;
       if (t.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]') || document.querySelector('[aria-modal="true"]')) return;
       if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
-      else if (prevQ && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !t.closest?.('.fside, [role="tree"], [role="menu"], [role="listbox"]')) { e.preventDefault(); stepPrev(e.key === 'ArrowDown' ? 1 : -1); }
+      else if (prevQ && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !t.closest?.('.fside, [role="tree"], [role="menu"], [role="listbox"]:not(.bk2-list)')) { e.preventDefault(); stepPrev(e.key === 'ArrowDown' ? 1 : -1); }
       else if (prevQ && e.key === 'Enter' && !t.closest?.('button, a, [role="button"]')) { e.preventDefault(); openView(prevQ.uid); }
+      else if (prevQ && (e.key === 'e' || e.key === 'E')) { e.preventDefault(); openView(prevQ.uid); setViewEdit(true); }
       else if (e.key === 'PageDown' && cur < pages - 1) { e.preventDefault(); goPage(cur + 1, true); }
       else if (e.key === 'PageUp' && cur > 0) { e.preventDefault(); goPage(cur - 1, true); }
     };
@@ -502,87 +521,73 @@ export function BankScreen() {
   };
 
 
+  const codeOf = (q: Question): string | null => (noIdOf(q) !== null ? null : questionCode(q, q.level));
+  /** Nhãn trạng thái trên thẻ: Cần sửa > Chưa có ID > Trùng > Thiếu lời giải > Đã duyệt / Chưa kiểm tra */
+  const badgeOf = (q: Question): CardBadge => {
+    if (q.review === 'needs_fix') return { tone: 'bad', label: REVIEW_LABEL.needs_fix };
+    const ks = tri.kinds.get(q.uid);
+    if (ks?.length) return { tone: 'warn', label: TRIAGE_LABEL[ks.includes('noid') ? 'noid' : ks[0]] };
+    return q.review === 'approved' ? { tone: 'ok', label: REVIEW_LABEL.approved } : { tone: 'draft', label: REVIEW_LABEL.unreviewed };
+  };
+  /** Nút Cần xử lí: lọc trên toàn kho (số trong menu là của toàn kho) — chưa chọn mục nào thì xem cả kho. */
+  const pickTri = (k: TriageKind | 'all' | null) => {
+    setTriMenu(false);
+    setTriF(k);
+    setPage(0);
+    if (k && !scopeChosen(f)) setF0({ ...f0, all: true });
+  };
+  useEffect(() => {
+    if (!triMenu && !toolMenu) return;
+    const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.('.bk2-pop')) { setTriMenu(false); setToolMenu(false); } };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); setTriMenu(false); setToolMenu(false); } };
+    document.addEventListener('mousedown', h);
+    document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
+  }, [triMenu, toolMenu]);
+
   const heading = wideOn ? 'Kết quả tìm trong toàn kho' : f.noId != null ? `Chưa có ID${f.noId === 'all' ? '' : f.noId === NOID_UNKNOWN ? ' · chưa rõ lớp' : ` · Lớp ${f.noId}`}` : chapter && gradeObj ? `${gradeLabel(gradeObj)} · ${chapter.name}` : gradeObj ? gradeLabel(gradeObj) : 'Toàn bộ ngân hàng';
 
   return (
     <>
-      <header ref={headRef} className="page-head bank-head">
-        <h1>Ngân hàng câu hỏi</h1>
-        <div className="qbar bk-hbar">
-          <label className="search sm">
+      <header ref={headRef} className="page-head bank-head bk2-head">
+        <div className="bk2-row">
+          <div className="bk2-title">
+            <span className="bk2-crumb">Ngân hàng câu hỏi{triF ? ` · Cần xử lí: ${triF === 'all' ? 'tất cả' : TRIAGE_LABEL[triF].toLowerCase()}` : ''}</span>
+            <h1 title={heading}>{heading}</h1>
+          </div>
+          <span className="bk2-sp" />
+          <label className="search sm bk2-search">
             <IcSearch size={16} />
             <span className="sr-only">Tìm câu hỏi</span>
-            <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu, mã (vd 2D1H1) hoặc số #2086 — phím /" />
+            <input ref={searchRef} type="search" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} placeholder="Tìm câu, mã ID hoặc #số — phím /" />
             <select className="scope-sel" value={wide ? 'all' : 'here'} onChange={(e) => setWide(e.target.value === 'all')} aria-label="Phạm vi tìm">
               <option value="here">mục này</option>
               <option value="all">toàn kho</option>
             </select>
-            <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette}>Ctrl K</button>
+            <button type="button" className="kbd" style={{ border: 'none' }} onClick={openPalette} title="Bảng lệnh: tìm câu, mục chương trình hoặc lệnh">Ctrl K</button>
           </label>
-          <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); }} onResetAll={() => { resetEverything(); setIdF('all'); }} canReset={canReset || idF !== 'all'} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
-          <button type="button" className="btn btn-sm" onClick={() => setDupOpen(true)}>Kiểm tra trùng</button>
+          <div className="bk2-pop bk2-tools">
+            <button type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={toolMenu} onClick={() => setToolMenu(!toolMenu)} title="Nhập, kiểm tra trùng, xác minh, nhờ Claude">Công cụ ▾</button>
+            {toolMenu && (
+              <div className="bk2-menu" role="menu">
+                <button type="button" role="menuitem" autoFocus onClick={() => { setToolMenu(false); go({ screen: 'import' }); }}>Nhập từ file</button>
+                <button type="button" role="menuitem" onClick={() => { setToolMenu(false); setDupOpen(true); }}>Kiểm tra trùng</button>
+                <button type="button" role="menuitem" disabled={vqCount === 0} onClick={() => { setToolMenu(false); setVqOpen(true); }} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh Dạng / mức độ<span className="bk2-mn">{nf.format(vqCount)}</span></button>
+                <hr />
+                <button type="button" role="menuitem" onClick={() => { setToolMenu(false); setCidOpen(true); }} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
+                <button type="button" role="menuitem" onClick={() => { setToolMenu(false); setCrvOpen(true); }} title="Xuất lô câu Chưa kiểm tra cho Claude kiểm đề, đáp án, lời giải">Duyệt nhờ Claude…</button>
+              </div>
+            )}
+          </div>
+          <button type="button" className="btn btn-accent bk2-new" onClick={newHere} title="Soạn câu mới; nếu đang xem một chương/bài thì điền sẵn vị trí đó">+ Câu mới</button>
+        </div>
+        <div className="bk2-row bk2-filters">
           {!docked && (
             <button ref={openerRef} type="button" className={`btn btn-sm fs-open${nAttr > 0 ? ' on' : ''}`} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} title="Mở mục lục và bộ lọc">
               Mục lục
             </button>
           )}
-        </div>
-        <div className="head-actions">
-          <button type="button" className="btn btn-outline" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
-          <button type="button" className="btn btn-outline" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
-          <button type="button" className="btn btn-outline" onClick={() => setCrvOpen(true)} title="Xuất lô câu Chưa kiểm tra cho Claude tự giải lại và kiểm đề, đáp án, lời giải; nhập kết quả thành Đã duyệt / Cần sửa">Duyệt nhờ Claude…</button>
-          <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'import' })}>Nhập từ file</button>
-          <button type="button" className="btn btn-accent" onClick={newHere} title="Soạn câu mới; nếu đang xem một chương/bài thì điền sẵn vị trí đó">+ Câu hỏi mới</button>
-        </div>
-      </header>
-
-      <div className={`body-row${!docked ? ' tree-hidden' : ''}${mode === 'table' ? ' bk-fit' : ''}`} style={{ ['--bk-head' as string]: `${headH}px` } as React.CSSProperties}>
-        {docked && (
-          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} stats={treeStats} wide={wideOn} onF={setF} onHide={() => undefined} />
-        )}
-
-        <section ref={qlistRef} className={`qlist${prevOn ? ' has-prev' : ''}`} aria-label="Danh sách câu hỏi">
-
-
-          {sel.size > 0 && (
-            <div className="selbar" role="region" aria-label="Thao tác với các câu đã chọn">
-              <span className="selbar-n">
-                <b>Đã chọn {nf.format(counts.total)} câu</b>
-                <small>{nf.format(counts.inPage)} ở trang này{counts.outPage - counts.outScope > 0 ? ` · ${nf.format(counts.outPage - counts.outScope)} ở trang khác` : ''}{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} ở bộ lọc khác (vẫn giữ)` : ''}</small>
-              </span>
-              <div className="selbar-grp">
-                <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo kiểu sắp xếp đang chọn">Xuất .tex</button>
-                <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
-                <button type="button" className="btn btn-sm" onClick={() => { if (sel.size > AUTO_ID_MAX) toast(`Gán ID tự động: mỗi lượt tối đa ${nf.format(AUTO_ID_MAX)} câu (đang chọn ${nf.format(sel.size)}). Hãy bỏ bớt rồi làm từng lượt.`); else if (!placedSel.length) toast('Các câu đang chọn đều Chưa có ID: Gán ID tự động không áp dụng — dùng Gán ID nhờ Claude hoặc chọn Dạng trong Sửa câu.'); else setBatch('autoid'); }} title={`Gợi ý vị trí (ID) theo các câu đã có trong ngân hàng, xem trước rồi mới áp dụng — tối đa ${AUTO_ID_MAX} câu/lượt`}>Gán ID tự động</button>
-                <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô gồm đúng các câu đang chọn cho Claude (gán hoặc kiểm tra lại Dạng, mức độ)">Gán ID nhờ Claude…</button>
-                <button type="button" className="btn btn-sm" onClick={() => setCrvOpen(true)} title="Xuất lô gồm đúng các câu đang chọn cho Claude duyệt nội dung">Duyệt nhờ Claude…</button>
-                <button type="button" className="btn btn-sm" onClick={() => openSlides('Ngân hàng', selectedQs.map((q) => ({ latex: q.latex, uid: q.uid })))} title="Chiếu các câu đã chọn lên màn hình lớp (từng câu, hiện đáp án/lời giải khi bấm), hoặc lưu thành bộ trình chiếu">Trình chiếu…</button>
-                {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
-                <span className="selbar-more">
-                  <button ref={moreBtnRef} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
-                  {moreSel && (
-                    <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMoreSel(false); moreBtnRef.current?.focus(); } }}>
-                      <button type="button" role="menuitem" autoFocus onClick={() => { setMoreSel(false); setBatch('tag'); }}>Gắn nhãn…</button>
-                      <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đánh dấu “Cần sửa” cho ${nf.format(sel.size)} câu?`, body: 'Chỉ đổi trạng thái kiểm duyệt. Nội dung câu không đổi. (HEdu không có “Đã duyệt hàng loạt”: việc duyệt do thầy/cô xác nhận từng câu.)', label: 'Đánh dấu Cần sửa', run: () => { void runBatch(withReview('needs_fix'), 'đánh dấu Cần sửa'); } }); }}>Đánh dấu “Cần sửa”</button>
-                      <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đưa ${nf.format(sel.size)} câu về “Chưa kiểm tra”?`, body: 'Các câu đang “Đã duyệt” hoặc “Cần sửa” sẽ trở về “Chưa kiểm tra”. Nội dung không đổi.', label: 'Về Chưa kiểm tra', run: () => { void runBatch(withReview(undefined), 'đưa về Chưa kiểm tra'); } }); }}>Về “Chưa kiểm tra”</button>
-                      <button type="button" role="menuitem" onClick={() => { setMoreSel(false); askIdSync(); }}>Đồng bộ ID vào LaTeX…</button>
-                      <button type="button" role="menuitem" className="danger" onClick={() => { setMoreSel(false); void openTrashBatch(); }}>Chuyển vào Thùng rác…</button>
-                    </div>
-                  )}
-                </span>
-                <span className="selbar-sep" aria-hidden="true" />
-                {counts.inPage > 0 && <button type="button" className="btn btn-sm" onClick={deselectPage} title="Chỉ bỏ các câu của trang này, giữ các trang khác">Bỏ chọn trang</button>}
-                {counts.outScope > 0 && <button type="button" className="btn btn-sm" onClick={() => setSel((x) => new Set([...x].filter((u) => resultUids.has(u))))} title="Bỏ các câu đang chọn nằm ngoài bộ lọc hiện tại">Bỏ câu ngoài bộ lọc</button>}
-                <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
-              </div>
-            </div>
-          )}
-          {lechUids.length > 0 && (
-            <div className="note warn" role="status"><div className="note-body">
-              <b>{nf.format(lechUids.length)} câu có ID trong LaTeX khác vị trí đang lưu</b>
-              <span>Thường do lúc nhập HEdu chưa đọc được ID (ví dụ ID viết ở cuối dòng đầu) nên câu vào vị trí mặc định. <button type="button" className="linkbtn" disabled={batchBusy} onClick={askFollowId}>Đưa về đúng vị trí theo ID…</button></span>
-            </div></div>
-          )}
+          <BankMoreFilters f={f} facets={facets} onF={setF} idF={idF} onIdF={(v) => { setPage(0); setIdF(v); }} onClearAll={() => { clearFilters(); setIdF('all'); setTriF(null); }} onResetAll={() => { resetEverything(); setIdF('all'); setTriF(null); }} canReset={canReset || idF !== 'all' || triF != null} nAll={nAttr + (idF !== 'all' ? 1 : 0)} />
           {(list.length > 0 || levelsActive(f) || f.types.size > 0) && (
             <div className="qstats" role="group" aria-label="Thống kê kết quả (bấm để lọc; bấm nhiều ô để chọn nhiều)">
               <span className="qs-title">Thống kê</span>
@@ -611,6 +616,77 @@ export function BankScreen() {
               </div>
             </div>
           )}
+          <span className="bk2-sp" />
+          <span className="seg bank-mode" role="group" aria-label="Kiểu xem">
+            <button type="button" aria-pressed={mode === 'table'} aria-current={mode === 'table' ? 'page' : undefined} onClick={() => pickMode('table')} title="Danh sách thẻ câu + khung chi tiết">Danh sách</button>
+            <button type="button" aria-pressed={mode === 'cards'} aria-current={mode === 'cards' ? 'page' : undefined} onClick={() => pickMode('cards')} title="Lưới thẻ hiện đầy đủ nội dung câu">Lưới</button>
+          </span>
+          <div className="bk2-pop bk2-tri">
+            <button type="button" className={`bk2-tribtn${triF ? ' on' : tri.total === 0 ? ' zero' : ''}`} aria-haspopup="menu" aria-expanded={triMenu} onClick={() => setTriMenu(!triMenu)}
+              title="Câu trùng nội dung, chưa có ID, thiếu lời giải — trên toàn kho">
+              <i aria-hidden="true" />{triF && triF !== 'all' ? TRIAGE_LABEL[triF] : 'Cần xử lí'} · <b>{nf.format(triF && triF !== 'all' ? tri.count[triF] : tri.total)}</b> ▾
+            </button>
+            {triMenu && (
+              <div className="bk2-menu" role="menu">
+                <button type="button" role="menuitemradio" aria-checked={triF === 'all'} autoFocus onClick={() => pickTri('all')}>Tất cả việc cần xử lí<span className="bk2-mn">{nf.format(tri.total)}</span></button>
+                <hr />
+                {TRIAGE_KINDS.map((k) => (
+                  <button key={k} type="button" role="menuitemradio" aria-checked={triF === k} disabled={tri.count[k] === 0} onClick={() => pickTri(k)}>{TRIAGE_LABEL[k]}<span className="bk2-mn">{nf.format(tri.count[k])}</span></button>
+                ))}
+                {triF && <><hr /><button type="button" role="menuitem" onClick={() => pickTri(null)}>Bỏ lọc Cần xử lí</button></>}
+              </div>
+            )}
+          </div>
+        </div>
+        {sel.size > 0 && (
+          <div className="selbar" role="region" aria-label="Thao tác với các câu đã chọn">
+            <span className="selbar-n">
+              <b>Đã chọn {nf.format(counts.total)} câu</b>
+              <small>{nf.format(counts.inPage)} ở trang này{counts.outPage - counts.outScope > 0 ? ` · ${nf.format(counts.outPage - counts.outScope)} ở trang khác` : ''}{counts.outScope > 0 ? ` · ${nf.format(counts.outScope)} ở bộ lọc khác (vẫn giữ)` : ''}</small>
+            </span>
+            <div className="selbar-grp">
+              <button type="button" className="btn btn-sm" onClick={exportSelected} title="Xuất các câu đã chọn ra file .tex, theo kiểu sắp xếp đang chọn">Xuất .tex</button>
+              <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
+              <button type="button" className="btn btn-sm" onClick={() => { if (sel.size > AUTO_ID_MAX) toast(`Gán ID tự động: mỗi lượt tối đa ${nf.format(AUTO_ID_MAX)} câu (đang chọn ${nf.format(sel.size)}). Hãy bỏ bớt rồi làm từng lượt.`); else if (!placedSel.length) toast('Các câu đang chọn đều Chưa có ID: Gán ID tự động không áp dụng — dùng Gán ID nhờ Claude hoặc chọn Dạng trong Sửa câu.'); else setBatch('autoid'); }} title={`Gợi ý vị trí (ID) theo các câu đã có trong ngân hàng, xem trước rồi mới áp dụng — tối đa ${AUTO_ID_MAX} câu/lượt`}>Gán ID tự động</button>
+              <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô gồm đúng các câu đang chọn cho Claude (gán hoặc kiểm tra lại Dạng, mức độ)">Gán ID nhờ Claude…</button>
+              <button type="button" className="btn btn-sm" onClick={() => setCrvOpen(true)} title="Xuất lô gồm đúng các câu đang chọn cho Claude duyệt nội dung">Duyệt nhờ Claude…</button>
+              <button type="button" className="btn btn-sm" onClick={() => openSlides('Ngân hàng', selectedQs.map((q) => ({ latex: q.latex, uid: q.uid })))} title="Chiếu các câu đã chọn lên màn hình lớp (từng câu, hiện đáp án/lời giải khi bấm), hoặc lưu thành bộ trình chiếu">Trình chiếu…</button>
+              {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
+              <span className="selbar-more">
+                <button ref={moreBtnRef} type="button" className="btn btn-sm" aria-haspopup="menu" aria-expanded={moreSel} onClick={() => setMoreSel(!moreSel)}>Thao tác khác ▾</button>
+                {moreSel && (
+                  <div className="more-menu" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMoreSel(false); moreBtnRef.current?.focus(); } }}>
+                    <button type="button" role="menuitem" autoFocus onClick={() => { setMoreSel(false); setBatch('tag'); }}>Gắn nhãn…</button>
+                    <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đánh dấu “Cần sửa” cho ${nf.format(sel.size)} câu?`, body: 'Chỉ đổi trạng thái kiểm duyệt. Nội dung câu không đổi. (HEdu không có “Đã duyệt hàng loạt”: việc duyệt do thầy/cô xác nhận từng câu.)', label: 'Đánh dấu Cần sửa', run: () => { void runBatch(withReview('needs_fix'), 'đánh dấu Cần sửa'); } }); }}>Đánh dấu “Cần sửa”</button>
+                    <button type="button" role="menuitem" onClick={() => { setMoreSel(false); setAsk({ title: `Đưa ${nf.format(sel.size)} câu về “Chưa kiểm tra”?`, body: 'Các câu đang “Đã duyệt” hoặc “Cần sửa” sẽ trở về “Chưa kiểm tra”. Nội dung không đổi.', label: 'Về Chưa kiểm tra', run: () => { void runBatch(withReview(undefined), 'đưa về Chưa kiểm tra'); } }); }}>Về “Chưa kiểm tra”</button>
+                    <button type="button" role="menuitem" onClick={() => { setMoreSel(false); askIdSync(); }}>Đồng bộ ID vào LaTeX…</button>
+                    <button type="button" role="menuitem" className="danger" onClick={() => { setMoreSel(false); void openTrashBatch(); }}>Chuyển vào Thùng rác…</button>
+                  </div>
+                )}
+              </span>
+              <span className="selbar-sep" aria-hidden="true" />
+              {counts.inPage > 0 && <button type="button" className="btn btn-sm" onClick={deselectPage} title="Chỉ bỏ các câu của trang này, giữ các trang khác">Bỏ chọn trang</button>}
+              {counts.outScope > 0 && <button type="button" className="btn btn-sm" onClick={() => setSel((x) => new Set([...x].filter((u) => resultUids.has(u))))} title="Bỏ các câu đang chọn nằm ngoài bộ lọc hiện tại">Bỏ câu ngoài bộ lọc</button>}
+              <button type="button" className="btn btn-sm" onClick={() => setSel(new Set())}>Bỏ chọn tất cả</button>
+            </div>
+          </div>
+        )}
+        {lechUids.length > 0 && (
+          <div className="note warn" role="status"><div className="note-body">
+            <b>{nf.format(lechUids.length)} câu có ID trong LaTeX khác vị trí đang lưu</b>
+            <span>Thường do lúc nhập HEdu chưa đọc được ID (ví dụ ID viết ở cuối dòng đầu) nên câu vào vị trí mặc định. <button type="button" className="linkbtn" disabled={batchBusy} onClick={askFollowId}>Đưa về đúng vị trí theo ID…</button></span>
+          </div></div>
+        )}
+      </header>
+
+      <div className={`body-row${!docked ? ' tree-hidden' : ''}${mode === 'table' ? ' bk-fit' : ''}`} style={{ ['--bk-head' as string]: `${headH}px` } as React.CSSProperties}>
+        {docked && (
+          <BankSidebar variant="dock" tax={tax} f={f} facets={facets} stats={treeStats} wide={wideOn} onF={setF} onHide={() => undefined} />
+        )}
+
+        <section ref={qlistRef} className={`qlist${prevOn ? ' has-prev' : ''}`} aria-label="Danh sách câu hỏi">
+
+
           {shown.length > 0 && (
             <div className="qtools">
               <span className="lh-left">
@@ -624,10 +700,6 @@ export function BankScreen() {
                 )}
               </span>
               <span className="qtools-r">
-                <span className="seg bank-mode" role="group" aria-label="Kiểu xem">
-                  <button type="button" aria-pressed={mode === 'table'} onClick={() => pickMode('table')}>Bảng</button>
-                  <button type="button" aria-pressed={mode === 'cards'} onClick={() => pickMode('cards')}>Thẻ</button>
-                </span>
                 <label className="qsel" title="Sắp xếp">
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} aria-label="Sắp xếp danh sách">
                     {SORT_MODES.map((m) => <option key={m} value={m}>{SORT_LABEL[m]}</option>)}
@@ -653,8 +725,8 @@ export function BankScreen() {
 
           {shown.length > 0 && mode === 'cards' && <div className="cards-grid">{shown.map((q) => renderCard(q))}</div>}
           {shown.length > 0 && mode === 'table' && (
-            <BankTable rows={shown} sel={sel} activeUid={activeUid} codeOf={(q) => (noIdOf(q) !== null ? null : questionCode(q, q.level))}
-              onToggle={(uid) => setSel(toggleOne(sel, uid))} onOpen={prevOn ? setActiveUid : openView} onBig={prevOn ? openView : undefined} />
+            <BankCards rows={shown} sel={sel} activeUid={prevQ?.uid ?? activeUid} codeOf={codeOf} badgeOf={badgeOf}
+              onToggle={(uid) => setSel(toggleOne(sel, uid))} onPick={prevOn ? setActiveUid : openView} onBig={openView} />
           )}
 
 
@@ -666,7 +738,14 @@ export function BankScreen() {
             </nav>
           )}
 
-          {!list.length && (
+          {!list.length && triF && (
+            <div className="bk2-empty" role="status">
+              <b>Không còn câu nào {triF === 'all' ? 'cần xử lí' : `“${TRIAGE_LABEL[triF].toLowerCase()}”`} ở đây</b>
+              <span>Số trên nút Cần xử lí đếm trên toàn kho; mục đang chọn có thể không có câu nào như vậy.</span>
+              <button type="button" className="btn btn-sm" onClick={() => pickTri(null)}>Bỏ lọc Cần xử lí</button>
+            </div>
+          )}
+          {!list.length && !triF && (
             <BankEmpty tax={tax} f={f} facets={facets} totalQuestions={questions.length} text={text} wide={wideOn} onF={setF}
               onClearText={() => { setText(''); setWide(false); setPage(0); }} onWide={() => setWide(true)} onClearAttrs={clearFilters}
               onNew={newHere} onImport={() => go({ screen: 'import' })} onOpenTree={docked ? undefined : () => setDrawerOpen(true)} />
@@ -675,13 +754,16 @@ export function BankScreen() {
         {prevQ && (() => {
           const ni = noIdOf(prevQ);
           const at = ni !== null ? undefined : place(prevQ.lessonId) ?? place(prevQ.chapterId);
-          const where = ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? [at.chapter?.name, at.lesson?.name].filter(Boolean).join(' › ') : '';
+          const where = ni !== null ? (ni !== NOID_UNKNOWN ? `Lớp ${ni} · chưa chọn Dạng` : 'Chưa rõ lớp · chưa chọn Dạng') : at ? [at.chapter?.name, at.lesson?.name].filter(Boolean).map((x) => shortName(x!)).join(' › ') : '';
           return (
-            <BankPreview key={prevQ.uid} q={prevQ} code={ni !== null ? null : questionCode(prevQ, prevQ.level)} where={where} index={prevIdx} total={list.length}
-              onPrev={() => stepPrev(-1)} onNext={() => stepPrev(1)}
-              onOpen={() => openView(prevQ.uid)} onEdit={() => { openView(prevQ.uid); setViewEdit(true); }}
+            <BankDetail key={prevQ.uid} q={prevQ} code={codeOf(prevQ)} where={where} badge={badgeOf(prevQ)} issues={(tri.kinds.get(prevQ.uid) ?? []).map((k) => TRIAGE_LABEL[k])}
+              index={prevIdx} total={list.length} onPrev={() => stepPrev(-1)} onNext={() => stepPrev(1)}
+              onBig={() => openView(prevQ.uid)} onEdit={() => { openView(prevQ.uid); setViewEdit(true); }}
+              onDuplicate={() => { const c = duplicateQuestion(prevQ.uid); if (c) toast(`Đã nhân bản thành ${seqLabel(c.seq)} — nhớ sửa số liệu.`); }}
+              onDelete={() => { void removeQuestion(prevQ); }}
+              onApprove={(on) => { void changeReview(prevQ, on ? 'approved' : undefined); }}
               onAddToExam={featureOn('exam') ? () => go({ screen: 'exam', examPick: [prevQ.uid] }) : undefined}
-              onSlides={() => openSlides('Ngân hàng', [{ latex: prevQ.latex, uid: prevQ.uid }])} />
+              onSlides={() => openSlides('Ngân hàng', [{ latex: prevQ.latex, uid: prevQ.uid }])} toast={toast} />
           );
         })()}
       </div>
