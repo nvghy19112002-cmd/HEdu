@@ -163,3 +163,9 @@ body { font-feature-settings: "tnum" 0; }
 @media (prefers-reduced-motion: reduce) { .ct-card { animation: none; } .ct-tw .ct-ico { transition: none; } }
 /* khung mục lục cao hết cửa sổ, chừa dải chuyển màn (44px) */
 .fside:not(.is-drawer) { top: 56px; height: calc(100vh - 72px); }
+/* Duyệt nhờ Claude: danh sách câu Claude thấy có lỗi */
+.crv-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.crv-list li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--line-3); font-size: 12.5px; }
+.crv-list li:first-child { border-top: 0; }
+.crv-tags { display: flex; gap: 4px; flex-wrap: wrap; flex: none; }
+.crv-note { flex: 1; min-width: 0; color: var(--ink-2); line-height: 1.45; }
