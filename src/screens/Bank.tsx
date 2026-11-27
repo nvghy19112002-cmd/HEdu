@@ -45,6 +45,7 @@ import { ReviewBadge } from '../components/ReviewControl';
 import { IdStateBadge, useEffectiveOf } from '../components/IdReviewControl';
 import { VerifyQueue } from '../components/VerifyQueue';
 import { ClaudeIdDialog } from '../components/ClaudeIdDialog';
+import { ClaudeReviewDialog } from '../components/ClaudeReviewDialog';
 import { scopeCounts } from '../lib/verifyqueue';
 import { LEVELS, LEVEL_LABEL, REVIEW_LABEL, TYPES, TYPE_LABEL, type Question, type ReviewStatus } from '../lib/types';
 
@@ -162,6 +163,7 @@ export function BankScreen() {
   const resultUids = useMemo(() => new Set(list.map((q) => q.uid)), [list]);
   const [vqOpen, setVqOpen] = useState(false); // hàng đợi xác minh từng câu (PR 1E)
   const [cidOpen, setCidOpen] = useState(false); // Gán ID nhờ Claude (AI ngoài)
+  const [crvOpen, setCrvOpen] = useState(false); // Duyệt nội dung nhờ Claude
   const vqCount = useMemo(() => scopeCounts(list, effOf)['tat-ca'], [list, effOf]);
 
   const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
@@ -528,6 +530,7 @@ export function BankScreen() {
         <div className="head-actions">
           <button type="button" className="btn btn-outline" disabled={vqCount === 0} onClick={() => setVqOpen(true)} title="Xem từng câu, xác nhận Dạng/mức độ bằng phím tắt">Xác minh ({nf.format(vqCount)})</button>
           <button type="button" className="btn btn-outline" onClick={() => setCidOpen(true)} title="Xuất lô câu cần gán ID cho Claude, nhập đề xuất về hàng đợi Xác minh">Gán ID nhờ Claude…</button>
+          <button type="button" className="btn btn-outline" onClick={() => setCrvOpen(true)} title="Xuất lô câu Chưa kiểm tra cho Claude tự giải lại và kiểm đề, đáp án, lời giải; nhập kết quả thành Đã duyệt / Cần sửa">Duyệt nhờ Claude…</button>
           <button type="button" className="btn btn-outline" onClick={() => go({ screen: 'import' })}>Nhập từ file</button>
           <button type="button" className="btn btn-accent" onClick={newHere} title="Soạn câu mới; nếu đang xem một chương/bài thì điền sẵn vị trí đó">+ Câu hỏi mới</button>
         </div>
@@ -552,6 +555,7 @@ export function BankScreen() {
                 <button type="button" className="btn btn-sm" onClick={() => { setDupSel(true); setDupOpen(true); }} title="Quét trùng trong các câu đã chọn">Kiểm tra trùng</button>
                 <button type="button" className="btn btn-sm" onClick={() => { if (sel.size > AUTO_ID_MAX) toast(`Gán ID tự động: mỗi lượt tối đa ${nf.format(AUTO_ID_MAX)} câu (đang chọn ${nf.format(sel.size)}). Hãy bỏ bớt rồi làm từng lượt.`); else if (!placedSel.length) toast('Các câu đang chọn đều Chưa có ID: Gán ID tự động không áp dụng — dùng Gán ID nhờ Claude hoặc chọn Dạng trong Sửa câu.'); else setBatch('autoid'); }} title={`Gợi ý vị trí (ID) theo các câu đã có trong ngân hàng, xem trước rồi mới áp dụng — tối đa ${AUTO_ID_MAX} câu/lượt`}>Gán ID tự động</button>
                 <button type="button" className="btn btn-sm" onClick={() => setCidOpen(true)} title="Xuất lô gồm đúng các câu đang chọn cho Claude (gán hoặc kiểm tra lại Dạng, mức độ)">Gán ID nhờ Claude…</button>
+                <button type="button" className="btn btn-sm" onClick={() => setCrvOpen(true)} title="Xuất lô gồm đúng các câu đang chọn cho Claude duyệt nội dung">Duyệt nhờ Claude…</button>
                 <button type="button" className="btn btn-sm" onClick={() => openSlides('Ngân hàng', selectedQs.map((q) => ({ latex: q.latex, uid: q.uid })))} title="Chiếu các câu đã chọn lên màn hình lớp (từng câu, hiện đáp án/lời giải khi bấm), hoặc lưu thành bộ trình chiếu">Trình chiếu…</button>
                 {featureOn('exam') && <button type="button" className="btn btn-sm btn-accent" onClick={() => go({ screen: 'exam', examPick: selectedQs.map((q) => q.uid) })}>Thêm vào đề</button>}
                 <span className="selbar-more">
@@ -689,6 +693,8 @@ export function BankScreen() {
       )}
       {vqOpen && <VerifyQueue pool={list} onClose={() => setVqOpen(false)} />}
       {/* có câu đang tick ⇒ lô chỉ lấy các câu đó; không tick ⇒ lấy danh sách đang lọc */}
+      {crvOpen && <ClaudeReviewDialog pool={sel.size ? selectedQs : list} fromSelection={sel.size > 0} toast={toast} onOpen={(uid) => { setCrvOpen(false); setOpenUid(uid); }} onClose={() => setCrvOpen(false)}
+        whereOf={(q) => { const p = place(q.formId) ?? place(q.lessonId) ?? place(q.chapterId); return p ? [p.chapter?.name, p.lesson?.name, p.form?.name].filter(Boolean).join(' › ') : ''; }} />}
       {cidOpen && <ClaudeIdDialog pool={sel.size ? selectedQs : list} fromSelection={sel.size > 0} all={questions} tax={tax} effOf={effOf} toast={toast} onClose={() => setCidOpen(false)} onOpenQueue={() => setVqOpen(true)} />}
       {dupOpen && <DupCheck questions={questions} selected={sel} initialSelection={dupSel} onClose={() => { setDupOpen(false); setDupSel(false); }} onOpen={setOpenUid} onGoto={gotoQuestion} onTrash={moveToTrash} />}
       {undo && (
