@@ -120,7 +120,8 @@ export function defaultDecisions(drafts: DraftIn[], rows: (DraftAnalysis | undef
     const sure = a.hits.some((h) => (h.kind === 'raw' || h.kind === 'same') && earlier(h));
     const conflict = a.hits.some((h) => h.kind === 'conflict');
     const near = a.hits.some((h) => h.kind === 'near');
-    out[d.id] = conflict ? 'hold' : sure ? 'skip' : near ? 'hold' : 'import';
+    // Luật 3 ngăn (chủ dự án duyệt 28/11): mã chưa đọc đủ ⇒ "Cần bạn xem", không tự thêm. Thiếu ID không chặn nhập.
+    out[d.id] = conflict ? 'hold' : sure ? 'skip' : near || a.unreadable ? 'hold' : 'import';
   });
   return out;
 }

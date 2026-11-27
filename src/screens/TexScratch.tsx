@@ -470,7 +470,7 @@ export function TexScratchScreen() {
 
   return (
     <div className="qe-page tsx-page">
-      <header className="page-head tsx-head">
+      <header className="page-head tsx-head nh-head">
         <div className="tsx-crumb">
           <h1>Soạn TeX</h1>
           <span className="tsx-sep">/</span>

@@ -162,10 +162,9 @@ export function OcrScreen() {
     const err = files.length === 1 && files[0].kind === 'pdf' && pick === null;
     return (
       <>
-        <header className="page-head g3-head"><h1>Đọc đề từ PDF/ảnh</h1>
-          <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'import' })}>← Nhập liệu</button></div>
-        </header>
-        <div className="simple ocr-src">
+        <header className="page-head g3-head nh-head"><h1>Đọc đề từ PDF/ảnh</h1>
+                  </header>
+        <div className="simple ocr-src nh-body">
           <div className="ocr-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void onFiles(e.dataTransfer.files); }}>
             <div><b>Kéo thả PDF hoặc ảnh vào đây</b><span>Nhiều tệp cùng lúc · mỗi ảnh là một trang</span></div>
             <button type="button" className="btn" onClick={() => inputRef.current?.click()}>Chọn tệp…</button>
@@ -195,7 +194,7 @@ export function OcrScreen() {
   // ---------- bước 2: xem/sửa 3 cột ----------
   return (
     <div className="ocr-wrap">
-      <header className="page-head g3-head"><h1>Đọc đề từ PDF/ảnh</h1>
+      <header className="page-head g3-head nh-head"><h1>Đọc đề từ PDF/ảnh</h1>
         <ol className="steps" aria-label="Các bước"><li aria-current="step"><b>1</b>Chép &amp; soát</li><li><b>2</b>Nhập liệu</li></ol>
         <div className="head-actions">
           {run && <span className="ocr-run" role="status">{run.wait ?? run.status}</span>}

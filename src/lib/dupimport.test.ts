@@ -77,6 +77,7 @@ const bank = (...l: string[]): QLike[] => l.map((latex, i) => ({ uid: 'b' + i, l
     ok(before.rows[0]!.worst === 'raw' && after.rows[0]!.worst !== 'raw' && after.rows[0]!.worst !== 'same', 'sửa câu mới ⇒ phân tích lại cho kết quả mới');
     const bad = await analyzeDrafts(D('\\begin{ex}\nCho $x>1. Tìm x.\\shortans{2}\n\\end{ex}'), [], { index: idx() });
     ok(bad.rows[0]!.unreadable, 'câu mã chưa đọc đủ được đánh dấu để hiện "Cần kiểm tra mã"');
+    ok(defaultDecisions(D('x'), bad.rows).d0 === 'hold', 'mã chưa đọc đủ ⇒ mặc định Cần bạn xem (không tự thêm)');
   }
   console.log('Hiệu năng nhập lô lớn (dữ liệu giả lập)');
   {
