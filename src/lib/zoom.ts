@@ -67,6 +67,7 @@ async function applyToView(z: number): Promise<void> {
     try {
       await wv.getCurrentWebview().setZoom(z);
       document.documentElement.style.removeProperty('zoom');
+      document.documentElement.style.removeProperty('--hedu-cssz');
       return;
     } catch {
       cssFallback = true; // thiếu quyền hoặc phiên bản không hỗ trợ: dùng CSS zoom thay thế (không dùng cả hai)
@@ -74,6 +75,9 @@ async function applyToView(z: number): Promise<void> {
   }
   if (z === 1) document.documentElement.style.removeProperty('zoom');
   else document.documentElement.style.setProperty('zoom', String(z));
+  // CSS zoom co cả 100vh ⇒ khung cao hết cửa sổ (Ngân hàng) chia lại cho hệ số này
+  if (z === 1) document.documentElement.style.removeProperty('--hedu-cssz');
+  else document.documentElement.style.setProperty('--hedu-cssz', String(z));
 }
 
 /** bề rộng cửa sổ quy về zoom 100%: zoom thật của WebView2 làm innerWidth nhỏ đi theo mức zoom, CSS zoom thì không */
