@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import 'katex/dist/katex.min.css';
 import './styles.css';
+import './macos.css';
 import { App } from './App';
 import { StorageUpgrade } from './components/StorageUpgrade';
 import { isDesktop } from './lib/platform';

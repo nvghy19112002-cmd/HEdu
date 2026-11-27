@@ -1,6 +1,6 @@
 // Cây mục lục kiểu thư mục của màn Ngân hàng: số đếm theo mục, ẩn mục 0 câu, tìm thư mục không dấu, chọn mục.
 import { computeFacets, emptyFilters, facetCtx, type BankFilters } from './bankfilter';
-import { fullTree, nodeKey, pathKeys, pickPath, selectedKey, visibleTree, type TreeNode } from './banktree';
+import { fullTree, hasSolution, nodeKey, nodeStats, pathKeys, pickPath, selectedKey, visibleTree, type TreeNode } from './banktree';
 import { buildDefault } from './taxonomy';
 import type { Question } from './types';
 let fail = 0;
@@ -57,6 +57,20 @@ console.log('Chọn mục');
   ok(selectedKey(f) === nodeKey('form', fm.id) && selectedKey(F()) === null, 'mục đang chọn = mục sâu nhất; trống = Tất cả');
   const r = computeFacets(qs, pickPath(F(), node.path), ctx());
   ok(r.list.length === 3, 'danh sách đúng theo mục đã chọn');
+}
+
+console.log('Thống kê từng mục cho mục lục mới');
+{
+  ok(hasSolution(String.raw`\begin{ex} A \loigiai{ Ta có $x=1$. } \end{ex}`), 'có lời giải');
+  ok(!hasSolution(String.raw`\begin{ex} A \loigiai{ % chưa có` + '\n' + String.raw` } \end{ex}`), 'lời giải rỗng/chỉ chú thích = thiếu');
+  ok(!hasSolution(String.raw`\begin{ex} A \end{ex}`), 'không có \\loigiai = thiếu');
+  const st = nodeStats(qs, facetCtx(tax, () => true, false));
+  const c = st.get(nodeKey('chapter', ch.id))!;
+  ok(c.lv[0] === 2 && c.lv[1] === 1, 'đếm mức độ theo chương (2 NB, 1 TH)');
+  ok(c.noSol === 3 && c.approved === 3, 'đếm thiếu lời giải và đã duyệt');
+  ok(st.get(nodeKey('form', fm.id))!.lv.reduce((a, b) => a + b, 0) === 3, 'cộng xuống tới Dạng');
+  const st2 = nodeStats(qs, facetCtx(tax, () => true, false), ((x: Question) => (x.uid === 'u1' ? 0 : null)) as never);
+  ok(st2.get(nodeKey('chapter', ch.id))!.lv[0] === 1, 'câu Chưa có ID không cộng vào mục nào');
 }
 
 if (fail) process.exit(1);
