@@ -203,7 +203,7 @@ export function ImportScreen() {
   const [userDec, setUserDec] = useState<Record<string, Decision>>({});
   const [ana, setAna] = useState<AnalyzeResult | null>(null);
   const [anaProg, setAnaProg] = useState<{ done: number; total: number; phase: string } | null>(null);
-  const [statusF, setStatusF] = useState<'all' | 'new' | 'sure' | 'near' | 'conflict' | 'template' | 'unread' | 'hold'>('all');
+  const [statusF, setStatusF] = useState<'all' | 'new' | 'sure' | 'near' | 'conflict' | 'template' | 'unread' | 'hold' | 'import' | 'skip'>('all');
   const [cmpKey, setCmpKey] = useState<string | null>(null);
   const [editRow, setEditRow] = useState<number | null>(null);
   const [openBank, setOpenBank] = useState<string | null>(null);
@@ -237,7 +237,6 @@ export function ImportScreen() {
   const [idPicks, setIdPicks] = useState<Map<number, DraftIdPick> | null>(null);
   /** câu mà AI không đủ căn cứ chọn Dạng: cần giáo viên chọn, nếu không sẽ vào vị trí chung (phải xác nhận trước khi nhập) */
   const [refused, setRefused] = useState<ReadonlySet<number>>(new Set());
-  const [ackRefused, setAckRefused] = useState(false);
   useEffect(() => { if (!idPicks) setRefused(new Set()); }, [idPicks]);
   useEffect(() => { setIdPicks(null); }, [noIdGrade, taxRevNow]);
   const pickIx = useMemo(() => (idPicks ? indexOf(getTaxonomy()) : null), [idPicks]);
@@ -314,11 +313,14 @@ export function ImportScreen() {
     let stop = false;
     const acc: (Issue[] | undefined)[] = new Array(rows.length);
     let i = 0;
+    let shown = Date.now();
     const step = () => {
       if (stop) return;
       const until = Math.min(i + 15, rows.length);
       for (; i < until; i++) acc[i] = checkQuestion(rows[i].p, rows[i].latex, rows[i].line - 1);
-      setIssues(acc.slice());
+      // vẽ lại tối đa ~3 lần/giây (trước đây vẽ lại cả trang sau MỖI 15 câu ⇒ lô nghìn câu giật)
+      const now = Date.now();
+      if (i >= rows.length || now - shown >= 300) { shown = now; setIssues(acc.slice()); }
       if (i < rows.length) setTimeout(step, 0);
     };
     const t = setTimeout(step, 0);
@@ -392,7 +394,7 @@ export function ImportScreen() {
     .filter(({ i }) => !onlyIdBD || verifOf(i)?.verdict === 'bat-dong')
     .filter(({ i }) => !pkgFilter || pkgFilter.rows.includes(i))
     .filter(({ i }) => !texOnlyBad || texOf(i)?.ok === false)
-    .filter(({ i }) => statusF === 'all' || (statusF === 'hold' ? decOf(i) === 'hold' : statusOf(i).key === statusF));
+    .filter(({ i }) => statusF === 'all' || (statusF === 'hold' || statusF === 'import' || statusF === 'skip' ? decOf(i) === statusF : statusOf(i).key === statusF));
 
 
   const importCount = sum.importN;
@@ -581,14 +583,14 @@ export function ImportScreen() {
 
   return (
     <>
-      <header className="page-head g3-head"><h1>Nhập liệu</h1>
+      <header className="page-head g3-head nh-head"><h1>Nhập liệu</h1>
         <ol className="steps" aria-label="Các bước nhập">
           {['Dán hoặc mở file', 'Chọn vị trí', 'Rà soát', 'Nhập'].map((t, k) => {
             const cur = !rows.length ? 0 : confirm ? 3 : anaDone ? 2 : 1;
             return <li key={t} aria-current={k === cur ? 'step' : undefined} className={k < cur ? 'done' : ''}><b>{k + 1}</b>{t}</li>;
           })}
         </ol>
-        <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => go({ screen: 'ocr' })} title="Đọc đề scan bằng Gemini">Từ PDF/ảnh…</button><button type="button" className="btn btn-sm" onClick={() => { requestPane('backup'); go({ screen: 'system' }); }} title="Cài đặt › Sao lưu › Nhật ký nhập">Lịch sử nhập</button></div>
+        <div className="head-actions"><button type="button" className="btn btn-sm" onClick={() => { requestPane('backup'); go({ screen: 'system' }); }} title="Cài đặt › Sao lưu › Nhật ký nhập">Lịch sử nhập</button></div>
       </header>
       {fromTex && !multi && !result && src === fromTex && (
         <div className="simple"><div className="note" role="status"><div className="note-body">
@@ -606,7 +608,7 @@ export function ImportScreen() {
         </div></div></div>
       )}
       {result && <div className="simple"><ImportReportView report={result.report} full logSaved={result.logSaved} onBank={() => { setResult(null); go({ screen: 'bank' }); }} onShowBatch={result.report.batchTag ? () => { saveSession({ f0: { ...emptyFilters(), tag: result.report.batchTag!, all: true }, text: '', wide: false, sort: DEFAULT_SORT, page: 0 }); setResult(null); go({ screen: 'bank' }); } : undefined} onClose={() => { setResult(null); if (lots) clearAll(); }} /></div>}
-      {!result && <div className="simple">
+      {!result && <div className="simple nh-body">
         <div className={`panel imp-drop${rows.length ? ' is-compact' : ''}${dragOver ? ' over' : ''}`}>
           <h2>{isDesktop() ? 'Kéo thả tệp .tex, .docx hoặc cả thư mục vào đây — hoặc dán mã LaTeX' : 'Dán mã LaTeX hoặc mở file .tex'}</h2>
           <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
@@ -797,6 +799,16 @@ export function ImportScreen() {
                 {!anaDone && !anaProg && rows.length > 0 && <span className="chk-pill warn" role="status">Chưa rà soát trùng xong — chưa thể nhập</span>}
                 {anaDone && <span className="chk-pill ok">Đã rà soát trùng xong</span>}
               </div>
+              {anaDone && (
+                <div className="nh-bins" role="group" aria-label="Kế hoạch nhập (bấm để lọc)">
+                  {([['import', 'Sẽ thêm', sum.importN], ['skip', 'Bỏ qua', sum.skipN], ['hold', 'Cần bạn xem', sum.holdN]] as const).map(([k, label, n]) => (
+                    <button key={k} type="button" className={`nh-bin nh-${k}`} aria-pressed={statusF === k} onClick={() => setStatusF(statusF === k ? 'all' : k)}>
+                      <b>{n.toLocaleString('vi-VN')}</b><span>{label}</span>
+                    </button>
+                  ))}
+                  {sum.keptSuspect > 0 && <span className="nh-bins-note">{sum.keptSuspect} câu nghi trùng được bạn chọn thêm</span>}
+                </div>
+              )}
               {multi && fileStats.length > 1 && (
                 <label className="dc-kindsel">Chỉ hiện tệp
                   <select value={String(fileF)} onChange={(e) => setFileF(e.target.value === 'all' ? 'all' : Number(e.target.value))} aria-label="Chỉ hiện câu của một tệp">
@@ -808,17 +820,11 @@ export function ImportScreen() {
               {anaDone && (
                 <label className="dc-kindsel">Lọc theo kết quả rà soát
                   <select value={statusF} onChange={(e) => setStatusF(e.target.value as typeof statusF)}>
-                    {([['all', 'Tất cả', rows.length], ['new', 'Mới', statusCount.new ?? 0], ['sure', 'Trùng chắc', statusCount.sure ?? 0], ['conflict', 'Mâu thuẫn đáp án', statusCount.conflict ?? 0], ['near', 'Có thể trùng', statusCount.near ?? 0], ['template', 'Cùng mẫu khác dữ kiện', statusCount.template ?? 0], ['unread', 'Cần sửa mã', statusCount.unread ?? 0], ['hold', 'Chưa quyết định', sum.holdN]] as [typeof statusF, string, number][]).map(([k, label, n]) => (
+                    {([['all', 'Tất cả', rows.length], ['new', 'Mới', statusCount.new ?? 0], ['sure', 'Trùng chắc', statusCount.sure ?? 0], ['conflict', 'Mâu thuẫn đáp án', statusCount.conflict ?? 0], ['near', 'Có thể trùng', statusCount.near ?? 0], ['template', 'Cùng mẫu khác dữ kiện', statusCount.template ?? 0], ['unread', 'Cần sửa mã', statusCount.unread ?? 0], ['import', 'Sẽ thêm', sum.importN], ['skip', 'Bỏ qua', sum.skipN], ['hold', 'Cần bạn xem', sum.holdN]] as [typeof statusF, string, number][]).map(([k, label, n]) => (
                       <option key={k} value={k}>{label} ({n})</option>
                     ))}
                   </select>
                 </label>
-              )}
-              {anaDone && (
-                <p className="dup-plan" role="status">
-                  Kế hoạch nhập: <b>nhập {sum.importN}</b> · <b>bỏ qua {sum.skipN}</b>{sum.holdN > 0 && <> · <b className="dup-hold">{sum.holdN} câu chưa quyết định</b></>}
-                  {sum.keptSuspect > 0 && <> · {sum.keptSuspect} câu nghi trùng được bạn chọn nhập</>}
-                </p>
               )}
               {anaDone && importCount > 0 && (
                 <div className={`trust${trust ? ' on' : ''}`}>
@@ -905,9 +911,9 @@ export function ImportScreen() {
                   <label className="dec-sel">
                     <span className="sr-only">Quyết định cho câu {i + 1}</span>
                     <select value={decOf(i)} disabled={!anaDone} onChange={(e) => setDec(i, e.target.value as Decision)} aria-label={`Quyết định cho câu ${i + 1}`}>
-                      <option value="import">Nhập</option>
+                      <option value="import">Sẽ thêm</option>
                       <option value="skip">Bỏ qua</option>
-                      <option value="hold" disabled>{anaDone ? 'Chưa quyết định' : 'Chờ rà soát…'}</option>
+                      <option value="hold" disabled>{anaDone ? 'Cần bạn xem' : 'Chờ rà soát…'}</option>
                     </select>
                   </label>
                   </div>
@@ -1024,30 +1030,30 @@ export function ImportScreen() {
               </p>
             )}
             <div className="head-actions imp-bar">
-              <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => { setAckRefused(false); setConfirm(true); }}>
-                {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần quyết định` : vsum.unchecked > 0 ? 'Đang kiểm chứng ID…' : `Nhập ${importCount} câu vào ngân hàng`}
+              <button type="button" className="btn btn-accent" disabled={!canImport || !!saveErr} onClick={() => setConfirm(true)}>
+                {checking || !anaDone ? 'Đang kiểm tra…' : sum.holdN > 0 ? `Còn ${sum.holdN} câu cần bạn xem` : vsum.unchecked > 0 ? 'Đang kiểm chứng ID…' : `Nhập ${importCount} câu vào ngân hàng`}
               </button>
-              {anaDone && sum.holdN > 0 && <button type="button" className="btn btn-sm" onClick={() => setStatusF('hold')}>Xem các câu chưa quyết định</button>}
+              {anaDone && sum.holdN > 0 && <button type="button" className="btn btn-sm" onClick={() => setStatusF('hold')}>Xem các câu cần bạn xem</button>}
               {vsum.batDong > 0 && <button type="button" className="btn btn-sm" onClick={() => setOnlyIdBD((x) => !x)}>{onlyIdBD ? 'Hiện tất cả câu' : `Xem ${vsum.batDong} câu ID bất đồng`}</button>}
             </div>
             {confirm && (
               <div className="qe-confirm qe-modal" role="alertdialog" aria-modal="true" aria-label="Xác nhận nhập">
-                <b>Sẽ nhập {sum.importN} câu, bỏ qua {sum.skipN} câu.</b>
+                <b>Sẽ thêm {sum.importN} câu, bỏ qua {sum.skipN} câu.</b>
                 {sum.keptSuspect > 0 && <p>Trong số nhập có {sum.keptSuspect} câu HEdu đánh dấu nghi trùng mà bạn đã chọn giữ{sum.keptPairs > 0 ? `, trong đó ${sum.keptPairs} cặp trùng nhau ngay trong file sẽ được nhập cả hai` : ''}.</p>}
                 {idSum.mustConfirm && (
-                  <label className="bd-sure"><input type="checkbox" checked={ackRefused} onChange={(e) => setAckRefused(e.target.checked)} /> <span>
+                  <p className="nh-info">
                     {idSum.needTeacher.missing > 0 && <>{idSum.needTeacher.missing} câu không có ID{' '}</>}
                     {idSum.needTeacher.invalid > 0 && <>{idSum.needTeacher.invalid} câu có ID không hợp lệ{' '}</>}
                     {idSum.needTeacher.noForm > 0 && <>{idSum.needTeacher.noForm} câu có ID thiếu mã Dạng{' '}</>}
                     (thầy/cô chưa chọn Dạng{refused.size > 0 ? ', gồm cả câu AI chưa đủ căn cứ' : ''}) sẽ vào mục <b>Chưa có ID</b> ở Ngân hàng.{' '}
                     <>Các câu này không thuộc Chương/Bài/Dạng nào và giữ nguyên mã LaTeX (HEdu không ghi ID giả); câu có ID lỗi giữ nguyên mã để thầy/cô sửa sau. Câu thầy/cô đã nhận gợi ý được ghi ID theo gợi ý (tệp gốc không đổi). </>
-                    Tôi đã xem lại và xác nhận.
-                  </span></label>
+                    Thiếu ID không chặn việc nhập.
+                  </p>
                 )}
                 {vsum.chua > 0 && <p>{vsum.chua} câu có ID trong tệp nhưng ngân hàng chưa đủ căn cứ để kiểm chứng: vẫn nhập theo ID đó, báo cáo nhập sẽ ghi “chưa kiểm chứng”.</p>}
                 <p>HEdu sẽ rà soát lại với ngân hàng ngay trước khi ghi. Không câu nào trong ngân hàng bị sửa hay xoá.</p>
                 <div className="head-actions">
-                  <button type="button" className="btn btn-accent" autoFocus disabled={idSum.mustConfirm && !ackRefused} onClick={commit}>Nhập {sum.importN} câu</button>
+                  <button type="button" className="btn btn-accent" autoFocus onClick={commit}>Thêm {sum.importN} câu</button>
                   <button type="button" className="btn" onClick={() => setConfirm(false)}>Quay lại</button>
                 </div>
               </div>
