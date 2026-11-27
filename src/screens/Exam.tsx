@@ -319,7 +319,7 @@ HEdu ghi dấu vết việc này vào đề (hedu-de.json) và KHÔNG sửa Ngâ
 
   return (
     <>
-      <header className="page-head te-head">
+      <header className="page-head te-head dt-head">
         <div className="te-title">
           <h1>Tạo đề</h1>
           <span className="te-sub">{d.info.title || 'Đề mới'} · tự lưu nháp</span>

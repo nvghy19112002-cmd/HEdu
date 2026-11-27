@@ -712,7 +712,7 @@ export function ExamLibraryScreen() {
 
   const docTabs = tabs.ids.map((id) => items.find((x) => x.id === id)).filter((x): x is ExamSummary => !!x && !!x.mainFile && desktop);
   const tabBar = docTabs.length > 0 && (
-    <div className={`xt-bar${tabs.front ? ' over' : ''}`} role="tablist" aria-label="Đề đang mở (Ctrl+Tab đổi tab, Ctrl+W đóng)">
+    <div className={`xt-bar dt-tabs${tabs.front ? ' over' : ''}`} role="tablist" aria-label="Đề đang mở (Ctrl+Tab đổi tab, Ctrl+W đóng)">
       <button type="button" role="tab" aria-selected={!tabs.front} className={`xt-tab xt-lib${!tabs.front ? ' on' : ''}`} onClick={() => setTabs((t) => ({ ...t, front: null }))}>Thư viện</button>
       {docTabs.map((e) => {
         const st = tabStat.get(e.id);
@@ -737,14 +737,14 @@ export function ExamLibraryScreen() {
   return (
     <>
       {tabBar}
-      <div className="fx">
-        <div className="fx-bar">
+      <div className="fx dt-lib">
+        <div className="fx-bar dt-bar">
           <div className="fx-crumb" title="Vị trí đang xem">
             <b>{smart ? SMART_LABEL[smart] : trail.length ? trail.join(' › ') : 'Tất cả đề'}</b>
             {place && !smart && <button type="button" className="btn btn-sm btn-ghost" disabled={!desktop || busy} onClick={() => setNewName('')} title="Tạo một đề trống ngay trong mục này">+ Đề trống tại đây</button>}
           </div>
           <span className="fx-sp" />
-          <span className="xl-seg" role="group" aria-label="Kiểu xem">
+          <span className="xl-seg dt-view" role="group" aria-label="Kiểu xem">
             <button type="button" className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')}>Danh sách</button>
             <button type="button" className={view === 'card' ? 'on' : ''} aria-pressed={view === 'card'} onClick={() => setView('card')}>Biểu tượng</button>
             <button type="button" className={view === 'cols' ? 'on' : ''} aria-pressed={view === 'cols'} onClick={() => setView('cols')}>Cột</button>
@@ -810,7 +810,7 @@ export function ExamLibraryScreen() {
             )}
           </span>
           <span className="xl-menu">
-            <button type="button" className="btn btn-sm" disabled={!desktop || busy || !undoLabel} onClick={() => void undo()} title={undoLabel ? `Hoàn tác: ${undoLabel} (Ctrl+Z)` : 'Chưa có gì để hoàn tác'}>↶ Hoàn tác</button>
+            <button type="button" className="btn btn-sm" disabled={!desktop || busy || !undoLabel} onClick={() => void undo()} title={undoLabel ? `Hoàn tác: ${undoLabel} (Ctrl+Z)` : 'Chưa có gì để hoàn tác'} aria-label="Hoàn tác">↶</button>
             <button type="button" className="btn btn-sm" disabled={!desktop} aria-haspopup="menu" aria-expanded={menu === 'tools'} onClick={() => setMenu(menu === 'tools' ? null : 'tools')}>Công cụ ▾</button>
             {menu === 'tools' && (
               <span className="more-menu xl-pop" role="menu">
@@ -824,7 +824,6 @@ export function ExamLibraryScreen() {
             <button type="button" className="btn btn-sm btn-accent" disabled={!desktop || busy} aria-haspopup="menu" aria-expanded={menu === 'add'} onClick={() => setMenu(menu === 'add' ? null : 'add')}>+ Thêm đề ▾</button>
             {menu === 'add' && (
               <span className="more-menu xl-pop" role="menu">
-                <button type="button" role="menuitem" onClick={() => { setMenu(null); go({ screen: 'exam' }); }}><b>Tạo đề từ ngân hàng</b><small>Chọn câu theo ma trận, trộn mã đề</small></button>
                 <button type="button" role="menuitem" onClick={() => { setMenu(null); setNewName(''); }}><b>Tạo đề trống{place ? ' tại mục này' : ''}</b><small>{place ? trail.join(' › ') : 'Soạn LaTeX trực tiếp'}</small></button>
                 <hr />
                 <button type="button" role="menuitem" onClick={() => pick(chooseTexFile)}><b>Nhập file .tex</b><small>Sao chép vào thư viện, tệp gốc giữ nguyên</small></button>
@@ -855,7 +854,7 @@ export function ExamLibraryScreen() {
             {load === 'ok' && desktop && items.length === 0 && (
               <div className="empty" role="status">
                 <b>Thư viện đề chưa có đề nào.</b>
-                <span>Tạo đề từ ngân hàng câu hỏi, tạo đề trống, hoặc nhập file .tex / thư mục / gói đề có sẵn bằng nút “+ Thêm đề”. Hoặc kéo tệp .tex / thư mục vào đây.</span>
+                <span>Tạo đề từ ngân hàng ở mục “Tạo đề” phía trên; tạo đề trống hoặc nhập file .tex / thư mục / gói đề có sẵn bằng nút “+ Thêm đề”. Hoặc kéo tệp .tex / thư mục vào đây.</span>
               </div>
             )}
             {items.length > 0 && list.length === 0 && (
@@ -966,7 +965,7 @@ export function ExamLibraryScreen() {
           )}
         </div>
 
-        <div className="fx-status" role="status">
+        <div className="fx-status dt-status" role="status">
           <span>{nf.format(list.length)} đề{pickedE.length ? ` · ${pickedE.length} đang chọn` : ''}{status ? ` · lọc: ${STATUS_LABEL[status]}` : ''}{cat ? ` · loại: ${cat === CAT_NONE ? 'chưa phân loại' : CAT_LABEL[cat]}` : ''}</span>
           <span className="fx-status-path">{smart ? SMART_LABEL[smart] : trail.length ? trail.join(' › ') : 'Tất cả đề'}</span>
           <span>{formatBytes(list.reduce((s, e) => s + e.totalBytes, 0))}</span>
