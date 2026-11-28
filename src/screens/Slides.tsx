@@ -106,7 +106,7 @@ export function SlidesScreen() {
     return () => ro.disconnect();
   }, [n, deck?.id]);
   return (
-    <div className="sl2">
+    <div className="sl2 dt-sl">
       <aside className="sl2-decks" aria-label="Các bộ trình chiếu">
         <div className="sl2-dh"><h1>Trình chiếu</h1><button type="button" className="btn btn-sm" title="Tạo bộ trình chiếu mới" onClick={() => setAdding({ forNew: true })}>+ Mới</button></div>
         {decks.length === 0 ? <p className="sl2-none">Chưa có bộ nào.</p> : (

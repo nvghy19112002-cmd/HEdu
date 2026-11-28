@@ -212,6 +212,92 @@ body { font-feature-settings: "tnum" 0; }
 .nh-body .dc-kindsel select { max-width: 280px; }
 .simple.nh-body { margin-inline: 0; width: 100%; box-sizing: border-box; }
 
+/* ---------- Khu "Đề thi" (Thư viện đề · Tạo đề · Trình chiếu · Biên tập đề) — đồng bộ với Ngân hàng (28/11/2026). Tiền tố dt- ---------- */
+/* khung cao vừa cửa sổ, chừa dải chuyển màn (44px); bản web co chữ bằng CSS zoom ⇒ chia lại theo --hedu-cssz (mặc định 1) */
+.fx.dt-lib { height: calc(100vh / var(--hedu-cssz, 1) - 44px); background: #fff; }
+.xt-bar:not(.over) ~ .fx.dt-lib { height: calc(100vh / var(--hedu-cssz, 1) - 82px); }
+.dt-bar { gap: 8px; min-height: 48px; padding: 8px 20px; background: #fff; border-bottom: 1px solid var(--line); flex-wrap: nowrap; }
+.dt-bar .fx-crumb { flex: 0 1 auto; min-width: 0; }
+.dt-bar .fx-crumb b { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dt-bar .btn { height: 30px; border-radius: 7px; font-size: 13px; padding: 0 11px; }
+.dt-bar .btn-accent { font-weight: 600; padding: 0 14px; }
+.dt-bar [aria-label="Hoàn tác"] { width: 30px; padding: 0; font-size: 15px; }
+.dt-bar .qsel select { height: 30px; border-radius: 7px; font-size: 13px; }
+.dt-bar .fx-search { height: 30px; flex: 0 1 260px; min-width: 150px; padding: 0 10px; gap: 6px; border: 0; border-radius: 8px; background: rgba(0, 0, 0, 0.05); }
+.dt-bar .fx-search:focus-within { background: #fff; box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2), 0 0 0 1px var(--pri-line); }
+.dt-bar .fx-search input { font-size: 13px; }
+.dt-bar .fx-search svg { color: var(--ink-3); }
+/* kiểu xem Danh sách | Biểu tượng | Cột: dải phân đoạn như Ngân hàng */
+.xl-seg.dt-view { padding: 2px; border: 0; border-radius: 8px; background: rgba(0, 0, 0, 0.06); overflow: visible; }
+.dt-view button { height: 26px; padding: 0 11px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+.dt-view button + button { border-left: 0; }
+.dt-view button.on { background: #fff; color: var(--ink); font-weight: 500; box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.05); }
+/* menu thả xuống kiểu macOS: nền trắng, dòng đang trỏ xanh chữ trắng */
+.dt-bar .more-menu { padding: 5px; border: 0; border-radius: 10px; background: #fff; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.12); }
+.dt-bar .more-menu button { border-radius: 6px; padding: 6px 10px; }
+.dt-bar .more-menu button:hover, .dt-bar .more-menu button:focus-visible { background: var(--pri); color: #fff; }
+.dt-bar .more-menu button:hover small, .dt-bar .more-menu button:focus-visible small { color: rgba(255, 255, 255, 0.85); }
+/* cột cây đề */
+.dt-lib .fx-side { background: var(--paper-2); border-right: 1px solid var(--line); }
+/* bảng đề (Danh sách) */
+.dt-lib .fx-head { height: 30px; background: #fff; border-bottom: 1px solid var(--line); font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+.dt-lib .fx-row { min-height: 34px; border-bottom: 0; }
+.dt-lib .fx-row:nth-child(even) { background: #F7F7F9; }
+.dt-lib .fx-row:hover { background: rgba(0, 0, 0, 0.04); }
+.dt-lib .fx-row.sel, .dt-lib .fx-row.of-sel, .dt-lib .fx-row.ctx-on { background: rgba(0, 122, 255, 0.12); box-shadow: none; }
+/* thẻ đề (Biểu tượng): khung mảnh như thẻ câu ở Ngân hàng; màu loại đề chỉ còn ở nhãn */
+.dt-lib .xc-grid { gap: 12px; }
+.dt-lib .xc { padding: 12px 14px 10px; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.04); transition: border-color .12s, box-shadow .12s; }
+.dt-lib .xc::before { display: none; }
+.dt-lib .xc:hover { transform: none; border-color: var(--line-2); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07); }
+.dt-lib .xc.sel { outline: 0; border-color: var(--pri); box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16); }
+.dt-lib .xc-name { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.dt-lib .xc-foot { border-top: 1px solid var(--line-3); }
+.dt-status { padding: 4px 20px; font-size: 11.5px; background: #fff; border-top: 1px solid var(--line); }
+/* tab đề đang mở */
+.xt-bar.dt-tabs { background: #ECECEE; border-bottom: 1px solid var(--line); }
+.dt-tabs .xt-tab { font-size: 12.5px; border-radius: 8px 8px 0 0; }
+.dt-tabs .xt-tab.on { background: #fff; border-color: var(--line); }
+
+/* Tạo đề: tiêu đề + 3 bước như khu Đưa đề vào */
+.page-head.dt-head { padding: 10px 24px 8px; min-height: 48px; align-items: center; gap: 8px 16px; }
+.dt-head .te-title h1 { font-family: var(--f-ui); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.dt-head .te-sub { font-size: 12px; color: var(--ink-3); }
+.dt-head .te-steps { gap: 2px; padding: 2px; border-radius: 9px; background: rgba(0, 0, 0, 0.05); }
+.dt-head .te-steps button { height: 26px; padding: 0 10px 0 6px; border-radius: 7px; font-size: 12.5px; color: var(--ink-3); gap: 6px; }
+.dt-head .te-steps button:hover { background: none; color: var(--ink); }
+.dt-head .te-steps i { width: 18px; height: 18px; font-size: 11px; background: rgba(0, 0, 0, 0.08); color: var(--ink-2); }
+.dt-head .te-steps button.done { color: var(--ink-2); }
+.dt-head .te-steps button.done i { background: var(--ok); color: #fff; }
+.dt-head .te-steps button[aria-selected="true"] { background: #fff; color: var(--ink); font-weight: 500; box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.05); }
+.dt-head .te-steps button[aria-selected="true"] i { background: var(--pri); color: #fff; }
+.dt-head .te-step-sep { display: none; }
+.dt-head .btn { height: 30px; border-radius: 7px; font-size: 13px; }
+
+/* Trình chiếu: chữ giao diện thay chữ có chân; hai cột bên đứng yên dưới dải chuyển màn */
+.sl2.dt-sl { min-height: calc(100vh / var(--hedu-cssz, 1) - 44px); background: var(--bg); }
+.dt-sl .sl2-decks, .dt-sl .sl2-set { top: 44px; height: calc(100vh / var(--hedu-cssz, 1) - 44px); border-color: var(--line); }
+.dt-sl .sl2-decks { background: var(--paper-2); }
+.dt-sl .sl2-dh h1 { font-family: var(--f-ui); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.dt-sl .sl2-dh .btn { height: 28px; border-radius: 7px; font-size: 12.5px; }
+.dt-sl .sl2-decks li button { border-radius: 8px; }
+.dt-sl .sl2-decks li button.on { background: rgba(0, 122, 255, 0.12); box-shadow: none; }
+.dt-sl .sl2-title h2 { font-family: var(--f-ui); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.dt-sl .sl2-hero h2 { font-family: var(--f-ui); font-weight: 700; letter-spacing: -0.02em; }
+.dt-sl .sl2-ways button { border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.04); }
+.dt-sl .sl2-ways button:hover, .dt-sl .sl2-ways button:focus-visible { border-color: var(--pri-line); box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12); }
+.dt-sl .sl2-acts .btn { height: 32px; border-radius: 8px; font-size: 13px; }
+.dt-sl .sl2-play { height: 32px; font-size: 13px; font-weight: 600; }
+
+/* Biên tập đề: thanh trên kính mờ, nút gọn 28px */
+.dt-ew .ew-head { min-height: 44px; padding: 6px 12px; background: rgba(255, 255, 255, 0.85); backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass); border-bottom: 1px solid var(--line); }
+.dt-ew .ew-head .btn { height: 28px; border-radius: 7px; font-size: 12.5px; padding: 0 10px; }
+.dt-ew .ew-head .btn-primary { font-weight: 600; padding: 0 14px; background: var(--pri); border-color: var(--pri); color: #fff; }
+.dt-ew .ew-head .btn-primary:hover:not(:disabled) { background: var(--pri-ink); border-color: var(--pri-ink); }
+.dt-ew .ew-head .ew-sel { height: 28px; border-radius: 7px; font-size: 12.5px; }
+.dt-ew .ew-title b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.dt-ew .ew-path { font-size: 11.5px; color: var(--ink-3); }
+.dt-ew .ew-files { background: var(--paper-2); border-color: var(--line); }
 /* ---------- Ngân hàng đợt 2 (28/11/2026): thanh trên gọn, "Cần xử lí · n", danh sách thẻ câu + khung chi tiết. Tiền tố bk2- ---------- */
 .page-head.bk2-head { display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 6px; padding: 8px 20px; }
 .bk2-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
